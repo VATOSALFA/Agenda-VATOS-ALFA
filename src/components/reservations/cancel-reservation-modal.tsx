@@ -30,12 +30,9 @@ interface CancelReservationModalProps {
 export function CancelReservationModal({ reservation, isOpen, onOpenChange, onConfirm }: CancelReservationModalProps) {
   const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [authCode, setAuthCode] = useState('');
 
   const { user } = useAuth();
   const { toast } = useToast();
-
-  const requiresAuthCode = user?.role !== 'Administrador general';
 
   const isConfirmationTextCorrect = confirmationText.toUpperCase() === 'CANCELAR';
 
@@ -43,39 +40,10 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
     e.stopPropagation();
     if (!reservation || !isConfirmationTextCorrect) return;
 
-    if (requiresAuthCode) {
-      if (!authCode) {
-        toast({ variant: 'destructive', title: 'Código requerido' });
-        return;
-      }
-      const authCodeQuery = query(
-        collection(db, 'codigos_autorizacion'),
-        where('code', '==', authCode),
-        where('active', '==', true),
-        where('reserves', '==', true)
-      );
-      const querySnapshot = await getDocs(authCodeQuery);
-      if (querySnapshot.empty) {
-        toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
-        return;
-      }
-
-      await logAuditAction({
-        action: 'Autorización por Código',
-        details: `Cancelación de reserva autorizada (Reserva: ${reservation.id}).`,
-        userId: user?.uid || 'unknown',
-        userName: user?.displayName || user?.email || 'Unknown',
-        userRole: user?.role,
-        authCode: authCode,
-        severity: 'warning'
-      });
-    }
-
     setIsDeleting(true);
     await onConfirm(reservation.id);
     setIsDeleting(false);
     setConfirmationText('');
-    setAuthCode('');
     // No cerramos manualmente aquí, dejamos que el componente padre maneje el cierre global
   }
 
@@ -83,7 +51,6 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
     e?.stopPropagation();
     if (isDeleting) return;
     setConfirmationText('');
-    setAuthCode('');
     onOpenChange(false);
   }
 
@@ -121,25 +88,6 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
             onClick={(e) => e.stopPropagation()}
             onFocus={(e) => e.stopPropagation()}
           />
-
-          {requiresAuthCode && (
-            <div className="pt-2">
-              <Label htmlFor="auth-code-cancel">
-                Código de autorización requerido
-              </Label>
-              <Input
-                id="auth-code-cancel"
-                type="password"
-                value={authCode}
-                onChange={(e) => setAuthCode(e.target.value)}
-                placeholder='Código a 6 caracteres'
-                autoComplete="off"
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                onFocus={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
         </div>
 
         <DialogFooter className="sm:justify-center gap-2">
@@ -153,7 +101,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
           <Button
             variant="destructive"
             onClick={handleConfirm}
-            disabled={(!isConfirmationTextCorrect) || (requiresAuthCode && !authCode) || isDeleting}
+            disabled={(!isConfirmationTextCorrect) || isDeleting}
             type="button"
           >
             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

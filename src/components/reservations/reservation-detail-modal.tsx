@@ -115,6 +115,19 @@ export function ReservationDetailModal({
     }
   }, [isOpen, db]);
 
+  const allProfessionalNames = useMemo(() => {
+    if (!reservation.items || !professionals) return reservation.professionalNames || 'N/A';
+
+    const profIds = new Set(reservation.items.map(i => i.barbero_id).filter(Boolean));
+    if (profIds.size === 0) return reservation.professionalNames || 'N/A';
+
+    const names = Array.from(profIds)
+      .map(id => professionals.find(p => p.id === id)?.name)
+      .filter(Boolean);
+
+    return names.length > 0 ? names.join(', ') : (reservation.professionalNames || 'N/A');
+  }, [reservation.items, reservation.professionalNames, professionals]);
+
   if (!reservation) return null;
 
   const handleCancelClick = () => {
@@ -291,7 +304,7 @@ export function ReservationDetailModal({
         .replace(/{servicios}/g, servicesText)
         .replace(/{fecha}/g, dateStr)
         .replace(/{hora}/g, reservation.hora_inicio || '')
-        .replace(/{profesional}/g, reservation.professionalNames || 'N/A')
+        .replace(/{profesional}/g, allProfessionalNames)
         .replace(/{ubicacion}/g, locationStr);
     
     return encodeURIComponent(message);
@@ -319,7 +332,7 @@ export function ReservationDetailModal({
         .replace(/{servicios}/g, servicesText)
         .replace(/{fecha}/g, dateStr)
         .replace(/{hora}/g, reservation.hora_inicio || '')
-        .replace(/{profesional}/g, reservation.professionalNames || 'N/A')
+        .replace(/{profesional}/g, allProfessionalNames)
         .replace(/{ubicacion}/g, locationStr);
     
     return encodeURIComponent(message);
@@ -348,7 +361,7 @@ export function ReservationDetailModal({
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
-          <DialogHeader className="p-6 pb-4 flex-row justify-between items-center border-b flex-shrink-0 space-y-0">
+          <DialogHeader className="p-6 pr-12 pb-4 flex-row justify-between items-center border-b flex-shrink-0 space-y-0">
             <div className="flex flex-col gap-1">
               <DialogTitle>Detalle de la Reserva</DialogTitle>
               <DialogDescription>ID: {reservation.id}</DialogDescription>
@@ -375,7 +388,7 @@ export function ReservationDetailModal({
                   {formatClientName(reservation.customer?.nombre, reservation.customer?.apellido)}
                 </h4>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm text-muted-foreground">{reservation.professionalNames || 'N/A'}</p>
+                  <p className="text-sm text-muted-foreground">{allProfessionalNames}</p>
                   {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica')) && (
                     <TooltipProvider>
                       <Tooltip>
@@ -412,7 +425,15 @@ export function ReservationDetailModal({
               <div>
                 <p className="font-medium flex items-center gap-2"><Scissors className="w-4 h-4 text-primary" /> Servicios</p>
                 <ul className="list-disc pl-10">
-                  {reservation.items ? reservation.items.map((i, idx) => <li key={idx}>{i.nombre || i.servicio}</li>) : <li>{(reservation as any).servicio}</li>}
+                  {reservation.items ? reservation.items.map((i, idx) => {
+                    const prof = professionals?.find(p => p.id === i.barbero_id);
+                    return (
+                      <li key={idx} className="flex justify-between items-center pr-4">
+                        <span>{i.nombre || i.servicio}</span>
+                        {prof && <span className="text-[10px] text-muted-foreground">({prof.name})</span>}
+                      </li>
+                    );
+                  }) : <li>{(reservation as any).servicio}</li>}
                 </ul>
               </div>
             </div>
@@ -493,6 +514,7 @@ export function ReservationDetailModal({
                     <TooltipTrigger asChild>
                       <button
                         onClick={() => {
+                          if (reservation.pago_estado === 'Pagado') return;
                           if (status === 'Cancelado') {
                             handleCancelClick();
                           } else {
@@ -501,7 +523,9 @@ export function ReservationDetailModal({
                         }}
                         className={cn(
                           'h-6 w-6 rounded-full border-2 transition-all',
-                          reservation.estado === status ? 'border-primary ring-2 ring-primary ring-offset-2 scale-110' : 'border-transparent opacity-50 hover:opacity-100',
+                          reservation.estado === status ? 'border-primary ring-2 ring-primary ring-offset-2 scale-110' : 'border-transparent opacity-50',
+                          reservation.pago_estado !== 'Pagado' && 'hover:opacity-100',
+                          reservation.pago_estado === 'Pagado' && 'cursor-not-allowed opacity-30',
                           color
                         )}
                       />

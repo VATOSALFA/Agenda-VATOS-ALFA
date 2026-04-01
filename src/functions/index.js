@@ -537,7 +537,12 @@ exports.mercadoPagoWebhook = onRequest(
         if (ventaData.reservationId) {
           const reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
           const reservaDoc = await t.get(reservaRef);
-          if (reservaDoc.exists) t.update(reservaRef, { pago_estado: 'Pagado' });
+          if (reservaDoc.exists) {
+            t.update(reservaRef, { 
+              pago_estado: 'Pagado',
+              estado: 'Asiste' 
+            });
+          }
         }
       });
       console.log(`[vFinal] SUCCESS: Venta ${external_reference} processed.`);

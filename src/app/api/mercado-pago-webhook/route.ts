@@ -88,13 +88,14 @@ export async function POST(req: NextRequest) {
                 const total = Number(data.totalAmount || data.precio || 0);
                 const paid = Number(transaction_amount || 0);
 
+                const newPaymentStatus = determinePaymentStatus(total, paid);
                 t.update(reservaRef, {
-                    pago_estado: determinePaymentStatus(total, paid),
+                    pago_estado: newPaymentStatus,
                     deposit_payment_id: String(paymentInfo.id),
                     deposit_paid_at: new Date(),
                     monto_pagado: paid,
-                    // If it was pending confirmation, confirm it now
-                    estado: data.estado === 'Pendiente' ? 'Confirmado' : data.estado
+                    // Si ya se pagó completo, el sistema es inteligente y pone 'Asiste'
+                    estado: newPaymentStatus === 'Pagado' ? 'Asiste' : (data.estado === 'Pendiente' ? 'Confirmado' : data.estado)
                 });
                 console.log(`[Next.js] Reservation ${external_reference} updated.`);
                 return;

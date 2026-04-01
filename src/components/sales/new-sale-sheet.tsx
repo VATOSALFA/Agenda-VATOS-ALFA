@@ -1032,6 +1032,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             unsubscribe();
                             unsubscribeRef.current = undefined;
 
+                            // If there is a reservation linked, update its status too.
+                            if (reservationId && db) {
+                                try {
+                                    const resRef = doc(db, 'reservas', reservationId);
+                                    await updateDoc(resRef, { 
+                                        pago_estado: 'Pagado',
+                                        estado: 'Asiste' 
+                                    });
+                                } catch (resErr) {
+                                    console.error("Error updating reservation status on snapshot:", resErr);
+                                }
+                            }
+
                             await finalizeSaleProcess(data.cliente_id, data.local_id);
                         }
                     }
@@ -2042,7 +2055,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                             // Also update Reservation status if linked
                                                                             if (reservationId) {
                                                                                 const resRef = doc(db, 'reservas', reservationId);
-                                                                                await updateDoc(resRef, { pago_estado: 'Pagado' });
+                                                                                await updateDoc(resRef, { 
+                                                                                    pago_estado: 'Pagado',
+                                                                                    estado: 'Asiste'
+                                                                                });
                                                                             }
                                                                             // finalizeSaleProcess usually takes (saleId, items). Passing cart as second arg.
                                                                             await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'));

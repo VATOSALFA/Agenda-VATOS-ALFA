@@ -467,6 +467,7 @@ exports.mercadoPagoWebhook = onRequest(
             // Usamos la misma lógica que calculamos arriba para la venta
             t.update(reservaRef, {
               pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
+              estado: isFullPay ? 'Asiste' : reservaDoc.data().estado, // SI PAGO COMPLETO -> ASISTE
               saldo_pendiente: saldoPendiente // Actualizamos también el saldo
             });
           }
@@ -487,7 +488,7 @@ exports.mercadoPagoWebhook = onRequest(
 
           t.update(reservaRef, {
             pago_estado: isFullPay ? 'Pagado' : 'deposit_paid', // Dynamic Status
-            estado: 'Confirmado',  // CONFIRM the appointment so it appears in agenda
+            estado: isFullPay ? 'Asiste' : 'Confirmado',  // SI PAGO COMPLETO -> ASISTE, SINO CONFIRMADO
 
             // Record Financials
             deposit_payment_id: String(paymentInfo.id),
@@ -715,7 +716,7 @@ exports.mercadoPagoWebhook = onRequest(
                 hora_inicio: booking.time,
                 hora_fin: booking.endTime, // We added this to payload
                 duracion: booking.duration,
-                estado: 'Confirmado', // Paid = Confirmed
+                estado: finalStatus === 'Pagado' ? 'Asiste' : 'Confirmado', // SI PAGO COMPLETO -> ASISTE
 
                 pago_estado: finalStatus,
 

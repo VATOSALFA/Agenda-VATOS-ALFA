@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { VatosButton } from '@/components/ui/vatos-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Clock, Info } from 'lucide-react';
 
@@ -32,9 +32,9 @@ export default function ReservaPendientePage() {
                     </div>
 
                     <div className="pt-4 space-y-3">
-                        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.push('/')}>
+                        <VatosButton className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.push('/')}>
                             Volver al Inicio
-                        </Button>
+                        </VatosButton>
                     </div>
                 </CardContent>
             </Card>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { VatosButton } from '@/components/ui/vatos-button';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
@@ -422,13 +423,28 @@ export default function BookingPage() {
                 }
 
                 // Fetch availability for all capable pros safely
-                const promises = capablePros.map((p: any) =>
-                    getAvailableSlots({ date: dateStr, professionalId: p.id, durationMinutes: duration || 30 })
+                const promises = capablePros.map((p: any) => {
+                    let profDuration = 0;
+                    if (activeConfigId === 'combined') {
+                        profDuration = cart.reduce((acc, item) => {
+                            const customDur = item.service.durationPorProfesional?.[p.id];
+                            return acc + Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                        }, 0);
+                    } else {
+                        const item = cart.find(c => c.uniqueId === activeConfigId);
+                        if (item) {
+                            const customDur = item.service.durationPorProfesional?.[p.id];
+                            profDuration = Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                        }
+                    }
+                    if (profDuration === 0) profDuration = 30;
+
+                    return getAvailableSlots({ date: dateStr, professionalId: p.id, durationMinutes: profDuration })
                         .catch(err => {
                             console.error(`Error fetching slots for pro ${p.name}:`, err);
                             return { error: err.message || 'Unknown network error' };
-                        })
-                );
+                        });
+                });
 
                 try {
                     const results = await Promise.all(promises);
@@ -543,22 +559,30 @@ export default function BookingPage() {
                 const cfg = configs['combined'];
                 if (!cfg) throw new Error("Config missing");
 
-                // Calculate End Time
+                // Calculate End Time based on selected professional
+                const actualTotalDuration = cart.reduce((acc, item) => {
+                    const customDur = item.service.durationPorProfesional?.[cfg.professionalId || ''];
+                    return acc + Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                }, 0);
+                
                 const startTimeDate = parse(cfg.time, 'HH:mm', new Date());
-                const endDate = addMinutes(startTimeDate, totalDuration);
+                const endDate = addMinutes(startTimeDate, actualTotalDuration);
                 const endTime = format(endDate, 'HH:mm');
                 const serviceNames = cart.map(c => c.service.name);
 
                 // Prepare Items (Services + Products)
                 const itemsPayload = [
-                    ...cart.map(c => ({
-                        id: c.serviceId,
-                        nombre: c.service.name,
-                        tipo: 'servicio',
-                        precio: Number(c.service.price || 0),
-                        barbero_id: cfg.professionalId,
-                        duracion: Number(c.service.duration || 0)
-                    })),
+                    ...cart.map(c => {
+                        const customDur = c.service.durationPorProfesional?.[cfg.professionalId || ''];
+                        return {
+                            id: c.serviceId,
+                            nombre: c.service.name,
+                            tipo: 'servicio',
+                            precio: Number(c.service.price || 0),
+                            barbero_id: cfg.professionalId,
+                            duracion: Number(customDur !== undefined ? customDur : (c.service.duration || 0))
+                        };
+                    }),
                     ...productCart.map(p => ({
                         id: p.id,
                         nombre: p.nombre,
@@ -581,7 +605,7 @@ export default function BookingPage() {
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
                     endTime: endTime,
-                    duration: totalDuration,
+                    duration: actualTotalDuration,
                     locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
                     amountDue: upfrontTotal,
                     totalAmount: totalPrice,
@@ -596,7 +620,8 @@ export default function BookingPage() {
                     const pType = item.service.payment_type || 'no-payment';
                     const itemUpfront = (pType === 'online-deposit' ? Number(item.service.price || 0) * 0.5 : (pType === 'full-payment' ? Number(item.service.price || 0) : 0));
 
-                    const duration = Number(item.service.duration || 30);
+                    const customDur = item.service.durationPorProfesional?.[cfg.professionalId || ''];
+                    const duration = Number(customDur !== undefined ? customDur : (item.service.duration || 30));
                     const startTimeDate = parse(cfg.time, 'HH:mm', new Date());
                     const endDate = addMinutes(startTimeDate, duration);
                     const endTime = format(endDate, 'HH:mm');
@@ -818,9 +843,9 @@ export default function BookingPage() {
                             <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative">
 
                                 <div className="flex-1 pb-32 px-1">
-                                    <Button variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
+                                    <VatosButton variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
                                         <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
-                                    </Button>
+                                    </VatosButton>
                                     {/* Pre-selected Pro Banner */}
                                     {preSelectedProId && (() => {
                                         const pro = professionals.find(p => p.id === preSelectedProId);
@@ -837,14 +862,14 @@ export default function BookingPage() {
                                                     <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
                                                     <p className="font-bold text-lg leading-tight">{pro.publicName || pro.name}</p>
                                                 </div>
-                                                <Button variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
+                                                <VatosButton variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
                                                     setPreSelectedProId(null);
                                                     const url = new URL(window.location.href);
                                                     url.searchParams.delete('professionalId');
                                                     window.history.replaceState({}, '', url.toString());
                                                 }}>
                                                     Cambiar
-                                                </Button>
+                                                </VatosButton>
                                             </div>
                                         ) : null;
                                     })()}
@@ -968,7 +993,7 @@ export default function BookingPage() {
                                     <h2 id="productos" className="text-xl font-semibold mb-2 mt-8 pt-4 border-t scroll-mt-24">Selecciona tus productos</h2>
                                     <div className="grid grid-cols-1 gap-4 mb-4">
                                         {productsData && productsData.length > 0 ? (
-                                            productsData.filter((p: any) => p.active && p.stock > 0).map((product: any) => {
+                                            productsData.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
                                                 const count = getProductCount(product.id);
                                                 return (
                                                     <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
@@ -1106,40 +1131,43 @@ export default function BookingPage() {
                                         </p>
                                         <p className="font-bold text-lg">{formatPrice(totalPrice)}</p>
                                     </div>
-                                    <Button onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg" className="shadow-lg">
+                                    <VatosButton onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg" className="shadow-lg">
                                         Continuar <ChevronRight className="ml-2 h-4 w-4" />
-                                    </Button>
+                                    </VatosButton>
                                 </div>
 
-                                {/* Floating Navigation Pills */}
-                                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-10 fade-in duration-500">
-                                    <div className="bg-slate-900/90 backdrop-blur-md text-white px-5 py-2.5 rounded-full shadow-xl flex items-center gap-4 text-xs font-medium border border-white/10">
-                                        <button onClick={() => scrollToSection('servicios')} className="hover:text-primary-foreground/80 transition-colors">
-                                            Servicios
-                                        </button>
+                                {/* Floating Navigation Bar - Glassmorphic Vatos Style */}
+                                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300 animate-in slide-in-from-bottom-10 fade-in w-full max-w-fit">
+                                    <div className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar">
+                                        {/* Top neon line for the whole bar */}
+                                        <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+
+                                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('servicios')}>
+                                            <Scissors className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
+                                            <span className="text-[10px] sm:text-xs">Servicios</span>
+                                        </VatosButton>
 
                                         {visiblePackageServices.length > 0 && (
-                                            <>
-                                                <div className="w-px h-3 bg-white/20"></div>
-                                                <button onClick={() => scrollToSection('paquetes')} className="hover:text-primary-foreground/80 transition-colors">
-                                                    Paquetes
-                                                </button>
-                                            </>
+                                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('paquetes')}>
+                                                <Layers className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
+                                                <span className="text-[10px] sm:text-xs">Paquetes</span>
+                                            </VatosButton>
                                         )}
 
-                                        <div className="w-px h-3 bg-white/20"></div>
-                                        <button onClick={() => scrollToSection('productos')} className="hover:text-primary-foreground/80 transition-colors">
-                                            Productos
-                                        </button>
+                                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('productos')}>
+                                            <ShoppingBag className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
+                                            <span className="text-[10px] sm:text-xs">Productos</span>
+                                        </VatosButton>
 
                                         {activePromotions.length > 0 && (
-                                            <>
-                                                <div className="w-px h-3 bg-white/20"></div>
-                                                <button onClick={() => scrollToSection('promociones')} className="hover:text-primary-foreground/80 transition-colors">
-                                                    Promociones
-                                                </button>
-                                            </>
+                                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('promociones')}>
+                                                <Sparkles className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
+                                                <span className="text-[10px] sm:text-xs">Promos</span>
+                                            </VatosButton>
                                         )}
+
+                                        {/* Bottom neon line for the whole bar */}
+                                        <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
                                     </div>
                                 </div>
                             </motion.div>
@@ -1148,7 +1176,7 @@ export default function BookingPage() {
                         {/* STEP 1: MODE SELECTION */}
                         {step === 1 && (
                             <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                                <Button variant="ghost" onClick={() => setStep(0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</Button>
+                                <VatosButton variant="ghost" onClick={() => setStep(0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</VatosButton>
                                 <h2 className="text-xl font-bold text-center mb-6">¿Cómo quieres agendar?</h2>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1188,7 +1216,7 @@ export default function BookingPage() {
                         {/* STEP 2: CONFIGURATION (DASHBOARD OR SUB-FLOW) */}
                         {step === 2 && !activeConfigId && bookingMode === 'individual' && (
                             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                                <Button variant="ghost" onClick={() => setStep(cart.length > 1 ? 1 : 0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</Button>
+                                <VatosButton variant="ghost" onClick={() => setStep(cart.length > 1 ? 1 : 0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</VatosButton>
                                 <h2 className="text-xl font-semibold mb-4">Configura tus citas</h2>
                                 <p className="text-sm text-muted-foreground mb-4">Selecciona cada servicio para asignar fecha, hora y profesional.</p>
 
@@ -1226,9 +1254,9 @@ export default function BookingPage() {
                                 </div>
 
                                 <div className="mt-8 flex justify-end">
-                                    <Button onClick={() => setStep(3)} disabled={!isDashboardComplete} size="lg" className="w-full sm:w-auto">
+                                    <VatosButton onClick={() => setStep(3)} disabled={!isDashboardComplete} size="lg" className="w-full sm:w-auto">
                                         Siguiente <ChevronRight className="ml-2 h-4 w-4" />
-                                    </Button>
+                                    </VatosButton>
                                 </div>
                             </motion.div>
                         )}
@@ -1237,7 +1265,7 @@ export default function BookingPage() {
                         {step === 2 && activeConfigId && (
                             <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col min-h-[400px]">
                                 <div className="flex items-center mb-4">
-                                    <Button variant="ghost" size="icon" onClick={() => {
+                                    <VatosButton variant="ghost" size="icon" onClick={() => {
                                         if (configStep > 0) {
                                             setConfigStep(prev => prev - 1);
                                         } else {
@@ -1256,7 +1284,7 @@ export default function BookingPage() {
                                                 setActiveConfigId(null);
                                             }
                                         }
-                                    }} className="-ml-2 mr-2"><ChevronLeft /></Button>
+                                    }} className="-ml-2 mr-2"><ChevronLeft /></VatosButton>
                                     <h2 className="text-xl font-semibold">
                                         {activeConfigId === 'combined' ? 'Elige fecha y hora' : cart.find(c => c.uniqueId === activeConfigId)?.service.name}
                                     </h2>
@@ -1296,7 +1324,7 @@ export default function BookingPage() {
                                                 <p className="text-yellow-800 font-medium mb-1">Combinación no disponible</p>
                                                 <p className="text-sm text-muted-foreground mb-4">Ningún profesional disponible realiza todos estos servicios.</p>
                                                 <div className="flex flex-col gap-2">
-                                                    <Button variant="outline" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
+                                                    <VatosButton variant="outline" onClick={() => setConfigStep(0)}>Cambiar Fecha</VatosButton>
                                                     {bookingMode === 'combined' && (
                                                         <p className="text-xs text-muted-foreground mt-2">Intenta la opción <span className="font-bold">"Por separado"</span> para asignar diferentes profesionales.</p>
                                                     )}
@@ -1310,9 +1338,9 @@ export default function BookingPage() {
                                         ) : (
                                             <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[300px] p-1">
                                                 {tempAvailableSlots.map(time => (
-                                                    <Button key={time} variant="outline" onClick={() => handleTimeSelected(time)}>
+                                                    <VatosButton key={time} variant="outline" onClick={() => handleTimeSelected(time)}>
                                                         {time}
-                                                    </Button>
+                                                    </VatosButton>
                                                 ))}
                                             </div>
                                         )}
@@ -1386,7 +1414,7 @@ export default function BookingPage() {
                         {step === 3 && (
                             <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
                                 <div className="flex items-center mb-2">
-                                    <Button variant="ghost" size="icon" onClick={() => {
+                                    <VatosButton variant="ghost" size="icon" onClick={() => {
                                         // If only products (no services), go back to HOME, not step 2
                                         if (cart.length === 0) {
                                             router.push('/');
@@ -1397,7 +1425,7 @@ export default function BookingPage() {
                                             setActiveConfigId('combined');
                                         }
                                         setStep(2);
-                                    }} className="-ml-2 mr-2"><ChevronLeft /></Button>
+                                    }} className="-ml-2 mr-2"><ChevronLeft /></VatosButton>
                                     <h2 className="text-xl font-semibold">Tus Datos</h2>
                                 </div>
 
@@ -1600,7 +1628,7 @@ export default function BookingPage() {
 
                                 <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t z-50 shadow-upper flex flex-col items-center justify-center animate-in slide-in-from-bottom-5">
                                     <div className="w-full max-w-md">
-                                        <Button
+                                        <VatosButton
                                             className="w-full shadow-lg h-12 text-lg"
                                             onClick={confirmBooking}
                                             disabled={
@@ -1620,7 +1648,7 @@ export default function BookingPage() {
                                                     <span>Procesando...</span>
                                                 </div>
                                             ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
-                                        </Button>
+                                        </VatosButton>
                                     </div>
                                     {upfrontTotal > 0 && (
                                         <p className="text-[10px] text-center text-muted-foreground mt-2">
@@ -1648,9 +1676,9 @@ export default function BookingPage() {
                                         {websiteSettings.predefinedNotes.replace('3 horas antes. ', '3 horas antes.\n')}
                                     </div>
                                 )}
-                                <Button className="mt-8 shadow-lg" size="lg" onClick={() => router.push('/')}>
+                                <VatosButton className="mt-8 shadow-lg" size="lg" onClick={() => router.push('/')}>
                                     Volver al Inicio
-                                </Button>
+                                </VatosButton>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -1669,9 +1697,9 @@ export default function BookingPage() {
                                 </div>
                             </div>
                             <DialogFooter>
-                                <Button onClick={() => setSelectedPromotion(null)}>
+                                <VatosButton onClick={() => setSelectedPromotion(null)}>
                                     Cerrar
-                                </Button>
+                                </VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -1689,7 +1717,7 @@ export default function BookingPage() {
                                 </div>
                             </div>
                             <DialogFooter className="mt-4">
-                                <Button onClick={() => setPrivacyModalOpen(false)}>Cerrar</Button>
+                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Cerrar</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -1705,7 +1733,7 @@ export default function BookingPage() {
                                 </div>
                             </div>
                             <DialogFooter className="mt-4">
-                                <Button onClick={() => setTermsModalOpen(false)}>Cerrar</Button>
+                                <VatosButton onClick={() => setTermsModalOpen(false)}>Cerrar</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>

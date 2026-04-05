@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -14,6 +14,10 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import BackgroundAurora from '@/components/ui/background-aurora';
+import { VatosButton } from '@/components/ui/vatos-button';
+import { ParallaxHero } from '@/components/ui/parallax-hero';
+
 
 // Hook moved inside component
 
@@ -183,9 +187,19 @@ export default function LandingPage() {
     const totalItems = cart.length + productCart.length;
 
     // Filter Professionals by Selected Branch
-    const filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && p.acceptsOnline && (!selectedBranch || p.local_id === selectedBranch)) || [];
+    let filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && p.acceptsOnline && (!selectedBranch || p.local_id === selectedBranch)) || [];
+    
+    // Manual reorder: Swap 1st (index 0) and 3rd (index 2) positions as requested
+    if (filteredProfessionals.length >= 3) {
+        const result = [...filteredProfessionals];
+        const temp = result[0];
+        result[0] = result[2];
+        result[2] = temp;
+        filteredProfessionals = result;
+    }
 
     return (
+        <ParallaxHero>
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
             {/* SEO & Bot Purpose Verification */}
             <div className="sr-only">
@@ -232,26 +246,31 @@ export default function LandingPage() {
                         )}
 
                         <Link href="/reservar">
-                            <Button size="sm">Reservar Cita</Button>
+                            <VatosButton variant="default" size="sm">Reservar Cita</VatosButton>
                         </Link>
                     </div>
                 </div>
             </header>
 
-            {/* Hero */}
-            <section
-                className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden"
-                style={{ backgroundColor: 'hsl(var(--primary))' }}
-            >
-                <div className="absolute inset-0 z-0 bg-background/0 pointer-events-none"></div>
-                <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
-                    {companySlogan}
-                </h1>
-                <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
-                    {heroDescription}
-                </p>
-                {/* Navigation Buttons moved to Floating Bar */}
-            </section >
+            {/* Hero with Parallax */}
+              <section
+                  className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950"
+              >
+                  <div data-parallax-layers className="absolute inset-0">
+                      <div data-parallax-layer="1" className="absolute inset-0">
+                          <BackgroundAurora />
+                      </div>
+                      <div data-parallax-layer="2" className="absolute inset-0 bg-black/40 pointer-events-none"></div>
+                  </div>
+
+                  <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
+                      {companySlogan}
+                  </h1>
+                  <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
+                      {heroDescription}
+                  </p>
+                  {/* Navigation Buttons moved to Floating Bar */}
+              </section>
 
             {/* Professional Profile Dialog */}
             <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
@@ -281,12 +300,12 @@ export default function LandingPage() {
                         </div>
 
                         <div className="mt-auto pt-4">
-                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-12 text-lg" onClick={() => {
+                            <VatosButton className="w-full h-12 text-lg" onClick={() => {
                                 setSelectedPro(null);
                                 router.push(`/reservar?professionalId=${selectedPro.id}`);
                             }}>
                                 <Scissors className="mr-2 h-5 w-5" /> Reservar Ahora
-                            </Button>
+                            </VatosButton>
                         </div>
                     </div>
                 </DialogContent>
@@ -322,16 +341,16 @@ export default function LandingPage() {
                                         )}
                                         {/* Overlay with Booking Action */}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                            <Button variant="secondary" className="font-semibold" onClick={() => setSelectedPro(pro)}>
+                                            <VatosButton variant="secondary" className="font-semibold" onClick={() => setSelectedPro(pro)}>
                                                 <Eye className="mr-2 h-4 w-4" /> Ver Perfil
-                                            </Button>
+                                            </VatosButton>
                                         </div>
                                     </div>
 
                                     <CardFooter className="p-4 justify-center">
-                                        <Button className="w-full shadow-sm hover:shadow-md transition-all" onClick={() => router.push(`/reservar?professionalId=${pro.id}`)}>
+                                        <VatosButton className="w-full" onClick={() => router.push(`/reservar?professionalId=${pro.id}`)}>
                                             Reservar
-                                        </Button>
+                                        </VatosButton>
                                     </CardFooter>
                                 </Card>
                             ))}
@@ -340,7 +359,7 @@ export default function LandingPage() {
                 </section>
             )}
 
-            < section id="servicios" className="py-16 md:py-24 bg-muted/30" >
+            <section id="servicios" className="py-16 md:py-24 bg-muted/30">
                 <div className="container px-4 md:px-6">
                     <div className="text-center mb-12">
                         <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestros Servicios</h2>
@@ -480,7 +499,8 @@ export default function LandingPage() {
             {/* Products Section */}
             {
                 products && products.length > 0 && (
-                    <section id="productos" className="py-16 md:py-24 container px-4 md:px-6">
+                    <section id="productos" className="py-16 md:py-24 bg-slate-50">
+                        <div className="container px-4 md:px-6">
                         <div className="text-center mb-12">
                             <h2 className="text-3xl font-bold tracking-tight mb-2">Productos Destacados</h2>
                             <p className="text-muted-foreground">Lleva la experiencia de la barbería a tu casa.</p>
@@ -538,6 +558,7 @@ export default function LandingPage() {
                                     </Card>
                                 )
                             })}
+                        </div>
                         </div>
                     </section>
                 )
@@ -614,9 +635,9 @@ export default function LandingPage() {
                                             )}
                                         </CardContent>
                                         <CardFooter className="p-6 pt-0">
-                                            <Button className="w-full" onClick={() => router.push('/reservar')}>
+                                            <VatosButton className="w-full" onClick={() => router.push('/reservar')}>
                                                 Reservar Ahora
-                                            </Button>
+                                            </VatosButton>
                                         </CardFooter>
                                     </Card>
                                 ))}
@@ -684,15 +705,15 @@ export default function LandingPage() {
                         </div>
 
                         <div className="mt-4 pt-4 border-t">
-                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
+                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
                                 addToCart(selectedService.id);
                                 setSelectedService(null);
                             }}>
                                 <Plus className="mr-2 h-5 w-5" /> Agregar y Seguir Explorando
-                            </Button>
-                            <Button variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedService(null)}>
+                            </VatosButton>
+                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedService(null)}>
                                 Volver a Servicios
-                            </Button>
+                            </VatosButton>
                         </div>
                     </div>
                 </DialogContent>
@@ -752,15 +773,15 @@ export default function LandingPage() {
                         </div>
 
                         <div className="mt-4 pt-4 border-t">
-                            <Button className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
+                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
                                 addToProductCart(selectedProduct.id);
                                 setSelectedProduct(null);
                             }}>
                                 <ShoppingBag className="mr-2 h-5 w-5" /> Agregar al Pedido
-                            </Button>
-                            <Button variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedProduct(null)}>
+                            </VatosButton>
+                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedProduct(null)}>
                                 Volver a Productos
-                            </Button>
+                            </VatosButton>
                         </div>
                     </div>
                 </DialogContent>
@@ -779,9 +800,9 @@ export default function LandingPage() {
                         </div>
                     </div>
                     <div className="mt-4 flex justify-end">
-                        <Button onClick={() => setSelectedPromotion(null)}>
+                        <VatosButton onClick={() => setSelectedPromotion(null)}>
                             Cerrar
-                        </Button>
+                        </VatosButton>
                     </div>
                 </DialogContent>
             </Dialog>
@@ -795,7 +816,7 @@ export default function LandingPage() {
                                 <span className="text-sm font-medium text-muted-foreground">{totalItems} item{totalItems > 1 ? 's' : ''} seleccionado{totalItems > 1 ? 's' : ''}</span>
                                 <span className="text-2xl font-bold text-primary">{formatPrice(totalPrice)}</span>
                             </div>
-                            <Button size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking} disabled={isBooking}>
+                            <VatosButton size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking} disabled={isBooking} variant="default">
                                 {isBooking ? (
                                     <CustomLoader size={24} className="text-primary-foreground" />
                                 ) : cart.length > 0 ? (
@@ -803,7 +824,7 @@ export default function LandingPage() {
                                 ) : (
                                     <>Comprar Productos <ShoppingBag className="ml-2 h-5 w-5" /></>
                                 )}
-                            </Button>
+                            </VatosButton>
                         </div>
                     </div>
                 )
@@ -863,11 +884,11 @@ export default function LandingPage() {
                                             </div>
                                         </CardContent>
                                         <CardFooter>
-                                            <Button variant="outline" className="w-full" asChild>
+                                            <VatosButton variant="outline" className="w-full" asChild>
                                                 <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
                                                     Ver en Mapa
                                                 </a>
-                                            </Button>
+                                            </VatosButton>
                                         </CardFooter>
                                     </Card>
                                 ))}
@@ -911,7 +932,7 @@ export default function LandingPage() {
                                 </div>
                             </div>
                             <DialogFooter className="mt-4">
-                                <Button onClick={() => setPrivacyModalOpen(false)}>Cerrar</Button>
+                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Cerrar</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -927,7 +948,7 @@ export default function LandingPage() {
                                 </div>
                             </div>
                             <DialogFooter className="mt-4">
-                                <Button onClick={() => setTermsModalOpen(false)}>Cerrar</Button>
+                                <VatosButton onClick={() => setTermsModalOpen(false)}>Cerrar</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -937,35 +958,56 @@ export default function LandingPage() {
             </footer>
 
             {/* Floating Navigation Bar */}
+            {/* Floating Navigation Bar - Glassmorphic Vatos Style */}
             <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
                 <div
-                    className="flex items-center gap-1 sm:gap-2 backdrop-blur-md text-white border border-white/20 shadow-2xl rounded-full p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar"
-                    style={{ backgroundColor: 'hsl(var(--secondary) / 0.9)' }}
+                    className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar"
                 >
+                    {/* Top neon line for the whole bar */}
+                    <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+
                     <Link href="#servicios">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
-                            Servicios
-                        </Button>
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
+                            <Scissors className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-[10px] sm:text-xs">Servicios</span>
+                        </VatosButton>
                     </Link>
-                    <Link href="#productos">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
-                            Productos
-                        </Button>
+                    
+                    <Link href="/inspiracion">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
+                            <ImageIcon className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-[10px] sm:text-xs">Inspiración</span>
+                        </VatosButton>
                     </Link>
+
                     <Link href="#profesionales">
-                        <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
-                            Profesionales
-                        </Button>
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
+                            <User className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-[10px] sm:text-xs">Equipo</span>
+                        </VatosButton>
                     </Link>
+
+                    <Link href="#productos">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
+                            <ShoppingBag className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-[10px] sm:text-xs">Productos</span>
+                        </VatosButton>
+                    </Link>
+                    
                     {activePromotions && activePromotions.length > 0 && (
                         <Link href="#promociones">
-                            <Button size="sm" variant="ghost" className="rounded-full hover:bg-white/20 hover:text-white text-white/90 h-8 px-2 sm:px-4 text-xs sm:text-sm font-medium transition-all">
-                                Promociones
-                            </Button>
+                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
+                                <Sparkles className="h-3.5 w-3.5 text-blue-400" />
+                                <span className="text-[10px] sm:text-xs">Promos</span>
+                            </VatosButton>
                         </Link>
                     )}
+
+                    {/* Bottom neon line for the whole bar */}
+                    <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
                 </div>
             </div>
         </div >
+        </ParallaxHero>
     );
 }

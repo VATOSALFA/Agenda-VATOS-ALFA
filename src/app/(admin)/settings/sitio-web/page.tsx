@@ -13,9 +13,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2, GripVertical, Image as ImageIcon } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { ImageUploader } from '@/components/shared/image-uploader';
 
 const customerFields = [
     { id: 'email', label: 'Email' },
@@ -58,7 +59,10 @@ export default function SitioWebPage() {
             customerFields: customerFields.reduce((acc, field) => {
                 acc[field.id] = { use: true, required: ['email', 'phone'].includes(field.id) };
                 return acc;
-            }, {} as Record<string, { use: boolean; required: boolean }>)
+            }, {} as Record<string, { use: boolean; required: boolean }>),
+            galleryTitle: 'GALERÍA ESTELAR',
+            gallerySubtitle: 'Explora • Zoom • Inspírate',
+            galleryCards: [] as { id: string; imageUrl: string; title: string; alt: string }[]
         }
     });
 
@@ -348,6 +352,98 @@ export default function SitioWebPage() {
                                     ))}
                                 </TableBody>
                             </Table>
+                        </AccordionContent>
+                    </AccordionItem>
+
+                    <AccordionItem value="gallery" className="border rounded-lg bg-card">
+                        <AccordionTrigger className="p-6">Galería de Inspiración</AccordionTrigger>
+                        <AccordionContent className="p-6 pt-0 space-y-6">
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label>Título de la Galería</Label>
+                                        <Input {...form.register('galleryTitle')} placeholder="GALERÍA ESTELAR" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Subtítulo de la Galería</Label>
+                                        <Input {...form.register('gallerySubtitle')} placeholder="Explora • Zoom • Inspírate" />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 pt-4 border-t">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="font-semibold">Tarjetas de la Galería</h4>
+                                        <Button 
+                                            type="button" 
+                                            size="sm" 
+                                            onClick={() => {
+                                                const currentCards = form.getValues('galleryCards') || [];
+                                                form.setValue('galleryCards', [
+                                                    ...currentCards,
+                                                    { id: Math.random().toString(36).substr(2, 9), imageUrl: '', title: '', alt: '' }
+                                                ]);
+                                            }}
+                                        >
+                                            <Plus className="w-4 h-4 mr-2" /> Agregar Imagen
+                                        </Button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                        {(form.watch('galleryCards') || []).map((card: any, index: number) => (
+                                            <Card key={card.id} className="bg-muted/30 border-dashed relative group overflow-hidden">
+                                                <Button 
+                                                    variant="destructive" 
+                                                    size="icon" 
+                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                                                    onClick={() => {
+                                                        const currentCards = form.getValues('galleryCards');
+                                                        form.setValue('galleryCards', currentCards.filter((_: any, i: number) => i !== index));
+                                                    }}
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </Button>
+                                                <CardContent className="p-2 space-y-2">
+                                                    <Controller
+                                                        name={`galleryCards.${index}.imageUrl`}
+                                                        control={form.control}
+                                                        render={({ field }) => (
+                                                            <div className="h-32 bg-black/5 rounded-md overflow-hidden relative border border-dashed border-primary/20 flex items-center justify-center">
+                                                                <ImageUploader
+                                                                    folder="gallery"
+                                                                    currentImageUrl={field.value}
+                                                                    onUpload={(url) => field.onChange(url)}
+                                                                    onRemove={() => field.onChange('')}
+                                                                    className="w-full h-full border-none bg-transparent"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    />
+                                                    <div className="space-y-1">
+                                                        <Input 
+                                                            placeholder="Título..." 
+                                                            className="h-7 text-xs font-medium"
+                                                            {...form.register(`galleryCards.${index}.title` as any)}
+                                                        />
+                                                        <Input 
+                                                            placeholder="Alt..." 
+                                                            className="h-6 text-[9px] opacity-60"
+                                                            {...form.register(`galleryCards.${index}.alt` as any)}
+                                                        />
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+
+                                    {(form.watch('galleryCards') || []).length === 0 && (
+                                        <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg bg-muted/20 text-muted-foreground">
+                                            <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
+                                            <p>No hay imágenes en la galería.</p>
+                                            <p className="text-xs">Agrega fotos de tus mejores trabajos para inspirar a tus clientes.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </AccordionContent>
                     </AccordionItem>
                 </Accordion>

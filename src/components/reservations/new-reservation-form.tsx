@@ -451,10 +451,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           // Try to match with a service
           const service = services?.find(s => s.id === i.id || s.name === i.servicio || s.name === i.nombre);
           if (service) {
+            const customDur = service.durationPorProfesional?.[i.barbero_id || ''];
             return {
               servicio: service.id,
               barbero_id: i.barbero_id || '',
-              duracion: (i as any).duracion !== undefined ? (i as any).duracion : (service.duration || 0)
+              duracion: (i as any).duracion !== undefined ? (i as any).duracion : (customDur !== undefined ? customDur : (service.duration || 0))
             };
           }
 
@@ -541,7 +542,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             if (service) {
               acc.totalPrice += service.price || 0;
               const profId = currentItem.barbero_id || 'unassigned';
-              acc.durations[profId] = (acc.durations[profId] || 0) + (currentItem.duracion !== undefined ? currentItem.duracion : (service.duration || 0));
+              const customDur = service.durationPorProfesional?.[profId];
+              acc.durations[profId] = (acc.durations[profId] || 0) + (currentItem.duracion !== undefined ? currentItem.duracion : (customDur !== undefined ? customDur : (service.duration || 0)));
               acc.maxDuration = Math.max(acc.maxDuration, acc.durations[profId]);
             }
             return acc;
@@ -597,6 +599,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         // Try to find as service
         const service = services.find(s => s.id === item.servicio);
         if (service) {
+          const customDur = service.durationPorProfesional?.[item.barbero_id || ''];
           return {
             id: service.id, // Ensure ID is saved if needed, or generated? Usually firestore generates ID for subobjects if not provided, but here we store array. Ideally items should have IDs.
             // But SaleItem usually has 'id' which might be the service ID or unique item ID?
@@ -606,7 +609,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             nombre: service.name,
             barbero_id: item.barbero_id,
             precio: service.price || 0,
-            duracion: item.duracion !== undefined ? item.duracion : (service.duration || 0),
+            duracion: item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service.duration || 0)),
             tipo: 'servicio'
           };
         }
@@ -938,8 +941,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                 onChange={(val) => {
                                   field.onChange(val);
                                   const srv = servicesMap.get(val);
-                                  if (srv && srv.duration) {
-                                    form.setValue(`items.${index}.duracion`, srv.duration, { shouldValidate: true });
+                                  if (srv) {
+                                    const profId = form.getValues(`items.${index}.barbero_id`);
+                                    const customDur = profId ? srv.durationPorProfesional?.[profId] : undefined;
+                                    form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
                                   } else {
                                     form.setValue(`items.${index}.duracion`, 0, { shouldValidate: true });
                                   }
@@ -968,7 +973,18 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                   {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
                                 </Button>
                               </div>
-                              <Select onValueChange={field.onChange} value={field.value} disabled={isProfessionalLocked}>
+                              <Select 
+                                onValueChange={(val) => {
+                                  field.onChange(val);
+                                  const srv = servicesMap.get(currentItemId);
+                                  if (srv) {
+                                    const customDur = srv.durationPorProfesional?.[val];
+                                    form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                  }
+                                }} 
+                                value={field.value} 
+                                disabled={isProfessionalLocked}
+                              >
                                 <FormControl>
                                   <SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}>
                                     <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />

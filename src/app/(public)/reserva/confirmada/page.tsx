@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { VatosButton } from '@/components/ui/vatos-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -92,12 +92,12 @@ export default function ReservaConfirmadaPage() {
                     )}
 
                     <div className="pt-4 space-y-3">
-                        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.push('/')}>
+                        <VatosButton className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.push('/')}>
                             Volver al Inicio
-                        </Button>
-                        <Button variant="outline" className="w-full" onClick={() => router.push('/reservar')}>
+                        </VatosButton>
+                        <VatosButton variant="outline" className="w-full" onClick={() => router.push('/reservar')}>
                             Hacer otra reserva
-                        </Button>
+                        </VatosButton>
                     </div>
                 </CardContent>
             </Card>

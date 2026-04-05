@@ -1,7 +1,7 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
+import { VatosButton } from '@/components/ui/vatos-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { XCircle, AlertTriangle } from 'lucide-react';
 
@@ -32,12 +32,12 @@ export default function ReservaFallidaPage() {
                     </div>
 
                     <div className="pt-4 space-y-3">
-                        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.back()}>
+                        <VatosButton className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.back()}>
                             Intentar de Nuevo
-                        </Button>
-                        <Button variant="outline" className="w-full" onClick={() => router.push('/')}>
+                        </VatosButton>
+                        <VatosButton variant="outline" className="w-full" onClick={() => router.push('/')}>
                             Volver al Inicio
-                        </Button>
+                        </VatosButton>
                     </div>
                 </CardContent>
             </Card>

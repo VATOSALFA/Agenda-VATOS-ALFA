@@ -124,11 +124,28 @@ export function ImageUploader({
   
   if (currentImageUrl) {
     return (
-        <div className={cn('relative w-40 h-40 rounded-lg overflow-hidden group', className)}>
+        <div 
+          className={cn('relative w-40 h-40 rounded-lg overflow-hidden group cursor-pointer', className)}
+          {...getRootProps()}
+        >
+            <input {...getInputProps()} />
             <Image src={currentImageUrl} alt="Imagen subida" layout="fill" objectFit="cover" />
-            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Button variant="destructive" size="icon" onClick={handleRemove}>
-                    <Trash2 className="h-4 w-4" />
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                <div className="bg-white/10 p-2 rounded-full backdrop-blur-sm border border-white/20">
+                    <UploadCloud className="w-6 h-6 text-white" />
+                </div>
+                <p className="text-[10px] text-white font-bold uppercase tracking-widest text-shadow">Cambiar Imagen</p>
+                
+                <Button 
+                    variant="destructive" 
+                    size="icon" 
+                    className="absolute top-2 right-2 h-7 w-7"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemove();
+                    }}
+                >
+                    <Trash2 className="h-3.5 w-3.5" />
                 </Button>
             </div>
         </div>

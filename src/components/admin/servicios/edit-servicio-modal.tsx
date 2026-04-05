@@ -50,6 +50,7 @@ const serviceSchema = z.object({
   payment_amount_value: z.coerce.string().optional(),
   payment_amount_type: z.enum(['%', '$']).default('%'),
   images: z.array(z.object({ value: z.string() })).optional().default([]),
+  durationPorProfesional: z.record(z.string(), z.union([z.coerce.number(), z.string().transform(v => v === "" ? "" : Number(v))])).optional(),
 });
 
 type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -93,6 +94,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         payment_type: service.payment_type || 'no-payment',
         payment_amount_value: (service.payment_amount_value ?? '') as any,
         payment_amount_type: service.payment_amount_type || '%',
+        durationPorProfesional: service.durationPorProfesional || {},
       });
     } else {
       reset({
@@ -107,7 +109,8 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         payment_type: 'no-payment',
         commission_value: '' as any,
         commission_type: '%',
-        images: []
+        images: [],
+        durationPorProfesional: {}
       });
     }
   }, [service, reset]);
@@ -164,6 +167,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
           type: commissionType
         },
         professionals: data.professionals || [],
+        durationPorProfesional: data.durationPorProfesional || {},
         images: data.images?.map(img => img.value).filter(Boolean) || [],
       };
 
@@ -423,23 +427,55 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
                               name="professionals"
                               control={control}
                               render={({ field }) => (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                                  {professionals.map(prof => (
-                                    <div key={prof.id} className="flex items-center space-x-2">
-                                      <Checkbox
-                                        id={prof.id}
-                                        checked={field.value?.includes(prof.id)}
-                                        onCheckedChange={(checked) => {
-                                          const currentValue = field.value || [];
-                                          const newValue = checked
-                                            ? [...currentValue, prof.id]
-                                            : currentValue.filter((id) => id !== prof.id);
-                                          field.onChange(newValue);
-                                        }}
-                                      />
-                                      <Label htmlFor={prof.id} className="font-normal cursor-pointer">{prof.name}</Label>
-                                    </div>
-                                  ))}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+                                  {professionals.map(prof => {
+                                    const isChecked = field.value?.includes(prof.id);
+                                    return (
+                                      <div key={prof.id} className="flex flex-col space-y-2 border p-3 rounded-md bg-slate-50/50">
+                                        <div className="flex items-center space-x-2">
+                                          <Checkbox
+                                            id={prof.id}
+                                            checked={isChecked}
+                                            onCheckedChange={(checked) => {
+                                              const currentValue = field.value || [];
+                                              const newValue = checked
+                                                ? [...currentValue, prof.id]
+                                                : currentValue.filter((id) => id !== prof.id);
+                                              field.onChange(newValue);
+                                              // Remove specific duration when unchecked
+                                              if (!checked) {
+                                                const currentDurations = { ...watch('durationPorProfesional') };
+                                                delete currentDurations[prof.id];
+                                                setValue('durationPorProfesional', currentDurations);
+                                              }
+                                            }}
+                                          />
+                                          <Label htmlFor={prof.id} className="font-medium cursor-pointer">{prof.name}</Label>
+                                        </div>
+                                        {isChecked && (
+                                          <div className="flex items-center justify-between pl-6 mt-1 border-t pt-2 border-slate-200">
+                                            <Label className="text-xs text-muted-foreground mr-2 whitespace-nowrap">Duración (min)</Label>
+                                            <Controller
+                                              name={`durationPorProfesional.${prof.id}`}
+                                              control={control}
+                                              render={({ field: durField }) => (
+                                                <Input 
+                                                  type="number" 
+                                                  placeholder={watch('duration') ? watch('duration').toString() : 'Global'} 
+                                                  className="h-7 text-xs w-20 text-center" 
+                                                  value={durField.value === undefined || durField.value === null ? '' : durField.value}
+                                                  onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    durField.onChange(val === '' ? '' : Number(val));
+                                                  }}
+                                                />
+                                              )}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             />

@@ -200,6 +200,7 @@ export interface Service {
   order: number;
   defaultCommission?: Commission;
   comisionesPorProfesional?: { [profesionalId: string]: Commission };
+  durationPorProfesional?: { [profesionalId: string]: number };
   include_vat?: boolean;
   images?: string[];
   professionals?: string[];

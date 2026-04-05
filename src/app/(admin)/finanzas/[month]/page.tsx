@@ -300,7 +300,7 @@ export default function FinanzasMensualesPage() {
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
-    const { data: liquidaciones, loading: liquidacionesLoading } = useFirestoreQuery<any>(`finanzas_mensuales/${monthName.toLowerCase()}_${selectedYear}/liquidaciones_admin`, `liq-${monthName}-${selectedYear}`);
+    const { data: liquidaciones, loading: liquidacionesLoading } = useFirestoreQuery<any>(`finanzas_mensuales/${monthName.toLowerCase()}_${selectedYear}/liquidaciones_admin`, `liq-${monthName}-${selectedYear}-${queryKey}`);
 
 
     const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false);
@@ -634,7 +634,7 @@ export default function FinanzasMensualesPage() {
     // ---------------------------------
 
     const cashMovementsData = useMemo(() => {
-        if (egresosLoading || incomesManualLoading) return { movements: [], totalEntradas: 0, totalSalidas: 0 };
+        if (egresosLoading || incomesManualLoading) return { movements: [], totalEntradas: 0, totalSalidas: 0, totalReembolsos: 0 };
 
         const movements: any[] = [];
         let totalEntradas = 0;
@@ -645,6 +645,15 @@ export default function FinanzasMensualesPage() {
         egresos.forEach(e => {
             const concepto = e.concepto?.toLowerCase() || '';
             if (concepto.includes('entrega de efectivo') || concepto.includes('entrega de dinero')) {
+                // Filter by role: exclude if "Administrador general"
+                const userById = users?.find(u => u.id === e.aQuien);
+                const userByName = users?.find(u => u.name.toLowerCase() === e.aQuien.toLowerCase());
+                const targetUser = userById || userByName;
+
+                if (targetUser && targetUser.role === 'Administrador general') {
+                    return; // Skip movements from general admin
+                }
+
                 totalSalidas += e.monto;
                 movements.push({
                     id: e.id,
@@ -671,15 +680,27 @@ export default function FinanzasMensualesPage() {
                 comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso') || comentarios.includes('ajuste de caja');
             
             if (isBalanceAjuste) {
-                totalEntradas += i.monto;
-
-                
                 let quien = 'Sistema';
                 if (concepto.includes('lo ingresó') || concepto.includes('lo ingreso')) {
                     quien = i.concepto?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
                 } else if (comentarios.includes('lo ingresó') || comentarios.includes('lo ingreso')) {
                     quien = i.comentarios?.replace(/lo ingres[oó]\s*/i, '').trim() || 'Sistema';
                 }
+
+                const targetUser = users?.find(u => u.name.toLowerCase() === quien.toLowerCase());
+                if (targetUser && targetUser.role === 'Administrador general') {
+                    return; 
+                }
+
+                totalEntradas += i.monto;
+
+                
+
+
+
+
+
+
 
                 movements.push({
                     id: i.id,
@@ -724,7 +745,7 @@ export default function FinanzasMensualesPage() {
         });
 
         return { movements: sorted, totalEntradas, totalSalidas, totalReembolsos };
-    }, [egresos, egresosLoading, incomesManual, incomesManualLoading, cashMovementsSortConfig]);
+    }, [egresos, egresosLoading, incomesManual, incomesManualLoading, liquidaciones, liquidacionesLoading, cashMovementsSortConfig, users]);
 
     const { movements: cashMovements, totalEntradas, totalSalidas, totalReembolsos } = cashMovementsData;
 
@@ -758,7 +779,7 @@ export default function FinanzasMensualesPage() {
             egresosAdmin,
             resultado
         };
-    }, [calculatedEgresos, totalSalidas, totalEntradas, users]);
+    }, [calculatedEgresos, totalSalidas, totalEntradas, totalReembolsos, users]);
 
     const handleSaveComment = async () => {
         if (!commentToEdit) return;

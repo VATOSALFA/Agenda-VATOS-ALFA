@@ -551,7 +551,12 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           { totalPrice: 0, maxDuration: 0, durations: {} as Record<string, number> }
         );
 
-        form.setValue('precio', totalPrice, { shouldValidate: true });
+        // Only auto-update price if not in edit mode OR if a service-related field specifically changed
+        // This prevents manual overrides from being lost when re-opening for edit or changing date
+        const isServiceChange = name && (name.startsWith('items') && (name.endsWith('.servicio') || name === 'items'));
+        if (!isEditMode || isServiceChange) {
+          form.setValue('precio', totalPrice, { shouldValidate: true });
+        }
 
         if (fecha && hora_inicio_hora && hora_inicio_minuto && maxDuration > 0) {
           try {
@@ -595,20 +600,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
 
-      const itemsToSave = data.items.map((item: any) => {
+      const itemsToSave = data.items.map((item: any, idx: number) => {
         // Try to find as service
         const service = services.find(s => s.id === item.servicio);
         if (service) {
           const customDur = service.durationPorProfesional?.[item.barbero_id || ''];
           return {
-            id: service.id, // Ensure ID is saved if needed, or generated? Usually firestore generates ID for subobjects if not provided, but here we store array. Ideally items should have IDs.
-            // But SaleItem usually has 'id' which might be the service ID or unique item ID?
-            // In 'Reservation' type, items is SaleItem[]. SaleItem has 'id'. 
-            // Here 'item.servicio' IS the ID from the form select.
+            id: service.id,
             servicio: service.name,
             nombre: service.name,
             barbero_id: item.barbero_id,
-            precio: service.price || 0,
+            // If there's only one item, we use the total price from the form (which might be edited)
+            // If there are more, we currently default to service price (complex to distribute manual edits)
+            precio: data.items.length === 1 ? (data.precio || 0) : (service.price || 0),
             duracion: item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service.duration || 0)),
             tipo: 'servicio'
           };
@@ -622,23 +626,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             servicio: product.nombre,
             nombre: product.nombre,
             barbero_id: item.barbero_id,
-            precio: product.public_price || 0, // SaleItem usually uses 'precio' corresponding to 'public_price'
+            precio: data.items.length === 1 ? (data.precio || 0) : (product.public_price || 0),
             duracion: item.duracion !== undefined ? item.duracion : 0,
             tipo: 'producto'
           };
         }
 
-        // Fallback: Check if it was an existing item to preserve its data (especially if it was a product not in list?)
-        // But likely we found it in 'products' list if it loaded.
-        // If totally unknown, treat as service with empty name or critical error?
-        // Let's fallback to 'servicio' which holds the ID if lookup failed.
         return {
-          servicio: item.servicio || '', // This is the ID
+          servicio: item.servicio || '',
           nombre: item.servicio || '',
           barbero_id: item.barbero_id,
-          precio: 0,
+          precio: data.items.length === 1 ? (data.precio || 0) : 0,
           duracion: 0,
-          tipo: 'servicio' // Default
+          tipo: 'servicio'
         };
       });
 

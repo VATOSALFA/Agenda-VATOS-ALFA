@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         // to the PRODUCTION domain (https://vatosalfa.com).
 
         const isLocal = baseUrl.includes('localhost');
-        const returnUrl = isLocal ? 'https://vatosalfa.com' : baseUrl;
+        const returnUrl = baseUrl;
 
         // Protocol Check for BaseURL (only if NOT local and NOT already having protocol)
         if (!isLocal && !baseUrl.startsWith('http')) {

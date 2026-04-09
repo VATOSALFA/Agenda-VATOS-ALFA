@@ -438,7 +438,10 @@ export async function createPublicReservation(data: any) {
 
         if (validServices.length === 0) return { error: 'Servicios no encontrados' };
 
-        const totalDuration = validServices.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+        const totalDuration = validServices.reduce((sum: number, s: any) => {
+            const customDur = s.durationPorProfesional?.[data.professionalId];
+            return sum + (customDur !== undefined ? Number(customDur) : (s.duration || 0));
+        }, 0);
         const totalPrice = validServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
         const serviceNames = validServices.map((s: any) => s.name).join(', ');
 
@@ -582,14 +585,17 @@ export async function createPublicReservation(data: any) {
         if (hasBlockConflict) return { error: 'El profesional tiene un bloqueo en este horario.' };
 
 
-        const items = validServices.map((s: any) => ({
-            id: s.id,
-            nombre: s.name,
-            servicio: s.name,
-            precio: s.price,
-            duracion: s.duration,
-            barbero_id: data.professionalId
-        }));
+        const items = validServices.map((s: any) => {
+            const customDur = s.durationPorProfesional?.[data.professionalId];
+            return {
+                id: s.id,
+                nombre: s.name,
+                servicio: s.name,
+                precio: s.price,
+                duracion: customDur !== undefined ? Number(customDur) : (s.duration || 0),
+                barbero_id: data.professionalId
+            };
+        });
 
         // 3. Create Reservation
         const reservationData = {

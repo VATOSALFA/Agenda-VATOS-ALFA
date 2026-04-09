@@ -695,7 +695,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             }
             const initialCartItems: CartItem[] = initialData.items.map(item => {
                 const tipo = 'duration' in item ? 'servicio' : 'producto';
-                const precio = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
+                // Prioritize 'precio' (manually edited during reservation) over master price list
+                const precio = (item as any).precio || (tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price);
                 const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
                 const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
                 return {

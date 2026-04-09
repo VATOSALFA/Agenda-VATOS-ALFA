@@ -646,28 +646,25 @@ export default function AgendaView() {
         if (item.tipo === 'producto') {
           const product = products.find(p => p.nombre === item.nombre || p.id === item.id);
           return product ? {
-            ...product, // Contains original product data
-            // We overwrite with specific sale item details
+            ...product,
             id: product.id,
             nombre: product.nombre,
-            precio: product.public_price,
+            precio: item.precio || product.public_price,
             cantidad: item.cantidad,
             tipo: 'producto' as const,
-            commissionPaid: (item as any).commissionPaid // Preserve commission status
+            commissionPaid: (item as any).commissionPaid
           } : null;
         } else {
-          // Default to service
           const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
           return service ? {
-            ...service, // Contains original service data
-            // We overwrite with specific sale item details
+            ...service,
             id: service.id,
             nombre: service.name,
-            precio: service.price,
+            precio: item.precio || service.price,
             cantidad: 1,
             tipo: 'servicio' as const,
             barbero_id: item.barbero_id,
-            commissionPaid: (item as any).commissionPaid // Preserve commission status
+            commissionPaid: (item as any).commissionPaid
           } : null;
         }
       }).filter((i): i is any => !!i);

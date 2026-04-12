@@ -64,8 +64,8 @@ const VatosButton = React.forwardRef<HTMLButtonElement, VatosButtonProps>(
             >
                 {/* Top neon line - Centered & Subtle */}
                 <span className={cn(
-                    "absolute h-[1.5px] opacity-0 group-hover:opacity-100 transition-all duration-500 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/2 mx-auto from-transparent via-blue-500 to-transparent z-10 blur-[0.2px] shadow-[0_0_8px_rgba(59,130,246,0.6)]", 
-                    neon && "block"
+                    "absolute h-[1.5px] transition-all duration-500 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/2 mx-auto from-transparent via-blue-500 to-transparent z-10 blur-[0.2px] shadow-[0_0_8px_rgba(59,130,246,0.6)]", 
+                    neon ? "opacity-100 md:opacity-0 md:group-hover:opacity-100 block" : "hidden"
                 )} />
                 
                 <span className="relative z-20 flex items-center justify-center gap-2">
@@ -74,14 +74,15 @@ const VatosButton = React.forwardRef<HTMLButtonElement, VatosButtonProps>(
 
                 {/* Bottom neon line - Centered & Subtle */}
                 <span className={cn(
-                    "absolute h-[1.5px] opacity-0 group-hover:opacity-100 transition-all duration-500 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/2 mx-auto from-transparent via-blue-500 to-transparent z-10 blur-[0.2px] shadow-[0_0_8px_rgba(59,130,246,0.6)]", 
-                    neon && "block"
+                    "absolute h-[1.5px] transition-all duration-500 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/2 mx-auto from-transparent via-blue-500 to-transparent z-10 blur-[0.2px] shadow-[0_0_8px_rgba(59,130,246,0.6)]", 
+                    neon ? "opacity-100 md:opacity-0 md:group-hover:opacity-100 block" : "hidden"
                 )} />
                 
                 {/* Subtle perimeter glow wrap */}
                 <span className={cn(
-                    "absolute inset-0 border border-blue-500/0 group-hover:border-blue-500/30 transition-all duration-500 pointer-events-none",
-                    isPill ? "rounded-full" : "rounded-md"
+                    "absolute inset-0 border transition-all duration-500 pointer-events-none",
+                    isPill ? "rounded-full" : "rounded-md",
+                    "border-blue-500/30 md:border-blue-500/0 md:group-hover:border-blue-500/30"
                 )} />
             </Comp>
         );

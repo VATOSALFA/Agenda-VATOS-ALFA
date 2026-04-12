@@ -1,8 +1,9 @@
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
-import { where, Timestamp, type QueryConstraint } from 'firebase/firestore';
+import { where, Timestamp, type QueryConstraint, doc, getDoc } from 'firebase/firestore';
+import { db } from "@/lib/firebase-client";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Egreso, IngresoManual, Client, Profesional, Local, User } from "@/lib/types";
 import { roundMoney } from '@/lib/utils';
@@ -77,9 +78,43 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     );
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+
+    // 2.b Fetch ONLY needed clients to optimize loaded memory
+    const fetchedClientIds = useRef<Set<string>>(new Set());
+    const [clientsInSales, setClientsInSales] = useState<Client[]>([]);
+    const [clientsLoading, setClientsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!sales || sales.length === 0) return;
+
+        const uniqueClientIds = Array.from(new Set(sales.map(s => s.cliente_id).filter(Boolean)));
+        const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIds.current.has(id));
+
+        if (idsToFetch.length > 0) {
+            const fetchClients = async () => {
+                setClientsLoading(true);
+                try {
+                    const promises = idsToFetch.map(id => getDoc(doc(db, 'clientes', id)));
+                    const results = await Promise.all(promises);
+                    const newClients: Client[] = [];
+                    results.forEach(snapshot => {
+                        if (snapshot.exists()) {
+                            fetchedClientIds.current.add(snapshot.id);
+                            newClients.push({ id: snapshot.id, ...snapshot.data() } as Client);
+                        }
+                    });
+                    setClientsInSales(prev => [...prev, ...newClients]);
+                } catch (err) {
+                    console.error("Error fetching clients", err);
+                } finally {
+                    setClientsLoading(false);
+                }
+            };
+            fetchClients();
+        }
+    }, [sales]);
 
     const loading = salesLoading || egresosLoading || ingresosLoading || localesLoading || clientsLoading || professionalsLoading || usersLoading;
 
@@ -122,9 +157,9 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
 
     // 4. Populate Data
     const clientMap = useMemo(() => {
-        if (clientsLoading) return new Map();
-        return new Map(clients.map(c => [c.id, c]));
-    }, [clients, clientsLoading]);
+        if (!clientsInSales) return new Map();
+        return new Map(clientsInSales.map(c => [c.id, c]));
+    }, [clientsInSales]);
 
     const professionalMap = useMemo(() => {
         if (professionalsLoading || usersLoading) return new Map();

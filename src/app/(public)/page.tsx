@@ -964,7 +964,7 @@ export default function LandingPage() {
                     className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar"
                 >
                     {/* Top neon line for the whole bar */}
-                    <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+                    <span className="absolute h-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
 
                     <Link href="#servicios">
                         <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">

@@ -399,7 +399,17 @@ export default function InspiracionPage() {
 
 function InspiracionContent() {
   const router = useRouter();
-  const { galleryData, loading } = useCard();
+  const { galleryData, loading, cards, setSelectedCard } = useCard();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile(); // Check on mount
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   return (
     <div className="w-full h-screen relative overflow-hidden bg-black selection:bg-blue-500/30">
@@ -421,6 +431,34 @@ function InspiracionContent() {
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black gap-4">
              <div className="w-12 h-12 border-4 border-[#314177]/20 border-t-[#314177] rounded-full animate-spin" />
              <p className="text-[#314177] font-bold tracking-widest text-xs uppercase animate-pulse">Cargando Galaxia...</p>
+        </div>
+      ) : isMobile ? (
+        <div className="absolute inset-0 z-10 pt-[100px] pb-10 px-4 h-full overflow-y-auto w-full">
+            <h1 className="text-3xl font-black tracking-tighter mb-4 italic text-white drop-shadow-[0_0_15px_rgba(49,65,119,0.5)] uppercase text-center mt-4">
+              {galleryData.title.split(' ').map((word, i) => (
+                i === galleryData.title.split(' ').length - 1 ? 
+                <span key={i} className="text-transparent bg-clip-text bg-gradient-to-r from-[#314177] to-[#4b61a3] ml-2">{word}</span> : 
+                <span key={i} className="mr-2">{word}</span>
+              ))}
+            </h1>
+            <p className="text-center text-[#314177] text-xs font-bold tracking-widest uppercase mb-8">{galleryData.subtitle}</p>
+            <div className="grid grid-cols-2 gap-3 pb-20">
+              {cards.map(card => (
+                  <div 
+                     key={card.id}
+                     onClick={(e) => { e.stopPropagation(); setSelectedCard(card); }}
+                     className="w-full flex flex-col rounded-lg overflow-hidden shadow-2xl bg-[#1F2121] p-2 border border-white/10 active:border-[#314177] active:scale-95 transition-all text-center aspect-[3/4]"
+                  >
+                     <img
+                       src={card.imageUrl || "/placeholder.svg"}
+                       alt={card.alt}
+                       className="w-full h-full object-cover rounded-md flex-1 min-h-0"
+                       loading="lazy"
+                     />
+                     <span className="text-white text-[10px] sm:text-xs font-medium truncate w-full mt-2 shrink-0">{card.title}</span>
+                  </div>
+              ))}
+            </div>
         </div>
       ) : (
         <Canvas
@@ -454,7 +492,7 @@ function InspiracionContent() {
 
       <CardModal />
 
-      {!loading && (
+      {!loading && !isMobile && (
         <div className="absolute bottom-10 left-0 right-0 z-20 text-center pointer-events-none px-6">
           <h1 className="text-3xl md:text-5xl font-black tracking-tighter mb-2 italic text-white drop-shadow-[0_0_15px_rgba(49,65,119,0.5)] uppercase">
             {galleryData.title.split(' ').map((word, i) => (

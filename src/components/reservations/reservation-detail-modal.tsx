@@ -496,6 +496,15 @@ export function ReservationDetailModal({
                   </div>
                 )}
               </div>
+              
+              {reservation.customer?.notas && (
+                <div className="mt-3 bg-amber-50/60 border border-amber-200/60 p-3 rounded-lg shadow-sm">
+                  <h5 className="font-semibold text-amber-800 text-xs mb-1 flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Notas del Cliente (Internas)
+                  </h5>
+                  <p className="text-sm text-amber-900 whitespace-pre-wrap leading-relaxed">{reservation.customer.notas}</p>
+                </div>
+              )}
             </div>
 
             {reservation.nota_interna && (

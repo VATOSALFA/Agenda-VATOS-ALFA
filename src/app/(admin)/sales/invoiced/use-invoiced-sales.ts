@@ -1,8 +1,9 @@
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
-import { where } from "firebase/firestore";
+import { where, doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase-client";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Client, Profesional, User } from "@/lib/types";
 
@@ -31,9 +32,43 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
 
     // 2. Fetch Data
     const { data: salesDataFromHook, loading: salesLoading } = useFirestoreQuery<Sale>('ventas', queryKey, ...salesQueryConstraints);
-    const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
+
+    // 2.b Fetch ONLY needed clients to optimize loaded memory
+    const fetchedClientIds = useRef<Set<string>>(new Set());
+    const [clientsInSales, setClientsInSales] = useState<Client[]>([]);
+    const [clientsLoading, setClientsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!salesDataFromHook || salesDataFromHook.length === 0) return;
+
+        const uniqueClientIds = Array.from(new Set(salesDataFromHook.map(s => s.cliente_id).filter(Boolean)));
+        const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIds.current.has(id));
+
+        if (idsToFetch.length > 0) {
+            const fetchClients = async () => {
+                setClientsLoading(true);
+                try {
+                    const promises = idsToFetch.map(id => getDoc(doc(db, 'clientes', id)));
+                    const results = await Promise.all(promises);
+                    const newClients: Client[] = [];
+                    results.forEach(snapshot => {
+                        if (snapshot.exists()) {
+                            fetchedClientIds.current.add(snapshot.id);
+                            newClients.push({ id: snapshot.id, ...snapshot.data() } as Client);
+                        }
+                    });
+                    setClientsInSales(prev => [...prev, ...newClients]);
+                } catch (err) {
+                    console.error("Error fetching clients", err);
+                } finally {
+                    setClientsLoading(false);
+                }
+            };
+            fetchClients();
+        }
+    }, [salesDataFromHook]);
 
     const loading = salesLoading || clientsLoading || professionalsLoading || usersLoading;
 
@@ -61,9 +96,9 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
 
     // 4. Populate Data (Join with Clients/Professionals)
     const clientMap = useMemo(() => {
-        if (!clients) return new Map();
-        return new Map(clients.map(c => [c.id, c]));
-    }, [clients]);
+        if (!clientsInSales) return new Map();
+        return new Map(clientsInSales.map(c => [c.id, c]));
+    }, [clientsInSales]);
 
     const sellerMap = useMemo(() => {
         const map = new Map<string, string>();

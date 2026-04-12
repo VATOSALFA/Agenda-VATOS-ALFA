@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, type LucideIcon } from 'lucide-react';
 import type { Client, Profesional } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
@@ -43,7 +43,7 @@ interface Sale {
   monto_pagado_real?: number;
 }
 
-const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value: string | undefined | null }) => (
+const InfoRow = ({ icon: Icon, label, value }: { icon: LucideIcon, label: string, value: string | undefined | null }) => (
   <div className="flex items-start gap-3">
     <Icon className="h-5 w-5 text-primary flex-shrink-0 mt-1" />
     <div>
@@ -53,7 +53,7 @@ const InfoRow = ({ icon: Icon, label, value }: { icon: React.ElementType, label:
   </div>
 );
 
-const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | number, icon: React.ElementType, description?: string }) => (
+const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | number, icon: LucideIcon, description?: string }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>

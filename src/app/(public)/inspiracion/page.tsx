@@ -108,12 +108,14 @@ function StarfieldBackground() {
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000)
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setSize(window.innerWidth, window.innerHeight)
-    renderer.setPixelRatio(window.devicePixelRatio)
+    // Optimización: limitar pixelRatio en móviles mejora dramáticamente el rendimiento
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, window.innerWidth < 768 ? 1.5 : 2))
     renderer.setClearColor(0x000000, 1)
     mountRef.current.appendChild(renderer.domElement)
 
     const starsGeometry = new THREE.BufferGeometry()
-    const starsCount = 10000
+    // Optimización: Menos estrellas en pantallas pequeñas
+    const starsCount = window.innerWidth < 768 ? 2000 : 10000
     const positions = new Float32Array(starsCount * 3)
     for (let i = 0; i < starsCount; i++) {
       positions[i * 3] = (Math.random() - 0.5) * 2000
@@ -330,6 +332,10 @@ function CardModal() {
 
 function CardGalaxy() {
   const { cards } = useCard()
+  
+  // Optmización: Menos segmentos poligonales para la estructura alámbrica en móviles
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
+  const segments = isMobile ? 12 : 32;
 
   const cardPositions = useMemo(() => {
     const positions: {
@@ -365,16 +371,16 @@ function CardGalaxy() {
 
   return (
     <>
-      <Sphere args={[2, 32, 32]} position={[0, 0, 0]}>
+      <Sphere args={[2, segments, segments]} position={[0, 0, 0]}>
         <meshStandardMaterial color="#314177" transparent opacity={0.15} wireframe />
       </Sphere>
-      <Sphere args={[12, 32, 32]} position={[0, 0, 0]}>
+      <Sphere args={[12, segments, segments]} position={[0, 0, 0]}>
         <meshStandardMaterial color="#202A49" transparent opacity={0.05} wireframe />
       </Sphere>
-      <Sphere args={[16, 32, 32]} position={[0, 0, 0]}>
+      <Sphere args={[16, segments, segments]} position={[0, 0, 0]}>
         <meshStandardMaterial color="#314177" transparent opacity={0.03} wireframe />
       </Sphere>
-      <Sphere args={[20, 32, 32]} position={[0, 0, 0]}>
+      <Sphere args={[20, segments, segments]} position={[0, 0, 0]}>
         <meshStandardMaterial color="#202A49" transparent opacity={0.02} wireframe />
       </Sphere>
 
@@ -399,17 +405,7 @@ export default function InspiracionPage() {
 
 function InspiracionContent() {
   const router = useRouter();
-  const { galleryData, loading, cards, setSelectedCard } = useCard();
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    checkMobile(); // Check on mount
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
+  const { galleryData, loading } = useCard();
 
   return (
     <div className="w-full h-screen relative overflow-hidden bg-black selection:bg-blue-500/30">
@@ -432,36 +428,10 @@ function InspiracionContent() {
              <div className="w-12 h-12 border-4 border-[#314177]/20 border-t-[#314177] rounded-full animate-spin" />
              <p className="text-[#314177] font-bold tracking-widest text-xs uppercase animate-pulse">Cargando Galaxia...</p>
         </div>
-      ) : isMobile ? (
-        <div className="absolute inset-0 z-10 pt-[100px] pb-10 px-4 h-full overflow-y-auto w-full">
-            <h1 className="text-3xl font-black tracking-tighter mb-4 italic text-white drop-shadow-[0_0_15px_rgba(49,65,119,0.5)] uppercase text-center mt-4">
-              {galleryData.title.split(' ').map((word, i) => (
-                i === galleryData.title.split(' ').length - 1 ? 
-                <span key={i} className="text-transparent bg-clip-text bg-gradient-to-r from-[#314177] to-[#4b61a3] ml-2">{word}</span> : 
-                <span key={i} className="mr-2">{word}</span>
-              ))}
-            </h1>
-            <p className="text-center text-[#314177] text-xs font-bold tracking-widest uppercase mb-8">{galleryData.subtitle}</p>
-            <div className="grid grid-cols-2 gap-3 pb-20">
-              {cards.map(card => (
-                  <div 
-                     key={card.id}
-                     onClick={(e) => { e.stopPropagation(); setSelectedCard(card); }}
-                     className="w-full flex flex-col rounded-lg overflow-hidden shadow-2xl bg-[#1F2121] p-2 border border-white/10 active:border-[#314177] active:scale-95 transition-all text-center aspect-[3/4]"
-                  >
-                     <img
-                       src={card.imageUrl || "/placeholder.svg"}
-                       alt={card.alt}
-                       className="w-full h-full object-cover rounded-md flex-1 min-h-0"
-                       loading="lazy"
-                     />
-                     <span className="text-white text-[10px] sm:text-xs font-medium truncate w-full mt-2 shrink-0">{card.title}</span>
-                  </div>
-              ))}
-            </div>
-        </div>
       ) : (
         <Canvas
+          dpr={[1, 1.5]}
+          performance={{ min: 0.5 }}
           camera={{ position: [0, 0, 20], fov: 55 }}
           className="absolute inset-0 z-10"
           onCreated={({ gl }) => {
@@ -492,7 +462,7 @@ function InspiracionContent() {
 
       <CardModal />
 
-      {!loading && !isMobile && (
+      {!loading && (
         <div className="absolute bottom-10 left-0 right-0 z-20 text-center pointer-events-none px-6">
           <h1 className="text-3xl md:text-5xl font-black tracking-tighter mb-2 italic text-white drop-shadow-[0_0_15px_rgba(49,65,119,0.5)] uppercase">
             {galleryData.title.split(' ').map((word, i) => (

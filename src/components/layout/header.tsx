@@ -671,28 +671,55 @@ export default function Header() {
               </PopoverTrigger>
               <PopoverContent className="w-80 p-4" align="end">
                 <div className="flex flex-col space-y-4">
+                  {user?.role !== 'Administrador general' && (
+                    <div className="space-y-2 border-b border-border/50 pb-4">
+                      <h4 className="font-semibold leading-none flex items-center text-primary"><User className="mr-2 h-4 w-4" /> Mi Enlace Personal</h4>
+                      <p className="text-xs text-muted-foreground break-all">
+                        {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${user?.uid}` : ''}
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                          const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                          if (baseUrl) {
+                            const url = `${baseUrl}/reservar?professionalId=${user?.uid}&preview=true`;
+                            window.open(url, '_blank');
+                          }
+                        }}>
+                          <ExternalLink className="mr-2 h-4 w-4" />
+                          Ir a mi enlace
+                        </Button>
+                        <Button variant="outline" size="icon" onClick={() => {
+                          const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                          navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${user?.uid}`);
+                          toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
+                        }}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2">
-                    <h4 className="font-semibold leading-none">¡Comparte tu link y recibe citas!</h4>
+                    <h4 className="font-semibold leading-none flex items-center text-primary"><Store className="mr-2 h-4 w-4" /> Enlace General</h4>
                     <p className="text-xs text-muted-foreground break-all">
                       {displayUrl}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                      if (displayUrl) {
-                        const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
-                        window.open(previewUrl, '_blank');
-                      }
-                    }}>
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      Ir a mi sitio web
-                    </Button>
-                    <Button variant="outline" size="icon" onClick={() => {
-                      navigator.clipboard.writeText(displayUrl);
-                      toast({ title: "Link copiado", description: "El enlace se ha copiado al portapapeles." });
-                    }}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                        if (displayUrl) {
+                          const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
+                          window.open(previewUrl, '_blank');
+                        }
+                      }}>
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Ir a la web
+                      </Button>
+                      <Button variant="outline" size="icon" onClick={() => {
+                        navigator.clipboard.writeText(displayUrl);
+                        toast({ title: "Link copiado", description: "El enlace general se ha copiado al portapapeles." });
+                      }}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </PopoverContent>

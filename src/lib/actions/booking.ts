@@ -373,7 +373,15 @@ export async function createPublicReservation(data: any) {
 
         if (existingDoc) {
             clientId = existingDoc.id;
-            // Optional: Update info if missing? For now, just link.
+            
+            // Progressive Enrichment: Update email if it was missing in the existing profile
+            const existingData = existingDoc.data();
+            if (validateEmail && data.client.email && !existingData.correo && !existingData.email) {
+                await db.collection('clientes').doc(clientId).update({
+                    correo: data.client.email
+                });
+                console.log(`[Booking] Updated missing email for existing client ${clientId}: ${data.client.email}`);
+            }
         } else {
             // Determine Custom Client ID (Auto-increment)
             let nextClientNumber = undefined;

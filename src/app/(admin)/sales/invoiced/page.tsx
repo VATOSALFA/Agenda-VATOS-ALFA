@@ -56,7 +56,7 @@ import { logAuditAction } from '@/lib/audit-logger';
 
 export default function InvoicedSalesPage() {
     const { user } = useAuth();
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [localFilter, setLocalFilter] = useState('todos');
     const [paymentMethodFilter, setPaymentMethodFilter] = useState('todos');
@@ -66,7 +66,7 @@ export default function InvoicedSalesPage() {
         paymentMethod: string;
         professional?: string;
     }>({
-        dateRange: undefined,
+        dateRange: { from: new Date(), to: new Date() },
         local: 'todos',
         paymentMethod: 'todos',
         professional: 'todos'

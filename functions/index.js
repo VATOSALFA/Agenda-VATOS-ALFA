@@ -590,6 +590,15 @@ exports.mercadoPagoWebhook = onRequest(
                 // CLIENTE ENCONTRADO - USAMOS EL EXISTENTE
                 clientId = clientQuery.docs[0].id;
                 console.log(`[vFinal] Cliente existente encontrado por coincidencias: ${clientId}`);
+
+                // Progressive Enrichment: Update email if it was missing
+                const existingData = clientQuery.docs[0].data();
+                if (clientData.email && !existingData.correo && !existingData.email) {
+                  await clientsRef.doc(clientId).update({
+                    correo: clientData.email
+                  });
+                  console.log(`[vFinal] Correo faltante actualizado para el cliente: ${clientId}`);
+                }
               } else {
                 // CLIENTE NO EXISTE - CREAMOS UNO NUEVO
 

@@ -125,7 +125,7 @@ const SummaryCard = ({
     </Card>
 );
 
-const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
+const IconSeparator = ({ icon: Icon }: { icon: any }) => (
     <div className="flex items-center justify-center">
         <Icon className="h-6 w-6 text-muted-foreground" />
     </div>
@@ -134,7 +134,7 @@ const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
 
 export default function CashBoxPage() {
     const { user } = useAuth();
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     const handleDateSelect = (range: DateRange | undefined) => {
@@ -149,7 +149,7 @@ export default function CashBoxPage() {
         dateRange: DateRange | undefined;
         localId: string;
     }>({
-        dateRange: undefined,
+        dateRange: { from: new Date(), to: new Date() },
         localId: 'todos'
     });
 

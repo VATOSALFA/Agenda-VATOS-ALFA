@@ -7,11 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Trophy, TrendingUp, Calendar, Target, DollarSign, Star, Award } from 'lucide-react';
+import { Trophy, TrendingUp, Calendar, Target, DollarSign, Star, Award, Share2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { Sale } from '@/lib/types';
 import { where } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -32,6 +33,8 @@ export default function DashboardPage() {
     // Let's assume we can fetch 'ventas'.
     const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<any>('profesionales');
+    const { data: empresaData } = useFirestoreQuery<any>('empresa');
+    const { toast } = useToast();
 
     const dashboardData = useMemo(() => {
         if (!sales || !user) return null;
@@ -48,7 +51,7 @@ export default function DashboardPage() {
 
         // Personal Stats
         // Find professional ID linked to user
-        const myProfessionalId = professionals?.find((p: any) => p.userId === user.uid)?.id;
+        const myProfessionalId = professionals?.find((p: any) => p.userId === user.uid)?.id || user.uid;
 
         // If user is admin, show global stats or personal if they have a professional profile?
         // Let's focus on "My Stats".
@@ -99,6 +102,7 @@ export default function DashboardPage() {
         else { progressToNext = (myTotal / 10000) * 100; }
 
         return {
+            myProfessionalId,
             myTotal,
             myTodayTotal,
             myRanking,
@@ -145,9 +149,25 @@ export default function DashboardPage() {
                     <h2 className="text-3xl font-bold tracking-tight">Hola, {user?.displayName?.split(' ')[0] || 'Barbero'} 👋</h2>
                     <p className="text-muted-foreground">Aquí está tu rendimiento de este mes.</p>
                 </div>
-                <div className="flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
-                    <Trophy className="h-5 w-5 text-yellow-500" />
-                    <span className="font-bold text-sm">Nivel {dashboardData?.level}: {dashboardData?.levelName}</span>
+                <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
+                        <Trophy className="h-5 w-5 text-yellow-500" />
+                        <span className="font-bold text-sm">Nivel {dashboardData?.level}: {dashboardData?.levelName}</span>
+                    </div>
+                    {dashboardData?.myProfessionalId && (
+                        <button 
+                            onClick={() => {
+                                const displayUrl = empresaData?.[0]?.website_slug || window.location.origin;
+                                const baseUrl = displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl;
+                                const link = `${baseUrl}/reservar?professionalId=${user?.uid}`;
+                                navigator.clipboard.writeText(link);
+                                toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado al portapapeles." });
+                            }}
+                            className="flex items-center text-sm text-primary hover:underline"
+                        >
+                            <Share2 className="w-4 h-4 mr-1" /> Copiar mi enlace de citas
+                        </button>
+                    )}
                 </div>
             </div>
 

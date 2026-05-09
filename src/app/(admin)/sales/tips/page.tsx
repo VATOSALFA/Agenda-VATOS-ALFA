@@ -23,7 +23,7 @@ export default function TipsPage() {
     const isLocalRestricted = !!user?.local_id;
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
-    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+    const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
     const [localFilter, setLocalFilter] = useState('todos');
     const [professionalFilter, setProfessionalFilter] = useState('todos');
 
@@ -33,7 +33,7 @@ export default function TipsPage() {
         local: string;
         professional: string;
     }>({
-        dateRange: undefined,
+        dateRange: { from: new Date(), to: new Date() },
         local: 'todos',
         professional: 'todos'
     });

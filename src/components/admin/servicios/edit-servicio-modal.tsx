@@ -50,7 +50,7 @@ const serviceSchema = z.object({
   payment_amount_value: z.coerce.string().optional(),
   payment_amount_type: z.enum(['%', '$']).default('%'),
   images: z.array(z.object({ value: z.string() })).optional().default([]),
-  durationPorProfesional: z.record(z.string(), z.union([z.coerce.number(), z.string().transform(v => v === "" ? "" : Number(v))])).optional(),
+  durationPorProfesional: z.record(z.string(), z.union([z.coerce.number(), z.string().transform(v => v === "" ? "" : Number(v))]).optional()).optional(),
 });
 
 type ServiceFormData = z.infer<typeof serviceSchema>;
@@ -149,6 +149,14 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
       const commissionValue = Number(data.commission_value) || 0;
       const commissionType = data.commission_type || '%';
 
+      // Clean durationPorProfesional to avoid saving undefined/empty values
+      const cleanDurationPorProfesional = Object.entries(data.durationPorProfesional || {})
+        .filter(([_, val]) => val !== undefined && val !== null && val !== "")
+        .reduce((acc, [key, val]) => {
+          acc[key] = val;
+          return acc;
+        }, {} as Record<string, any>);
+
       // Prepare the object to save, excluding UI-only fields
       const dataToSave = {
         name: data.name,
@@ -167,7 +175,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
           type: commissionType
         },
         professionals: data.professionals || [],
-        durationPorProfesional: data.durationPorProfesional || {},
+        durationPorProfesional: cleanDurationPorProfesional,
         images: data.images?.map(img => img.value).filter(Boolean) || [],
       };
 
@@ -249,6 +257,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   };
 
   const onErrors = (errors: FieldErrors<ServiceFormData>) => {
+    console.log("Validation errors:", errors);
     const missingFields: string[] = [];
     if (errors.name) missingFields.push('Nombre del servicio');
     if (errors.price) missingFields.push('Precio');
@@ -261,6 +270,12 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         variant: 'destructive',
         title: 'Campos requeridos faltantes',
         description: `Por favor completa los siguientes campos: ${missingFields.join(', ')}`,
+      });
+    } else if (Object.keys(errors).length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Error de validación',
+        description: `Error detectado: ${Object.keys(errors).map(key => `${key}: ${(errors as any)[key]?.message}`).join(', ')}`,
       });
     }
   };

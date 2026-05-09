@@ -38,7 +38,7 @@ const SummaryCard = ({ title, amount }: { title: string, amount: number }) => (
     </Card>
 )
 
-const IconSeparator = ({ icon: Icon }: { icon: React.ElementType }) => (
+const IconSeparator = ({ icon: Icon }: { icon: any }) => (
     <div className="flex items-center justify-center">
         <Icon className="h-6 w-6 text-muted-foreground" />
     </div>

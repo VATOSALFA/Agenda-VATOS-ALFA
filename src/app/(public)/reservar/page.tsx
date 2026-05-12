@@ -280,8 +280,12 @@ export default function BookingPage() {
 
         if (preSelectedProId) {
             available = available.filter((s: any) => {
-                const pro = professionals.find(p => p.id === preSelectedProId);
-                return pro && pro.services ? pro.services.includes(s.id) : false;
+                const pro = professionals.find((p: any) => p.id === preSelectedProId || p.userId === preSelectedProId);
+                if (pro && pro.services && pro.services.length > 0) {
+                    return pro.services.includes(s.id);
+                }
+                // Si el profesional no tiene servicios asignados, le mostramos todos por defecto
+                return true;
             });
         }
 
@@ -410,7 +414,7 @@ export default function BookingPage() {
                 // Filter Pros who can do THESE services
                 const capablePros = professionals.filter(p =>
                     p.active &&
-                    (!preSelectedProId || p.id === preSelectedProId) &&
+                    (!preSelectedProId || p.id === preSelectedProId || p.userId === preSelectedProId) &&
                     requiredServiceIds.every(sId => (p.services || []).includes(sId))
                 );
 
@@ -506,11 +510,12 @@ export default function BookingPage() {
         const timeToUse = overrideTime || tempTime;
         if (!activeConfigId || !tempDate || !timeToUse) return;
 
-        const pro = professionals.find(p => p.id === proId);
+        const pro = professionals.find(p => p.id === proId || p.userId === proId);
+        const actualProId = pro ? pro.id : proId;
         const config: AppointmentConfig = {
             date: tempDate,
             time: timeToUse,
-            professionalId: proId,
+            professionalId: actualProId,
             professional: pro
         };
 
@@ -848,7 +853,7 @@ export default function BookingPage() {
                                     </VatosButton>
                                     {/* Pre-selected Pro Banner */}
                                     {preSelectedProId && (() => {
-                                        const pro = professionals.find(p => p.id === preSelectedProId);
+                                        const pro = professionals.find(p => p.id === preSelectedProId || p.userId === preSelectedProId);
                                         return pro ? (
                                             <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">

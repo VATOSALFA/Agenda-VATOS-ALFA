@@ -366,7 +366,15 @@ export async function createPublicReservation(data: any) {
         }
 
         if (!existingDoc && validatePhone && data.client.phone) {
+            // 3. Check by Phone
             const q = clientsRef.where('telefono', '==', data.client.phone).limit(1);
+            const snap = await q.get();
+            if (!snap.empty) existingDoc = snap.docs[0];
+        }
+        
+        if (!existingDoc && data.client.name && data.client.lastName) {
+            // 4. Fallback: Check by Name and Last Name
+            const q = clientsRef.where('nombre', '==', data.client.name).where('apellido', '==', data.client.lastName).limit(1);
             const snap = await q.get();
             if (!snap.empty) existingDoc = snap.docs[0];
         }
@@ -374,13 +382,31 @@ export async function createPublicReservation(data: any) {
         if (existingDoc) {
             clientId = existingDoc.id;
             
-            // Progressive Enrichment: Update email if it was missing in the existing profile
+            // Progressive Enrichment: Update email or phone if missing/placeholder
             const existingData = existingDoc.data();
-            if (validateEmail && data.client.email && !existingData.correo && !existingData.email) {
-                await db.collection('clientes').doc(clientId).update({
-                    correo: data.client.email
-                });
-                console.log(`[Booking] Updated missing email for existing client ${clientId}: ${data.client.email}`);
+            const updates: any = {};
+            
+            // Check and update Email
+            const currentEmail = existingData.correo || existingData.email || '';
+            const isInvalidEmail = !currentEmail || currentEmail.toLowerCase() === 'no registrado' || currentEmail.trim() === '' || !currentEmail.includes('@');
+            const providedEmail = data.client.email;
+            
+            if (validateEmail && providedEmail && isInvalidEmail && providedEmail.includes('@')) {
+                updates.correo = providedEmail;
+            }
+            
+            // Check and update Phone
+            const currentPhone = existingData.telefono || '';
+            const isInvalidPhone = !currentPhone || currentPhone.toLowerCase() === 'no registrado' || currentPhone.trim() === '';
+            const providedPhone = data.client.phone;
+            
+            if (validatePhone && providedPhone && isInvalidPhone && providedPhone.length >= 10) {
+                updates.telefono = providedPhone;
+            }
+            
+            if (Object.keys(updates).length > 0) {
+                await db.collection('clientes').doc(clientId).update(updates);
+                console.log(`[Booking] Enriched existing client ${clientId}:`, updates);
             }
         } else {
             // Determine Custom Client ID (Auto-increment)

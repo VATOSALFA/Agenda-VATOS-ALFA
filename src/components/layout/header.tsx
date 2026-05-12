@@ -59,6 +59,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Promotion } from '@/lib/types';
 import { ExternalLink, WifiOff } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useFeatures } from '@/hooks/use-features';
@@ -120,6 +121,9 @@ export default function Header() {
   // We fetch the whole collection (it's small and public) and filter client-side to avoid
   // potential issues with Firestore where-query indexes or security rules.
   const { data: allProfessionals = [] } = useFirestoreQuery<any>('profesionales');
+  const { data: allPromotions = [] } = useFirestoreQuery<Promotion>('promociones');
+  const hasActivePromotions = useMemo(() => allPromotions.some(p => p.active), [allPromotions]);
+
   const professionalId = useMemo(() => {
     if (!user?.uid || allProfessionals.length === 0) return user?.uid;
     const match = allProfessionals.find((p: any) => p.userId === user.uid);
@@ -130,7 +134,8 @@ export default function Header() {
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
     { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
     { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
-  ], [enableBarberDashboard]);
+    ...(hasActivePromotions ? [{ href: '/promociones', label: 'Promociones', icon: Gift, permission: 'ver_promociones' }] : []),
+  ], [enableBarberDashboard, hasActivePromotions]);
 
   // Get website URL from settings or fallback to current origin
   const configuredWebsiteUrl = empresaData?.[0]?.website_slug;

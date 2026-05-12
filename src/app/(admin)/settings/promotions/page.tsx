@@ -235,7 +235,13 @@ export default function PromotionsPage() {
                         <Card key={promo.id} className="flex flex-col overflow-hidden">
                             <div className="relative h-48 w-full bg-muted">
                                 {promo.imageUrl ? (
-                                    <img src={promo.imageUrl} alt={promo.name} className="h-full w-full object-cover" />
+                                    (promo.imageUrl.toLowerCase().includes('.mp4') || promo.imageUrl.toLowerCase().includes('.webm') || (promo.imageUrl.includes('alt=media') && promo.imageUrl.includes('video'))) ? (
+                                        <div className="relative w-full h-full">
+                                            <video src={promo.imageUrl} className="h-full w-full object-cover" autoPlay muted loop playsInline />
+                                        </div>
+                                    ) : (
+                                        <img src={promo.imageUrl} alt={promo.name} className="h-full w-full object-cover" />
+                                    )
                                 ) : (
                                     <div className="flex h-full items-center justify-center text-muted-foreground">
                                         <ImageIcon className="h-12 w-12 opacity-20" />
@@ -312,27 +318,31 @@ export default function PromotionsPage() {
                             <div className="flex justify-center">
                                 {imagePreview ? (
                                     <div className="relative group w-64 h-64 rounded-lg overflow-hidden border">
-                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                        {imagePreview.startsWith('data:video/') || imagePreview.toLowerCase().includes('.mp4') || imagePreview.toLowerCase().includes('.webm') || (imagePreview.includes('alt=media') && imagePreview.includes('video')) ? (
+                                            <video src={imagePreview} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+                                        ) : (
+                                            <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                        )}
                                         <button
                                             type="button"
                                             onClick={() => { setImageFile(null); setImagePreview(null); }}
-                                            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                            className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
                                         >
                                             <X className="h-4 w-4" />
                                         </button>
                                     </div>
                                 ) : (
                                     <label className="flex flex-col items-center justify-center w-64 h-64 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
-                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                                             <ImageIcon className="w-10 h-10 text-muted-foreground mb-3" />
-                                            <p className="text-sm text-muted-foreground font-semibold">Click para subir imagen</p>
-                                            <p className="text-xs text-muted-foreground text-center mt-1">
-                                                PNG, JPG o GIF (MÁX. 5MB)
+                                            <p className="text-sm text-muted-foreground font-semibold">Click para subir imagen o video</p>
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                PNG, JPG, GIF o WEBM/MP4
                                                 <br />
-                                                Recomendado: Cuadrado 1:1 (ej. 1080×1080px)
+                                                Recomendado: Cuadrado 1:1 (Máx. 5MB)
                                             </p>
                                         </div>
-                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                                        <input type="file" className="hidden" accept="image/*,video/mp4,video/webm" onChange={handleImageChange} />
                                     </label>
                                 )}
                             </div>

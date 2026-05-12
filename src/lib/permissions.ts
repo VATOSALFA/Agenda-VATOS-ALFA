@@ -1,5 +1,5 @@
 
-import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon } from 'lucide-react';
+import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, Gift } from 'lucide-react';
 
 
 export interface Permission {
@@ -29,6 +29,13 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'crear_reservas', label: 'Crear Reservas' },
             { key: 'editar_reservas', label: 'Editar Reservas' },
             { key: 'bloquear_horarios', label: 'Bloquear Horarios' },
+        ],
+    },
+    {
+        title: 'Promociones',
+        icon: Gift,
+        permissions: [
+            { key: 'ver_promociones', label: 'Ver Promociones Activas' },
         ],
     },
     {
@@ -127,28 +134,29 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
             'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
             'ver_finanzas',
-            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'ver_ajustes'
+            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'ver_ajustes',
+            'ver_promociones'
         ],
     },
     {
         title: 'Recepcionista',
         description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
-        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas'],
+        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas', 'ver_promociones'],
     },
     {
         title: 'Recepcionista (Sin edición)',
         description: 'Gestiona la agenda y reservas. No puede editar información sensible.',
-        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas'],
+        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'ver_promociones'],
     },
     {
         title: 'Staff',
         description: 'Profesional que puede ver su propia agenda y gestionar sus citas.',
-        permissions: ['ver_agenda', 'crear_reservas', 'editar_reservas', 'ver_productos', 'ver_inventario', 'ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas', 'ver_ventas'],
+        permissions: ['ver_agenda', 'crear_reservas', 'editar_reservas', 'ver_productos', 'ver_inventario', 'ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas', 'ver_ventas', 'ver_promociones'],
     },
     {
         title: 'Staff (Sin edición)',
         description: 'Profesional que solo puede ver su propia agenda.',
-        permissions: ['ver_agenda'],
+        permissions: ['ver_agenda', 'ver_promociones'],
     },
 ];
 

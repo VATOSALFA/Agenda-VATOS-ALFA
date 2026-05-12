@@ -957,48 +957,48 @@ export default function LandingPage() {
                 </div>
             </footer>
 
-            {/* Floating Navigation Bar */}
             {/* Floating Navigation Bar - Glassmorphic Vatos Style */}
             <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
                 <div
-                    className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar"
+                    className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-[95vw] md:max-w-full no-scrollbar overscroll-x-contain"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                     {/* Top neon line for the whole bar */}
                     <span className="absolute h-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
 
-                    <Link href="#servicios">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
-                            <Scissors className="h-3.5 w-3.5 text-blue-400" />
-                            <span className="text-[10px] sm:text-xs">Servicios</span>
+                    <Link href="#servicios" className="flex-shrink-0">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
+                            <Scissors className="h-4 w-4 text-blue-400" />
+                            <span className="text-xs font-medium">Servicios</span>
                         </VatosButton>
                     </Link>
                     
-                    <Link href="/inspiracion">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
-                            <ImageIcon className="h-3.5 w-3.5 text-blue-400" />
-                            <span className="text-[10px] sm:text-xs">Inspiración</span>
+                    <Link href="/inspiracion" className="flex-shrink-0">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
+                            <ImageIcon className="h-4 w-4 text-blue-400" />
+                            <span className="text-xs font-medium">Inspiración</span>
                         </VatosButton>
                     </Link>
 
-                    <Link href="#profesionales">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
-                            <User className="h-3.5 w-3.5 text-blue-400" />
-                            <span className="text-[10px] sm:text-xs">Equipo</span>
+                    <Link href="#profesionales" className="flex-shrink-0">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
+                            <User className="h-4 w-4 text-blue-400" />
+                            <span className="text-xs font-medium">Equipo</span>
                         </VatosButton>
                     </Link>
 
-                    <Link href="#productos">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
-                            <ShoppingBag className="h-3.5 w-3.5 text-blue-400" />
-                            <span className="text-[10px] sm:text-xs">Productos</span>
+                    <Link href="#productos" className="flex-shrink-0">
+                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
+                            <ShoppingBag className="h-4 w-4 text-blue-400" />
+                            <span className="text-xs font-medium">Productos</span>
                         </VatosButton>
                     </Link>
                     
                     {activePromotions && activePromotions.length > 0 && (
-                        <Link href="#promociones">
-                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-1.5 sm:px-3 flex items-center justify-center gap-1 sm:gap-1.5 min-w-fit">
-                                <Sparkles className="h-3.5 w-3.5 text-blue-400" />
-                                <span className="text-[10px] sm:text-xs">Promos</span>
+                        <Link href="#promociones" className="flex-shrink-0">
+                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
+                                <Sparkles className="h-4 w-4 text-blue-400" />
+                                <span className="text-xs font-medium">Promos</span>
                             </VatosButton>
                         </Link>
                     )}

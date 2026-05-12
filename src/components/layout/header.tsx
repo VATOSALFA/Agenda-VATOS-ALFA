@@ -64,7 +64,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
-import { where } from 'firebase/firestore';
 
 // Removed top-level mainNavLinks
 
@@ -117,13 +116,15 @@ export default function Header() {
   const { enableBarberDashboard } = useFeatures();
   const isOnline = useNetworkStatus();
 
-  // Fetch the professional record for the logged in user to get the correct document ID
-  const { data: userProfessionalData } = useFirestoreQuery<any>(
-    'profesionales',
-    user?.uid || 'no-user',
-    user ? where('userId', '==', user.uid) : undefined
-  );
-  const professionalId = userProfessionalData?.[0]?.id || user?.uid;
+  // Fetch ALL professionals to find the correct document ID for the logged-in user's share link.
+  // We fetch the whole collection (it's small and public) and filter client-side to avoid
+  // potential issues with Firestore where-query indexes or security rules.
+  const { data: allProfessionals = [] } = useFirestoreQuery<any>('profesionales');
+  const professionalId = useMemo(() => {
+    if (!user?.uid || allProfessionals.length === 0) return user?.uid;
+    const match = allProfessionals.find((p: any) => p.userId === user.uid);
+    return match ? match.id : user.uid;
+  }, [user?.uid, allProfessionals]);
 
   const mainNavLinks = useMemo(() => [
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),

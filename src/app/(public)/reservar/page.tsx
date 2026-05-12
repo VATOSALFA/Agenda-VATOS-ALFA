@@ -122,7 +122,9 @@ export default function BookingPage() {
         const legacyServiceId = searchParams.get('serviceId');
         const proIdParam = searchParams.get('professionalId');
 
-        if (proIdParam) setPreSelectedProId(proIdParam);
+        if (proIdParam && !preSelectedProId) {
+            setPreSelectedProId(proIdParam); // Set raw value first, will be resolved below
+        }
 
         // Priority 1: List of services (from Landing Page Cart)
         if (servicesParam) {
@@ -159,6 +161,24 @@ export default function BookingPage() {
             }
         }
     }, [searchParams, services]);
+
+    // --- RESOLVE professionalId: Auth UID -> Firestore Document ID ---
+    // The share links may use the Firebase Auth UID (user.uid) instead of the Firestore
+    // document ID. This effect translates it once the professionals list is loaded.
+    useEffect(() => {
+        if (!preSelectedProId || professionals.length === 0) return;
+
+        // Check if it already matches a document ID
+        const directMatch = professionals.find((p: any) => p.id === preSelectedProId);
+        if (directMatch) return; // Already a valid Firestore document ID, nothing to do
+
+        // Check if it matches a userId (Firebase Auth UID)
+        const byUserId = professionals.find((p: any) => p.userId === preSelectedProId);
+        if (byUserId) {
+            console.log(`[Booking] Resolved Auth UID "${preSelectedProId}" -> Document ID "${byUserId.id}"`);
+            setPreSelectedProId(byUserId.id); // Translate to the correct document ID
+        }
+    }, [preSelectedProId, professionals]);
 
     // FETCH PRODUCTS (Added query)
 
@@ -280,7 +300,7 @@ export default function BookingPage() {
 
         if (preSelectedProId) {
             available = available.filter((s: any) => {
-                const pro = professionals.find((p: any) => p.id === preSelectedProId || p.userId === preSelectedProId);
+                const pro = professionals.find((p: any) => p.id === preSelectedProId);
                 if (pro && pro.services && pro.services.length > 0) {
                     return pro.services.includes(s.id);
                 }
@@ -414,7 +434,7 @@ export default function BookingPage() {
                 // Filter Pros who can do THESE services
                 const capablePros = professionals.filter(p =>
                     p.active &&
-                    (!preSelectedProId || p.id === preSelectedProId || p.userId === preSelectedProId) &&
+                    (!preSelectedProId || p.id === preSelectedProId) &&
                     requiredServiceIds.every(sId => (p.services || []).includes(sId))
                 );
 
@@ -510,12 +530,12 @@ export default function BookingPage() {
         const timeToUse = overrideTime || tempTime;
         if (!activeConfigId || !tempDate || !timeToUse) return;
 
-        const pro = professionals.find(p => p.id === proId || p.userId === proId);
-        const actualProId = pro ? pro.id : proId;
+        const pro = professionals.find(p => p.id === proId);
+
         const config: AppointmentConfig = {
             date: tempDate,
             time: timeToUse,
-            professionalId: actualProId,
+            professionalId: proId,
             professional: pro
         };
 
@@ -853,7 +873,7 @@ export default function BookingPage() {
                                     </VatosButton>
                                     {/* Pre-selected Pro Banner */}
                                     {preSelectedProId && (() => {
-                                        const pro = professionals.find(p => p.id === preSelectedProId || p.userId === preSelectedProId);
+                                        const pro = professionals.find(p => p.id === preSelectedProId);
                                         return pro ? (
                                             <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">

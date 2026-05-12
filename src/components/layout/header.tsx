@@ -64,6 +64,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
+import { where } from 'firebase/firestore';
 
 // Removed top-level mainNavLinks
 
@@ -115,6 +116,14 @@ export default function Header() {
   const { data: empresaData } = useFirestoreQuery<any>('empresa');
   const { enableBarberDashboard } = useFeatures();
   const isOnline = useNetworkStatus();
+
+  // Fetch the professional record for the logged in user to get the correct document ID
+  const { data: userProfessionalData } = useFirestoreQuery<any>(
+    'profesionales',
+    user?.uid || 'no-user',
+    user ? where('userId', '==', user.uid) : undefined
+  );
+  const professionalId = userProfessionalData?.[0]?.id || user?.uid;
 
   const mainNavLinks = useMemo(() => [
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
@@ -675,13 +684,13 @@ export default function Header() {
                     <div className="space-y-2 border-b border-border/50 pb-4">
                       <h4 className="font-semibold leading-none flex items-center text-primary"><User className="mr-2 h-4 w-4" /> Mi Enlace Personal</h4>
                       <p className="text-xs text-muted-foreground break-all">
-                        {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${user?.uid}` : ''}
+                        {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : ''}
                       </p>
                       <div className="flex items-center gap-2 pt-1">
                         <Button variant="outline" size="sm" className="w-full" onClick={() => {
                           const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
                           if (baseUrl) {
-                            const url = `${baseUrl}/reservar?professionalId=${user?.uid}&preview=true`;
+                            const url = `${baseUrl}/reservar?professionalId=${professionalId}&preview=true`;
                             window.open(url, '_blank');
                           }
                         }}>
@@ -690,7 +699,7 @@ export default function Header() {
                         </Button>
                         <Button variant="outline" size="icon" onClick={() => {
                           const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
-                          navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${user?.uid}`);
+                          navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${professionalId}`);
                           toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
                         }}>
                           <Copy className="h-4 w-4" />

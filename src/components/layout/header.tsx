@@ -258,9 +258,54 @@ export default function Header() {
                           Sitio Web
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div className="pt-2 pb-2">
-                            <div className="rounded-md border bg-muted/30 p-3">
-                              <p className="mb-3 break-all text-xs text-muted-foreground">
+                          <div className="flex flex-col space-y-4 pt-2 pb-2">
+                            {user?.role !== 'Administrador general' && (
+                              <div className="rounded-md border bg-primary/5 p-3 space-y-3">
+                                <div className="flex items-center gap-2 text-primary font-semibold text-xs">
+                                  <User className="h-3 w-3" />
+                                  Mi Enlace Personal
+                                </div>
+                                <p className="break-all text-[10px] text-muted-foreground leading-tight">
+                                  {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : ''}
+                                </p>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 flex-1 text-xs"
+                                    onClick={() => {
+                                      const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                                      if (baseUrl) {
+                                        const url = `${baseUrl}/reservar?professionalId=${professionalId}&preview=true`;
+                                        window.open(url, '_blank');
+                                      }
+                                    }}
+                                  >
+                                    <ExternalLink className="mr-2 h-3 w-3" />
+                                    Ir a mi enlace
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => {
+                                      const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                                      navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${professionalId}`);
+                                      toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
+                                    }}
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="rounded-md border bg-muted/30 p-3 space-y-3">
+                              <div className="flex items-center gap-2 text-muted-foreground font-semibold text-xs">
+                                <Store className="h-3 w-3" />
+                                Enlace General
+                              </div>
+                              <p className="break-all text-[10px] text-muted-foreground leading-tight">
                                 {displayUrl}
                               </p>
                               <div className="flex gap-2">

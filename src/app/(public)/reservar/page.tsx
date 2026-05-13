@@ -1168,12 +1168,12 @@ export default function BookingPage() {
                                         {/* Action Buttons (Radial) */}
                                         <AnimatePresence>
                                             {isMenuOpen && (
-                                                <div className="absolute bottom-full right-0 mb-4 flex flex-col items-end gap-3">
+                                                <div className="absolute bottom-full right-0 mb-4 flex flex-col items-end gap-4">
                                                     {[
-                                                        { id: 'promociones', icon: Sparkles, label: 'Promos', color: 'from-purple-500 to-pink-500', show: activePromotions.length > 0 },
-                                                        { id: 'productos', icon: ShoppingBag, label: 'Productos', color: 'from-blue-500 to-indigo-500', show: true },
-                                                        { id: 'paquetes', icon: Layers, label: 'Paquetes', color: 'from-cyan-500 to-blue-500', show: visiblePackageServices.length > 0 },
-                                                        { id: 'servicios', icon: Scissors, label: 'Servicios', color: 'from-slate-700 to-slate-900', show: true },
+                                                        { id: 'promociones', icon: Sparkles, label: 'Promos', show: activePromotions.length > 0 },
+                                                        { id: 'productos', icon: ShoppingBag, label: 'Productos', show: true },
+                                                        { id: 'paquetes', icon: Layers, label: 'Paquetes', show: visiblePackageServices.length > 0 },
+                                                        { id: 'servicios', icon: Scissors, label: 'Servicios', show: true },
                                                     ].filter(item => item.show).map((item, index) => (
                                                         <motion.div
                                                             key={item.id}
@@ -1181,23 +1181,19 @@ export default function BookingPage() {
                                                             animate={{ opacity: 1, y: 0, scale: 1 }}
                                                             exit={{ opacity: 0, y: 20, scale: 0.8 }}
                                                             transition={{ delay: index * 0.05, type: 'spring', stiffness: 300, damping: 20 }}
+                                                            className="flex items-center group"
                                                         >
+                                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none">
+                                                                {item.label}
+                                                            </span>
                                                             <button
                                                                 onClick={() => {
                                                                     scrollToSection(item.id);
                                                                     setIsMenuOpen(false);
                                                                 }}
-                                                                className="group flex items-center gap-3 pr-1"
+                                                                className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-xl border border-blue-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-500/60 hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] transition-all"
                                                             >
-                                                                <span className="bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full border border-white/10 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    {item.label}
-                                                                </span>
-                                                                <div className={cn(
-                                                                    "w-12 h-12 rounded-full flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-90",
-                                                                    `bg-gradient-to-br ${item.color}`
-                                                                )}>
-                                                                    <item.icon className="w-5 h-5 text-white" />
-                                                                </div>
+                                                                <item.icon className="w-5 h-5 text-blue-400" />
                                                             </button>
                                                         </motion.div>
                                                     ))}
@@ -1211,17 +1207,10 @@ export default function BookingPage() {
                                             whileTap={{ scale: 0.95 }}
                                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                                             className={cn(
-                                                "w-16 h-16 rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.4)] border-2 transition-all duration-300 relative overflow-hidden group z-10",
-                                                isMenuOpen 
-                                                    ? "bg-slate-900 border-slate-700" 
-                                                    : "bg-black border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                                                "w-14 h-14 rounded-full bg-black flex items-center justify-center border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.4)] z-50 transition-all duration-300",
+                                                isMenuOpen ? "rotate-45" : "rotate-0"
                                             )}
                                         >
-                                            {/* Glow Effect */}
-                                            {!isMenuOpen && (
-                                                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-blue-500/20 animate-pulse" />
-                                            )}
-                                            
                                             <AnimatePresence mode="wait">
                                                 {isMenuOpen ? (
                                                     <motion.div
@@ -1248,6 +1237,11 @@ export default function BookingPage() {
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
+                                            
+                                            {/* Pulse effect when closed */}
+                                            {!isMenuOpen && (
+                                                <span className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping" />
+                                            )}
                                         </motion.button>
                                     </div>
                                 </div>

@@ -1096,16 +1096,12 @@ export default function LandingPage() {
                         {isMenuOpen ? (
                             <X className="w-7 h-7 text-white" />
                         ) : (
-                            <div className="relative w-9 h-9 flex items-center justify-center">
-                                {iconUrl ? (
-                                    <img 
-                                        src={iconUrl} 
-                                        alt="Vatos Alfa" 
-                                        className="w-full h-full rounded-full object-cover" 
-                                    />
-                                ) : (
-                                    <Scissors className="w-7 h-7 text-white" />
-                                )}
+                            <div className="relative w-10 h-10 flex items-center justify-center">
+                                <img 
+                                    src="/logo-vatos-wa.png" 
+                                    alt="Vatos Alfa" 
+                                    className="w-full h-full rounded-full object-cover border border-white/10" 
+                                />
                             </div>
                         )}
                         

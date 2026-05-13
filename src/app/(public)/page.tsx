@@ -337,10 +337,12 @@ export default function LandingPage() {
                                 <Card key={pro.id} className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all text-center bg-slate-50">
                                     <div className="relative w-full aspect-square overflow-hidden bg-slate-200 group">
                                         {pro.avatarUrl ? (
-                                            <img
+                                            <Image
                                                 src={pro.avatarUrl}
                                                 alt={pro.publicName || pro.name}
+                                                fill
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-400">
@@ -391,10 +393,12 @@ export default function LandingPage() {
                                     {/* Small Square Image/Icon */}
                                     <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
                                         {service.images && service.images.length > 0 ? (
-                                            <img
+                                            <Image
                                                 src={service.images[0]}
                                                 alt={service.name}
-                                                className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                fill
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="80px"
                                             />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -463,10 +467,12 @@ export default function LandingPage() {
                                         >
                                             <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative">
                                                 {service.images && service.images.length > 0 ? (
-                                                    <img
+                                                    <Image
                                                         src={service.images[0]}
                                                         alt={service.name}
-                                                        className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        fill
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        sizes="80px"
                                                     />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -530,10 +536,12 @@ export default function LandingPage() {
                                     >
                                         <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
                                             {product.images && product.images.length > 0 ? (
-                                                <img
+                                                <Image
                                                     src={product.images[0]}
                                                     alt={product.nombre}
-                                                    className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    fill
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    sizes="80px"
                                                 />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -600,10 +608,12 @@ export default function LandingPage() {
                                                         playsInline
                                                     />
                                                 ) : (
-                                                    <img
+                                                    <Image
                                                         src={promo.imageUrl}
                                                         alt={promo.name}
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        fill
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        sizes="(max-width: 768px) 100vw, 33vw"
                                                     />
                                                 )
                                             ) : (
@@ -693,7 +703,13 @@ export default function LandingPage() {
                     <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
                         <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedService?.images && selectedService.images.length > 0 ? (
-                                <img src={selectedService.images[0]} alt={selectedService.name} className="h-full w-full object-contain p-2" />
+                                <Image 
+                                    src={selectedService.images[0]} 
+                                    alt={selectedService.name} 
+                                    fill
+                                    className="object-contain p-2" 
+                                    sizes="(max-width: 768px) 100vw, 400px"
+                                />
                             ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-slate-200">
                                     <Scissors className="h-24 w-24 text-muted-foreground/30" />

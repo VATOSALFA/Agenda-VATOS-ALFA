@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 
 
 // Helper Interfaces
@@ -908,8 +909,14 @@ export default function BookingPage() {
                                                 <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
                                                     <CardContent className="p-4 flex items-center gap-4">
                                                         {(service.images && service.images.length > 0) && (
-                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
-                                                                <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
+                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
+                                                                <Image 
+                                                                    src={service.images[0]} 
+                                                                    alt={service.name} 
+                                                                    fill
+                                                                    className="object-cover" 
+                                                                    sizes="64px"
+                                                                />
                                                             </div>
                                                         )}
                                                         <div className="flex-1">
@@ -966,8 +973,14 @@ export default function BookingPage() {
                                                 <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
                                                     <CardContent className="p-4 flex items-center gap-4">
                                                         {(service.images && service.images.length > 0) && (
-                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
-                                                                <img src={service.images[0]} alt={service.name} className="h-full w-full object-cover" />
+                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
+                                                                <Image 
+                                                                    src={service.images[0]} 
+                                                                    alt={service.name} 
+                                                                    fill
+                                                                    className="object-cover" 
+                                                                    sizes="64px"
+                                                                />
                                                             </div>
                                                         )}
                                                         <div className="flex-1">
@@ -1025,8 +1038,8 @@ export default function BookingPage() {
                                                     <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
                                                         <CardContent className="p-4 flex items-center gap-4">
                                                             {(product.images && product.images.length > 0) ? (
-                                                                <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border">
-                                                                    <img src={product.images[0]} alt={product.nombre} className="h-full w-full object-cover" />
+                                                                <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
+                                                                    <Image src={product.images[0]} alt={product.nombre} fill className="object-cover" sizes="64px" />
                                                                 </div>
                                                             ) : (
                                                                 <div className="h-16 w-16 rounded-md bg-slate-100 flex items-center justify-center border text-muted-foreground">
@@ -1091,7 +1104,13 @@ export default function BookingPage() {
                                                     <div className="flex h-full flex-col sm:flex-row">
                                                         <div className="w-full sm:w-1/3 bg-slate-100 relative min-h-[120px]">
                                                             {promo.imageUrl ? (
-                                                                <img src={promo.imageUrl} alt={promo.name} className="h-full w-full object-cover" />
+                                                                <Image 
+                                                                    src={promo.imageUrl} 
+                                                                    alt={promo.name} 
+                                                                    fill
+                                                                    className="object-cover" 
+                                                                    sizes="(max-width: 640px) 100vw, 33vw"
+                                                                />
                                                             ) : (
                                                                 <div className="h-full w-full flex items-center justify-center text-muted-foreground p-4">
                                                                     <ShoppingBag className="h-8 w-8 opacity-20" />
@@ -1229,10 +1248,12 @@ export default function BookingPage() {
                                                         exit={{ opacity: 0, rotate: -90 }}
                                                         className="relative w-10 h-10 flex items-center justify-center"
                                                     >
-                                                        <img 
+                                                        <Image 
                                                             src="/logo-vatos-wa.png" 
                                                             alt="Vatos Alfa" 
-                                                            className="w-full h-full rounded-full object-cover border border-white/10" 
+                                                            fill
+                                                            className="rounded-full object-cover border border-white/10"
+                                                            sizes="40px"
                                                         />
                                                     </motion.div>
                                                 )}
@@ -1443,11 +1464,23 @@ export default function BookingPage() {
                                                         }
                                                     }}
                                                 >
-                                                    <div className="w-full aspect-square rounded-lg bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden">
+                                                    <div className="w-full aspect-square rounded-lg bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden relative">
                                                         {empresaData?.[0]?.icon_url ? (
-                                                            <img src={empresaData[0].icon_url} alt="Icon" className="w-full h-full object-cover" />
+                                                            <Image 
+                                                                src={empresaData[0].icon_url} 
+                                                                alt="Icon" 
+                                                                fill
+                                                                className="object-cover" 
+                                                                sizes="100px"
+                                                            />
                                                         ) : empresaData?.[0]?.logo_url ? (
-                                                            <img src={empresaData[0].logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                                            <Image 
+                                                                src={empresaData[0].logo_url} 
+                                                                alt="Logo" 
+                                                                fill
+                                                                className="object-cover" 
+                                                                sizes="100px"
+                                                            />
                                                         ) : (
                                                             <Users className="h-8 w-8 text-slate-500" />
                                                         )}
@@ -1466,9 +1499,15 @@ export default function BookingPage() {
                                                             className="flex flex-col items-center p-2 rounded-xl border-2 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all"
                                                             onClick={() => handleProSelected(pro.id)}
                                                         >
-                                                            <div className="w-full aspect-square rounded-lg bg-muted overflow-hidden mb-2 border">
+                                                            <div className="w-full aspect-square rounded-lg bg-muted overflow-hidden mb-2 border relative">
                                                                 {pro.avatarUrl ? (
-                                                                    <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="w-full h-full object-cover" />
+                                                                    <Image 
+                                                                        src={pro.avatarUrl} 
+                                                                        alt={pro.publicName || pro.name} 
+                                                                        fill
+                                                                        className="object-cover" 
+                                                                        sizes="100px"
+                                                                    />
                                                                 ) : (
                                                                     <User className="w-full h-full p-3 text-muted-foreground" />
                                                                 )}

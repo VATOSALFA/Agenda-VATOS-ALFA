@@ -134,8 +134,7 @@ export default function Header() {
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
     { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
     { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
-    ...(hasActivePromotions ? [{ href: '/promociones', label: 'Promociones', icon: Gift, permission: 'ver_promociones' }] : []),
-  ], [enableBarberDashboard, hasActivePromotions]);
+  ], [enableBarberDashboard]);
 
   // Get website URL from settings or fallback to current origin
   const configuredWebsiteUrl = empresaData?.[0]?.website_slug;
@@ -405,6 +404,24 @@ export default function Header() {
                         </AccordionItem>
                       )}
 
+                      {hasActivePromotions && canSee('ver_promociones') && (
+                        <AccordionItem value="promotions" className="border-b-0">
+                          <Link
+                            href="/promociones"
+                            onClick={handleLinkClick}
+                            className={cn(
+                              'flex items-center px-3 py-4 text-sm font-medium rounded-md transition-colors',
+                              pathname === '/promociones'
+                                ? 'bg-primary/10 text-primary'
+                                : 'text-foreground hover:bg-muted'
+                            )}
+                          >
+                            <Gift className="mr-3 h-4 w-4" />
+                            Promociones
+                          </Link>
+                        </AccordionItem>
+                      )}
+
                       {canSeeAny(productsNavLinks.map(l => l.permission)) && (
                         <AccordionItem value="products" className="border-b-0">
                           <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
@@ -588,6 +605,20 @@ export default function Header() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+
+            {hasActivePromotions && canSee('ver_promociones') && (
+              <Link
+                href="/promociones"
+                className={cn(
+                  'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm whitespace-nowrap font-medium',
+                  pathname === '/promociones'
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
+                )}
+              >
+                Promociones
+              </Link>
             )}
 
             {canSeeAny(productsNavLinks.map(l => l.permission)) && (

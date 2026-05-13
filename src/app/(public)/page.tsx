@@ -9,7 +9,7 @@ import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, Chev
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from '@/lib/utils';
@@ -17,6 +17,8 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import BackgroundAurora from '@/components/ui/background-aurora';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { ParallaxHero } from '@/components/ui/parallax-hero';
+import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 
 
 // Hook moved inside component
@@ -34,6 +36,7 @@ export default function LandingPage() {
     const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
     const { data: categories } = useFirestoreQuery<any>('categorias_servicios');
     const { data: promotions } = useFirestoreQuery<any>('promociones');
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // Filter active promotions
     const activePromotions = promotions?.filter((p: any) => p.active) || [];
@@ -67,7 +70,8 @@ export default function LandingPage() {
     const [selectedProduct, setSelectedProduct] = useState<any>(null); // New: Selected Product
     const [selectedService, setSelectedService] = useState<any>(null); // New: Selected Service
     const [selectedBranch, setSelectedBranch] = useState<string>('');
-    const [selectedPromotion, setSelectedPromotion] = useState<any>(null); // New: Selected Promotion for Terms
+    const [selectedPromotion, setSelectedPromotion] = useState<any>(null);
+    const [showTerms, setShowTerms] = useState<any>(null);
     const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
     const [termsModalOpen, setTermsModalOpen] = useState(false);
 
@@ -641,9 +645,31 @@ export default function LandingPage() {
                                                     })()}
                                                 </span>
                                             </div>
-                                            <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
+                                            <div className="text-muted-foreground text-sm h-28 overflow-y-auto mb-4 pr-1 custom-scrollbar whitespace-pre-line">
                                                 {promo.description}
-                                            </p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedPromotion(promo);
+                                                    }}
+                                                    className="text-xs font-bold text-primary hover:underline transition-colors flex items-center gap-1"
+                                                >
+                                                    <Video className="w-3 h-3" /> Ver video
+                                                </button>
+                                                {promo.termsAndConditions && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setShowTerms(promo);
+                                                        }}
+                                                        className="text-xs font-medium text-muted-foreground hover:text-primary underline transition-colors"
+                                                    >
+                                                        Términos y condiciones
+                                                    </button>
+                                                )}
+                                            </div>
                                         </CardContent>
                                         <CardFooter className="p-6 pt-0 z-20 relative">
                                             <VatosButton className="w-full" onClick={(e) => {
@@ -801,9 +827,9 @@ export default function LandingPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Promotion Reel Modal */}
+            {/* Promotion Reel Modal - CLEAN VIDEO ONLY */}
             <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
-                <DialogContent className="max-w-[450px] w-[95vw] bg-black p-0 rounded-2xl md:rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl h-[85vh] md:h-[90vh] flex flex-col relative" style={{ aspectRatio: '9/16' }}>
+                <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
                     <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
                         {selectedPromotion?.imageUrl ? (
                             isVideo(selectedPromotion.imageUrl) ? (
@@ -829,36 +855,37 @@ export default function LandingPage() {
                             </div>
                         )}
                         
-                        {/* Overlay info */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent p-6 pt-24 pointer-events-none">
-                            <h3 className="text-white text-2xl md:text-3xl font-extrabold mb-2 drop-shadow-lg">{selectedPromotion?.name}</h3>
-                            <p className="text-white/90 text-sm line-clamp-3 mb-4 drop-shadow-md">{selectedPromotion?.description}</p>
-                            
-                            {selectedPromotion?.termsAndConditions && (
-                                <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 pointer-events-auto">
-                                    <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-wider flex items-center gap-2">
-                                        <Info className="w-4 h-4" /> Términos y Condiciones
-                                    </h4>
-                                    <div className="text-xs text-white/80 max-h-32 overflow-y-auto pr-2 custom-scrollbar whitespace-pre-line leading-relaxed">
-                                        {selectedPromotion.termsAndConditions}
-                                    </div>
-                                </div>
-                            )}
-                            
-                            <div className="mt-4 pointer-events-auto">
-                                <VatosButton className="w-full shadow-[0_0_20px_rgba(59,130,246,0.5)] bg-primary text-primary-foreground border-none font-bold text-lg h-14" onClick={() => router.push('/reservar')}>
-                                    ¡Reservar Ahora!
-                                </VatosButton>
-                            </div>
-                        </div>
+                        {/* No info overlay or buttons here as per user request, only video */}
                     </div>
                     
                     <button 
                         onClick={() => setSelectedPromotion(null)}
-                        className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50"
+                        className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50 shadow-lg"
                     >
                         <X className="w-5 h-5" />
                     </button>
+                </DialogContent>
+            </Dialog>
+
+            {/* Terms and Conditions Modal */}
+            <Dialog open={!!showTerms} onOpenChange={(open) => !open && setShowTerms(null)}>
+                <DialogContent className="max-w-md bg-white p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <Info className="w-5 h-5 text-primary" /> Términos y Condiciones
+                        </DialogTitle>
+                        <DialogDescription>
+                            {showTerms?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-sm text-slate-600 whitespace-pre-line leading-relaxed">
+                        {showTerms?.termsAndConditions}
+                    </div>
+                    <div className="mt-6">
+                        <VatosButton className="w-full" onClick={() => setShowTerms(null)}>
+                            Entendido
+                        </VatosButton>
+                    </div>
                 </DialogContent>
             </Dialog>
 
@@ -1012,56 +1039,84 @@ export default function LandingPage() {
                 </div>
             </footer>
 
-            {/* Floating Navigation Bar - Glassmorphic Vatos Style */}
-            <div className={cn("fixed left-0 right-0 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300", totalItems > 0 ? "bottom-24" : "bottom-6")}>
-                <div
-                    className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-[95vw] md:max-w-full no-scrollbar overscroll-x-contain"
-                    style={{ WebkitOverflowScrolling: 'touch' }}
-                >
-                    {/* Top neon line for the whole bar */}
-                    <span className="absolute h-[1px] opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+            {/* Floating Navigation Menu - Option 3: Radial / Expanding FAB */}
+            <div className={cn("fixed right-6 z-50 transition-all duration-500", totalItems > 0 ? "bottom-24" : "bottom-8")}>
+                <div className="relative flex flex-col items-center">
+                    <AnimatePresence>
+                        {isMenuOpen && (
+                            <motion.div 
+                                className="flex flex-col items-center gap-4 mb-4"
+                                initial="closed"
+                                animate="open"
+                                exit="closed"
+                                variants={{
+                                    open: { transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+                                    closed: { transition: { staggerChildren: 0.05, staggerDirection: -1 } }
+                                }}
+                            >
+                                {[
+                                    { href: "#servicios", label: "Servicios", icon: Scissors },
+                                    { href: "/inspiracion", label: "Inspiración", icon: ImageIcon },
+                                    { href: "#profesionales", label: "Equipo", icon: User },
+                                    { href: "#productos", label: "Productos", icon: ShoppingBag },
+                                    { href: "#promociones", label: "Promos", icon: Sparkles, show: activePromotions && activePromotions.length > 0 }
+                                ].map((item, i) => (
+                                    (item.show === undefined || item.show) && (
+                                        <motion.div
+                                            key={item.href}
+                                            variants={{
+                                                open: { opacity: 1, y: 0, scale: 1 },
+                                                closed: { opacity: 0, y: 20, scale: 0.5 }
+                                            }}
+                                            className="flex items-center group"
+                                        >
+                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none">
+                                                {item.label}
+                                            </span>
+                                            <Link href={item.href} onClick={() => setIsMenuOpen(false)}>
+                                                <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-xl border border-blue-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-500/60 hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] transition-all">
+                                                    <item.icon className="w-5 h-5 text-blue-400" />
+                                                </div>
+                                            </Link>
+                                        </motion.div>
+                                    )
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
-                    <Link href="#servicios" className="flex-shrink-0">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
-                            <Scissors className="h-4 w-4 text-blue-400" />
-                            <span className="text-xs font-medium">Servicios</span>
-                        </VatosButton>
-                    </Link>
-                    
-                    <Link href="/inspiracion" className="flex-shrink-0">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
-                            <ImageIcon className="h-4 w-4 text-blue-400" />
-                            <span className="text-xs font-medium">Inspiración</span>
-                        </VatosButton>
-                    </Link>
-
-                    <Link href="#profesionales" className="flex-shrink-0">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
-                            <User className="h-4 w-4 text-blue-400" />
-                            <span className="text-xs font-medium">Equipo</span>
-                        </VatosButton>
-                    </Link>
-
-                    <Link href="#productos" className="flex-shrink-0">
-                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
-                            <ShoppingBag className="h-4 w-4 text-blue-400" />
-                            <span className="text-xs font-medium">Productos</span>
-                        </VatosButton>
-                    </Link>
-                    
-                    {activePromotions && activePromotions.length > 0 && (
-                        <Link href="#promociones" className="flex-shrink-0">
-                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-3 flex items-center justify-center gap-1.5 min-w-[90px]">
-                                <Sparkles className="h-4 w-4 text-blue-400" />
-                                <span className="text-xs font-medium">Promos</span>
-                            </VatosButton>
-                        </Link>
-                    )}
-
-                    {/* Bottom neon line for the whole bar */}
-                    <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+                    {/* Main FAB Toggle */}
+                    <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className={cn(
+                            "w-14 h-14 rounded-full bg-black flex items-center justify-center border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.4)] z-50 transition-transform duration-300",
+                            isMenuOpen ? "rotate-45" : "rotate-0"
+                        )}
+                    >
+                        {isMenuOpen ? (
+                            <X className="w-7 h-7 text-white" />
+                        ) : (
+                            <div className="relative w-9 h-9 flex items-center justify-center">
+                                {iconUrl ? (
+                                    <img 
+                                        src={iconUrl} 
+                                        alt="Vatos Alfa" 
+                                        className="w-full h-full rounded-full object-cover" 
+                                    />
+                                ) : (
+                                    <Scissors className="w-7 h-7 text-white" />
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Pulse effect when closed */}
+                        {!isMenuOpen && (
+                            <span className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping" />
+                        )}
+                    </button>
                 </div>
             </div>
+
         </div >
         </ParallaxHero>
     );

@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import {
     Dialog,
     DialogContent,
@@ -44,7 +45,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Plus, Pencil, Trash2, Calendar, Image as ImageIcon, X } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, Calendar, Image as ImageIcon, X, Eye, Video, Info, Share2 } from 'lucide-react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 
 const promotionSchema = z.object({
@@ -64,6 +65,8 @@ export default function PromotionsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
+    const [previewPromotion, setPreviewPromotion] = useState<Promotion | null>(null);
+    const [showTerms, setShowTerms] = useState<Promotion | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -229,11 +232,11 @@ export default function PromotionsPage() {
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {promotions && promotions.length > 0 ? (
                     promotions.map((promo) => (
                         <Card key={promo.id} className="flex flex-col overflow-hidden">
-                            <div className="relative aspect-[4/5] w-full bg-black/5 flex items-center justify-center overflow-hidden">
+                            <div className="relative aspect-square w-full bg-black/5 flex items-center justify-center overflow-hidden">
                                 {promo.imageUrl ? (
                                     (promo.imageUrl.toLowerCase().includes('.mp4') || promo.imageUrl.toLowerCase().includes('.webm') || (promo.imageUrl.includes('alt=media') && promo.imageUrl.includes('video'))) ? (
                                         <div className="relative w-full h-full">
@@ -274,9 +277,37 @@ export default function PromotionsPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="flex-1">
-                                <p className="text-sm text-muted-foreground line-clamp-3">{promo.description}</p>
+                                <div className="text-sm text-muted-foreground h-28 overflow-y-auto mb-4 pr-1 custom-scrollbar whitespace-pre-line">
+                                    {promo.description}
+                                </div>
+                                {promo.termsAndConditions && (
+                                    <button
+                                        onClick={() => setShowTerms(promo)}
+                                        className="text-xs font-medium text-primary hover:underline transition-colors"
+                                    >
+                                        Términos y condiciones
+                                    </button>
+                                )}
                             </CardContent>
-                            <CardFooter className="flex justify-end gap-2 border-t pt-4">
+                             <CardFooter className="flex justify-end gap-2 border-t pt-4">
+                                <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => {
+                                        const url = `${window.location.origin}/promociones/${promo.id}`;
+                                        navigator.clipboard.writeText(url);
+                                        toast({
+                                            title: "Link copiado",
+                                            description: "Enlace público listo para compartir.",
+                                        });
+                                    }}
+                                    className="flex items-center gap-1"
+                                >
+                                    <Share2 className="h-3.5 w-3.5" /> Compartir
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => setPreviewPromotion(promo)}>
+                                    <Eye className="h-4 w-4 mr-1" /> Ver Reel
+                                </Button>
                                 <Button variant="ghost" size="sm" onClick={() => handleEdit(promo)}>
                                     <Pencil className="h-4 w-4 mr-1" /> Editar
                                 </Button>
@@ -418,6 +449,70 @@ export default function PromotionsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Preview Reel Modal - CLEAN VIDEO ONLY */}
+            <Dialog open={!!previewPromotion} onOpenChange={(open) => !open && setPreviewPromotion(null)}>
+                <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
+                    <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
+                        {previewPromotion?.imageUrl ? (
+                            (previewPromotion.imageUrl.toLowerCase().includes('.mp4') || previewPromotion.imageUrl.toLowerCase().includes('.webm') || (previewPromotion.imageUrl.includes('alt=media') && previewPromotion.imageUrl.includes('video'))) ? (
+                                <video
+                                    src={previewPromotion.imageUrl}
+                                    className="w-full h-full object-contain"
+                                    autoPlay
+                                    controls
+                                    playsInline
+                                    loop
+                                />
+                            ) : (
+                                <img
+                                    src={previewPromotion.imageUrl}
+                                    alt={previewPromotion?.name}
+                                    className="w-full h-full object-contain"
+                                />
+                            )
+                        ) : (
+                            <div className="text-white/50 text-center p-8">
+                                <ImageIcon className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                                <p>Sin contenido visual</p>
+                            </div>
+                        )}
+                        
+                        <div className="absolute top-4 left-4 z-50">
+                            <Badge variant="secondary" className="bg-black/60 text-white border-none backdrop-blur-md">Vista Previa</Badge>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => setPreviewPromotion(null)}
+                        className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50 shadow-lg"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </DialogContent>
+            </Dialog>
+
+            {/* Terms and Conditions Modal */}
+            <Dialog open={!!showTerms} onOpenChange={(open) => !open && setShowTerms(null)}>
+                <DialogContent className="max-w-md bg-white p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <Info className="w-5 h-5 text-primary" /> Términos y Condiciones
+                        </DialogTitle>
+                        <DialogDescription>
+                            {showTerms?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-sm text-slate-600 whitespace-pre-line leading-relaxed">
+                        {showTerms?.termsAndConditions}
+                    </div>
+                    <div className="mt-6">
+                        <Button className="w-full" onClick={() => setShowTerms(null)}>
+                            Entendido
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

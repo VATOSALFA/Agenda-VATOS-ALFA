@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -20,6 +20,10 @@ import { ParallaxHero } from '@/components/ui/parallax-hero';
 
 
 // Hook moved inside component
+const isVideo = (url?: string) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.webm') || (url.toLowerCase().includes('alt=media') && url.includes('video'));
+};
 
 export default function LandingPage() {
     const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
@@ -573,24 +577,44 @@ export default function LandingPage() {
                                 <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestras Promociones</h2>
                                 <p className="text-muted-foreground">Aprovecha nuestras ofertas exclusivas.</p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
                                 {activePromotions.map((promo: any) => (
-                                    <Card key={promo.id} className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-none group">
-                                        <div className="relative aspect-square w-full bg-slate-200 overflow-hidden">
+                                    <Card 
+                                        key={promo.id} 
+                                        className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-none group cursor-pointer"
+                                        onClick={() => setSelectedPromotion(promo)}
+                                    >
+                                        <div className="relative aspect-[4/5] sm:aspect-square w-full bg-slate-200 overflow-hidden">
                                             {promo.imageUrl ? (
-                                                <img
-                                                    src={promo.imageUrl}
-                                                    alt={promo.name}
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                />
+                                                isVideo(promo.imageUrl) ? (
+                                                    <video
+                                                        src={promo.imageUrl}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        autoPlay
+                                                        muted
+                                                        loop
+                                                        playsInline
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={promo.imageUrl}
+                                                        alt={promo.name}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    />
+                                                )
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-slate-100">
                                                     <ShoppingBag className="h-16 w-16 opacity-20" />
                                                 </div>
                                             )}
-                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm z-10">
                                                 Oferta
                                             </div>
+                                            {isVideo(promo.imageUrl) && (
+                                                <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full z-10">
+                                                    <Video className="w-4 h-4" />
+                                                </div>
+                                            )}
                                         </div>
                                         <CardContent className="p-6">
                                             <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
@@ -620,22 +644,12 @@ export default function LandingPage() {
                                             <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
                                                 {promo.description}
                                             </p>
-                                            {promo.termsAndConditions && (
-                                                <div className="mb-4">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedPromotion(promo);
-                                                        }}
-                                                        className="text-xs text-primary underline hover:text-primary/80 transition-colors"
-                                                    >
-                                                        Ver términos y condiciones
-                                                    </button>
-                                                </div>
-                                            )}
                                         </CardContent>
-                                        <CardFooter className="p-6 pt-0">
-                                            <VatosButton className="w-full" onClick={() => router.push('/reservar')}>
+                                        <CardFooter className="p-6 pt-0 z-20 relative">
+                                            <VatosButton className="w-full" onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push('/reservar');
+                                            }}>
                                                 Reservar Ahora
                                             </VatosButton>
                                         </CardFooter>
@@ -787,23 +801,64 @@ export default function LandingPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* Promotion Terms Modal */}
+            {/* Promotion Reel Modal */}
             <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
-                <DialogContent className="max-w-md bg-white p-6 rounded-xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-xl font-bold">{selectedPromotion?.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="mt-4">
-                        <h4 className="font-semibold text-sm mb-2 text-primary">Términos y Condiciones:</h4>
-                        <div className="max-h-[60vh] overflow-y-auto whitespace-pre-line text-sm text-slate-700 bg-slate-50 p-4 rounded-lg border">
-                            {selectedPromotion?.termsAndConditions || 'No hay términos y condiciones específicos para esta promoción.'}
+                <DialogContent className="max-w-[450px] w-[95vw] bg-black p-0 rounded-2xl md:rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl h-[85vh] md:h-[90vh] flex flex-col relative" style={{ aspectRatio: '9/16' }}>
+                    <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
+                        {selectedPromotion?.imageUrl ? (
+                            isVideo(selectedPromotion.imageUrl) ? (
+                                <video
+                                    src={selectedPromotion.imageUrl}
+                                    className="w-full h-full object-contain"
+                                    autoPlay
+                                    controls
+                                    playsInline
+                                    loop
+                                />
+                            ) : (
+                                <img
+                                    src={selectedPromotion.imageUrl}
+                                    alt={selectedPromotion?.name}
+                                    className="w-full h-full object-contain"
+                                />
+                            )
+                        ) : (
+                            <div className="text-white/50 text-center p-8">
+                                <Sparkles className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                                <p>Sin contenido visual</p>
+                            </div>
+                        )}
+                        
+                        {/* Overlay info */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/80 to-transparent p-6 pt-24 pointer-events-none">
+                            <h3 className="text-white text-2xl md:text-3xl font-extrabold mb-2 drop-shadow-lg">{selectedPromotion?.name}</h3>
+                            <p className="text-white/90 text-sm line-clamp-3 mb-4 drop-shadow-md">{selectedPromotion?.description}</p>
+                            
+                            {selectedPromotion?.termsAndConditions && (
+                                <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20 pointer-events-auto">
+                                    <h4 className="text-xs font-bold text-white mb-2 uppercase tracking-wider flex items-center gap-2">
+                                        <Info className="w-4 h-4" /> Términos y Condiciones
+                                    </h4>
+                                    <div className="text-xs text-white/80 max-h-32 overflow-y-auto pr-2 custom-scrollbar whitespace-pre-line leading-relaxed">
+                                        {selectedPromotion.termsAndConditions}
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <div className="mt-4 pointer-events-auto">
+                                <VatosButton className="w-full shadow-[0_0_20px_rgba(59,130,246,0.5)] bg-primary text-primary-foreground border-none font-bold text-lg h-14" onClick={() => router.push('/reservar')}>
+                                    ¡Reservar Ahora!
+                                </VatosButton>
+                            </div>
                         </div>
                     </div>
-                    <div className="mt-4 flex justify-end">
-                        <VatosButton onClick={() => setSelectedPromotion(null)}>
-                            Cerrar
-                        </VatosButton>
-                    </div>
+                    
+                    <button 
+                        onClick={() => setSelectedPromotion(null)}
+                        className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
                 </DialogContent>
             </Dialog>
 

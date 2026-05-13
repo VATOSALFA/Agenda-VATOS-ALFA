@@ -233,7 +233,7 @@ export default function PromotionsPage() {
                 {promotions && promotions.length > 0 ? (
                     promotions.map((promo) => (
                         <Card key={promo.id} className="flex flex-col overflow-hidden">
-                            <div className="relative h-48 w-full bg-muted">
+                            <div className="relative aspect-[4/5] w-full bg-black/5 flex items-center justify-center overflow-hidden">
                                 {promo.imageUrl ? (
                                     (promo.imageUrl.toLowerCase().includes('.mp4') || promo.imageUrl.toLowerCase().includes('.webm') || (promo.imageUrl.includes('alt=media') && promo.imageUrl.includes('video'))) ? (
                                         <div className="relative w-full h-full">
@@ -317,9 +317,9 @@ export default function PromotionsPage() {
                         <div className="space-y-4 rounded-lg border p-4">
                             <div className="flex justify-center">
                                 {imagePreview ? (
-                                    <div className="relative group w-64 h-64 rounded-lg overflow-hidden border">
+                                    <div className="relative group w-48 aspect-[9/16] bg-black/5 rounded-lg overflow-hidden border">
                                         {imagePreview.startsWith('data:video/') || imagePreview.toLowerCase().includes('.mp4') || imagePreview.toLowerCase().includes('.webm') || (imagePreview.includes('alt=media') && imagePreview.includes('video')) ? (
-                                            <video src={imagePreview} className="w-full h-full object-cover" autoPlay muted loop playsInline />
+                                            <video src={imagePreview} className="w-full h-full object-contain bg-black" autoPlay muted loop playsInline />
                                         ) : (
                                             <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                                         )}
@@ -332,14 +332,14 @@ export default function PromotionsPage() {
                                         </button>
                                     </div>
                                 ) : (
-                                    <label className="flex flex-col items-center justify-center w-64 h-64 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
+                                    <label className="flex flex-col items-center justify-center w-full aspect-video sm:aspect-[4/5] border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted/50 transition-colors">
                                         <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center px-4">
                                             <ImageIcon className="w-10 h-10 text-muted-foreground mb-3" />
                                             <p className="text-sm text-muted-foreground font-semibold">Click para subir imagen o video</p>
                                             <p className="text-xs text-muted-foreground mt-2">
                                                 PNG, JPG, GIF o WEBM/MP4
                                                 <br />
-                                                Recomendado: Cuadrado 1:1 (Máx. 5MB)
+                                                Recomendado: Vertical 9:16 (Máx. 5MB)
                                             </p>
                                         </div>
                                         <input type="file" className="hidden" accept="image/*,video/mp4,video/webm" onChange={handleImageChange} />

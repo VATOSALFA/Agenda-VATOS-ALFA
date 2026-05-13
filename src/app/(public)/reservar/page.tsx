@@ -87,6 +87,7 @@ export default function BookingPage() {
     const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
     const [termsModalOpen, setTermsModalOpen] = useState(false);
     const [step, setStep] = useState(0);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [bookingMode, setBookingMode] = useState<'individual' | 'combined'>('individual');
 
     // Booking Logic State
@@ -1161,38 +1162,93 @@ export default function BookingPage() {
                                     </VatosButton>
                                 </div>
 
-                                {/* Floating Navigation Bar - Glassmorphic Vatos Style */}
-                                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex justify-center pointer-events-none px-4 transition-all duration-300 animate-in slide-in-from-bottom-10 fade-in w-full max-w-fit">
-                                    <div className="group relative flex items-center gap-1 sm:gap-2 backdrop-blur-xl bg-black/40 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)] hover:border-blue-500/60 transition-all duration-500 rounded-md p-1.5 pointer-events-auto overflow-x-auto max-w-full no-scrollbar">
-                                        {/* Top neon line for the whole bar */}
-                                        <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 top-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+                                 {/* Floating Navigation Menu (Radial) */}
+                                <div className="fixed bottom-24 right-8 z-[60]">
+                                    <div className="relative">
+                                        {/* Action Buttons (Radial) */}
+                                        <AnimatePresence>
+                                            {isMenuOpen && (
+                                                <div className="absolute bottom-full right-0 mb-4 flex flex-col items-end gap-3">
+                                                    {[
+                                                        { id: 'promociones', icon: Sparkles, label: 'Promos', color: 'from-purple-500 to-pink-500', show: activePromotions.length > 0 },
+                                                        { id: 'productos', icon: ShoppingBag, label: 'Productos', color: 'from-blue-500 to-indigo-500', show: true },
+                                                        { id: 'paquetes', icon: Layers, label: 'Paquetes', color: 'from-cyan-500 to-blue-500', show: visiblePackageServices.length > 0 },
+                                                        { id: 'servicios', icon: Scissors, label: 'Servicios', color: 'from-slate-700 to-slate-900', show: true },
+                                                    ].filter(item => item.show).map((item, index) => (
+                                                        <motion.div
+                                                            key={item.id}
+                                                            initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: 20, scale: 0.8 }}
+                                                            transition={{ delay: index * 0.05, type: 'spring', stiffness: 300, damping: 20 }}
+                                                        >
+                                                            <button
+                                                                onClick={() => {
+                                                                    scrollToSection(item.id);
+                                                                    setIsMenuOpen(false);
+                                                                }}
+                                                                className="group flex items-center gap-3 pr-1"
+                                                            >
+                                                                <span className="bg-black/80 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1.5 rounded-full border border-white/10 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    {item.label}
+                                                                </span>
+                                                                <div className={cn(
+                                                                    "w-12 h-12 rounded-full flex items-center justify-center shadow-2xl border border-white/20 transition-transform active:scale-90",
+                                                                    `bg-gradient-to-br ${item.color}`
+                                                                )}>
+                                                                    <item.icon className="w-5 h-5 text-white" />
+                                                                </div>
+                                                            </button>
+                                                        </motion.div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </AnimatePresence>
 
-                                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('servicios')}>
-                                            <Scissors className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
-                                            <span className="text-[10px] sm:text-xs">Servicios</span>
-                                        </VatosButton>
-
-                                        {visiblePackageServices.length > 0 && (
-                                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('paquetes')}>
-                                                <Layers className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
-                                                <span className="text-[10px] sm:text-xs">Paquetes</span>
-                                            </VatosButton>
-                                        )}
-
-                                        <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('productos')}>
-                                            <ShoppingBag className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
-                                            <span className="text-[10px] sm:text-xs">Productos</span>
-                                        </VatosButton>
-
-                                        {activePromotions.length > 0 && (
-                                            <VatosButton size="sm" variant="glass" className="border-transparent bg-transparent hover:bg-white/10 h-9 px-2 sm:px-3 flex items-center justify-center gap-1.5 min-w-fit" onClick={() => scrollToSection('promociones')}>
-                                                <Sparkles className="h-3.5 w-3.5 text-blue-400 hidden sm:block" />
-                                                <span className="text-[10px] sm:text-xs">Promos</span>
-                                            </VatosButton>
-                                        )}
-
-                                        {/* Bottom neon line for the whole bar */}
-                                        <span className="absolute h-[1px] opacity-0 group-hover:opacity-100 transition-all duration-700 ease-in-out inset-x-0 bottom-0 bg-gradient-to-r w-1/3 mx-auto from-transparent via-blue-400 to-transparent z-10 blur-[0.2px]" />
+                                        {/* Main Toggle Button */}
+                                        <motion.button
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.95 }}
+                                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                                            className={cn(
+                                                "w-16 h-16 rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.4)] border-2 transition-all duration-300 relative overflow-hidden group z-10",
+                                                isMenuOpen 
+                                                    ? "bg-slate-900 border-slate-700" 
+                                                    : "bg-black border-blue-500/50 shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+                                            )}
+                                        >
+                                            {/* Glow Effect */}
+                                            {!isMenuOpen && (
+                                                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/20 via-transparent to-blue-500/20 animate-pulse" />
+                                            )}
+                                            
+                                            <AnimatePresence mode="wait">
+                                                {isMenuOpen ? (
+                                                    <motion.div
+                                                        key="close"
+                                                        initial={{ opacity: 0, rotate: -90 }}
+                                                        animate={{ opacity: 1, rotate: 0 }}
+                                                        exit={{ opacity: 0, rotate: 90 }}
+                                                    >
+                                                        <X className="w-7 h-7 text-white" />
+                                                    </motion.div>
+                                                ) : (
+                                                    <motion.div
+                                                        key="menu"
+                                                        initial={{ opacity: 0, rotate: 90 }}
+                                                        animate={{ opacity: 1, rotate: 0 }}
+                                                        exit={{ opacity: 0, rotate: -90 }}
+                                                        className="relative w-10 h-10 flex items-center justify-center"
+                                                    >
+                                                        <img 
+                                                            src="/logo-vatos-wa.png" 
+                                                            alt="Vatos Alfa" 
+                                                            className="w-full h-full rounded-full object-cover border border-white/10" 
+                                                        />
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </motion.button>
                                     </div>
                                 </div>
                             </motion.div>

@@ -13,7 +13,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';

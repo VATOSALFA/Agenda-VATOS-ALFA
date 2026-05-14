@@ -13,7 +13,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
@@ -1153,7 +1153,10 @@ export default function BookingPage() {
 
                                                             {promo.termsAndConditions && (
                                                                 <button
-                                                                    onClick={() => setSelectedPromotion(promo)}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        window.open(`/promociones/${promo.id}/terminos`, '_blank');
+                                                                    }}
                                                                     className="text-xs text-blue-600 underline hover:text-blue-800 w-fit"
                                                                 >
                                                                     Ver términos y condiciones
@@ -1810,11 +1813,25 @@ export default function BookingPage() {
                                     {selectedPromotion?.termsAndConditions || 'No hay términos y condiciones específicos.'}
                                 </div>
                             </div>
-                            <DialogFooter>
-                                <VatosButton onClick={() => setSelectedPromotion(null)}>
+                            <div className="mt-6 flex gap-3">
+                                <Button 
+                                    variant="outline" 
+                                    className="flex-1" 
+                                    onClick={() => {
+                                        const url = `${window.location.origin}/promociones/${selectedPromotion?.id}/terminos`;
+                                        navigator.clipboard.writeText(url);
+                                        toast({
+                                            title: "Link de términos copiado",
+                                            description: "El enlace público de los términos y condiciones se ha copiado al portapapeles.",
+                                        });
+                                    }}
+                                >
+                                    <Share2 className="w-4 h-4 mr-2" /> Copiar Link
+                                </Button>
+                                <VatosButton className="flex-1" onClick={() => setSelectedPromotion(null)}>
                                     Cerrar
                                 </VatosButton>
-                            </DialogFooter>
+                            </div>
                         </DialogContent>
                     </Dialog>
 

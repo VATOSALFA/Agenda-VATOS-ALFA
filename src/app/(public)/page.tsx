@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -18,6 +18,7 @@ import BackgroundAurora from '@/components/ui/background-aurora';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { ParallaxHero } from '@/components/ui/parallax-hero';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from '@/hooks/use-toast';
 import Image from 'next/image';
 
 
@@ -672,7 +673,7 @@ export default function LandingPage() {
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            setShowTerms(promo);
+                                                            window.open(`/promociones/${promo.id}/terminos`, '_blank');
                                                         }}
                                                         className="text-xs font-medium text-muted-foreground hover:text-primary underline transition-colors"
                                                     >
@@ -897,8 +898,22 @@ export default function LandingPage() {
                     <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-sm text-slate-600 whitespace-pre-line leading-relaxed">
                         {showTerms?.termsAndConditions}
                     </div>
-                    <div className="mt-6">
-                        <VatosButton className="w-full" onClick={() => setShowTerms(null)}>
+                    <div className="mt-6 flex gap-3">
+                        <Button 
+                            variant="outline" 
+                            className="flex-1" 
+                            onClick={() => {
+                                const url = `${window.location.origin}/promociones/${showTerms?.id}/terminos`;
+                                navigator.clipboard.writeText(url);
+                                toast({
+                                    title: "Link de términos copiado",
+                                    description: "El enlace público de los términos y condiciones se ha copiado al portapapeles.",
+                                });
+                            }}
+                        >
+                            <Share2 className="w-4 h-4 mr-2" /> Copiar Link
+                        </Button>
+                        <VatosButton className="flex-1" onClick={() => setShowTerms(null)}>
                             Entendido
                         </VatosButton>
                     </div>

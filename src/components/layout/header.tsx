@@ -141,7 +141,7 @@ export default function Header() {
   const displayUrl = configuredWebsiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
 
   const isAuthPage = pathname === '/login';
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos';
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones');
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
 

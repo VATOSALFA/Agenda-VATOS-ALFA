@@ -186,11 +186,13 @@ export default function PromotionsPage() {
                 await updateDoc(doc(db, 'promociones', selectedPromotion.id), promotionData);
                 toast({ title: 'Promoción actualizada', description: 'Los cambios se han guardado correctamente.' });
             } else {
-                await addDoc(collection(db, 'promociones'), {
+                const newDocRef = await addDoc(collection(db, 'promociones'), {
                     ...promotionData,
                     createdAt: Timestamp.now(),
                 });
-                toast({ title: 'Promoción creada', description: 'La nueva promoción ha sido agregada.' });
+                const url = `${window.location.origin}/promociones/${newDocRef.id}/terminos`;
+                navigator.clipboard.writeText(url);
+                toast({ title: 'Promoción creada', description: 'Se guardó correctamente y el link de sus términos se ha copiado al portapapeles.' });
             }
 
             setIsDialogOpen(false);
@@ -281,12 +283,29 @@ export default function PromotionsPage() {
                                     {promo.description}
                                 </div>
                                 {promo.termsAndConditions && (
-                                    <button
-                                        onClick={() => setShowTerms(promo)}
-                                        className="text-xs font-medium text-primary hover:underline transition-colors"
-                                    >
-                                        Términos y condiciones
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setShowTerms(promo)}
+                                            className="text-xs font-medium text-primary hover:underline transition-colors"
+                                        >
+                                            Términos y condiciones
+                                        </button>
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const url = `${window.location.origin}/promociones/${promo.id}/terminos`;
+                                                navigator.clipboard.writeText(url);
+                                                toast({
+                                                    title: "Link copiado",
+                                                    description: "El enlace de los términos se ha copiado al portapapeles.",
+                                                });
+                                            }}
+                                            className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                                            title="Copiar Link de Términos"
+                                        >
+                                            <Share2 className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 )}
                             </CardContent>
                              <CardFooter className="flex justify-end gap-2 border-t pt-4">
@@ -506,8 +525,22 @@ export default function PromotionsPage() {
                     <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-sm text-slate-600 whitespace-pre-line leading-relaxed">
                         {showTerms?.termsAndConditions}
                     </div>
-                    <div className="mt-6">
-                        <Button className="w-full" onClick={() => setShowTerms(null)}>
+                    <div className="mt-6 flex gap-3">
+                        <Button 
+                            variant="outline" 
+                            className="flex-1" 
+                            onClick={() => {
+                                const url = `${window.location.origin}/promociones/${showTerms?.id}/terminos`;
+                                navigator.clipboard.writeText(url);
+                                toast({
+                                    title: "Link de términos copiado",
+                                    description: "El enlace público de los términos y condiciones se ha copiado al portapapeles.",
+                                });
+                            }}
+                        >
+                            <Share2 className="w-4 h-4 mr-2" /> Copiar Link
+                        </Button>
+                        <Button className="flex-1" onClick={() => setShowTerms(null)}>
                             Entendido
                         </Button>
                     </div>

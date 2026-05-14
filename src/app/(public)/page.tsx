@@ -1123,7 +1123,7 @@ export default function LandingPage() {
                                             }}
                                             className="flex items-center group"
                                         >
-                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none">
+                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none shadow-lg">
                                                 {item.label}
                                             </span>
                                             <Link href={item.href} onClick={() => setIsMenuOpen(false)}>

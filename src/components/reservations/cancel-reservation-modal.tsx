@@ -19,16 +19,18 @@ import { getDocs, query, collection, where } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
+import { Textarea } from '@/components/ui/textarea';
 
 interface CancelReservationModalProps {
   reservation: Reservation | null;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onConfirm: (reservationId: string) => Promise<void>;
+  onConfirm: (reservationId: string, reason: string) => Promise<void>;
 }
 
 export function CancelReservationModal({ reservation, isOpen, onOpenChange, onConfirm }: CancelReservationModalProps) {
   const [confirmationText, setConfirmationText] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
   const { user } = useAuth();
@@ -41,9 +43,10 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
     if (!reservation || !isConfirmationTextCorrect) return;
 
     setIsDeleting(true);
-    await onConfirm(reservation.id);
+    await onConfirm(reservation.id, cancelReason);
     setIsDeleting(false);
     setConfirmationText('');
+    setCancelReason('');
     // No cerramos manualmente aquí, dejamos que el componente padre maneje el cierre global
   }
 
@@ -51,6 +54,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
     e?.stopPropagation();
     if (isDeleting) return;
     setConfirmationText('');
+    setCancelReason('');
     onOpenChange(false);
   }
 
@@ -73,21 +77,40 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-2">
-          <Label htmlFor="cancel-confirmation">
-            Para confirmar, escribe <strong>CANCELAR</strong> en el campo de abajo.
-          </Label>
-          <Input
-            id="cancel-confirmation"
-            value={confirmationText}
-            onChange={(e) => setConfirmationText(e.target.value)}
-            placeholder='CANCELAR'
-            autoComplete="off"
-            // Aseguramos que el input capture el foco y no propague el clic
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => e.stopPropagation()}
-            onFocus={(e) => e.stopPropagation()}
-          />
+        <div className="py-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="cancel-reason">
+              Motivo de la cancelación
+            </Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder='Escribe el motivo aquí...'
+              className="resize-none"
+              rows={3}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+          </div>
+
+          <div className="space-y-2 pt-2 border-t">
+            <Label htmlFor="cancel-confirmation">
+              Para confirmar, escribe <strong>CANCELAR</strong> en el campo de abajo.
+            </Label>
+            <Input
+              id="cancel-confirmation"
+              value={confirmationText}
+              onChange={(e) => setConfirmationText(e.target.value)}
+              placeholder='CANCELAR'
+              autoComplete="off"
+              // Aseguramos que el input capture el foco y no propague el clic
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
+            />
+          </div>
         </div>
 
         <DialogFooter className="sm:justify-center gap-2">
@@ -101,7 +124,7 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
           <Button
             variant="destructive"
             onClick={handleConfirm}
-            disabled={(!isConfirmationTextCorrect) || isDeleting}
+            disabled={(!isConfirmationTextCorrect) || (cancelReason.trim() === '') || isDeleting}
             type="button"
           >
             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

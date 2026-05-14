@@ -141,7 +141,7 @@ export default function Header() {
   const displayUrl = configuredWebsiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
 
   const isAuthPage = pathname === '/login';
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones');
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones/');
 
   const websiteUrl = 'vatos-alfa-barbershop.web.app';
 
@@ -406,19 +406,37 @@ export default function Header() {
 
                       {hasActivePromotions && canSee('ver_promociones') && (
                         <AccordionItem value="promotions" className="border-b-0">
-                          <Link
-                            href="/promociones"
-                            onClick={handleLinkClick}
-                            className={cn(
-                              'flex items-center px-3 py-4 text-sm font-medium rounded-md transition-colors',
-                              pathname === '/promociones'
-                                ? 'bg-primary/10 text-primary'
-                                : 'text-foreground hover:bg-muted'
-                            )}
-                          >
-                            <Gift className="mr-3 h-4 w-4" />
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
                             Promociones
-                          </Link>
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              <Link
+                                href="/promociones"
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === '/promociones'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Gift className="mr-3 h-4 w-4" />
+                                Todas las Promociones
+                              </Link>
+                              {allPromotions.filter(p => p.active).map(promo => (
+                                <Link
+                                  key={promo.id}
+                                  href={`/promociones/${promo.id}`}
+                                  onClick={handleLinkClick}
+                                  className="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground hover:bg-muted"
+                                >
+                                  <Tag className="mr-3 h-4 w-4 text-muted-foreground" />
+                                  <span className="truncate">{promo.name}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          </AccordionContent>
                         </AccordionItem>
                       )}
 

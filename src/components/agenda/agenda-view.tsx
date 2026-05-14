@@ -700,7 +700,7 @@ export default function AgendaView() {
     }
   };
 
-  const handleCancelReservation = async (reservationId: string) => {
+  const handleCancelReservation = async (reservationId: string, reason: string) => {
     if (!selectedReservation || !selectedReservation.cliente_id || !db) {
       toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o no hay conexión con la base de datos." });
       return;
@@ -712,10 +712,20 @@ export default function AgendaView() {
         const resRef = doc(db, 'reservas', reservationId);
         const clientRef = doc(db, 'clientes', selectedReservation.cliente_id!);
 
-        transaction.update(resRef, { estado: 'Cancelado' });
+        transaction.update(resRef, { estado: 'Cancelado', motivo_cancelacion: reason || '' });
         transaction.update(clientRef, {
           citas_canceladas: increment(1)
         });
+      });
+
+      await logAuditAction({
+        action: 'Cancelar Reserva',
+        details: `Se canceló la cita del cliente ${selectedReservation.customer?.nombre || 'Desconocido'}. Motivo: ${reason || 'No especificado'}. Fecha: ${selectedReservation.fecha} a las ${selectedReservation.hora_inicio}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'warning',
+        localId: selectedReservation.local_id || 'unknown'
       });
 
       toast({

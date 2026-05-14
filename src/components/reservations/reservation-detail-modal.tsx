@@ -134,7 +134,7 @@ export function ReservationDetailModal({
     setIsCancelModalOpen(true);
   }
 
-  const handleCancelReservation = async (reservationId: string) => {
+  const handleCancelReservation = async (reservationId: string, reason: string) => {
     // 1. CERRAR PRIMERO EL MODAL DE CONFIRMACIÓN PARA EVITAR CONGELAMIENTO
     setIsCancelModalOpen(false);
 
@@ -149,7 +149,7 @@ export function ReservationDetailModal({
         const resRef = doc(db, 'reservas', reservationId);
         const clientRef = doc(db, 'clientes', reservation.cliente_id!);
 
-        transaction.update(resRef, { estado: 'Cancelado' });
+        transaction.update(resRef, { estado: 'Cancelado', motivo_cancelacion: reason || '' });
         transaction.update(clientRef, {
           citas_canceladas: increment(1)
         });
@@ -162,7 +162,7 @@ export function ReservationDetailModal({
 
       await logAuditAction({
         action: 'Cancelar Reserva',
-        details: `Se canceló la cita del cliente ${reservation.customer?.nombre || 'Desconocido'}. Fecha: ${reservation.fecha} a las ${reservation.hora_inicio}.`,
+        details: `Se canceló la cita del cliente ${reservation.customer?.nombre || 'Desconocido'}. Motivo: ${reason || 'No especificado'}. Fecha: ${reservation.fecha} a las ${reservation.hora_inicio}.`,
         userId: user?.uid || 'unknown',
         userName: user?.displayName || user?.email || 'Unknown',
         userRole: user?.role,

@@ -17,6 +17,9 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/card';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { ArrowUpDown } from 'lucide-react';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -82,10 +85,60 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const { user } = useAuth();
   const canViewPhone = useMemo(() => user?.permissions?.includes('ver_numero_telefono'), [user]);
 
+  const [resSortConfig, setResSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
+  const [salesSortConfig, setSalesSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
+
   const professionalMap = useMemo(() => {
     if (professionalsLoading) return new Map();
     return new Map(professionals.map(p => [p.id, p.name]));
   }, [professionals, professionalsLoading]);
+
+  const sortedReservations = useMemo(() => {
+    if (!reservations) return [];
+    const sorted = [...reservations];
+    const { key, direction } = resSortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      if (key === 'fecha') {
+        const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
+        const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
+        return (dateA - dateB) * dir;
+      }
+      if (key === 'servicio') return (a.servicio || '').localeCompare(b.servicio || '') * dir;
+      if (key === 'profesional') {
+        const nameA = professionalMap.get(a.barbero_id) || '';
+        const nameB = professionalMap.get(b.barbero_id) || '';
+        return nameA.localeCompare(nameB) * dir;
+      }
+      if (key === 'estado') return (a.estado || '').localeCompare(b.estado || '') * dir;
+      return 0;
+    });
+    return sorted;
+  }, [reservations, resSortConfig, professionalMap]);
+
+  const sortedSales = useMemo(() => {
+    if (!sales) return [];
+    const sorted = [...sales];
+    const { key, direction } = salesSortConfig;
+    const dir = direction === 'asc' ? 1 : -1;
+
+    sorted.sort((a, b) => {
+      if (key === 'fecha') {
+        const dateA = a.fecha_hora_venta?.seconds || 0;
+        const dateB = b.fecha_hora_venta?.seconds || 0;
+        return (dateA - dateB) * dir;
+      }
+      if (key === 'total') return ((a.total || 0) - (b.total || 0)) * dir;
+      if (key === 'metodo_pago') return (a.metodo_pago || '').localeCompare(b.metodo_pago || '') * dir;
+      if (key === 'profesional') {
+        const getNames = (s: Sale) => Array.from(new Set(s.items?.map(i => i.barbero_id ? professionalMap.get(i.barbero_id) : '').filter(Boolean))).join(', ');
+        return getNames(a).localeCompare(getNames(b)) * dir;
+      }
+      return 0;
+    });
+    return sorted;
+  }, [sales, salesSortConfig, professionalMap]);
 
 
   const formatDate = (date: any, includeTime = false) => {
@@ -122,6 +175,43 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const unattendedAppointments = client.citas_no_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length);
   const cancelledAppointments = client.citas_canceladas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length);
   const totalAppointments = client.citas_totales || (reservationsLoading ? 0 : reservations.length);
+
+  const SortableHeader = ({ label, sortKey, config, onSort, className, align = 'left' }: { 
+    label: string; 
+    sortKey: string; 
+    config: { key: string; direction: 'asc' | 'desc' }; 
+    onSort: (key: string) => void;
+    className?: string;
+    align?: 'left' | 'right' | 'center';
+  }) => (
+    <TableHead className={cn(className, align === 'right' && "text-right")}>
+      <Button
+        variant="ghost"
+        className={cn(
+          "h-auto p-0 font-bold hover:bg-transparent flex items-center gap-2",
+          align === 'right' && "ml-auto"
+        )}
+        onClick={() => onSort(sortKey)}
+      >
+        {label}
+        <ArrowUpDown className={cn("h-3 w-3", config.key === sortKey ? "text-primary" : "text-muted-foreground/30")} />
+      </Button>
+    </TableHead>
+  );
+
+  const handleResSort = (key: string) => {
+    setResSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const handleSalesSort = (key: string) => {
+    setSalesSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
 
 
   return (
@@ -161,13 +251,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
           {/* History Tabs */}
           <div className="md:col-span-3 flex flex-col min-h-0 min-w-0">
             <Tabs defaultValue="general" className="flex-grow flex flex-col min-h-0 min-w-0">
-              <ScrollArea className="w-full mb-4">
-                <TabsList className="w-full justify-start">
-                  <TabsTrigger value="general">Información General</TabsTrigger>
-                  <TabsTrigger value="reservations">Historial de Reservas</TabsTrigger>
-                  <TabsTrigger value="sales">Historial de Compras</TabsTrigger>
-                </TabsList>
-              </ScrollArea>
+              <TabsList className="w-full justify-start mb-4 bg-muted/50 p-1 h-auto flex-wrap">
+                <TabsTrigger value="general">Información General</TabsTrigger>
+                <TabsTrigger value="reservations">Historial de Reservas</TabsTrigger>
+                <TabsTrigger value="sales">Historial de Compras</TabsTrigger>
+              </TabsList>
 
               <div className="flex-grow pr-2 overflow-y-auto overflow-x-hidden">
                 <TabsContent value="general" className="space-y-4">
@@ -181,19 +269,19 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                 </TabsContent>
                 <TabsContent value="reservations" className="m-0 h-full">
                   {reservationsLoading ? <Skeleton className="h-60 w-full" /> : (
-                    reservations.length > 0 ? (
+                    sortedReservations.length > 0 ? (
                       <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Fecha</TableHead>
-                              <TableHead>Servicio</TableHead>
-                              <TableHead>Profesional</TableHead>
-                              <TableHead>Estado</TableHead>
+                              <SortableHeader label="Fecha" sortKey="fecha" config={resSortConfig} onSort={handleResSort} />
+                              <SortableHeader label="Servicio" sortKey="servicio" config={resSortConfig} onSort={handleResSort} />
+                              <SortableHeader label="Profesional" sortKey="profesional" config={resSortConfig} onSort={handleResSort} />
+                              <SortableHeader label="Estado" sortKey="estado" config={resSortConfig} onSort={handleResSort} />
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {reservations.map(res => (
+                            {sortedReservations.map(res => (
                               <TableRow key={res.id}>
                                 <TableCell>{formatDate(res.fecha, true)}</TableCell>
                                 <TableCell>{res.servicio}</TableCell>
@@ -212,20 +300,20 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
                 <TabsContent value="sales" className="m-0 h-full">
                   {salesLoading ? <Skeleton className="h-60 w-full" /> : (
-                    sales.length > 0 ? (
+                    sortedSales.length > 0 ? (
                       <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Fecha</TableHead>
+                              <SortableHeader label="Fecha" sortKey="fecha" config={salesSortConfig} onSort={handleSalesSort} />
                               <TableHead>Items</TableHead>
-                              <TableHead>Profesional</TableHead>
-                              <TableHead>Método de pago</TableHead>
-                              <TableHead className="text-right">Total</TableHead>
+                              <SortableHeader label="Profesional" sortKey="profesional" config={salesSortConfig} onSort={handleSalesSort} />
+                              <SortableHeader label="Método de pago" sortKey="metodo_pago" config={salesSortConfig} onSort={handleSalesSort} />
+                              <SortableHeader label="Total" sortKey="total" config={salesSortConfig} onSort={handleSalesSort} align="right" />
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {sales.map(sale => {
+                            {sortedSales.map(sale => {
                               const professionalNames = Array.from(
                                 new Set(sale.items?.map(item => item.barbero_id ? professionalMap.get(item.barbero_id) : null).filter(Boolean))
                               ).join(', ') || 'N/A';

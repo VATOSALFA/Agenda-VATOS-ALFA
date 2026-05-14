@@ -71,10 +71,19 @@ export default function PublicPromotionPage() {
             
             {/* Header / Navigation */}
             <header className="sticky top-0 z-50 bg-black/60 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                <button 
+                    onClick={() => {
+                        if (window.history.length > 2) {
+                            router.back();
+                        } else {
+                            router.push('/');
+                        }
+                    }} 
+                    className="flex items-center gap-2 hover:opacity-80 transition-opacity text-white"
+                >
                     <ArrowLeft className="w-5 h-5" />
-                    <span className="font-bold text-lg hidden sm:inline">Vatos Alfa</span>
-                </Link>
+                    <span className="font-bold text-lg hidden sm:inline">Volver</span>
+                </button>
                 
                 <div className="flex items-center gap-4">
                     <button 

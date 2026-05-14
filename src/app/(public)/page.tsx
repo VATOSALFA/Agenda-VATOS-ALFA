@@ -220,17 +220,36 @@ export default function LandingPage() {
                 </nav>
             </div>
             {/* Header */}
-            <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <header className="sticky top-0 z-50 w-full border-b bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                        {iconUrl ? (
-                            <img src={iconUrl} alt="Icon" className="h-9 w-9 rounded-full object-cover border border-slate-200" />
-                        ) : logoUrl ? (
-                            <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
-                        ) : (
-                            <Scissors className="h-6 w-6 text-primary" />
-                        )}
-                        <span className="hidden sm:inline-block">{companyName}</span>
+                        <Link href="/" className="flex items-center gap-2">
+                            {iconUrl ? (
+                                <img 
+                                    src={iconUrl} 
+                                    alt="Icon" 
+                                    className="h-9 w-9 rounded-full object-cover border border-slate-200" 
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : logoUrl ? (
+                                <img 
+                                    src={logoUrl} 
+                                    alt="Logo" 
+                                    className="h-8 w-auto object-contain"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={cn("fallback-icon", (iconUrl || logoUrl) ? "hidden" : "")}>
+                                <Scissors className="h-6 w-6 text-primary" />
+                            </div>
+                            <span className="hidden sm:inline-block">{companyName}</span>
+                        </Link>
                     </div>
 
                     <div className="flex gap-2 items-center">
@@ -602,11 +621,12 @@ export default function LandingPage() {
                                                 isVideo(promo.imageUrl) ? (
                                                     <video
                                                         src={promo.imageUrl}
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 bg-slate-900"
                                                         autoPlay
                                                         muted
                                                         loop
                                                         playsInline
+                                                        preload="auto"
                                                     />
                                                 ) : (
                                                     <Image

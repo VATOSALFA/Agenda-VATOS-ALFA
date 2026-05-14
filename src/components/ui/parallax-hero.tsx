@@ -33,19 +33,23 @@ export function ParallaxHero({ children }: ParallaxPageProps) {
       tl.to(triggerElement.querySelectorAll('[data-parallax-layer="2"]'), { yPercent: 55, ease: "none" }, "<");
     }
 
-    // Smooth scroll with Lenis
-    const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: true,
-    });
-    lenis.on('scroll', ScrollTrigger.update);
-    gsap.ticker.add((time) => { lenis.raf(time * 1000); });
-    gsap.ticker.lagSmoothing(0);
+    // Smooth scroll with Lenis - Only on Desktop
+    let lenis: any;
+    if (window.innerWidth > 768) {
+      lenis = new Lenis({
+        duration: 1.2,
+        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        smoothWheel: true,
+        wheelMultiplier: 1,
+      });
+      lenis.on('scroll', ScrollTrigger.update);
+      gsap.ticker.add((time) => { lenis.raf(time * 1000); });
+      gsap.ticker.lagSmoothing(0);
+    }
 
     return () => {
       ScrollTrigger.getAll().forEach(st => st.kill());
-      lenis.destroy();
+      if (lenis) lenis.destroy();
     };
   }, []);
 

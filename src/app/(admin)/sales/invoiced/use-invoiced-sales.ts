@@ -2,7 +2,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
-import { where, doc, getDoc } from "firebase/firestore";
+import { where, doc, getDoc, collection, query, getDocs, documentId } from "firebase/firestore";
 import { db } from "@/lib/firebase-client";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Client, Profesional, User } from "@/lib/types";
@@ -50,18 +50,33 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
             const fetchClients = async () => {
                 setClientsLoading(true);
                 try {
-                    const promises = idsToFetch.map(id => getDoc(doc(db, 'clientes', id)));
-                    const results = await Promise.all(promises);
+                    // Chunk IDs into groups of 30 (Firestore limit for 'in' query)
+                    const chunks = [];
+                    for (let i = 0; i < idsToFetch.length; i += 30) {
+                        chunks.push(idsToFetch.slice(i, i + 30));
+                    }
+
                     const newClients: Client[] = [];
-                    results.forEach(snapshot => {
-                        if (snapshot.exists()) {
-                            fetchedClientIds.current.add(snapshot.id);
-                            newClients.push({ id: snapshot.id, ...snapshot.data() } as Client);
-                        }
+                    
+                    // Fetch each chunk in parallel
+                    const chunkPromises = chunks.map(async (chunk) => {
+                        const q = query(
+                            collection(db, 'clientes'), 
+                            where(documentId(), 'in', chunk)
+                        );
+                        const snapshot = await getDocs(q);
+                        return snapshot.docs.map(doc => {
+                            fetchedClientIds.current.add(doc.id);
+                            return { id: doc.id, ...doc.data() } as Client;
+                        });
                     });
+
+                    const results = await Promise.all(chunkPromises);
+                    results.forEach(clients => newClients.push(...clients));
+
                     setClientsInSales(prev => [...prev, ...newClients]);
                 } catch (err) {
-                    console.error("Error fetching clients", err);
+                    console.error("Error fetching clients in batches", err);
                 } finally {
                     setClientsLoading(false);
                 }

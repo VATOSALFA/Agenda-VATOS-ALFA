@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,40 @@ const isVideo = (url?: string) => {
     if (!url) return false;
     return url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.webm') || (url.toLowerCase().includes('alt=media') && url.includes('video'));
 };
+
+// Robust media component: tries video, falls back to image on error
+function PromoMedia({ url, name, className, cover = true }: { url: string; name: string; className?: string; cover?: boolean }) {
+    const [videoFailed, setVideoFailed] = React.useState(false);
+    const isVid = isVideo(url) && !videoFailed;
+
+    if (isVid) {
+        return (
+            <video
+                src={url}
+                className={cn(cover ? 'object-cover' : 'object-contain', 'w-full h-full', className)}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                onError={() => setVideoFailed(true)}
+                onStalled={() => setTimeout(() => setVideoFailed(true), 5000)}
+            />
+        );
+    }
+
+    // Show as image (works for both actual images AND video thumbnails from Firebase)
+    return (
+        <img
+            src={url}
+            alt={name}
+            className={cn(cover ? 'object-cover' : 'object-contain', 'w-full h-full', className)}
+            onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+            }}
+        />
+    );
+}
 
 export default function LandingPage() {
     const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
@@ -618,25 +652,11 @@ export default function LandingPage() {
                                     >
                                         <div className="relative aspect-[4/5] sm:aspect-square w-full bg-slate-200 overflow-hidden">
                                             {promo.imageUrl ? (
-                                                isVideo(promo.imageUrl) ? (
-                                                    <video
-                                                        src={promo.imageUrl}
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 bg-slate-900"
-                                                        autoPlay
-                                                        muted
-                                                        loop
-                                                        playsInline
-                                                        preload="auto"
-                                                    />
-                                                ) : (
-                                                    <Image
-                                                        src={promo.imageUrl}
-                                                        alt={promo.name}
-                                                        fill
-                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="(max-width: 768px) 100vw, 33vw"
-                                                    />
-                                                )
+                                                <PromoMedia
+                                                    url={promo.imageUrl}
+                                                    name={promo.name}
+                                                    className="group-hover:scale-105 transition-transform duration-500"
+                                                />
                                             ) : (
                                                 <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-slate-100">
                                                     <ShoppingBag className="h-16 w-16 opacity-20" />
@@ -645,11 +665,6 @@ export default function LandingPage() {
                                             <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm z-10">
                                                 Oferta
                                             </div>
-                                            {isVideo(promo.imageUrl) && (
-                                                <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-md text-white p-1.5 rounded-full z-10">
-                                                    <Video className="w-4 h-4" />
-                                                </div>
-                                            )}
                                         </div>
                                         <CardContent className="p-6">
                                             <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
@@ -869,30 +884,17 @@ export default function LandingPage() {
                 <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
                     <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
                         {selectedPromotion?.imageUrl ? (
-                            isVideo(selectedPromotion.imageUrl) ? (
-                                <video
-                                    src={selectedPromotion.imageUrl}
-                                    className="w-full h-full object-contain"
-                                    autoPlay
-                                    controls
-                                    playsInline
-                                    loop
-                                />
-                            ) : (
-                                <img
-                                    src={selectedPromotion.imageUrl}
-                                    alt={selectedPromotion?.name}
-                                    className="w-full h-full object-contain"
-                                />
-                            )
+                            <PromoMedia
+                                url={selectedPromotion.imageUrl}
+                                name={selectedPromotion?.name || 'Promoción'}
+                                cover={false}
+                            />
                         ) : (
                             <div className="text-white/50 text-center p-8">
                                 <Sparkles className="w-16 h-16 mx-auto mb-4 opacity-30" />
                                 <p>Sin contenido visual</p>
                             </div>
                         )}
-                        
-                        {/* No info overlay or buttons here as per user request, only video */}
                     </div>
                     
                     <button 

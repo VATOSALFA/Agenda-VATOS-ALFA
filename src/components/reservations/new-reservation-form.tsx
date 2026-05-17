@@ -400,9 +400,26 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
           if (r.estado === 'Cancelado' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
-          const hasCommonProfessional = r.items.some(i => i.barbero_id === item.barbero_id);
-          if (!hasCommonProfessional) return false;
-          return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
+          const profItems = r.items.filter(i => i.barbero_id === item.barbero_id);
+          if (profItems.length === 0) return false;
+
+          // Calculate this professional's actual time range within the existing reservation
+          const profIds = new Set(r.items.map(i => i.barbero_id).filter(Boolean));
+          let profHoraFin = r.hora_fin; // Default to global end
+
+          if (profIds.size > 1) {
+            // Multi-professional reservation: calculate per-professional end time
+            const totalProfDurationMins = profItems.reduce((acc, i: any) => acc + (i.duracion || 0), 0);
+            if (totalProfDurationMins > 0) {
+              const [startH, startM] = r.hora_inicio.split(':').map(Number);
+              const endMinutes = startH * 60 + startM + totalProfDurationMins;
+              const endH = Math.floor(endMinutes / 60);
+              const endM = endMinutes % 60;
+              profHoraFin = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+            }
+          }
+
+          return hora_inicio < profHoraFin && hora_fin > r.hora_inicio;
         });
 
         if (reservationConflict) {

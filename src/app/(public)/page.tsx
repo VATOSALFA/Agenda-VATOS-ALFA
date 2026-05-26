@@ -29,7 +29,7 @@ const isVideo = (url?: string) => {
 };
 
 // Robust media component: tries video, falls back to image on error
-function PromoMedia({ url, name, className, cover = true }: { url: string; name: string; className?: string; cover?: boolean }) {
+function PromoMedia({ url, name, className, cover = true, muted = true, controls = false }: { url: string; name: string; className?: string; cover?: boolean; muted?: boolean; controls?: boolean }) {
     const [videoFailed, setVideoFailed] = React.useState(false);
     const isVid = isVideo(url) && !videoFailed;
 
@@ -39,9 +39,10 @@ function PromoMedia({ url, name, className, cover = true }: { url: string; name:
                 src={url}
                 className={cn(cover ? 'object-cover' : 'object-contain', 'w-full h-full', className)}
                 autoPlay
-                muted
+                muted={muted}
                 loop
                 playsInline
+                controls={controls}
                 preload="metadata"
                 onError={() => setVideoFailed(true)}
                 onStalled={() => setTimeout(() => setVideoFailed(true), 5000)}
@@ -915,6 +916,8 @@ export default function LandingPage() {
                                 url={selectedPromotion.imageUrl}
                                 name={selectedPromotion?.name || 'Promoción'}
                                 cover={false}
+                                muted={false}
+                                controls={true}
                             />
                         ) : (
                             <div className="text-white/50 text-center p-8">

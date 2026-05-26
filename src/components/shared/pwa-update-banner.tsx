@@ -44,11 +44,26 @@ export function PwaUpdateBanner() {
         };
     }, []);
 
-    const handleUpdate = () => {
-        if (swRegistration && swRegistration.waiting) {
-            swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-        } else {
-            window.location.reload();
+    const handleUpdate = async () => {
+        try {
+            if (swRegistration) {
+                if (swRegistration.waiting) {
+                    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+                // Unregister the service worker to force fetching fresh files from server
+                await swRegistration.unregister();
+            }
+
+            // Clear Cache Storage if supported
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map(key => caches.delete(key)));
+            }
+        } catch (error) {
+            console.error("Error updating PWA:", error);
+        } finally {
+            // Force reload by changing location with a cache-busting query parameter
+            window.location.href = window.location.origin + window.location.pathname + '?update=' + Date.now();
         }
     };
 

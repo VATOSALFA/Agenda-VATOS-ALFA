@@ -404,42 +404,6 @@ export default function Header() {
                         </AccordionItem>
                       )}
 
-                      {hasActivePromotions && canSee('ver_promociones') && (
-                        <AccordionItem value="promotions" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Promociones
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              <Link
-                                href="/promociones"
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === '/promociones'
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
-                                )}
-                              >
-                                <Gift className="mr-3 h-4 w-4" />
-                                Todas las Promociones
-                              </Link>
-                              {allPromotions.filter(p => p.active).map(promo => (
-                                <Link
-                                  key={promo.id}
-                                  href={`/promociones/${promo.id}`}
-                                  onClick={handleLinkClick}
-                                  className="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground hover:bg-muted"
-                                >
-                                  <Tag className="mr-3 h-4 w-4 text-muted-foreground" />
-                                  <span className="truncate">{promo.name}</span>
-                                </Link>
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
                       {canSeeAny(productsNavLinks.map(l => l.permission)) && (
                         <AccordionItem value="products" className="border-b-0">
                           <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
@@ -559,6 +523,42 @@ export default function Header() {
                           </AccordionContent>
                         </AccordionItem>
                       )}
+
+                      {hasActivePromotions && canSee('ver_promociones') && (
+                        <AccordionItem value="promotions" className="border-b-0">
+                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+                            Promociones
+                          </AccordionTrigger>
+                          <AccordionContent>
+                            <div className="flex flex-col space-y-1 pt-1">
+                              <Link
+                                href="/promociones"
+                                onClick={handleLinkClick}
+                                className={cn(
+                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                                  pathname === '/promociones'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-foreground hover:bg-muted'
+                                )}
+                              >
+                                <Gift className="mr-3 h-4 w-4" />
+                                Todas las Promociones
+                              </Link>
+                              {allPromotions.filter(p => p.active).map(promo => (
+                                <Link
+                                  key={promo.id}
+                                  href={`/promociones/${promo.id}`}
+                                  onClick={handleLinkClick}
+                                  className="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground hover:bg-muted"
+                                >
+                                  <Tag className="mr-3 h-4 w-4 text-muted-foreground" />
+                                  <span className="truncate">{promo.name}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      )}
                     </Accordion>
                   </div>
                 </ScrollArea>
@@ -623,20 +623,6 @@ export default function Header() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
-
-            {hasActivePromotions && canSee('ver_promociones') && (
-              <Link
-                href="/promociones"
-                className={cn(
-                  'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm whitespace-nowrap font-medium',
-                  pathname === '/promociones'
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
-                )}
-              >
-                Promociones
-              </Link>
             )}
 
             {canSeeAny(productsNavLinks.map(l => l.permission)) && (
@@ -745,6 +731,26 @@ export default function Header() {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+            )}
+
+            {hasActivePromotions && canSee('ver_promociones') && (
+              <div className="ml-1 lg:ml-2 flex items-center">
+                <Link
+                  href="/promociones"
+                  className={cn(
+                    'px-3.5 py-1.5 rounded-full text-xs lg:text-sm whitespace-nowrap font-bold text-white shadow-md transform hover:scale-105 active:scale-95 duration-200 border flex items-center gap-1.5 animate-gradient-flow bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-500 hover:shadow-lg transition-all',
+                    pathname === '/promociones'
+                      ? 'border-white ring-2 ring-white/20 shadow-purple-500/40 scale-105'
+                      : 'border-white/20 hover:border-white/50'
+                  )}
+                >
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                  </span>
+                  Promociones
+                </Link>
+              </div>
             )}
 
           </nav>

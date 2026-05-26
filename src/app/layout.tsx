@@ -13,6 +13,7 @@ import { Metadata, Viewport } from 'next';
 
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
+import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
 
 export const revalidate = 60; // Revalidate every 60 seconds
 
@@ -81,6 +82,7 @@ export default function RootLayout({
                 <MercadoPagoProvider>
                   <RecaptchaProvider>
                     <NetworkStatusIndicator />
+                    <PwaUpdateBanner />
                     {children}
                     <Toaster />
                   </RecaptchaProvider>

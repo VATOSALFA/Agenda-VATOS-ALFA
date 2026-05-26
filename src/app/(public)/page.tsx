@@ -381,6 +381,33 @@ export default function LandingPage() {
             {filteredProfessionals && filteredProfessionals.length > 0 && (
                 <section id="profesionales" className="py-16 md:py-24 bg-white">
                     <div className="container px-4 md:px-6">
+                        {activePromotions.length > 0 && (
+                            <div className="flex justify-center mb-10">
+                                <Link 
+                                    href="#promociones" 
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        document.getElementById('promociones')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="group relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-slate-950 text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-500/30 overflow-hidden shadow-md"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
+                                    
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+                                    </span>
+                                    
+                                    <span className="relative z-10 flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
+                                        ¡Tenemos Promociones Activas! Ver ofertas
+                                    </span>
+                                    
+                                    <ArrowRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                                </Link>
+                            </div>
+                        )}
+
                         <div className="text-center mb-12">
                             <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestro Equipo</h2>
                             <p className="text-muted-foreground">Expertos listos para atenderte.</p>

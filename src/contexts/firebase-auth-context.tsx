@@ -42,6 +42,7 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const pathname = usePathname();
   const router = useRouter();
@@ -124,15 +125,77 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   };
 
+  const checkLocalSchedule = async (localId: string): Promise<boolean> => {
+    try {
+      const localDocRef = doc(db, 'locales', localId);
+      const localDoc = await getDoc(localDocRef);
+      if (!localDoc.exists()) return true;
+
+      const localData = localDoc.data();
+      const schedule = localData.schedule;
+      if (!schedule) return true;
+
+      const now = new Date();
+      const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+      const currentDay = days[now.getDay()];
+
+      const dayConfig = schedule[currentDay];
+      if (!dayConfig || dayConfig.enabled === false) return false;
+
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTimeInMins = currentHour * 60 + currentMinute;
+
+      // Enforce 11:00 PM hard stop
+      const hardEndLimitInMins = 23 * 60;
+      if (currentTimeInMins > hardEndLimitInMins) {
+        return false;
+      }
+
+      // Enforce 30 minutes before opening start limit
+      const startTimeStr = dayConfig.start || '10:00';
+      const [startH, startM] = startTimeStr.split(':').map(Number);
+      const startTimeInMins = startH * 60 + startM;
+      const allowedStartInMins = startTimeInMins - 30;
+
+      if (currentTimeInMins < allowedStartInMins) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      console.error("Error checking local schedule:", e);
+      return true; // fallback
+    }
+  };
+
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setCurrentSessionId(localStorage.getItem('current_session_id'));
+    }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
           const customUser = await validateUserPermissions(firebaseUser);
+
+          // Enforce schedule limits for Receptionists
+          if (customUser.role === 'Recepcionista' && customUser.local_id) {
+            const isWithinHours = await checkLocalSchedule(customUser.local_id);
+            if (!isWithinHours) {
+              console.warn(`User ${customUser.email} denied access: outside working hours.`);
+              throw new Error("OUTSIDE_HOURS");
+            }
+          }
+
           setUser(customUser);
         } catch (error: any) {
           if (error.message === "ACCESS_DENIED") {
             console.warn("Access denied for user:", firebaseUser.email);
+            await firebaseSignOut(auth);
+          } else if (error.message === "OUTSIDE_HOURS") {
+            if (typeof window !== 'undefined') {
+              alert("Acceso Restringido: Las recepcionistas no pueden acceder a la plataforma fuera del horario de la sucursal (permitido desde 30 mins antes de abrir hasta las 11:00 PM).");
+            }
             await firebaseSignOut(auth);
           } else {
             console.error("Error fetching user data from Firestore:", error);
@@ -165,10 +228,67 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
 
+  const getDeviceInfo = () => {
+    if (typeof window === 'undefined') return 'Desconocido';
+    const ua = window.navigator.userAgent;
+    
+    // Check standalone mode (PWA)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+
+    let os = 'Desconocido';
+    if (/windows/i.test(ua)) os = 'Windows';
+    else if (/android/i.test(ua)) os = 'Android';
+    else if (/ipad|iphone|ipod/i.test(ua)) os = 'iOS';
+    else if (/macintosh/i.test(ua)) os = 'macOS';
+    else if (/linux/i.test(ua)) os = 'Linux';
+
+    let deviceType = 'Desktop';
+    if (/mobi/i.test(ua)) deviceType = 'Móvil';
+    if (/ipad/i.test(ua) || (os === 'Android' && !/mobi/i.test(ua)) || (os === 'iOS' && /ipad/i.test(ua)) || (window.innerWidth >= 768 && window.innerWidth <= 1024)) {
+      deviceType = 'Tablet';
+    }
+
+    let browser = 'Browser';
+    if (/chrome|crios/i.test(ua) && !/edge|edg/i.test(ua) && !/opr/i.test(ua)) browser = 'Chrome';
+    else if (/safari/i.test(ua) && !/chrome|crios/i.test(ua)) browser = 'Safari';
+    else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+    else if (/edge|edg/i.test(ua)) browser = 'Edge';
+
+    const appType = isStandalone ? ' (App)' : ' (Navegador)';
+    return `${deviceType} - ${os} (${browser})${appType}`;
+  };
+
   const createSession = async (user: CustomUser) => {
     // Only create session for non-clients (e.g. receptionists, admins)
     if (user && user.role !== 'Cliente') {
       try {
+        const activeSessionId = localStorage.getItem('current_session_id');
+        if (activeSessionId) {
+          const sessionDoc = await getDoc(doc(db, 'sesiones_trabajo', activeSessionId));
+          if (sessionDoc.exists()) {
+            const sessionData = sessionDoc.data();
+            const start = sessionData.hora_entrada?.toDate();
+            const today = new Date();
+            const isSameDay = start && 
+              start.getDate() === today.getDate() && 
+              start.getMonth() === today.getMonth() && 
+              start.getFullYear() === today.getFullYear();
+
+            if (!isSameDay) {
+              // Auto-close session from previous day using its last activity or start time
+              await updateDoc(doc(db, 'sesiones_trabajo', activeSessionId), {
+                hora_salida: sessionData.ultima_actividad || sessionData.hora_entrada || serverTimestamp(),
+                estado: 'cerrada'
+              });
+              localStorage.removeItem('current_session_id');
+            } else {
+              // Same day: reuse the session
+              setCurrentSessionId(activeSessionId);
+              return;
+            }
+          }
+        }
+
         const sessionRef = await addDoc(collection(db, 'sesiones_trabajo'), {
           empleado_id: user.uid,
           empleado_nombre: user.displayName || user.email,
@@ -177,9 +297,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           hora_salida: null,
           local_id: user.local_id || null,
           estado: 'activa',
-          pagado: false
+          pagado: false,
+          dispositivo: getDeviceInfo(),
+          ultima_actividad: serverTimestamp()
         });
         localStorage.setItem('current_session_id', sessionRef.id);
+        setCurrentSessionId(sessionRef.id);
       } catch (e) {
         console.error("Error creating work session:", e);
       }
@@ -195,11 +318,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           estado: 'cerrada'
         });
         localStorage.removeItem('current_session_id');
+        setCurrentSessionId(null);
       } catch (e) {
         console.error("Error closing work session:", e);
       }
     }
   };
+
+  // Keep receptionist sessions updated every 60 seconds (Heartbeat)
+  useEffect(() => {
+    if (!currentSessionId || !user || user.role !== 'Recepcionista') return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        await updateDoc(doc(db, 'sesiones_trabajo', currentSessionId), {
+          ultima_actividad: serverTimestamp()
+        });
+      } catch (e) {
+        console.error("Error updating session heartbeat:", e);
+      }
+    }, 60000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [currentSessionId, user]);
 
   const signOut = async () => {
     await closeCurrentSession();

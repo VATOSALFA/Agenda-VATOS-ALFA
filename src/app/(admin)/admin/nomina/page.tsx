@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { Timestamp, collection, query, getDocs, writeBatch, doc, orderBy } from 'firebase/firestore';
+import { Timestamp, collection, query, getDocs, writeBatch, doc, orderBy, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useLocal } from '@/contexts/local-context';
@@ -69,6 +69,8 @@ interface WorkSession {
     local_id: string;
     estado: string;
     pagado: boolean;
+    dispositivo?: string;
+    ultima_actividad?: Timestamp | null;
 }
 
 interface PaymentRecord {
@@ -101,6 +103,13 @@ export default function NominaPage() {
     const [payingEmployee, setPayingEmployee] = useState<any | null>(null);
     const [selectedPayerId, setSelectedPayerId] = useState('');
     const [processingPayment, setProcessingPayment] = useState(false);
+
+    // Sessions detail modal state
+    const [selectedEmployeeSessions, setSelectedEmployeeSessions] = useState<{
+        name: string;
+        sessions: WorkSession[];
+    } | null>(null);
+    const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
 
     // Reset (clean slate) modal
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -213,16 +222,27 @@ export default function NominaPage() {
                 grouped[id].roles.push(session.rol);
             }
 
-            if (!session.hora_salida) {
+            const start = session.hora_entrada?.toDate();
+            const end = session.hora_salida?.toDate() || session.ultima_actividad?.toDate();
+            const today = new Date();
+            
+            // Check if it's currently active (same day and no explicit logout)
+            const isCurrentlyActive = !session.hora_salida && start && 
+              start.getDate() === today.getDate() && 
+              start.getMonth() === today.getMonth() && 
+              start.getFullYear() === today.getFullYear();
+
+            if (!session.hora_salida && isCurrentlyActive) {
                 grouped[id].unclosedSessions++;
             } else {
-                const start = session.hora_entrada?.toDate();
-                const end = session.hora_salida?.toDate();
                 if (start && end) {
                     const mins = differenceInMinutes(end, start);
-                    grouped[id].totalMinutos += mins;
+                    const safeMins = Math.max(0, mins);
+                    grouped[id].totalMinutos += safeMins;
                     grouped[id].unpaidSessions++;
                     grouped[id].sessionIds.push(session.id);
+                } else if (!session.hora_salida) {
+                    grouped[id].unclosedSessions++;
                 }
             }
         });
@@ -271,6 +291,74 @@ export default function NominaPage() {
             }
             return newManual;
         });
+    };
+
+    const handleOpenSessionDetails = (employeeId: string, employeeName: string) => {
+        const employeeSessions = sessions.filter(s => s.empleado_id === employeeId);
+        setSelectedEmployeeSessions({ name: employeeName, sessions: employeeSessions });
+        setIsSessionsModalOpen(true);
+    };
+
+    const getSessionDuration = (session: WorkSession) => {
+        const start = session.hora_entrada?.toDate();
+        const today = new Date();
+        const isCurrentlyActive = !session.hora_salida && start && 
+          start.getDate() === today.getDate() && 
+          start.getMonth() === today.getMonth() && 
+          start.getFullYear() === today.getFullYear();
+
+        const end = session.hora_salida?.toDate() || (!isCurrentlyActive ? session.ultima_actividad?.toDate() : null);
+        
+        if (!start || !end) return 'N/A';
+        const mins = differenceInMinutes(end, start);
+        const hrs = mins / 60;
+        return `${hrs.toFixed(2)} hrs (${Math.floor(mins / 60)}h ${mins % 60}m)`;
+    };
+
+    const handleForceCloseSession = async (sessionId: string, employeeName: string) => {
+        const confirmClose = window.confirm(`¿Estás seguro de que deseas forzar el cierre de la sesión de ${employeeName}? Se guardará con la hora de su último latido de actividad o la hora actual.`);
+        if (!confirmClose) return;
+
+        try {
+            const sessionRef = doc(db, 'sesiones_trabajo', sessionId);
+            const sessionDoc = await getDoc(sessionRef);
+            let exitTime = Timestamp.now();
+            if (sessionDoc.exists()) {
+                const data = sessionDoc.data();
+                // If last activity is missing (older session), use the current time (now) instead of entry time
+                exitTime = data.ultima_actividad || Timestamp.now();
+            }
+
+            await updateDoc(sessionRef, {
+                hora_salida: exitTime,
+                estado: 'cerrada'
+            });
+
+            toast({
+                title: "Sesión cerrada",
+                description: `Se forzó el cierre de sesión de ${employeeName} con éxito.`,
+            });
+            
+            // Refresh detailed session list inline if open
+            if (selectedEmployeeSessions) {
+                const refreshedSessions = selectedEmployeeSessions.sessions.map(s => {
+                    if (s.id === sessionId) {
+                        return { ...s, hora_salida: exitTime, estado: 'cerrada' } as WorkSession;
+                    }
+                    return s;
+                });
+                setSelectedEmployeeSessions({ ...selectedEmployeeSessions, sessions: refreshedSessions });
+            }
+            
+            setQueryKey(prev => prev + 1);
+        } catch (error) {
+            console.error("Error forcing session close:", error);
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "No se pudo cerrar la sesión.",
+            });
+        }
     };
 
     // Open payment modal for a single employee
@@ -618,9 +706,13 @@ export default function NominaPage() {
                                                             </span>
                                                         )}
                                                         {employee.unpaidSessions > 0 && (
-                                                            <span className="text-[10px] text-muted-foreground italic">
-                                                                Basado en {employee.unpaidSessions} sesiones
-                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                                className="text-[10px] text-primary hover:underline font-semibold focus:outline-none mt-1"
+                                                            >
+                                                                Ver {employee.unpaidSessions} sesión(es)
+                                                            </button>
                                                         )}
                                                     </div>
                                                 </TableCell>
@@ -629,11 +721,20 @@ export default function NominaPage() {
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     {employee.unclosedSessions > 0 ? (
-                                                        <Badge variant="secondary" className="text-xs">
+                                                        <Badge 
+                                                            variant="secondary" 
+                                                            className="text-xs cursor-pointer bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 transition-colors flex items-center justify-center gap-1 mx-auto w-fit"
+                                                            onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                        >
+                                                            <Clock className="h-3 w-3 animate-pulse" />
                                                             {employee.unclosedSessions} sesión(es) abierta(s)
                                                         </Badge>
                                                     ) : employee.unpaidSessions > 0 ? (
-                                                        <Badge variant="outline" className="text-xs">
+                                                        <Badge 
+                                                            variant="outline" 
+                                                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
+                                                            onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                        >
                                                             Listo para pagar
                                                         </Badge>
                                                     ) : (
@@ -877,6 +978,147 @@ export default function NominaPage() {
                         >
                             {processingReset ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
                             Sí, reiniciar desde cero
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── Sessions Details Modal ── */}
+            <Dialog open={isSessionsModalOpen} onOpenChange={setIsSessionsModalOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Clock className="h-5 w-5 text-primary" />
+                            Detalle de Sesiones — {selectedEmployeeSessions?.name}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Listado de sesiones de trabajo no liquidadas. Las sesiones abiertas no se acumulan en el cálculo hasta que se registre su salida.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 mt-4 overflow-y-auto pr-2 max-h-[55vh]">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Entrada</TableHead>
+                                    <TableHead>Salida</TableHead>
+                                    <TableHead>Dispositivo</TableHead>
+                                    <TableHead className="text-right">Duración</TableHead>
+                                    <TableHead className="text-center">Estado</TableHead>
+                                    <TableHead className="text-center">Acción</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {!selectedEmployeeSessions?.sessions || selectedEmployeeSessions.sessions.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                            No hay sesiones registradas para este empleado.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    [...selectedEmployeeSessions.sessions]
+                                        .sort((a, b) => {
+                                            const timeA = a.hora_entrada ? a.hora_entrada.toDate().getTime() : 0;
+                                            const timeB = b.hora_entrada ? b.hora_entrada.toDate().getTime() : 0;
+                                            return timeB - timeA; // Descending
+                                        })
+                                        .map((session) => {
+                                            const hasSalida = !!session.hora_salida;
+                                            const entradaDate = session.hora_entrada?.toDate();
+                                            const today = new Date();
+                                            const isCurrentlyActive = !session.hora_salida && entradaDate && 
+                                              entradaDate.getDate() === today.getDate() && 
+                                              entradaDate.getMonth() === today.getMonth() && 
+                                              entradaDate.getFullYear() === today.getFullYear();
+                                            
+                                            const showAsClosed = hasSalida || (!isCurrentlyActive && !!session.ultima_actividad);
+                                            const hasHeartbeat = !!session.ultima_actividad;
+                                            
+                                            return (
+                                                <TableRow key={session.id}>
+                                                    <TableCell className="font-medium">
+                                                        {entradaDate ? format(entradaDate, 'dd/MM/yyyy', { locale: es }) : 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {entradaDate ? format(entradaDate, 'HH:mm:ss') : 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {hasSalida && session.hora_salida ? (
+                                                            format(session.hora_salida.toDate(), 'HH:mm:ss')
+                                                        ) : isCurrentlyActive ? (
+                                                            <span className="text-primary font-medium">En curso</span>
+                                                        ) : session.ultima_actividad ? (
+                                                            <span className="text-muted-foreground font-medium" title={`Cierre automático (último latido: ${format(session.ultima_actividad.toDate(), 'HH:mm:ss')})`}>
+                                                                {format(session.ultima_actividad.toDate(), 'HH:mm:ss')} (Auto)
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-muted-foreground font-medium">Falta salida</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={session.dispositivo || 'No registrado'}>
+                                                        {session.dispositivo || <span className="italic text-gray-400">No registrado</span>}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">
+                                                        {showAsClosed ? (
+                                                            getSessionDuration(session)
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        {hasSalida ? (
+                                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 text-xs">
+                                                                Cerrada
+                                                            </Badge>
+                                                        ) : isCurrentlyActive ? (
+                                                            <Badge variant="secondary" className="animate-pulse text-xs bg-primary/10 text-primary border-primary/20">
+                                                                En curso
+                                                            </Badge>
+                                                        ) : hasHeartbeat ? (
+                                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 text-xs" title="Sesión auto-cerrada al final del día">
+                                                                Cerrada (Auto)
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-muted-foreground/20">
+                                                                Falta salida
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        {isCurrentlyActive ? (
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="sm" 
+                                                                className="h-7 px-2.5 text-[11px] text-primary border-primary/20 hover:bg-primary/5 font-semibold"
+                                                                onClick={() => handleForceCloseSession(session.id, selectedEmployeeSessions?.name || 'Empleado')}
+                                                            >
+                                                                Cerrar turno
+                                                            </Button>
+                                                        ) : (!hasSalida && !hasHeartbeat) ? (
+                                                            <Button 
+                                                                variant="outline" 
+                                                                size="sm" 
+                                                                className="h-7 px-2.5 text-[11px] text-primary border-primary/20 hover:bg-primary/5 font-semibold"
+                                                                onClick={() => handleForceCloseSession(session.id, selectedEmployeeSessions?.name || 'Empleado')}
+                                                            >
+                                                                Forzar Salida
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    <DialogFooter className="mt-4">
+                        <Button onClick={() => setIsSessionsModalOpen(false)}>
+                            Cerrar
                         </Button>
                     </DialogFooter>
                 </DialogContent>

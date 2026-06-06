@@ -57,6 +57,7 @@ import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservat
 
 import { useAgendaEvents } from './use-agenda-events';
 import { getStatusColor, formatClientName } from './agenda-utils';
+import { logAuditAction } from '@/lib/audit-logger';
 
 import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
 import { ClientDetailModal } from '../clients/client-detail-modal';

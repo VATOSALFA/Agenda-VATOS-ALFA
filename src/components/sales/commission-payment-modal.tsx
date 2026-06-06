@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -209,19 +209,15 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     }, [isOpen, sales, professionals, services, products, isLoading, discountsAffectCommissions]);
 
     useEffect(() => {
-        if (!isOpen) return;
-        const fetchSettings = async () => {
-            try {
-                const d = await getDoc(doc(db, 'settings', 'commissions'));
-                if (d.exists()) {
-                    setDiscountsAffectCommissions(d.data().discountsAffectCommissions ?? true);
-                }
-            } catch (e) {
-                console.error("Error loading commission settings", e);
+        const unsubscribe = onSnapshot(doc(db, 'settings', 'commissions'), (docSnap) => {
+            if (docSnap.exists()) {
+                setDiscountsAffectCommissions(docSnap.data().discountsAffectCommissions ?? true);
             }
-        };
-        fetchSettings();
-    }, [isOpen]);
+        }, (error) => {
+            console.error("Error loading commission settings", error);
+        });
+        return () => unsubscribe();
+    }, []);
 
 
     const handlePayCommissions = async () => {

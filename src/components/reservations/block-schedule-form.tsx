@@ -139,18 +139,29 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
 
       const conflictQuery = query(
         collection(db, 'reservas'),
-        where('barbero_id', '==', data.barbero_id),
-        where('fecha', '==', formattedDate),
-        where('hora_fin', '>', data.hora_inicio),
-        where('hora_inicio', '<', data.hora_fin)
+        where('fecha', '==', formattedDate)
       );
 
       const querySnapshot = await getDocs(conflictQuery);
-      if (!querySnapshot.empty) {
+      const activeConflicts = querySnapshot.docs.filter(doc => {
+        const res = doc.data();
+        if (res.estado === 'Cancelado') return false;
+
+        // Verificar si pertenece al barbero seleccionado (principal o en items)
+        const isForBarber = res.barbero_id === data.barbero_id ||
+          (Array.isArray(res.items) && res.items.some((item: any) => item?.barbero_id === data.barbero_id));
+
+        if (!isForBarber) return false;
+
+        // Verificar traslape de horario
+        return data.hora_inicio < res.hora_fin && data.hora_fin > res.hora_inicio;
+      });
+
+      if (activeConflicts.length > 0) {
         toast({
           variant: 'destructive',
           title: 'Conflicto de Horario',
-          description: `El barbero ya tiene ${querySnapshot.size} reserva(s) en el rango seleccionado.`,
+          description: `El barbero ya tiene ${activeConflicts.length} reserva(s) activa(s) en el rango seleccionado.`,
         });
         setIsSubmitting(false);
         return;

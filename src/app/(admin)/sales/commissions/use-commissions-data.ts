@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
-import { where, Timestamp, doc, getDoc } from "firebase/firestore";
+import { where, Timestamp, doc, onSnapshot } from "firebase/firestore";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { db } from "@/lib/firebase-client";
 import type { Sale, CommissionRowData, ProfessionalCommissionSummary, Local, Profesional, Service, Product, Client } from "@/lib/types";
@@ -19,19 +19,16 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
     const [isComputing, setIsComputing] = useState(true);
 
-    // 1. Fetch Settings
+    // 1. Fetch Settings (Real-time listener)
     useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const d = await getDoc(doc(db, 'settings', 'commissions'));
-                if (d.exists()) {
-                    setDiscountsAffectCommissions(d.data().discountsAffectCommissions ?? true);
-                }
-            } catch (e) {
-                console.error("Error loading commission settings", e);
+        const unsubscribe = onSnapshot(doc(db, 'settings', 'commissions'), (docSnap) => {
+            if (docSnap.exists()) {
+                setDiscountsAffectCommissions(docSnap.data().discountsAffectCommissions ?? true);
             }
-        };
-        fetchSettings();
+        }, (error) => {
+            console.error("Error listening to commission settings:", error);
+        });
+        return () => unsubscribe();
     }, []);
 
     // 2. Fetch Raw Data

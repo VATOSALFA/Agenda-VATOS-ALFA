@@ -97,11 +97,11 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
     const { selectedLocalId } = useLocal();
     const { user } = useAuth();
     const isEditMode = !!egreso;
+    const isAdmin = user?.role === 'Administrador general' || user?.role === 'Administrador local';
 
     const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
     const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
-
-    const isAdmin = user?.role === 'Administrador general' || user?.role === 'Administrador local';
+    const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
 
     const conceptosDisponibles = isAdmin ? adminConcepts : cashierConcepts;
 
@@ -126,20 +126,51 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
     const isCommissionsConcept = conceptoSeleccionado === 'Pago de Comisión y Propinas' || (conceptoSeleccionado === 'Otro' && form.watch('concepto_otro') === 'Pago de Comisión y Propinas');
 
     const destinatariosDisponibles = useMemo(() => {
-        if (usersLoading || !users) return [];
+        if (usersLoading || professionalsLoading || !users || !professionals) return [];
 
-        // Filtramos usuarios según el local seleccionado
-        // Incluimos:
-        // 1. Usuarios asignados explícitamente al local seleccionado
-        // 2. Administradores Generales (siempre visibles para opciones de pago)
+        const activeProfessionals = professionals.filter(p => p.active && !p.deleted);
+        const professionalEmailMap = new Map(
+            activeProfessionals.map(p => [p.email?.toLowerCase(), p])
+        );
 
         const filteredUsers = users.filter(u => {
-            // Si es admin general, incluirlo siempre
             if (u.role === 'Administrador general') return true;
-            // Si coincide con el local seleccionado
             if (u.local_id === localSeleccionadoId) return true;
             return false;
         });
+
+        const mappedDestinatarios = filteredUsers.map(u => {
+            if (u.role === 'Staff' && u.email) {
+                const prof = professionalEmailMap.get(u.email.toLowerCase());
+                if (prof) {
+                    return {
+                        id: prof.id,
+                        name: prof.name,
+                        role: 'Staff'
+                    };
+                }
+            }
+            return {
+                id: u.id,
+                name: u.name,
+                role: u.role
+            };
+        });
+
+        // Asegurar IDs únicos
+        const uniqueDestinatariosMap = new Map<string, any>();
+        mappedDestinatarios.forEach(d => {
+            uniqueDestinatariosMap.set(d.id, d);
+        });
+
+        // Si estamos editando y el egreso tiene un destinatario que ya no está en la lista activa, lo agregamos para evitar que se desmarque
+        if (isEditMode && egreso?.aQuienId && !uniqueDestinatariosMap.has(egreso.aQuienId)) {
+            uniqueDestinatariosMap.set(egreso.aQuienId, {
+                id: egreso.aQuienId,
+                name: egreso.aQuien || 'Usuario anterior',
+                role: 'Usuario anterior'
+            });
+        }
 
         const generic = [
             { id: 'costos_fijos', name: 'Costos fijos', role: 'Categoría general' },
@@ -147,8 +178,8 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
             { id: 'otro', name: 'Otro', role: 'Categoría general' }
         ];
 
-        return [...filteredUsers, ...generic] as any[];
-    }, [users, localSeleccionadoId, usersLoading]);
+        return [...Array.from(uniqueDestinatariosMap.values()), ...generic] as any[];
+    }, [users, professionals, localSeleccionadoId, usersLoading, professionalsLoading, isEditMode, egreso]);
 
     const adminsDisponibles = useMemo(() => {
         if (usersLoading || !users) return [];

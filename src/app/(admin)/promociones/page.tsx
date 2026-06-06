@@ -118,8 +118,17 @@ export default function PromocionesListView() {
                             </CardContent>
                             <CardFooter className="pt-0 pb-4 px-6 border-t mt-auto pt-4 flex gap-2">
                                 <Button className="flex-1 bg-primary text-primary-foreground border-none font-bold" onClick={() => setSelectedPromotion(promo)}>
-                                    <Video className="w-4 h-4 mr-2" />
-                                    Ver Reel
+                                    {promo.imageUrl && isVideo(promo.imageUrl) ? (
+                                        <>
+                                            <Video className="w-4 h-4 mr-2" />
+                                            Ver Reel
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ImageIcon className="w-4 h-4 mr-2" />
+                                            Ver Imagen
+                                        </>
+                                    )}
                                 </Button>
                                 <Button 
                                     variant="outline" 
@@ -146,6 +155,10 @@ export default function PromocionesListView() {
             {/* Promotion Reel Modal - CLEAN VIDEO ONLY */}
             <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
                 <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{selectedPromotion?.name || 'Ver Promoción'}</DialogTitle>
+                        <DialogDescription>{selectedPromotion?.description || 'Detalle de la promoción'}</DialogDescription>
+                    </DialogHeader>
                     <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
                         {selectedPromotion?.imageUrl ? (
                             isVideo(selectedPromotion.imageUrl) ? (

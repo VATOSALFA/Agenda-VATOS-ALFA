@@ -325,7 +325,15 @@ export default function PromotionsPage() {
                                     <Share2 className="h-3.5 w-3.5" /> Compartir
                                 </Button>
                                 <Button variant="ghost" size="sm" onClick={() => setPreviewPromotion(promo)}>
-                                    <Eye className="h-4 w-4 mr-1" /> Ver Reel
+                                    {promo.imageUrl && (promo.imageUrl.toLowerCase().includes('.mp4') || promo.imageUrl.toLowerCase().includes('.webm') || (promo.imageUrl.includes('alt=media') && promo.imageUrl.includes('video'))) ? (
+                                        <>
+                                            <Video className="h-4 w-4 mr-1" /> Ver Reel
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ImageIcon className="h-4 w-4 mr-1" /> Ver Imagen
+                                        </>
+                                    )}
                                 </Button>
                                 <Button variant="ghost" size="sm" onClick={() => handleEdit(promo)}>
                                     <Pencil className="h-4 w-4 mr-1" /> Editar
@@ -472,6 +480,10 @@ export default function PromotionsPage() {
             {/* Preview Reel Modal - CLEAN VIDEO ONLY */}
             <Dialog open={!!previewPromotion} onOpenChange={(open) => !open && setPreviewPromotion(null)}>
                 <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{previewPromotion?.name || 'Vista Previa'}</DialogTitle>
+                        <DialogDescription>Vista previa de la promoción</DialogDescription>
+                    </DialogHeader>
                     <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
                         {previewPromotion?.imageUrl ? (
                             (previewPromotion.imageUrl.toLowerCase().includes('.mp4') || previewPromotion.imageUrl.toLowerCase().includes('.webm') || (previewPromotion.imageUrl.includes('alt=media') && previewPromotion.imageUrl.includes('video'))) ? (

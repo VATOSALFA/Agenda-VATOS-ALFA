@@ -730,7 +730,15 @@ export default function LandingPage() {
                                                     }}
                                                     className="text-xs font-bold text-primary hover:underline transition-colors flex items-center gap-1"
                                                 >
-                                                    <Video className="w-3 h-3" /> Ver video
+                                                    {promo.imageUrl && isVideo(promo.imageUrl) ? (
+                                                        <>
+                                                            <Video className="w-3 h-3" /> Ver video
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ImageIcon className="w-3 h-3" /> Ver imagen
+                                                        </>
+                                                    )}
                                                 </button>
                                                 {promo.termsAndConditions && (
                                                     <button
@@ -910,6 +918,10 @@ export default function LandingPage() {
             {/* Promotion Reel Modal - CLEAN VIDEO ONLY */}
             <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
                 <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{selectedPromotion?.name || 'Ver Promoción'}</DialogTitle>
+                        <DialogDescription>{selectedPromotion?.description || 'Detalle de la promoción'}</DialogDescription>
+                    </DialogHeader>
                     <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
                         {selectedPromotion?.imageUrl ? (
                             <PromoMedia

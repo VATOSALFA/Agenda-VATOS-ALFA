@@ -56,10 +56,11 @@ interface CashBoxClosingModalProps {
   onOpenChange: (isOpen: boolean) => void;
   onFormSubmit: () => void;
   initialCash: number;
+  netLiveCash?: number;
   localId: string;
 }
 
-export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash, localId }: CashBoxClosingModalProps) {
+export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initialCash, netLiveCash, localId }: CashBoxClosingModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -135,7 +136,8 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     }, 0));
   }, [denominationCounts, denominations]);
 
-  const diferencia = roundMoney(totalContado - fondoBase - initialCash);
+  const safeNetLiveCash = netLiveCash !== undefined ? netLiveCash : initialCash;
+  const diferencia = roundMoney(totalContado - fondoBase - safeNetLiveCash);
 
   useEffect(() => {
     if (isOpen) {
@@ -164,7 +166,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
         fondo_base: fondoBase,
         monto_entregado: montoNetoEntregado,
         total_calculado: totalContado,
-        total_sistema: initialCash,
+        total_sistema: safeNetLiveCash,
         diferencia: diferencia,
         comentarios: data.comentarios,
         local_id: localId,

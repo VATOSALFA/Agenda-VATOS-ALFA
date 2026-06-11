@@ -7,7 +7,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { format } from 'date-fns';
@@ -68,6 +68,47 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   const [authCode, setAuthCode] = useState('');
 
   const [fondoBase, setFondoBase] = useState(1000);
+  const [isSavingFondo, setIsSavingFondo] = useState(false);
+
+  // Load base fund from configurations when modal opens
+  useEffect(() => {
+    async function loadFondoBase() {
+      if (!isOpen || !localId) return;
+      try {
+        const docRef = doc(db, 'configuracion', 'caja');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const localFondo = data?.defaultFondoBaseByLocal?.[localId] ?? data?.defaultFondoBase ?? 1000;
+          setFondoBase(localFondo);
+        } else {
+          setFondoBase(1000);
+        }
+      } catch (error) {
+        console.error("Error loading fondo base:", error);
+      }
+    }
+    loadFondoBase();
+  }, [isOpen, localId]);
+
+  const handleSaveFondoBase = async () => {
+    setIsSavingFondo(true);
+    try {
+      const docRef = doc(db, 'configuracion', 'caja');
+      await setDoc(docRef, {
+        defaultFondoBaseByLocal: {
+          [localId]: fondoBase
+        }
+      }, { merge: true });
+      toast({ title: 'Fondo base guardado con éxito.' });
+      setIsEditingFondo(false);
+    } catch (error) {
+      console.error("Error saving fondo base:", error);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo guardar el fondo base.' });
+    } finally {
+      setIsSavingFondo(false);
+    }
+  };
 
   const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
@@ -221,9 +262,27 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                     <div className="space-y-2">
                       <FormLabel className="flex justify-between items-center">
                         <span>Fondo base en caja</span>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => (isEditingFondo ? setIsEditingFondo(false) : handleAuthRequest())}>
-                          {isEditingFondo ? <Save className="h-4 w-4 mr-2" /> : <Edit className="h-4 w-4 mr-2" />}
-                          {isEditingFondo ? 'Guardar' : 'Editar'}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isSavingFondo}
+                          onClick={() => {
+                            if (isEditingFondo) {
+                              handleSaveFondoBase();
+                            } else {
+                              handleAuthRequest();
+                            }
+                          }}
+                        >
+                          {isSavingFondo ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : isEditingFondo ? (
+                            <Save className="h-4 w-4 mr-2" />
+                          ) : (
+                            <Edit className="h-4 w-4 mr-2" />
+                          )}
+                          {isSavingFondo ? 'Guardando...' : isEditingFondo ? 'Guardar' : 'Editar'}
                         </Button>
                       </FormLabel>
                       {isEditingFondo ? (

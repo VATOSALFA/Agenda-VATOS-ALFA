@@ -880,7 +880,7 @@ export default function CashBoxPage() {
     const isLoading = localesLoading || salesLoading || clientsLoading || egresosLoading || ingresosLoading;
 
     // --- LIVE CASH LOGIC: Calculates current cash in box based on Last Cut + Transactions since then ---
-    const { liveCashInBox, netLiveCash, loading: liveCashLoading } = useLiveCash(selectedLocalId, queryKey);
+    const { liveCashInBox, loading: liveCashLoading } = useLiveCash(selectedLocalId, queryKey);
     // ----------------------
 
     const isLocalAdmin = user?.role !== 'Administrador general';
@@ -1427,7 +1427,6 @@ export default function CashBoxPage() {
                     handleSearch();
                 }}
                 initialCash={liveCashInBox}
-                netLiveCash={netLiveCash}
                 localId={selectedLocalId}
             />
             <CommissionPaymentModal

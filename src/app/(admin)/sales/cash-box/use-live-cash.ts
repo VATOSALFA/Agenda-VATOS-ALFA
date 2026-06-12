@@ -1,4 +1,3 @@
-
 import { useMemo } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where, orderBy, limit, Timestamp, type QueryConstraint } from 'firebase/firestore';
@@ -7,20 +6,6 @@ import type { Sale, Egreso, IngresoManual, CashClosing } from '@/lib/types';
 import { roundMoney } from '@/lib/utils';
 
 export function useLiveCash(selectedLocalId: string, queryKey: number) {
-    // Load cashbox configuration settings
-    const { data: cashboxSettings, loading: settingsLoading } = useFirestoreQuery<any>(
-        'configuracion',
-        'caja-settings',
-        where('__name__', '==', 'caja')
-    );
-
-    const currentFondoBase = useMemo(() => {
-        if (selectedLocalId === 'todos') return 1000;
-        if (!cashboxSettings || cashboxSettings.length === 0) return 1000;
-        const data = cashboxSettings[0];
-        return data?.defaultFondoBaseByLocal?.[selectedLocalId] ?? data?.defaultFondoBase ?? 1000;
-    }, [cashboxSettings, selectedLocalId]);
-
     // 1. Get Last Cut
     const lastCutConstraints = useMemo(() => {
         if (selectedLocalId === 'todos') return [orderBy('fecha_corte', 'desc'), limit(1)];
@@ -84,7 +69,7 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
     }, [selectedLocalId, liveStartDate, queryKey]));
 
     // 3. Calculate Live Cash
-    const netLiveCash = useMemo(() => {
+    const liveCashInBox = useMemo(() => {
         const isAfterCut = (date: Date | Timestamp) => {
             const d = date instanceof Timestamp ? date.toDate() : date;
             return d > liveStartDate;
@@ -120,18 +105,9 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
         return roundMoney(baseCash + salesCash + ingresosCash - egresosCash);
     }, [baseCash, liveSales, liveIngresos, liveEgresos, liveStartDate]);
 
-    const liveCashInBox = useMemo(() => {
-        if (selectedLocalId === 'todos') return netLiveCash;
-        const lastCutFondoBase = lastCut?.fondo_base ?? 1000;
-        const baseFundDifference = currentFondoBase - lastCutFondoBase;
-        return roundMoney(netLiveCash + baseFundDifference);
-    }, [netLiveCash, currentFondoBase, lastCut, selectedLocalId]);
-
     return {
         liveCashInBox,
-        netLiveCash,
-        loading: cutsLoading || salesLoading || ingresosLoading || egresosLoading || settingsLoading,
-        lastCutDate: liveStartDate,
-        lastCut
+        loading: cutsLoading || salesLoading || ingresosLoading || egresosLoading,
+        lastCutDate: liveStartDate
     };
 }

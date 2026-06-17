@@ -1,5 +1,6 @@
 'use client';
 
+// Test comment to trigger PWA update banner simulation
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sparkles, RotateCw } from 'lucide-react';

@@ -98,6 +98,10 @@ interface CartItem {
     discountValue?: string | number;
     discountType?: 'fixed' | 'percentage';
     commissionPaid?: boolean;
+    hora_inicio?: string | null;
+    hora_fin?: string | null;
+    professional_lock?: boolean | null;
+    duracion?: number;
 }
 
 const saleSchema = (total: number) => z.object({
@@ -704,12 +708,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     id: item.id,
                     nombre: nombre,
                     precio: precio || 0,
-                    cantidad: 1,
+                    cantidad: (item as any).cantidad || 1,
                     tipo: tipo,
                     presentation_id,
                     barbero_id: (item as any).barbero_id || undefined,
                     commissionPaid: (item as any).commissionPaid,
-                    // If items come with discounts or other props, they would be handled here in future
+                    hora_inicio: (item as any).hora_inicio || null,
+                    hora_fin: (item as any).hora_fin || null,
+                    professional_lock: (item as any).professional_lock || null,
+                    duracion: (item as any).duracion || (item as any).duration || 0
                 };
             });
             setCart(initialCartItems);
@@ -1037,9 +1044,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             if (reservationId && db) {
                                 try {
                                     const resRef = doc(db, 'reservas', reservationId);
+                                    const reservationItems = cart.map((item: any) => ({
+                                        id: item.id,
+                                        nombre: item.nombre,
+                                        servicio: item.nombre,
+                                        tipo: item.tipo,
+                                        barbero_id: item.barbero_id || null,
+                                        precio: item.precio || 0,
+                                        duracion: item.duracion || 0,
+                                        cantidad: item.cantidad || 1,
+                                        ...(item.hora_inicio ? { hora_inicio: item.hora_inicio, hora_fin: item.hora_fin } : {}),
+                                        ...(item.professional_lock !== undefined && item.professional_lock !== null ? { professional_lock: item.professional_lock } : {})
+                                    }));
                                     await updateDoc(resRef, { 
                                         pago_estado: 'Pagado',
-                                        estado: 'Asiste' 
+                                        estado: 'Asiste',
+                                        items: reservationItems,
+                                        precio: subtotal - totalDiscount,
+                                        servicio: reservationItems.map((i: any) => i.nombre).join(', ')
                                     });
                                 } catch (resErr) {
                                     console.error("Error updating reservation status on snapshot:", resErr);
@@ -1550,11 +1572,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 if (reservationId) {
                     const reservationRef = doc(db, 'reservas', reservationId);
+                    const reservationItems = cart.map((item: any) => ({
+                        id: item.id,
+                        nombre: item.nombre,
+                        servicio: item.nombre,
+                        tipo: item.tipo,
+                        barbero_id: item.barbero_id || null,
+                        precio: item.precio || 0,
+                        duracion: item.duracion || 0,
+                        cantidad: item.cantidad || 1,
+                        ...(item.hora_inicio ? { hora_inicio: item.hora_inicio, hora_fin: item.hora_fin } : {}),
+                        ...(item.professional_lock !== undefined && item.professional_lock !== null ? { professional_lock: item.professional_lock } : {})
+                    }));
                     transaction.update(reservationRef, {
                         pago_estado: 'Pagado',
                         estado: 'Asiste',
                         monto_pagado: saleDataToSave.monto_pagado_real,
-                        saldo_pendiente: 0
+                        saldo_pendiente: 0,
+                        items: reservationItems,
+                        precio: subtotal - totalDiscount,
+                        servicio: reservationItems.map((i: any) => i.nombre).join(', ')
                     });
                 }
             });
@@ -2054,12 +2091,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                             });
 
                                                                             // Also update Reservation status if linked
-                                                                            if (reservationId) {
-                                                                                const resRef = doc(db, 'reservas', reservationId);
-                                                                                await updateDoc(resRef, { 
-                                                                                    pago_estado: 'Pagado',
-                                                                                    estado: 'Asiste'
-                                                                                });
+                                                                            if (reservationId && db) {
+                                                                                try {
+                                                                                    const resRef = doc(db, 'reservas', reservationId);
+                                                                                    const reservationItems = cart.map((item: any) => ({
+                                                                                        id: item.id,
+                                                                                        nombre: item.nombre,
+                                                                                        servicio: item.nombre,
+                                                                                        tipo: item.tipo,
+                                                                                        barbero_id: item.barbero_id || null,
+                                                                                        precio: item.precio || 0,
+                                                                                        duracion: item.duracion || 0,
+                                                                                        cantidad: item.cantidad || 1,
+                                                                                        ...(item.hora_inicio ? { hora_inicio: item.hora_inicio, hora_fin: item.hora_fin } : {}),
+                                                                                        ...(item.professional_lock !== undefined && item.professional_lock !== null ? { professional_lock: item.professional_lock } : {})
+                                                                                    }));
+                                                                                    await updateDoc(resRef, { 
+                                                                                        pago_estado: 'Pagado',
+                                                                                        estado: 'Asiste',
+                                                                                        items: reservationItems,
+                                                                                        precio: subtotal - totalDiscount,
+                                                                                        servicio: reservationItems.map((i: any) => i.nombre).join(', ')
+                                                                                    });
+                                                                                } catch (resErr) {
+                                                                                    console.error("Error updating reservation status on snapshot:", resErr);
+                                                                                }
                                                                             }
                                                                             // finalizeSaleProcess usually takes (saleId, items). Passing cart as second arg.
                                                                             await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'));

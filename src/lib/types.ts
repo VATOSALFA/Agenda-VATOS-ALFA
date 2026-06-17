@@ -272,6 +272,7 @@ export interface SaleItem {
     monto: number;
   };
   commissionPaid?: boolean;
+  professional_lock?: boolean;
 }
 
 export interface Egreso {

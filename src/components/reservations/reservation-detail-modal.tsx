@@ -428,9 +428,16 @@ export function ReservationDetailModal({
                   {reservation.items ? reservation.items.map((i, idx) => {
                     const prof = professionals?.find(p => p.id === i.barbero_id);
                     return (
-                      <li key={idx} className="flex justify-between items-center pr-4">
-                        <span>{i.nombre || i.servicio}</span>
-                        {prof && <span className="text-[10px] text-muted-foreground">({prof.name})</span>}
+                      <li key={idx} className="flex justify-between items-center pr-4 py-1 border-b last:border-b-0 border-muted">
+                        <div className="flex flex-col">
+                          <span>{i.nombre || i.servicio}</span>
+                          {(i as any).hora_inicio && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Hora: {(i as any).hora_inicio} - {(i as any).hora_fin || ''}
+                            </span>
+                          )}
+                        </div>
+                        {prof && <span className="text-[10px] text-muted-foreground font-medium">({prof.name})</span>}
                       </li>
                     );
                   }) : <li>{(reservation as any).servicio}</li>}

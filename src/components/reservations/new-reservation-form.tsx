@@ -74,7 +74,10 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
     z.object({
       servicio: z.string({ required_error: 'Debes seleccionar un servicio.' }).min(1, 'Debes seleccionar un servicio.'),
       barbero_id: z.string({ required_error: 'Debes seleccionar un profesional.' }).min(1, 'Debes seleccionar un profesional.'),
-      duracion: z.number().optional()
+      duracion: z.number().optional(),
+      hora_inicio_hora: z.string().optional(),
+      hora_inicio_minuto: z.string().optional(),
+      professional_lock: z.boolean().optional().default(false)
     })
   ).min(1, 'Debes agregar al menos un servicio.'),
   fecha: z.date({ required_error: 'Debes seleccionar una fecha.' }),
@@ -179,6 +182,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [availabilityErrors, setAvailabilityErrors] = useState<Record<number, string>>({});
   const [isProfessionalLocked, setIsProfessionalLocked] = useState(false);
+  const [showConfirmLockModal, setShowConfirmLockModal] = useState(false);
+  const [pendingSubmitData, setPendingSubmitData] = useState<any>(null);
+  const [pendingConfirmProfs, setPendingConfirmProfs] = useState<string[]>([]);
+  const [currentConfirmIdx, setCurrentConfirmIdx] = useState<number>(-1);
+  const [confirmedLocks, setConfirmedLocks] = useState<Record<string, boolean>>({});
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const { user, db } = useAuth();
@@ -462,9 +470,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
       const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
-      let itemsToSet: { servicio: string; barbero_id: string; duracion: number }[] = [];
+      let itemsToSet: { servicio: string; barbero_id: string; duracion: number; hora_inicio_hora?: string; hora_inicio_minuto?: string; professional_lock?: boolean }[] = [];
       if (isEditMode && initialData.items && Array.isArray(initialData.items)) {
         itemsToSet = initialData.items.map((i: SaleItemType) => {
+          const [itemH = '', itemM = ''] = (i as any).hora_inicio?.split(':') || [];
+          const itemLock = (i as any).professional_lock !== undefined
+            ? (i as any).professional_lock
+            : (initialData.professional_lock ?? false);
           // Try to match with a service
           const service = services?.find(s => s.id === i.id || s.name === i.servicio || s.name === i.nombre);
           if (service) {
@@ -472,7 +484,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             return {
               servicio: service.id,
               barbero_id: i.barbero_id || '',
-              duracion: (i as any).duracion !== undefined ? (i as any).duracion : (customDur !== undefined ? customDur : (service.duration || 0))
+              duracion: (i as any).duracion !== undefined ? (i as any).duracion : (customDur !== undefined ? customDur : (service.duration || 0)),
+              hora_inicio_hora: itemH,
+              hora_inicio_minuto: itemM,
+              professional_lock: itemLock
             };
           }
 
@@ -482,7 +497,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             return {
               servicio: product.id,
               barbero_id: i.barbero_id || '',
-              duracion: (i as any).duracion || 0
+              duracion: (i as any).duracion || 0,
+              hora_inicio_hora: itemH,
+              hora_inicio_minuto: itemM,
+              professional_lock: itemLock
             };
           }
 
@@ -490,14 +508,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           return {
             servicio: i.id || '',
             barbero_id: i.barbero_id || '',
-            duracion: (i as any).duracion || 0
+            duracion: (i as any).duracion || 0,
+            hora_inicio_hora: itemH,
+            hora_inicio_minuto: itemM,
+            professional_lock: itemLock
           };
         });
       } else {
         itemsToSet = [{
           servicio: '',
           barbero_id: (initialData as any).barbero_id || '',
-          duracion: 0
+          duracion: 0,
+          hora_inicio_hora: '',
+          hora_inicio_minuto: '',
+          professional_lock: false
         }];
       }
 
@@ -532,7 +556,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         nota_interna: '',
         estado: 'Reservado',
         precio: 0,
-        items: [{ servicio: '', barbero_id: '', duracion: 0 }],
+        items: [{ servicio: '', barbero_id: '', duracion: 0, professional_lock: false }],
         notifications: {
           whatsapp_notification: true,
           whatsapp_reminder: true
@@ -575,15 +599,35 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           form.setValue('precio', totalPrice, { shouldValidate: true });
         }
 
-        if (fecha && hora_inicio_hora && hora_inicio_minuto && maxDuration > 0) {
+        if (fecha && hora_inicio_hora && hora_inicio_minuto) {
           try {
-            const startTime = set(fecha, {
-              hours: parseInt(hora_inicio_hora, 10),
-              minutes: parseInt(hora_inicio_minuto, 10),
+            const globalStartMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
+            let latestEndMins = globalStartMins;
+
+            items.forEach((currentItem: any) => {
+              if (!currentItem) return;
+              const service = servicesMap.get(currentItem.servicio);
+              const profId = currentItem.barbero_id || 'unassigned';
+              const customDur = service?.durationPorProfesional?.[profId];
+              const dur = currentItem.duracion !== undefined ? currentItem.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
+
+              let itemStartMins = globalStartMins;
+              if (currentItem.hora_inicio_hora && currentItem.hora_inicio_minuto) {
+                itemStartMins = parseInt(currentItem.hora_inicio_hora, 10) * 60 + parseInt(currentItem.hora_inicio_minuto, 10);
+              }
+              const itemEndMins = itemStartMins + dur;
+              if (itemEndMins > latestEndMins) {
+                latestEndMins = itemEndMins;
+              }
             });
-            const endTime = addMinutes(startTime, maxDuration);
-            form.setValue('hora_fin_hora', format(endTime, 'HH'), { shouldValidate: true });
-            form.setValue('hora_fin_minuto', format(endTime, 'mm'), { shouldValidate: true });
+
+            const globalEndTime = set(fecha, {
+              hours: Math.floor(latestEndMins / 60),
+              minutes: latestEndMins % 60,
+            });
+
+            form.setValue('hora_fin_hora', format(globalEndTime, 'HH'), { shouldValidate: true });
+            form.setValue('hora_fin_minuto', format(globalEndTime, 'mm'), { shouldValidate: true });
           } catch (e) {
             console.error("Error calculating end time", e);
           }
@@ -601,63 +645,88 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }, [form, validateItemsAvailability]);
 
 
-  async function onSubmit(data: any) {
-    if (!validateItemsAvailability(data)) {
-      toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado." });
-      return;
-    }
-
+  async function executeSave(data: any) {
     setIsSubmitting(true);
     let success = false;
 
     try {
       if (!db) throw new Error("Database not available.");
 
-      const hora_inicio = `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
-      const hora_fin = `${data.hora_fin_hora}:${data.hora_fin_minuto}`;
+      let earliestStart = Infinity;
+      let latestEnd = -Infinity;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
 
       const itemsToSave = data.items.map((item: any, idx: number) => {
         // Try to find as service
         const service = services.find(s => s.id === item.servicio);
+        let id = '';
+        let name = '';
+        let precio = 0;
+        let duracion = item.duracion || 0;
+        let tipo = 'servicio';
+
         if (service) {
+          id = service.id;
+          name = service.name;
+          precio = data.items.length === 1 ? (data.precio || 0) : (service.price || 0);
           const customDur = service.durationPorProfesional?.[item.barbero_id || ''];
-          return {
-            id: service.id,
-            servicio: service.name,
-            nombre: service.name,
-            barbero_id: item.barbero_id,
-            // If there's only one item, we use the total price from the form (which might be edited)
-            // If there are more, we currently default to service price (complex to distribute manual edits)
-            precio: data.items.length === 1 ? (data.precio || 0) : (service.price || 0),
-            duracion: item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service.duration || 0)),
-            tipo: 'servicio'
-          };
+          duracion = item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service.duration || 0));
+        } else {
+          // Try to find as product
+          const product = products?.find(p => p.id === item.servicio);
+          if (product) {
+            id = product.id;
+            name = product.nombre;
+            precio = data.items.length === 1 ? (data.precio || 0) : (product.public_price || 0);
+            duracion = item.duracion !== undefined ? item.duracion : 0;
+            tipo = 'producto';
+          } else {
+            name = item.servicio || '';
+            precio = data.items.length === 1 ? (data.precio || 0) : 0;
+          }
         }
 
-        // Try to find as product
-        const product = products?.find(p => p.id === item.servicio);
-        if (product) {
-          return {
-            id: product.id,
-            servicio: product.nombre,
-            nombre: product.nombre,
-            barbero_id: item.barbero_id,
-            precio: data.items.length === 1 ? (data.precio || 0) : (product.public_price || 0),
-            duracion: item.duracion !== undefined ? item.duracion : 0,
-            tipo: 'producto'
-          };
+        let item_hora_inicio = undefined;
+        let item_hora_fin = undefined;
+        if (item.hora_inicio_hora && item.hora_inicio_minuto) {
+          item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
+          try {
+            const startParsed = parse(item_hora_inicio, 'HH:mm', new Date());
+            const endParsed = addMinutes(startParsed, duracion);
+            item_hora_fin = format(endParsed, 'HH:mm');
+          } catch (e) {
+            console.error("Error parsing item start time", e);
+          }
         }
+
+        const currentStartStr = item_hora_inicio || `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
+        const [sh, sm] = currentStartStr.split(':').map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = startMins + duracion;
+
+        if (startMins < earliestStart) earliestStart = startMins;
+        if (endMins > latestEnd) latestEnd = endMins;
 
         return {
-          servicio: item.servicio || '',
-          nombre: item.servicio || '',
+          id,
+          servicio: name,
+          nombre: name,
           barbero_id: item.barbero_id,
-          precio: data.items.length === 1 ? (data.precio || 0) : 0,
-          duracion: 0,
-          tipo: 'servicio'
+          precio,
+          duracion,
+          tipo,
+          professional_lock: item.professional_lock ?? false,
+          ...(item_hora_inicio ? { hora_inicio: item_hora_inicio, hora_fin: item_hora_fin } : {})
         };
       });
+
+      const globalStartHour = String(Math.floor(earliestStart / 60)).padStart(2, '0');
+      const globalStartMin = String(earliestStart % 60).padStart(2, '0');
+      const globalEndHour = String(Math.floor(latestEnd / 60)).padStart(2, '0');
+      const globalEndMin = String(latestEnd % 60).padStart(2, '0');
+
+      const hora_inicio = `${globalStartHour}:${globalStartMin}`;
+      const hora_fin = `${globalEndHour}:${globalEndMin}`;
 
       const dataToSave: Partial<Reservation> & { hora_inicio?: string, hora_fin?: string } = {
         cliente_id: data.cliente_id,
@@ -672,7 +741,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
-        professional_lock: isProfessionalLocked,
+        professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
       };
 
       let reservationId = initialData?.id;
@@ -749,6 +818,34 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         if (onOpenChange) onOpenChange(false);
       }
     }
+  }
+
+  async function onSubmit(data: any) {
+    if (!validateItemsAvailability(data)) {
+      toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado." });
+      return;
+    }
+
+    if (!isEditMode) {
+      const uniqueBarberos = Array.from(
+        new Set(
+          data.items
+            .map((item: any) => item.barbero_id)
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      if (uniqueBarberos.length > 0) {
+        setPendingSubmitData(data);
+        setPendingConfirmProfs(uniqueBarberos);
+        setCurrentConfirmIdx(0);
+        setConfirmedLocks({});
+        setShowConfirmLockModal(true);
+        return;
+      }
+    }
+
+    await executeSave(data);
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -975,33 +1072,35 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             </FormItem>
                           )} />
 
-                          <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => (
-                            <FormItem>
-                              <div className="flex items-center min-h-[24px] gap-2">
-                                <FormLabel>Profesional</FormLabel>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 p-0 hover:bg-transparent"
-                                  onClick={() => setIsProfessionalLocked(!isProfessionalLocked)}
-                                  title={isProfessionalLocked ? "Desbloquear selección" : "Bloquear selección"}
+                          <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => {
+                            const itemLock = form.watch(`items.${index}.professional_lock`) ?? false;
+                            return (
+                              <FormItem>
+                                <div className="flex items-center min-h-[24px] gap-2">
+                                  <FormLabel>Profesional</FormLabel>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 p-0 hover:bg-transparent"
+                                    onClick={() => form.setValue(`items.${index}.professional_lock`, !itemLock, { shouldValidate: true })}
+                                    title={itemLock ? "Desbloquear selección" : "Bloquear selección"}
+                                  >
+                                    {itemLock ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
+                                  </Button>
+                                </div>
+                                <Select 
+                                  onValueChange={(val) => {
+                                    field.onChange(val);
+                                    const srv = servicesMap.get(currentItemId);
+                                    if (srv) {
+                                      const customDur = srv.durationPorProfesional?.[val];
+                                      form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                    }
+                                  }} 
+                                  value={field.value} 
+                                  disabled={itemLock}
                                 >
-                                  {isProfessionalLocked ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
-                                </Button>
-                              </div>
-                              <Select 
-                                onValueChange={(val) => {
-                                  field.onChange(val);
-                                  const srv = servicesMap.get(currentItemId);
-                                  if (srv) {
-                                    const customDur = srv.durationPorProfesional?.[val];
-                                    form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
-                                  }
-                                }} 
-                                value={field.value} 
-                                disabled={isProfessionalLocked}
-                              >
                                 <FormControl>
                                   <SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}>
                                     <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
@@ -1024,7 +1123,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               <FormMessage />
                               {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
                             </FormItem>
-                          )} />
+                            );
+                          }} />
 
                           {!isProduct && fields.length > 1 && (
                             <FormField control={form.control} name={`items.${index}.duracion`} render={({ field }) => (
@@ -1052,6 +1152,71 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                           )}
                         </div>
                         {fields.length > 1 && (
+                          <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField
+                              control={form.control}
+                              name={`items.${index}.hora_inicio_hora`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Hora de inicio específica (opcional)</FormLabel>
+                                  <div className="flex items-center gap-2">
+                                    <Select
+                                      onValueChange={(val) => {
+                                        const actualVal = val === "default" ? "" : val;
+                                        field.onChange(actualVal);
+                                        if (actualVal && !form.getValues(`items.${index}.hora_inicio_minuto`)) {
+                                          form.setValue(`items.${index}.hora_inicio_minuto`, '00');
+                                        }
+                                      }}
+                                      value={field.value || "default"}
+                                    >
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Global / Por defecto" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        <SelectItem value="default">Global / Por defecto</SelectItem>
+                                        {timeOptions.hours.map(h => {
+                                          const val = String(h).padStart(2, '0');
+                                          return <SelectItem key={`item-h-${index}-${val}`} value={val}>{val}</SelectItem>;
+                                        })}
+                                      </SelectContent>
+                                    </Select>
+                                    <span>:</span>
+                                    <FormField
+                                      control={form.control}
+                                      name={`items.${index}.hora_inicio_minuto`}
+                                      render={({ field: minField }) => (
+                                        <Select
+                                          onValueChange={(val) => {
+                                            const actualVal = val === "default" ? "" : val;
+                                            minField.onChange(actualVal);
+                                          }}
+                                          value={minField.value || "default"}
+                                          disabled={!field.value}
+                                        >
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="MM" />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="default">MM</SelectItem>
+                                            {timeOptions.minutes.map(m => (
+                                              <SelectItem key={`item-m-${index}-${m}`} value={m}>{m}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      )}
+                                    />
+                                  </div>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        )}
+                        {fields.length > 1 && (
                           <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1059,7 +1224,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                       </Card>
                     );
                   })}
-                  <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '', duracion: 0 })} className="w-full">
+                  <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '', duracion: 0, professional_lock: false })} className="w-full">
                     <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
                   </Button>
                 </div>
@@ -1131,6 +1296,84 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           {isClientModalOpen && (
             <NewClientForm onFormSubmit={(clientId) => { handleClientCreated(clientId); setIsEditingClient(false); }} client={isEditingClient ? selectedClient : null} initialName="" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showConfirmLockModal} onOpenChange={(open) => {
+        setShowConfirmLockModal(open);
+        if (!open) {
+          setCurrentConfirmIdx(-1);
+          setPendingConfirmProfs([]);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmación de Reserva</DialogTitle>
+            <DialogDescription className="text-base text-foreground mt-2">
+              {(() => {
+                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
+                const professionalName = professionals.find(p => p.id === currentProfId)?.name;
+                return professionalName
+                  ? `¿El cliente pidió exclusivamente con ${professionalName}?`
+                  : '¿El cliente pidió exclusivamente con el barbero?';
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-end gap-3 sm:space-x-0 mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
+                const newLocks = { ...confirmedLocks, [currentProfId]: false };
+                setConfirmedLocks(newLocks);
+
+                const nextIdx = currentConfirmIdx + 1;
+                if (nextIdx < pendingConfirmProfs.length) {
+                  setCurrentConfirmIdx(nextIdx);
+                } else {
+                  setShowConfirmLockModal(false);
+                  setCurrentConfirmIdx(-1);
+                  setPendingConfirmProfs([]);
+                  if (pendingSubmitData) {
+                    const updatedItems = pendingSubmitData.items.map((item: any) => ({
+                      ...item,
+                      professional_lock: newLocks[item.barbero_id] ?? false
+                    }));
+                    await executeSave({ ...pendingSubmitData, items: updatedItems });
+                  }
+                }
+              }}
+            >
+              No
+            </Button>
+            <Button
+              type="button"
+              onClick={async () => {
+                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
+                const newLocks = { ...confirmedLocks, [currentProfId]: true };
+                setConfirmedLocks(newLocks);
+
+                const nextIdx = currentConfirmIdx + 1;
+                if (nextIdx < pendingConfirmProfs.length) {
+                  setCurrentConfirmIdx(nextIdx);
+                } else {
+                  setShowConfirmLockModal(false);
+                  setCurrentConfirmIdx(-1);
+                  setPendingConfirmProfs([]);
+                  if (pendingSubmitData) {
+                    const updatedItems = pendingSubmitData.items.map((item: any) => ({
+                      ...item,
+                      professional_lock: newLocks[item.barbero_id] ?? false
+                    }));
+                    await executeSave({ ...pendingSubmitData, items: updatedItems });
+                  }
+                }
+              }}
+            >
+              Sí
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

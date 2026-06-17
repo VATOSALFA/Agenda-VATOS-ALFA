@@ -1618,7 +1618,7 @@ export default function FinanzasMensualesPage() {
                                     </TableBody>
                                 </Table>
                                 {dailyIncome.length > 0 && (
-                                    <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
                                         <div className="flex items-center space-x-2">
                                             <p className="text-sm font-medium">Resultados por página</p>
                                             <Select
@@ -1771,7 +1771,7 @@ export default function FinanzasMensualesPage() {
                                     </TableBody>
                                 </Table>
                                 {calculatedEgresos.length > 0 && (
-                                    <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
                                         <div className="flex items-center space-x-2">
                                             <p className="text-sm font-medium">Resultados por página</p>
                                             <Select
@@ -1919,7 +1919,7 @@ export default function FinanzasMensualesPage() {
                                 </TableBody>
                             </Table>
                             {cashMovements.length > 0 && (
-                                <div className="flex items-center justify-end space-x-6 pt-4 pb-4">
+                                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
                                     <div className="flex items-center space-x-2">
                                         <p className="text-sm font-medium">Resultados por página</p>
                                         <Select

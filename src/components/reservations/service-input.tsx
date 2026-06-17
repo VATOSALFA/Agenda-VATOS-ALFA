@@ -111,7 +111,7 @@ export const ServiceInput = ({ value, onChange, groupedServices, products, isPro
                     onWheel={(e) => e.stopPropagation()}
                 >
                     <div
-                        className="max-h-[250px] overflow-y-auto overscroll-contain p-1"
+                        className="max-h-[400px] overflow-y-auto overscroll-contain p-1"
                         style={{ WebkitOverflowScrolling: 'touch' }}
                     >
                         {!hasResults && (

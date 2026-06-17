@@ -40,10 +40,18 @@ export function useAgendaEvents(
                     }] as AgendaEvent[];
                 }
 
-                const profIds = new Set(res.items.map(i => i.barbero_id).filter(Boolean));
+                // Group items by professional and start time
+                const groupedItemsMap = new Map<string, typeof res.items>();
+                res.items.forEach(item => {
+                    const startKey = (item as any).hora_inicio || 'global';
+                    const key = `${item.barbero_id || 'unassigned'}_${startKey}`;
+                    if (!groupedItemsMap.has(key)) {
+                        groupedItemsMap.set(key, []);
+                    }
+                    groupedItemsMap.get(key)!.push(item);
+                });
 
-                // Same behavior, 1 professional handling the whole reservation ticket
-                if (profIds.size <= 1) {
+                if (groupedItemsMap.size <= 1) {
                     return [{
                         ...res,
                         type: 'appointment' as const,
@@ -57,16 +65,26 @@ export function useAgendaEvents(
                     }] as AgendaEvent[];
                 }
 
-                // Reservation has MULTIPLE professionals. Split into multiple AgendaEvents per professional.
+                // Split into multiple events
                 const splitEvents: AgendaEvent[] = [];
-                const profIdArray = Array.from(profIds);
+                groupedItemsMap.forEach((groupItems) => {
+                    const profId = groupItems[0].barbero_id;
+                    const itemStartStr = (groupItems[0] as any).hora_inicio;
+                    
+                    let startVal = globalStart;
+                    let endVal = globalEnd;
 
-                for (const profId of profIdArray) {
-                    const profItems = res.items.filter(i => i.barbero_id === profId);
-
-                    const totalProfDurationMins = profItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
-                    const profDurationHours = totalProfDurationMins > 0 ? (totalProfDurationMins / 60) : globalDuration;
-                    const profEnd = globalStart + profDurationHours;
+                    if (itemStartStr) {
+                        const [sh, sm] = itemStartStr.split(':').map(Number);
+                        startVal = sh + sm / 60;
+                        
+                        const totalProfDurationMins = groupItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
+                        endVal = startVal + totalProfDurationMins / 60;
+                    } else {
+                        const totalProfDurationMins = groupItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
+                        const profDurationHours = totalProfDurationMins > 0 ? (totalProfDurationMins / 60) : globalDuration;
+                        endVal = globalStart + profDurationHours;
+                    }
 
                     splitEvents.push({
                         ...res,
@@ -74,13 +92,14 @@ export function useAgendaEvents(
                         customer: customer,
                         professionalNames: professionalMap.get(profId) || 'N/A',
                         target_barber_id: profId,
-                        start: globalStart,
-                        end: profEnd,
-                        duration: Math.max(0.0833, profEnd - globalStart),
+                        start: startVal,
+                        end: endVal,
+                        duration: Math.max(0.0833, endVal - startVal),
                         color: getStatusColor(res.estado),
+                        professional_lock: groupItems.some((i: any) => i.professional_lock === true),
                         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
                     } as unknown as AgendaEvent);
-                }
+                });
 
                 return splitEvents;
             });

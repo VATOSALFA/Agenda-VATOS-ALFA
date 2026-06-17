@@ -653,7 +653,11 @@ export default function AgendaView() {
             precio: item.precio || product.public_price,
             cantidad: item.cantidad,
             tipo: 'producto' as const,
-            commissionPaid: (item as any).commissionPaid
+            commissionPaid: (item as any).commissionPaid,
+            hora_inicio: (item as any).hora_inicio || null,
+            hora_fin: (item as any).hora_fin || null,
+            professional_lock: (item as any).professional_lock || null,
+            duracion: (item as any).duracion || 0
           } : null;
         } else {
           const service = services.find(s => s.name === item.servicio || s.id === (item as any).id);
@@ -665,7 +669,11 @@ export default function AgendaView() {
             cantidad: 1,
             tipo: 'servicio' as const,
             barbero_id: item.barbero_id,
-            commissionPaid: (item as any).commissionPaid
+            commissionPaid: (item as any).commissionPaid,
+            hora_inicio: (item as any).hora_inicio || null,
+            hora_fin: (item as any).hora_fin || null,
+            professional_lock: (item as any).professional_lock || null,
+            duracion: (item as any).duracion !== undefined ? (item as any).duracion : (service.duration || 0)
           } : null;
         }
       }).filter((i): i is any => !!i);

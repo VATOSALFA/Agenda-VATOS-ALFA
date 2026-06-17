@@ -7,7 +7,6 @@ import { usePathname } from 'next/navigation';
 
 export function PwaUpdateBanner() {
     const [hasUpdate, setHasUpdate] = useState(false);
-    const [initialVersion, setInitialVersion] = useState<string | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
     const pathname = usePathname();
 
@@ -15,22 +14,18 @@ export function PwaUpdateBanner() {
     const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones/');
 
     useEffect(() => {
-        if (typeof window === 'undefined' || isPublicPage) return;
+        if (typeof window === 'undefined' || isPublicPage || process.env.NODE_ENV === 'development') return;
 
-        let activeInitialVersion: string | null = null;
-
-        const checkVersion = async (isInitial = false) => {
+        const checkVersion = async () => {
             try {
                 // Fetch version with a cache-buster query parameter to bypass service worker & browser cache
                 const res = await fetch(`/version.json?t=${Date.now()}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 const serverVersion = data.version;
+                const localVersion = process.env.NEXT_PUBLIC_BUILD_VERSION;
 
-                if (isInitial) {
-                    activeInitialVersion = serverVersion;
-                    setInitialVersion(serverVersion);
-                } else if (activeInitialVersion && serverVersion && serverVersion !== activeInitialVersion) {
+                if (serverVersion && localVersion && serverVersion !== localVersion) {
                     setHasUpdate(true);
                 }
             } catch (error) {
@@ -39,16 +34,16 @@ export function PwaUpdateBanner() {
         };
 
         // 1. Check version on load
-        checkVersion(true);
+        checkVersion();
 
         // 2. Poll every 3 minutes (180,000 ms)
         const intervalId = setInterval(() => {
-            checkVersion(false);
+            checkVersion();
         }, 180000);
 
         // 3. Check when the tab/window is focused/returned to
         const handleFocus = () => {
-            checkVersion(false);
+            checkVersion();
         };
         window.addEventListener('focus', handleFocus);
 

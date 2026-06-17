@@ -1,5 +1,18 @@
 
 import withPWAInit from '@ducanh2912/next-pwa';
+import fs from 'fs';
+import path from 'path';
+
+let buildId = 'dev';
+try {
+  const versionPath = path.join(process.cwd(), 'public', 'version.json');
+  if (fs.existsSync(versionPath)) {
+    const data = JSON.parse(fs.readFileSync(versionPath, 'utf8'));
+    buildId = data.version;
+  }
+} catch (err) {
+  console.warn('[Config] Failed to read version.json, using fallback:', err);
+}
 
 const withPWA = withPWAInit({
   dest: 'public',
@@ -42,6 +55,7 @@ const nextConfig = {
     ],
   },
   env: {
+    NEXT_PUBLIC_BUILD_VERSION: buildId,
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,

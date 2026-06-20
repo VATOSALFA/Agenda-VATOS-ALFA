@@ -336,14 +336,34 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
     }
 
-    let allItemsValid = true;
-    items.forEach((item, index) => {
-      if (!item.barbero_id) return;
-
+    let allItemsValid = true;    items.forEach((item, index) => {
       if (!item.barbero_id) return;
 
       const professional = filteredProfessionals.find(p => p.id === item.barbero_id);
       if (!professional) return;
+
+      // Calculate this item's specific start and end times
+      const service = servicesMap.get(item.servicio);
+      const customDur = service?.durationPorProfesional?.[item.barbero_id || ''];
+      const dur = item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
+
+      let item_hora_inicio = hora_inicio;
+      if (item.hora_inicio_hora && item.hora_inicio_minuto) {
+        item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
+      }
+
+      let item_hora_fin = '';
+      try {
+        const [sh, sm] = item_hora_inicio.split(':').map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = startMins + dur;
+        const endH = Math.floor(endMins / 60);
+        const endM = endMins % 60;
+        item_hora_fin = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+      } catch (e) {
+        console.error("Error calculating item end time in validation", e);
+        item_hora_fin = item_hora_inicio;
+      }
 
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
@@ -354,7 +374,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         b.fecha === formattedDate &&
         (b as any).type === 'available'
       );
-      const profSpecialJourneys = specialJourneys.filter((sj: any) => 
+      const profSpecialJourneys = specialJourneys.filter((sj: any) => 
         sj.profesionalId === item.barbero_id && 
         sj.fecha === formattedDate
       );
@@ -372,7 +392,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         b.barbero_id === item.barbero_id &&
         b.fecha === formattedDate &&
         (b as any).type !== 'available' &&
-        hora_inicio < b.hora_fin && hora_fin > b.hora_inicio
+        item_hora_inicio < b.hora_fin && item_hora_fin > b.hora_inicio
       );
 
       if (hasBlock) {
@@ -384,20 +404,20 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       if (!agendaSettings?.resourceOverload) {
         if (!daySchedule || !daySchedule.enabled) {
           // If schedule is disabled, the entire reservation must be covered by a special schedule
-          if (!isRangeCovered(hora_inicio, hora_fin)) {
+          if (!isRangeCovered(item_hora_inicio, item_hora_fin)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
           }
         } else {
           // Check if any part before schedule start is uncovered
-          if (hora_inicio < daySchedule.start && !isRangeCovered(hora_inicio, hora_fin < daySchedule.start ? hora_fin : daySchedule.start)) {
+          if (item_hora_inicio < daySchedule.start && !isRangeCovered(item_hora_inicio, item_hora_fin < daySchedule.start ? item_hora_fin : daySchedule.start)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
           }
           // Check if any part after schedule end is uncovered
-          if (hora_fin > daySchedule.end && !isRangeCovered(hora_inicio > daySchedule.end ? hora_inicio : daySchedule.end, hora_fin)) {
+          if (item_hora_fin > daySchedule.end && !isRangeCovered(item_hora_inicio > daySchedule.end ? item_hora_inicio : daySchedule.end, item_hora_fin)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
@@ -427,7 +447,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             }
           }
 
-          return hora_inicio < profHoraFin && hora_fin > r.hora_inicio;
+          return item_hora_inicio < profHoraFin && item_hora_fin > r.hora_inicio;
         });
 
         if (reservationConflict) {
@@ -441,11 +461,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         // Check for breaks (ignore breaks for special journeys)
         if (profSpecialJourneys.length === 0 && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
           const breakConflict = daySchedule.breaks.some((brk: any) => {
-            if (hora_inicio >= brk.end || hora_fin <= brk.start) return false; // No overlap
+            if (item_hora_inicio >= brk.end || item_hora_fin <= brk.start) return false; // No overlap
 
             // Calculate exact overlap with this break
-            const overlapStart = hora_inicio > brk.start ? hora_inicio : brk.start;
-            const overlapEnd = hora_fin < brk.end ? hora_fin : brk.end;
+            const overlapStart = item_hora_inicio > brk.start ? item_hora_inicio : brk.start;
+            const overlapEnd = item_hora_fin < brk.end ? item_hora_fin : brk.end;
 
             // Is this overlap covered by a special schedule (available block)?
             return !isRangeCovered(overlapStart, overlapEnd);

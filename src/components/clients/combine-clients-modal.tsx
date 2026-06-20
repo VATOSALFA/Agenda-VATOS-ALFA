@@ -189,8 +189,8 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     </DialogHeader>
 
                     {step === 1 && (
-                        <ScrollArea className="flex-grow max-h-[50dvh] my-4">
-                            <div className="space-y-4 pr-4">
+                        <div className="flex-grow overflow-y-auto max-h-[55dvh] my-4 pr-2">
+                            <div className="space-y-4">
                                 {loading && <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
                                 {!loading && duplicateGroups.length === 0 && (
                                     <p className="text-center text-muted-foreground py-10">No se encontraron clientes duplicados.</p>
@@ -216,12 +216,12 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                     </Card>
                                 ))}
                             </div>
-                        </ScrollArea>
+                        </div>
                     )}
 
                     {step === 2 && selectedGroup && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 flex-grow overflow-hidden">
-                            <ScrollArea className="max-h-[50dvh] pr-4">
+                            <div className="overflow-y-auto max-h-[55dvh] pr-2">
                                 <RadioGroup value={primaryClientId ?? undefined} onValueChange={setPrimaryClientId}>
                                     <div className="space-y-4">
                                         <h3 className="font-bold text-lg">Selecciona el registro a conservar:</h3>
@@ -237,7 +237,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                         ))}
                                     </div>
                                 </RadioGroup>
-                            </ScrollArea>
+                            </div>
                             <Card className="bg-card/50">
                                 <CardHeader>
                                     <CardTitle>Resumen de combinación</CardTitle>

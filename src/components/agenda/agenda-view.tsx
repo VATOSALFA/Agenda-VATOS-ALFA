@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -161,6 +161,7 @@ const subtractIntervals = (base: { start: number, end: number }, subtractions: {
 
 export default function AgendaView() {
   const [date, setDate] = useState<Date | undefined>(undefined);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [hoveredBarberId, setHoveredBarberId] = useState<string | null>(null);
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
   const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
@@ -961,7 +962,30 @@ export default function AgendaView() {
                 <Button variant="ghost" size="icon" onClick={handleNextDay}><ChevronRight className="h-5 w-5" /></Button>
               </div>
               <div>
-                <h2 className="text-xl font-semibold capitalize">{selectedDateFormatted}</h2>
+                <h2 className="text-xl font-semibold capitalize flex items-center gap-2">
+                  <span>{selectedDateFormatted}</span>
+                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary md:hidden">
+                        <CalendarDays className="h-5 w-5" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(newDate) => {
+                          if (newDate) {
+                            setDate(newDate);
+                            setIsCalendarOpen(false);
+                          }
+                        }}
+                        initialFocus
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </h2>
                 <p className="text-sm text-muted-foreground flex items-center gap-2">
                   <Store className='w-4 h-4' /> {selectedLocal?.name || 'Cargando...'}
                 </p>

@@ -189,7 +189,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     </DialogHeader>
 
                     {step === 1 && (
-                        <ScrollArea className="flex-grow my-4">
+                        <ScrollArea className="flex-grow max-h-[50dvh] my-4">
                             <div className="space-y-4 pr-4">
                                 {loading && <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
                                 {!loading && duplicateGroups.length === 0 && (
@@ -221,7 +221,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
 
                     {step === 2 && selectedGroup && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4 flex-grow overflow-hidden">
-                            <ScrollArea className="pr-4">
+                            <ScrollArea className="max-h-[50dvh] pr-4">
                                 <RadioGroup value={primaryClientId ?? undefined} onValueChange={setPrimaryClientId}>
                                     <div className="space-y-4">
                                         <h3 className="font-bold text-lg">Selecciona el registro a conservar:</h3>

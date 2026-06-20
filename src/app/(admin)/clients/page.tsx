@@ -792,7 +792,9 @@ export default function ClientsPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setIsCombineModalOpen(true)}>
+                  <DropdownMenuItem onSelect={() => {
+                    setTimeout(() => setIsCombineModalOpen(true), 150);
+                  }}>
                     <Combine className="mr-2 h-4 w-4" />
                     <span>Combinar clientes</span>
                   </DropdownMenuItem>

@@ -36,6 +36,44 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const profData = profDoc.data();
         if (!profData) return { error: 'Datos del profesional no disponibles.' };
 
+        // 1.01 Determine Minimum Service Duration for Gap Filtering
+        let minServiceDuration = 30; // default fallback
+        try {
+            const profServices = Array.isArray(profData.services) ? profData.services : [];
+            if (profServices.length > 0) {
+                // Fetch details of services performed by this professional
+                const servicesRefs = profServices.map((id: string) => db.collection('servicios').doc(id));
+                const servicesDocs = await db.getAll(...servicesRefs);
+                const durations = servicesDocs
+                    .filter(doc => doc.exists)
+                    .map(doc => {
+                        const data = doc.data();
+                        if (!data) return 0;
+                        const customDur = data.durationPorProfesional?.[professionalId];
+                        return customDur !== undefined ? Number(customDur) : (data.duration || 0);
+                    })
+                    .filter(dur => typeof dur === 'number' && dur > 0);
+                if (durations.length > 0) {
+                    minServiceDuration = Math.min(...durations);
+                }
+            } else {
+                // Fallback: fetch all active services
+                const servicesSnap = await db.collection('servicios').get();
+                const durations = servicesSnap.docs
+                    .map(doc => {
+                        const data = doc.data();
+                        const customDur = data.durationPorProfesional?.[professionalId];
+                        return customDur !== undefined ? Number(customDur) : (data.duration || 0);
+                    })
+                    .filter(dur => typeof dur === 'number' && dur > 0);
+                if (durations.length > 0) {
+                    minServiceDuration = Math.min(...durations);
+                }
+            }
+        } catch (servicesError) {
+            console.warn("Could not determine minimum service duration, using default 30 mins.", servicesError);
+        }
+
         // Safe Date Parsing
         let dayName = '';
         const parsedDate = parse(date, 'yyyy-MM-dd', new Date());
@@ -265,6 +303,28 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             currentMinutes = nowH * 60 + nowM;
         }
 
+        // Merge overlapping or adjacent busy intervals to analyze free gaps accurately
+        const sortedBusy = [...busyIntervals].sort((a, b) => a.start - b.start);
+        const mergedBusy: { start: number, end: number }[] = [];
+        sortedBusy.forEach(interval => {
+            if (mergedBusy.length === 0) {
+                mergedBusy.push({ ...interval });
+            } else {
+                const last = mergedBusy[mergedBusy.length - 1];
+                if (interval.start <= last.end) {
+                    last.end = Math.max(last.end, interval.end);
+                } else {
+                    mergedBusy.push({ ...interval });
+                }
+            }
+        });
+
+        const allBusyBlocks = [
+            { start: -Infinity, end: startTimeLimit },
+            ...mergedBusy,
+            { start: endTimeLimit, end: Infinity }
+        ];
+
         // Loop generation
         // Limit iterations to prevent infinite loops (e.g. if start > end)
         let iterations = 0;
@@ -293,7 +353,29 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             });
 
             if (!isBusy) {
-                availableSlots.push(format(current, 'HH:mm'));
+                // Smart Gap Filtering:
+                // Find closest busy blocks ending before slotStart and starting after slotEnd
+                let prevBlockEnd = startTimeLimit;
+                let nextBlockStart = endTimeLimit;
+
+                allBusyBlocks.forEach(block => {
+                    if (block.end <= slotStart) {
+                        prevBlockEnd = Math.max(prevBlockEnd, block.end);
+                    }
+                    if (block.start >= slotEnd) {
+                        nextBlockStart = Math.min(nextBlockStart, block.start);
+                    }
+                });
+
+                const gapBefore = slotStart - prevBlockEnd;
+                const gapAfter = nextBlockStart - slotEnd;
+
+                const hasDeadGapBefore = gapBefore > 0 && gapBefore < minServiceDuration;
+                const hasDeadGapAfter = gapAfter > 0 && gapAfter < minServiceDuration;
+
+                if (!hasDeadGapBefore && !hasDeadGapAfter) {
+                    availableSlots.push(format(current, 'HH:mm'));
+                }
             }
 
             current = addMinutes(current, GRID_INTERVAL);

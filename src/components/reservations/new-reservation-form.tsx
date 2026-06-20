@@ -535,10 +535,16 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           };
         });
       } else {
+        const preSrvId = (initialData as any).preselectedServiceId || '';
+        const srv = services?.find(s => s.id === preSrvId);
+        const profId = (initialData as any).barbero_id || '';
+        const customDur = srv?.durationPorProfesional?.[profId];
+        const dur = srv ? (customDur !== undefined ? customDur : (srv.duration || 0)) : 0;
+
         itemsToSet = [{
-          servicio: '',
-          barbero_id: (initialData as any).barbero_id || '',
-          duracion: 0,
+          servicio: preSrvId,
+          barbero_id: profId,
+          duracion: dur,
           hora_inicio_hora: '',
           hora_inicio_minuto: '',
           professional_lock: false

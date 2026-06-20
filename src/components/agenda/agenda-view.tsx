@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { QuickConsultModal } from './quick-consult-modal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -189,6 +190,9 @@ export default function AgendaView() {
   // New State for Client Detail
   const [isClientDetailModalOpen, setIsClientDetailModalOpen] = useState(false);
   const [selectedClientForModal, setSelectedClientForModal] = useState<Client | null>(null);
+
+  // Quick Consult Modal State
+  const [isQuickConsultOpen, setIsQuickConsultOpen] = useState(false);
 
   // Sidebar collapse state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -574,6 +578,18 @@ export default function AgendaView() {
       setIsReservationModalOpen(true);
       setPopoverState(null);
     }
+  };
+
+  const handleSelectQuickConsultSlot = (time: string, barberId: string, serviceId: string) => {
+    if (!canSee('crear_reservas')) return;
+    setReservationInitialData({
+      barbero_id: barberId,
+      fecha: date || new Date(),
+      hora_inicio: time,
+      local_id: selectedLocalId,
+      preselectedServiceId: serviceId,
+    });
+    setIsReservationModalOpen(true);
   };
 
   const handleOpenBlockModal = () => {
@@ -991,7 +1007,17 @@ export default function AgendaView() {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsQuickConsultOpen(true)}
+                className="gap-1.5 h-8 text-yellow-600 border-yellow-600/30 hover:bg-yellow-50/50 hover:text-yellow-700 dark:hover:bg-yellow-950/20 rounded-xl"
+              >
+                <Zap className="h-4 w-4 fill-current" />
+                <span className="hidden sm:inline font-bold text-xs uppercase tracking-wider">Espacio Rápido</span>
+              </Button>
+
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="ghost" size="icon">
@@ -1570,6 +1596,16 @@ export default function AgendaView() {
         onOpenChange={setIsEnableScheduleModalOpen}
         onFormSubmit={onDataRefresh}
         initialData={enableScheduleInitialData}
+      />
+      <QuickConsultModal
+        isOpen={isQuickConsultOpen}
+        onClose={() => setIsQuickConsultOpen(false)}
+        services={services || []}
+        professionals={filteredProfessionals}
+        reservations={reservations || []}
+        timeBlocks={timeBlocks || []}
+        date={date}
+        onSelectSlot={handleSelectQuickConsultSlot}
       />
     </TooltipProvider >
   );

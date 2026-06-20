@@ -505,24 +505,48 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
                                         return (
                                             <div key={day.id} className="border-b pb-4 mb-4">
-                                                <div className="grid grid-cols-6 items-center gap-4 mb-2">
+                                                <div className="flex flex-col md:grid md:grid-cols-6 items-stretch md:items-center gap-3 md:gap-4 mb-2">
                                                     <Controller
                                                         name={`schedule.${day.id}.enabled` as any}
                                                         control={form.control}
                                                         render={({ field }) => (
-                                                            <div className="flex items-center space-x-2 col-span-1">
-                                                                <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
-                                                                <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold">{day.label}</Label>
+                                                            <div className="flex items-center justify-between md:justify-start space-x-2 md:col-span-1">
+                                                                <div className="flex items-center space-x-2">
+                                                                    <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
+                                                                    <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold text-sm">{day.label}</Label>
+                                                                </div>
+                                                                {/* Mobile-only action buttons */}
+                                                                <div className="flex items-center gap-1.5 md:hidden">
+                                                                    <Button 
+                                                                        variant="outline" 
+                                                                        size="sm" 
+                                                                        className="h-8 text-xs px-2.5" 
+                                                                        type="button" 
+                                                                        onClick={() => addBreak(day.id)} 
+                                                                        disabled={!daySchedule?.enabled}
+                                                                    >
+                                                                        <Plus className="mr-1 h-3.5 w-3.5" />Descanso
+                                                                    </Button>
+                                                                    <Button 
+                                                                        variant="ghost" 
+                                                                        size="sm" 
+                                                                        className="h-8 text-xs px-2.5" 
+                                                                        type="button" 
+                                                                        onClick={() => copySchedule(day.id)}
+                                                                    >
+                                                                        <Copy className="mr-1 h-3.5 w-3.5" />Copiar
+                                                                    </Button>
+                                                                </div>
                                                             </div>
                                                         )}
                                                     />
-                                                    <div className="col-span-3 grid grid-cols-2 gap-2 items-center">
+                                                    <div className="md:col-span-3 grid grid-cols-2 gap-2 items-center">
                                                         <Controller
                                                             name={`schedule.${day.id}.start` as any}
                                                             control={form.control}
                                                             render={({ field }) => (
                                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                    <SelectTrigger className="h-9 md:h-10"><SelectValue /></SelectTrigger>
                                                                     <SelectContent>
                                                                         {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
                                                                     </SelectContent>
@@ -534,7 +558,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                             control={form.control}
                                                             render={({ field }) => (
                                                                 <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                                    <SelectTrigger className="h-9 md:h-10"><SelectValue /></SelectTrigger>
                                                                     <SelectContent>
                                                                         {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
                                                                     </SelectContent>
@@ -542,7 +566,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                             )}
                                                         />
                                                     </div>
-                                                    <div className="col-span-2 flex items-center gap-2 justify-end">
+                                                    <div className="hidden md:flex md:col-span-2 items-center gap-2 justify-end">
                                                         <Button variant="outline" size="sm" type="button" onClick={() => addBreak(day.id)} disabled={!daySchedule?.enabled}><Plus className="mr-2 h-4 w-4" />Descanso</Button>
                                                         <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.id)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
                                                     </div>
@@ -550,17 +574,27 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
 
                                                 {/* Breaks List */}
                                                 {breaks.map((_, index) => (
-                                                    <div key={index} className="grid grid-cols-6 items-center gap-4 mt-2 bg-slate-50 p-2 rounded-md">
-                                                        <div className="col-span-1 text-right text-xs font-medium text-muted-foreground mr-2">
-                                                            Descanso {index + 1}
+                                                    <div key={index} className="flex flex-col md:grid md:grid-cols-6 items-stretch md:items-center gap-2 md:gap-4 mt-2 bg-slate-50/70 p-2.5 md:p-2 rounded-md border md:border-none">
+                                                        <div className="flex justify-between items-center md:justify-end md:col-span-1 text-xs font-semibold md:font-medium text-muted-foreground md:mr-2">
+                                                            <span>Descanso {index + 1}</span>
+                                                            {/* Mobile-only Delete Button */}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                type="button"
+                                                                className="text-destructive hover:text-destructive h-8 px-2 md:hidden"
+                                                                onClick={() => removeBreak(day.id, index)}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
                                                         </div>
-                                                        <div className="col-span-3 grid grid-cols-2 gap-2 items-center">
+                                                        <div className="md:col-span-3 grid grid-cols-2 gap-2 items-center">
                                                             <Controller
                                                                 name={`schedule.${day.id}.breaks.${index}.start` as any}
                                                                 control={form.control}
                                                                 render={({ field }) => (
                                                                     <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                                                        <SelectTrigger className="h-8 md:h-8"><SelectValue /></SelectTrigger>
                                                                         <SelectContent>
                                                                             {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-start-${time}`} value={time}>{time}</SelectItem>)}
                                                                         </SelectContent>
@@ -572,7 +606,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                 control={form.control}
                                                                 render={({ field }) => (
                                                                     <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                        <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                                                        <SelectTrigger className="h-8 md:h-8"><SelectValue /></SelectTrigger>
                                                                         <SelectContent>
                                                                             {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-end-${time}`} value={time}>{time}</SelectItem>)}
                                                                         </SelectContent>
@@ -580,7 +614,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                                 )}
                                                             />
                                                         </div>
-                                                        <div className="col-span-2">
+                                                        <div className="hidden md:block md:col-span-2">
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"

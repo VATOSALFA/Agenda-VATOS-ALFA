@@ -588,7 +588,36 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
-      if (
+      if (name && ['hora_fin_hora', 'hora_fin_minuto'].includes(name)) {
+        const { items, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = value;
+        if (items && items.length > 0 && hora_inicio_hora && hora_inicio_minuto && hora_fin_hora && hora_fin_minuto) {
+          const startMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
+          const endMins = parseInt(hora_fin_hora, 10) * 60 + parseInt(hora_fin_minuto, 10);
+          const totalDuration = endMins - startMins;
+
+          if (totalDuration > 0) {
+            if (items.length === 1) {
+              const currentDur = items[0]?.duracion;
+              if (currentDur !== totalDuration) {
+                form.setValue('items.0.duracion', totalDuration, { shouldValidate: true });
+              }
+            } else {
+              const lastIdx = items.length - 1;
+              const lastItem = items[lastIdx];
+              if (lastItem) {
+                let lastItemStartMins = startMins;
+                if (lastItem.hora_inicio_hora && lastItem.hora_inicio_minuto) {
+                  lastItemStartMins = parseInt(lastItem.hora_inicio_hora, 10) * 60 + parseInt(lastItem.hora_inicio_minuto, 10);
+                }
+                const newLastItemDur = Math.max(0, endMins - lastItemStartMins);
+                if (lastItem.duracion !== newLastItemDur) {
+                  form.setValue(`items.${lastIdx}.duracion`, newLastItemDur, { shouldValidate: true });
+                }
+              }
+            }
+          }
+        }
+      } else if (
         name &&
         (name.startsWith('items') || ['fecha', 'hora_inicio_hora', 'hora_inicio_minuto'].includes(name))
       ) {
@@ -646,8 +675,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               minutes: latestEndMins % 60,
             });
 
-            form.setValue('hora_fin_hora', format(globalEndTime, 'HH'), { shouldValidate: true });
-            form.setValue('hora_fin_minuto', format(globalEndTime, 'mm'), { shouldValidate: true });
+            const newHH = format(globalEndTime, 'HH');
+            const newMM = format(globalEndTime, 'mm');
+
+            if (form.getValues('hora_fin_hora') !== newHH) {
+              form.setValue('hora_fin_hora', newHH, { shouldValidate: true });
+            }
+            if (form.getValues('hora_fin_minuto') !== newMM) {
+              form.setValue('hora_fin_minuto', newMM, { shouldValidate: true });
+            }
           } catch (e) {
             console.error("Error calculating end time", e);
           }
@@ -655,7 +691,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, servicesMap]);
+  }, [form, servicesMap, isEditMode]);
 
   useEffect(() => {
     const subscription = form.watch((value) => {

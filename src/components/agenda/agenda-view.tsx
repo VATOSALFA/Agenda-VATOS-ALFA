@@ -1012,7 +1012,7 @@ export default function AgendaView() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsQuickConsultOpen(true)}
-                className="gap-1.5 h-8 text-yellow-600 border-yellow-600/30 hover:bg-yellow-50/50 hover:text-yellow-700 dark:hover:bg-yellow-950/20 rounded-xl"
+                className="gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10 rounded-xl"
               >
                 <Zap className="h-4 w-4 fill-current" />
                 <span className="hidden sm:inline font-bold text-xs uppercase tracking-wider">Espacio Rápido</span>
@@ -1382,7 +1382,7 @@ export default function AgendaView() {
                           if (event.type === 'block') return event.barbero_id === barber.id;
                           if (event.type === 'appointment') {
                             if ((event as any).target_barber_id) return (event as any).target_barber_id === barber.id;
-                            return event.items?.some((i: SaleItem) => i.barbero_id === barber.id);
+                            return event.items?.some((i: SaleItem) => i.tipo !== 'producto' && i.barbero_id === barber.id);
                           }
                           return false;
                         })

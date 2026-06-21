@@ -40,9 +40,12 @@ export function useAgendaEvents(
                     }] as AgendaEvent[];
                 }
 
-                // Group items by professional and start time
-                const groupedItemsMap = new Map<string, typeof res.items>();
-                res.items.forEach(item => {
+                // Group items by professional and start time, ignoring product items
+                const serviceItems = res.items.filter(item => item.tipo !== 'producto');
+                const itemsToProcess = serviceItems.length > 0 ? serviceItems : res.items;
+
+                const groupedItemsMap = new Map<string, typeof itemsToProcess>();
+                itemsToProcess.forEach(item => {
                     const startKey = (item as any).hora_inicio || 'global';
                     const key = `${item.barbero_id || 'unassigned'}_${startKey}`;
                     if (!groupedItemsMap.has(key)) {
@@ -52,17 +55,20 @@ export function useAgendaEvents(
                 });
 
                 if (groupedItemsMap.size <= 1) {
+                    const groupItems = groupedItemsMap.size === 1 ? Array.from(groupedItemsMap.values())[0] : res.items;
+                    const primaryProfId = groupItems[0]?.barbero_id || res.barbero_id;
                     return [{
                         ...res,
                         type: 'appointment' as const,
                         customer: customer,
-                        professionalNames: res.items?.map((i: SaleItem) => professionalMap.get(i.barbero_id)).filter(Boolean).join(', ') || 'N/A',
+                        professionalNames: professionalMap.get(primaryProfId) || 'N/A',
+                        target_barber_id: primaryProfId,
                         start: globalStart,
                         end: globalEnd,
                         duration: globalDuration,
                         color: getStatusColor(res.estado),
                         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
-                    }] as AgendaEvent[];
+                    }] as unknown as AgendaEvent[];
                 }
 
                 // Split into multiple events
@@ -170,10 +176,10 @@ export function useAgendaEvents(
                 const eventB = processedEvents[j];
 
                 const eventAProfessionals = eventA.type === 'appointment'
-                    ? ((eventA as any).target_barber_id ? [(eventA as any).target_barber_id] : (eventA.items ? eventA.items.map((item: any) => item.barbero_id) : []))
+                    ? ((eventA as any).target_barber_id ? [(eventA as any).target_barber_id] : (eventA.items ? eventA.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
                     : [eventA.barbero_id];
                 const eventBProfessionals = eventB.type === 'appointment'
-                    ? ((eventB as any).target_barber_id ? [(eventB as any).target_barber_id] : (eventB.items ? eventB.items.map((item: any) => item.barbero_id) : []))
+                    ? ((eventB as any).target_barber_id ? [(eventB as any).target_barber_id] : (eventB.items ? eventB.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
                     : [eventB.barbero_id];
 
                 const hasCommonProfessional = eventAProfessionals.some(p => eventBProfessionals.includes(p));

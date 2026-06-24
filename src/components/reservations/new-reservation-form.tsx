@@ -335,8 +335,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         return false;
       }
     }
+    const globalStartMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
+    const profCurrentStartMins = new Map<string, number>();
 
-    let allItemsValid = true;    items.forEach((item, index) => {
+    let allItemsValid = true;    items.forEach((item, index) => {
       if (!item.barbero_id) return;
 
       const professional = filteredProfessionals.find(p => p.id === item.barbero_id);
@@ -346,23 +348,34 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const service = servicesMap.get(item.servicio);
       const customDur = service?.durationPorProfesional?.[item.barbero_id || ''];
       const dur = item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
+      const profId = item.barbero_id || 'unassigned';
 
-      let item_hora_inicio = hora_inicio;
-      if (item.hora_inicio_hora && item.hora_inicio_minuto) {
-        item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
-      }
-
+      let item_hora_inicio = '';
       let item_hora_fin = '';
+
       try {
-        const [sh, sm] = item_hora_inicio.split(':').map(Number);
-        const startMins = sh * 60 + sm;
+        let startMins;
+        if (item.hora_inicio_hora && item.hora_inicio_minuto) {
+          item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
+          const [sh, sm] = item_hora_inicio.split(':').map(Number);
+          startMins = sh * 60 + sm;
+        } else {
+          startMins = profCurrentStartMins.get(profId) ?? globalStartMins;
+          const sh = Math.floor(startMins / 60);
+          const sm = startMins % 60;
+          item_hora_inicio = `${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}`;
+        }
+
         const endMins = startMins + dur;
+        profCurrentStartMins.set(profId, endMins);
+
         const endH = Math.floor(endMins / 60);
         const endM = endMins % 60;
         item_hora_fin = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
       } catch (e) {
         console.error("Error calculating item end time in validation", e);
-        item_hora_fin = item_hora_inicio;
+        item_hora_inicio = item_hora_inicio || hora_inicio;
+        item_hora_fin = item_hora_fin || item_hora_inicio;
       }
 
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -614,6 +627,27 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 let lastItemStartMins = startMins;
                 if (lastItem.hora_inicio_hora && lastItem.hora_inicio_minuto) {
                   lastItemStartMins = parseInt(lastItem.hora_inicio_hora, 10) * 60 + parseInt(lastItem.hora_inicio_minuto, 10);
+                } else {
+                  const profCurrentStartMins = new Map<string, number>();
+                  for (let i = 0; i < lastIdx; i++) {
+                    const currentItem = items[i];
+                    if (!currentItem) continue;
+                    const service = servicesMap.get(currentItem.servicio || '');
+                    const profId = currentItem.barbero_id || 'unassigned';
+                    const customDur = service?.durationPorProfesional?.[profId];
+                    const dur = currentItem.duracion !== undefined ? currentItem.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
+
+                    let itemStartMins;
+                    if (currentItem.hora_inicio_hora && currentItem.hora_inicio_minuto) {
+                      itemStartMins = parseInt(currentItem.hora_inicio_hora, 10) * 60 + parseInt(currentItem.hora_inicio_minuto, 10);
+                    } else {
+                      itemStartMins = profCurrentStartMins.get(profId) ?? startMins;
+                    }
+                    const itemEndMins = itemStartMins + dur;
+                    profCurrentStartMins.set(profId, itemEndMins);
+                  }
+                  const lastItemProfId = lastItem.barbero_id || 'unassigned';
+                  lastItemStartMins = profCurrentStartMins.get(lastItemProfId) ?? startMins;
                 }
                 const newLastItemDur = Math.max(0, endMins - lastItemStartMins);
                 if (lastItem.duracion !== newLastItemDur) {
@@ -658,6 +692,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           try {
             const globalStartMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
             let latestEndMins = globalStartMins;
+            const profCurrentStartMins = new Map<string, number>();
 
             items.forEach((currentItem: any) => {
               if (!currentItem) return;
@@ -666,11 +701,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
               const customDur = service?.durationPorProfesional?.[profId];
               const dur = currentItem.duracion !== undefined ? currentItem.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
 
-              let itemStartMins = globalStartMins;
+              let itemStartMins;
               if (currentItem.hora_inicio_hora && currentItem.hora_inicio_minuto) {
                 itemStartMins = parseInt(currentItem.hora_inicio_hora, 10) * 60 + parseInt(currentItem.hora_inicio_minuto, 10);
+              } else {
+                itemStartMins = profCurrentStartMins.get(profId) ?? globalStartMins;
               }
               const itemEndMins = itemStartMins + dur;
+              profCurrentStartMins.set(profId, itemEndMins);
+
               if (itemEndMins > latestEndMins) {
                 latestEndMins = itemEndMins;
               }
@@ -717,6 +756,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       let earliestStart = Infinity;
       let latestEnd = -Infinity;
       const formattedDate = format(data.fecha, 'yyyy-MM-dd');
+      const globalStartMins = parseInt(data.hora_inicio_hora, 10) * 60 + parseInt(data.hora_inicio_minuto, 10);
+      const profCurrentStartMins = new Map<string, number>();
 
       const itemsToSave = data.items.map((item: any, idx: number) => {
         // Try to find as service
@@ -750,6 +791,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
         let item_hora_inicio = undefined;
         let item_hora_fin = undefined;
+        const profId = item.barbero_id || 'unassigned';
+        let startMins;
+
         if (item.hora_inicio_hora && item.hora_inicio_minuto) {
           item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
           try {
@@ -759,12 +803,14 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           } catch (e) {
             console.error("Error parsing item start time", e);
           }
+          const [sh, sm] = item_hora_inicio.split(':').map(Number);
+          startMins = sh * 60 + sm;
+        } else {
+          startMins = profCurrentStartMins.get(profId) ?? globalStartMins;
         }
 
-        const currentStartStr = item_hora_inicio || `${data.hora_inicio_hora}:${data.hora_inicio_minuto}`;
-        const [sh, sm] = currentStartStr.split(':').map(Number);
-        const startMins = sh * 60 + sm;
         const endMins = startMins + duracion;
+        profCurrentStartMins.set(profId, endMins);
 
         if (startMins < earliestStart) earliestStart = startMins;
         if (endMins > latestEnd) latestEnd = endMins;

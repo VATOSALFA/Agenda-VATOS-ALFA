@@ -694,9 +694,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (initialData.local_id) {
                 form.setValue('local_id', initialData.local_id);
             }
-            if (initialData.reservationId) {
-                setReservationId(initialData.reservationId);
-            }
+            setReservationId(initialData.reservationId || undefined);
             const initialCartItems: CartItem[] = initialData.items.map(item => {
                 const tipo = 'duration' in item ? 'servicio' : 'producto';
                 // Prioritize 'precio' (manually edited during reservation) over master price list
@@ -720,9 +718,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 };
             });
             setCart(initialCartItems);
-            if (initialData.anticipoPagado) {
-                setAnticipoPagado(initialData.anticipoPagado);
-            }
+            setAnticipoPagado(initialData.anticipoPagado || 0);
             setStep(2);
         }
     }, [initialData, form, isOpen]);
@@ -1145,6 +1141,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setStep(1);
         setRedeemPoints(false);
         setSelectedClientId(''); // Reset redeem points state
+        setAnticipoPagado(0); // Reset anticipo to prevent cross-contamination between sales
+        setReservationId(undefined); // Reset reservationId to prevent modifying wrong reservation
 
         // Determine default local
         let defaultLocalId = '';

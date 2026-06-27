@@ -1009,6 +1009,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 if (reservationId) {
                     saleDataToSave.reservationId = reservationId;
+                    const reservationRef = doc(db, 'reservas', reservationId);
+                    const reservationItems = cart.map((item: any) => ({
+                        id: item.id,
+                        nombre: item.nombre,
+                        servicio: item.nombre,
+                        tipo: item.tipo,
+                        barbero_id: item.barbero_id || null,
+                        precio: item.precio || 0,
+                        duracion: item.duracion || 0,
+                        cantidad: item.cantidad || 1,
+                        ...(item.hora_inicio ? { hora_inicio: item.hora_inicio, hora_fin: item.hora_fin } : {}),
+                        ...(item.professional_lock !== undefined && item.professional_lock !== null ? { professional_lock: item.professional_lock } : {})
+                    }));
+                    transaction.update(reservationRef, {
+                        items: reservationItems,
+                        precio: subtotal - totalDiscount,
+                        servicio: reservationItems.map((i: any) => i.nombre).join(', ')
+                    });
                 }
 
                 // D. Guardar Venta

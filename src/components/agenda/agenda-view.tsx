@@ -1606,6 +1606,7 @@ export default function AgendaView() {
         timeBlocks={timeBlocks || []}
         date={date}
         onSelectSlot={handleSelectQuickConsultSlot}
+        specialJourneys={specialJourneys || []}
       />
     </TooltipProvider >
   );

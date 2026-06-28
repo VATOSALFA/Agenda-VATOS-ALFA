@@ -25,6 +25,7 @@ interface QuickConsultModalProps {
   timeBlocks: TimeBlock[];
   date: Date | undefined;
   onSelectSlot: (time: string, barberId: string, serviceId: string) => void;
+  specialJourneys?: any[];
 }
 
 export function QuickConsultModal({
@@ -36,6 +37,7 @@ export function QuickConsultModal({
   timeBlocks,
   date,
   onSelectSlot,
+  specialJourneys = [],
 }: QuickConsultModalProps) {
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -80,6 +82,49 @@ export function QuickConsultModal({
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
 
+    const getDaySchedule = (barber: Profesional) => {
+      const dateStr = formattedDate;
+
+      // Check for Special Journeys (there may be multiple on the same day)
+      const barberJourneys = (specialJourneys || []).filter(
+        (s: any) => s.profesionalId === barber.id && s.fecha === dateStr
+      );
+
+      if (barberJourneys.length > 0) {
+        // Sort journeys by start time
+        const sorted = [...barberJourneys].sort((a: any, b: any) =>
+          a.hora_inicio.localeCompare(b.hora_inicio)
+        );
+
+        // Merge: overall start is the earliest, overall end is the latest
+        const overallStart = sorted[0].hora_inicio;
+        const overallEnd = sorted.reduce(
+          (latest: string, j: any) => (j.hora_fin > latest ? j.hora_fin : latest),
+          sorted[0].hora_fin
+        );
+
+        // Build break segments for gaps between consecutive journeys
+        const breaks: { start: string; end: string }[] = [];
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const currentEnd = sorted[i].hora_fin;
+          const nextStart = sorted[i + 1].hora_inicio;
+          if (currentEnd < nextStart) {
+            breaks.push({ start: currentEnd, end: nextStart });
+          }
+        }
+
+        return {
+          enabled: true,
+          start: overallStart,
+          end: overallEnd,
+          breaks,
+        };
+      }
+
+      if (!barber.schedule) return null;
+      return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
+    };
+
     const slots: {
       time: string;
       mins: number;
@@ -99,24 +144,74 @@ export function QuickConsultModal({
       const duration = customDur !== undefined ? customDur : (selectedService.duration || 0);
       if (duration <= 0) return;
 
-      // 3. Shift bounds
-      const daySchedule = prof.schedule?.[dayOfWeek];
-      if (!daySchedule || !daySchedule.enabled || !daySchedule.start || !daySchedule.end) return;
+      // 3. Calculate working intervals
+      const daySchedule = getDaySchedule(prof);
+      let workingIntervals: { start: number; end: number }[] = [];
 
-      const startTimeLimit = parseTime(daySchedule.start);
-      const endTimeLimit = parseTime(daySchedule.end);
+      if (daySchedule && daySchedule.enabled && daySchedule.start && daySchedule.end) {
+        const startMin = parseTime(daySchedule.start);
+        const endMin = parseTime(daySchedule.end);
+        
+        // Start with the full shift
+        workingIntervals.push({ start: startMin, end: endMin });
+
+        // Subtract default breaks
+        if (daySchedule.breaks && Array.isArray(daySchedule.breaks)) {
+          daySchedule.breaks.forEach((b: any) => {
+            if (b.start && b.end) {
+              const breakStart = parseTime(b.start);
+              const breakEnd = parseTime(b.end);
+              
+              const newWorking: { start: number; end: number }[] = [];
+              workingIntervals.forEach(interval => {
+                if (breakEnd <= interval.start || breakStart >= interval.end) {
+                  newWorking.push(interval);
+                } else {
+                  if (breakStart > interval.start) {
+                    newWorking.push({ start: interval.start, end: breakStart });
+                  }
+                  if (breakEnd < interval.end) {
+                    newWorking.push({ start: breakEnd, end: interval.end });
+                  }
+                }
+              });
+              workingIntervals = newWorking;
+            }
+          });
+        }
+      }
+
+      // Add 'available' blocks as working intervals
+      const barberAvailableBlocks = timeBlocks.filter(
+        block => block.fecha === formattedDate && block.barbero_id === prof.id && block.type === 'available' && block.hora_inicio && block.hora_fin
+      );
+
+      barberAvailableBlocks.forEach(block => {
+        const startMin = parseTime(block.hora_inicio);
+        const endMin = parseTime(block.hora_fin);
+        workingIntervals.push({ start: startMin, end: endMin });
+      });
+
+      // Merge working intervals
+      const sortedWorking = [...workingIntervals].sort((a, b) => a.start - b.start);
+      const mergedWorking: { start: number; end: number }[] = [];
+      sortedWorking.forEach(interval => {
+        if (mergedWorking.length === 0) {
+          mergedWorking.push({ ...interval });
+        } else {
+          const last = mergedWorking[mergedWorking.length - 1];
+          if (interval.start <= last.end) {
+            last.end = Math.max(last.end, interval.end);
+          } else {
+            mergedWorking.push({ ...interval });
+          }
+        }
+      });
+
+      if (mergedWorking.length === 0) return;
 
       // 4. Busy Intervals
       const busyIntervals: { start: number; end: number }[] = [];
-
-      // Breaks
-      if (daySchedule.breaks && Array.isArray(daySchedule.breaks)) {
-        daySchedule.breaks.forEach((b: any) => {
-          if (b.start && b.end) {
-            busyIntervals.push({ start: parseTime(b.start), end: parseTime(b.end) });
-          }
-        });
-      }
 
       // Reservations
       reservations.forEach(res => {
@@ -144,14 +239,28 @@ export function QuickConsultModal({
         }
       });
 
-      // Time Blocks
-      timeBlocks.forEach(block => {
-        if (block.fecha === formattedDate && block.barbero_id === prof.id && block.hora_inicio && block.hora_fin) {
-          busyIntervals.push({ start: parseTime(block.hora_inicio), end: parseTime(block.hora_fin) });
+      // Busy time blocks (type !== 'available')
+      const barberBusyBlocks = timeBlocks.filter(
+        block => block.fecha === formattedDate && block.barbero_id === prof.id && block.type !== 'available' && block.hora_inicio && block.hora_fin
+      );
+
+      barberBusyBlocks.forEach(block => {
+        const startMin = parseTime(block.hora_inicio);
+        const endMin = parseTime(block.hora_fin);
+
+        // Check if this block is overridden by any available block
+        const isOverridden = barberAvailableBlocks.some(avBlock => {
+          const avStart = parseTime(avBlock.hora_inicio);
+          const avEnd = parseTime(avBlock.hora_fin);
+          return (avStart < endMin && avEnd > startMin);
+        });
+
+        if (!isOverridden) {
+          busyIntervals.push({ start: startMin, end: endMin });
         }
       });
 
-      // 5. Merge busy intervals
+      // Merge busy intervals
       const sortedBusy = [...busyIntervals].sort((a, b) => a.start - b.start);
       const mergedBusy: { start: number; end: number }[] = [];
       sortedBusy.forEach(interval => {
@@ -167,61 +276,65 @@ export function QuickConsultModal({
         }
       });
 
-      // 6. Define blocks list including boundaries
-      const allBlocks = [
-        { start: -Infinity, end: startTimeLimit },
-        ...mergedBusy,
-        { start: endTimeLimit, end: Infinity },
-      ];
+      // 5. Find free gaps and generate options within working intervals
+      mergedWorking.forEach(work => {
+        const workingBusy = mergedBusy
+          .filter(busy => busy.start < work.end && busy.end > work.start)
+          .map(busy => ({
+            start: Math.max(work.start, busy.start),
+            end: Math.min(work.end, busy.end)
+          }));
 
-      // 7. Find free gaps and generate options
-      for (let i = 0; i < allBlocks.length - 1; i++) {
-        const gapStart = allBlocks[i].end;
-        const gapEnd = allBlocks[i + 1].start;
-        const gapDuration = gapEnd - gapStart;
+        const allBlocks = [
+          { start: -Infinity, end: work.start },
+          ...workingBusy,
+          { start: work.end, end: Infinity },
+        ];
 
-        if (gapDuration >= duration) {
-          // If date is today, slot must start in the future
-          let effectiveStart = gapStart;
-          if (isDateToday) {
-            // Buffer of 5 minutes for walk-in consults
-            effectiveStart = Math.max(gapStart, currentMins + 5);
-          }
+        for (let i = 0; i < allBlocks.length - 1; i++) {
+          const gapStart = allBlocks[i].end;
+          const gapEnd = allBlocks[i + 1].start;
+          const gapDuration = gapEnd - gapStart;
 
-          if (effectiveStart + duration <= gapEnd) {
-            // Align start time to the next 5-minute interval
-            const alignedStart = Math.ceil(effectiveStart / 5) * 5;
-            if (alignedStart + duration <= gapEnd) {
-              slots.push({
-                time: formatMins(alignedStart),
-                mins: alignedStart,
-                barberId: prof.id,
-                barberName: prof.name,
-                barberPhoto: prof.avatarUrl,
-                gapMinutes: gapEnd - alignedStart,
-              });
+          if (gapDuration >= duration) {
+            let effectiveStart = gapStart;
+            if (isDateToday) {
+              effectiveStart = Math.max(gapStart, currentMins + 5);
+            }
 
-              // Add a secondary option in the same gap if it's very large (e.g. 60+ mins extra)
-              const nextStart = alignedStart + 30; // 30 minutes later
-              if (nextStart + duration <= gapEnd) {
+            if (effectiveStart + duration <= gapEnd) {
+              const alignedStart = Math.ceil(effectiveStart / 5) * 5;
+              if (alignedStart + duration <= gapEnd) {
                 slots.push({
-                  time: formatMins(nextStart),
-                  mins: nextStart,
+                  time: formatMins(alignedStart),
+                  mins: alignedStart,
                   barberId: prof.id,
                   barberName: prof.name,
                   barberPhoto: prof.avatarUrl,
-                  gapMinutes: gapEnd - nextStart,
+                  gapMinutes: gapEnd - alignedStart,
                 });
+
+                const nextStart = alignedStart + 30;
+                if (nextStart + duration <= gapEnd) {
+                  slots.push({
+                    time: formatMins(nextStart),
+                    mins: nextStart,
+                    barberId: prof.id,
+                    barberName: prof.name,
+                    barberPhoto: prof.avatarUrl,
+                    gapMinutes: gapEnd - nextStart,
+                  });
+                }
               }
             }
           }
         }
-      }
+      });
     });
 
     // Sort all slots by start time (mins) ascending
     return slots.sort((a, b) => a.mins - b.mins);
-  }, [selectedService, date, professionals, reservations, timeBlocks]);
+  }, [selectedService, date, professionals, reservations, timeBlocks, specialJourneys]);
 
   const handleSelectSlot = (time: string, barberId: string) => {
     if (selectedServiceId) {

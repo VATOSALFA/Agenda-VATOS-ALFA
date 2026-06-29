@@ -233,6 +233,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
             const tipsToUpdate = new Map<string, Set<string>>();
+            const salesToUpdate = new Map<string, Sale>();
             const professionalMapForSave = new Map(professionals.map(p => [p.id, p]));
 
             for (const comm of professionalsToPay) {
@@ -254,8 +255,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         }
                     });
 
-                    // Mark items as paid
-                    const salesToUpdate = new Map<string, Sale>();
+                    // Mark items as paid (accumulate changes in salesToUpdate map declared outside the loop)
                     comm.saleItemIds.forEach(idPair => {
                         if (!salesToUpdate.has(idPair.saleId)) {
                             const originalSale = sales.find(s => s.id === idPair.saleId);
@@ -270,11 +270,6 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         }
                     });
 
-                    salesToUpdate.forEach((updatedSale, saleId) => {
-                        const saleRef = doc(db, 'ventas', saleId);
-                        batch.update(saleRef, { items: updatedSale.items });
-                    });
-
                     // Collect tips to mark as paid
                     comm.tipSaleIds.forEach(saleId => {
                         if (!tipsToUpdate.has(saleId)) {
@@ -285,6 +280,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     });
                 }
             }
+
+            // Apply all sales updates accumulated across all paid professionals
+            salesToUpdate.forEach((updatedSale, saleId) => {
+                const saleRef = doc(db, 'ventas', saleId);
+                batch.update(saleRef, { items: updatedSale.items });
+            });
 
             // Apply all tip updates
             tipsToUpdate.forEach((professionalIdsSet, saleId) => {

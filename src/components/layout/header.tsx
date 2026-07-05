@@ -354,44 +354,24 @@ export default function Header() {
             </div>
           )}
 
-          {/* Mobile Menu Trigger */}
-          <div className="md:hidden mr-2">
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-white/10">
-                  <Menu className="h-6 w-6" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white pl-6 pt-6 pb-6 pr-1 [&>button]:text-white hover:[&>button]:text-white/80">
-                <SheetHeader className="sr-only">
-                  <SheetTitle>Opciones Secundarias</SheetTitle>
-                </SheetHeader>
-                <ScrollArea className="h-full pr-1">
-                  <div className="flex items-center justify-between mb-8 mt-2 pr-5">
-                    <div>
-                      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                        OPCIONES SECUNDARIAS
-                      </h2>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold text-gray-300">
-                        {user?.displayName}
-                      </span>
-                      <Avatar className="h-10 w-10 border border-[#314177]/50 ring-2 ring-[#314177]/30">
-                        <AvatarImage src={user?.avatarUrl || user?.photoURL || ""} alt={user?.displayName || 'User'} />
-                        <AvatarFallback className="bg-primary text-white text-xs">{getInitials(user?.displayName)}</AvatarFallback>
-                      </Avatar>
-                      <button
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                        aria-label="Cerrar menú"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
+          {/* Mobile Menu (controlled via bottom navigation) */}
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white pl-6 pt-6 pb-6 pr-1 [&>button]:hidden">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Opciones Secundarias</SheetTitle>
+              </SheetHeader>
+              <ScrollArea className="h-full pr-1">
+                <div className="flex justify-end mb-6 mt-2 pr-5">
+                  <button
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    aria-label="Cerrar menú"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
 
-                  <div className="space-y-6 pb-24 pr-5">
+                <div className="space-y-6 pb-24 pr-5">
                     {/* Website links group */}
                     {websiteGroupLinks.length > 0 && (
                       <div>
@@ -468,7 +448,6 @@ export default function Header() {
                 </ScrollArea>
               </SheetContent>
             </Sheet>
-          </div>
 
           <Link href="/agenda" className="mr-4 flex items-center flex-shrink-0">
             <div className="relative h-14 w-32 md:w-40 lg:w-52">

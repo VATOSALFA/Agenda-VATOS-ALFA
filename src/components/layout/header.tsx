@@ -362,12 +362,12 @@ export default function Header() {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white p-6 [&>button]:text-white hover:[&>button]:text-white/80">
+              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white pl-6 pt-6 pb-6 pr-1 [&>button]:text-white hover:[&>button]:text-white/80">
                 <SheetHeader className="sr-only">
                   <SheetTitle>Opciones Secundarias</SheetTitle>
                 </SheetHeader>
                 <ScrollArea className="h-full pr-1">
-                  <div className="flex items-center justify-between mb-8 mt-2">
+                  <div className="flex items-center justify-between mb-8 mt-2 pr-5">
                     <div>
                       <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                         OPCIONES SECUNDARIAS
@@ -391,14 +391,14 @@ export default function Header() {
                     </div>
                   </div>
 
-                  <div className="space-y-6 pb-24">
+                  <div className="space-y-6 pb-24 pr-5">
                     {/* Website links group */}
                     {websiteGroupLinks.length > 0 && (
                       <div>
                         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
                           Sitio Web
                         </h3>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-2">
                           {websiteGroupLinks.map((link) => {
                             const handleCopy = (e: React.MouseEvent) => {
                               e.stopPropagation();
@@ -418,16 +418,16 @@ export default function Header() {
                               <div
                                 key={link.label}
                                 onClick={handleOpen}
-                                className="relative flex flex-col items-center justify-center p-5 rounded-2xl border bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_15px_rgba(49,65,119,0.3)] group cursor-pointer"
+                                className="relative flex flex-col items-center justify-center p-3 rounded-xl border bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_12px_rgba(49,65,119,0.3)] group cursor-pointer h-20"
                               >
                                 <button
                                   onClick={handleCopy}
-                                  className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors z-10"
+                                  className="absolute top-1.5 right-1.5 p-1 rounded bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors z-10"
                                 >
-                                  <Copy className="h-3.5 w-3.5" />
+                                  <Copy className="h-3 w-3" />
                                 </button>
-                                <link.icon className="h-6 w-6 text-blue-300 mb-3 group-hover:scale-110 transition-transform duration-300" />
-                                <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
+                                <link.icon className="h-5 w-5 text-blue-300 mb-1.5 group-hover:scale-110 transition-transform duration-300" />
+                                <span className="text-[10px] font-semibold text-gray-200 text-center leading-tight">{link.label}</span>
                               </div>
                             );
                           })}
@@ -441,7 +441,7 @@ export default function Header() {
                         <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
                           {group.title}
                         </h3>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-2">
                           {group.links.map((link) => {
                             const Icon = link.icon;
                             const isActive = pathname === link.href || (link.href === '/agenda' && pathname.startsWith('/agenda'));
@@ -451,34 +451,19 @@ export default function Header() {
                                 href={link.href}
                                 onClick={handleLinkClick}
                                 className={cn(
-                                  "flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-300",
-                                  "bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_15px_rgba(49,65,119,0.3)] group",
-                                  isActive && "border-[#314177] bg-[#1f2742] shadow-[0_0_15px_rgba(49,65,119,0.4)]"
+                                  "flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 h-20",
+                                  "bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_12px_rgba(49,65,119,0.3)] group",
+                                  isActive && "border-[#314177] bg-[#1f2742] shadow-[0_0_12px_rgba(49,65,119,0.4)]"
                                 )}
                               >
-                                <Icon className="h-6 w-6 text-blue-300 mb-3 group-hover:scale-110 transition-transform duration-300" />
-                                <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
+                                <Icon className="h-5 w-5 text-blue-300 mb-1.5 group-hover:scale-110 transition-transform duration-300" />
+                                <span className="text-[10px] font-semibold text-gray-200 text-center leading-tight">{link.label}</span>
                               </Link>
                             );
                           })}
                         </div>
                       </div>
                     ))}
-
-                    {/* General Actions */}
-                    <div className="border-t border-white/5 pt-6">
-                      <Button
-                        variant="destructive"
-                        className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm bg-red-950/20 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all duration-300"
-                        onClick={() => {
-                          handleLogout();
-                          setIsMobileMenuOpen(false);
-                        }}
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Cerrar Sesión
-                      </Button>
-                    </div>
                   </div>
                 </ScrollArea>
               </SheetContent>

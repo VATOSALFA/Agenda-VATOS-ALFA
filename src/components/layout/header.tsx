@@ -117,6 +117,41 @@ export default function Header() {
   const { enableBarberDashboard } = useFeatures();
   const isOnline = useNetworkStatus();
 
+  const canSee = (permission: string | string[]) => {
+    if (!user || !user.permissions) return false;
+
+    // Admin always has all permissions EXCEPT FOR personal views unless explicitly granted
+    const isPersonalPermission = Array.isArray(permission)
+      ? permission.every(p => p.startsWith('ver_mis_'))
+      : permission.startsWith('ver_mis_');
+
+    if (user.role === 'Administrador general' && !isPersonalPermission) return true;
+
+    if (Array.isArray(permission)) {
+      return permission.some(p => user.permissions!.includes(p));
+    }
+    return user.permissions.includes(permission);
+  }
+
+  const canSeeAny = (permissions: (string | string[] | undefined)[]) => {
+    if (!user || !user.permissions) return false;
+
+    // Check if ALL permissions being queried are personal
+    const allPersonal = permissions.every(p => {
+      if (!p) return true;
+      if (Array.isArray(p)) return p.every(singleP => singleP.startsWith('ver_mis_'));
+      return p.startsWith('ver_mis_');
+    });
+
+    if (user.role === 'Administrador general' && !allPersonal) return true;
+
+    return permissions.some(p => {
+      if (!p) return false;
+      if (Array.isArray(p)) return p.some(singleP => user.permissions!.includes(singleP));
+      return user.permissions!.includes(p);
+    });
+  }
+
   // Fetch ALL professionals to find the correct document ID for the logged-in user's share link.
   // We fetch the whole collection (it's small and public) and filter client-side to avoid
   // potential issues with Firestore where-query indexes or security rules.
@@ -139,6 +174,117 @@ export default function Header() {
   // Get website URL from settings or fallback to current origin
   const configuredWebsiteUrl = empresaData?.[0]?.website_slug;
   const displayUrl = configuredWebsiteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
+
+  const personalWebsiteUrl = useMemo(() => {
+    return displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : '';
+  }, [displayUrl, professionalId]);
+
+  const websiteGroupLinks = useMemo(() => {
+    const links = [];
+    if (user?.role !== 'Administrador general' && personalWebsiteUrl) {
+      links.push({
+        label: 'Mi Enlace Web',
+        url: personalWebsiteUrl,
+        icon: User,
+        isPersonal: true
+      });
+    }
+    if (displayUrl) {
+      links.push({
+        label: 'Sitio Web General',
+        url: displayUrl,
+        icon: Store,
+        isPersonal: false
+      });
+    }
+    return links;
+  }, [user?.role, personalWebsiteUrl, displayUrl]);
+
+  const activePromosLinks = useMemo(() => {
+    return allPromotions
+      .filter(p => p.active)
+      .map(promo => ({
+        href: `/promociones/${promo.id}`,
+        label: promo.name,
+        icon: Tag
+      }));
+  }, [allPromotions]);
+
+  const filteredMenuGroups = useMemo(() => {
+    const rawGroups = [
+      {
+        title: "Menú Principal",
+        links: [
+          ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
+          { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
+          { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+        ]
+      },
+      {
+        title: "Ventas",
+        links: [
+          { href: '/sales/my-performance', label: 'Mi Rendimiento', icon: LineChart, permission: ['ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas'] },
+          { href: '/sales/cash-box', label: 'Caja de Ventas', icon: Banknote, permission: ['ver_caja'] },
+          { href: '/sales/invoiced', label: 'Ventas Facturadas', icon: CreditCard, permission: ['ver_ventas_facturadas'] },
+          { href: '/sales/commissions', label: 'Reporte de Comisiones', icon: DollarSign, permission: ['ver_reporte_comisiones'] },
+          { href: '/sales/tips', label: 'Propinas', icon: Gift, permission: ['ver_propinas'] },
+        ]
+      },
+      {
+        title: "Productos",
+        links: [
+          { href: '/products', label: 'Inventario', icon: Archive, permission: 'ver_inventario' },
+          { href: '/products/stock-movement', label: 'Movimiento de Stock', icon: LineChart, permission: 'ver_movimiento_stock' },
+          { href: '/products/sales', label: 'Venta de Productos', icon: ShoppingCart, permission: 'ver_venta_productos' },
+        ]
+      },
+      {
+        title: "Reportes",
+        links: [
+          { href: '/reports/reservations', label: 'Reporte Reservas', icon: FileText, permission: 'ver_reporte_reservas' },
+          { href: '/reports/sales', label: 'Reporte Ventas', icon: LineChart, permission: 'ver_reporte_ventas' },
+          { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet, permission: 'ver_cierres_caja' },
+          { href: '/reports/audit', label: 'Auditoría', icon: ShieldCheck, permission: 'ver_auditoria' },
+        ]
+      },
+      {
+        title: "Finanzas",
+        links: [
+          { href: '/finanzas/resumen', label: 'Resumen Anual', icon: LineChart, permission: 'ver_finanzas' },
+          { href: `/finanzas/${getCurrentMonthName()}`, label: 'Vista Mensual', icon: DollarSign, permission: 'ver_finanzas' },
+        ]
+      },
+      {
+        title: "Administración",
+        links: [
+          { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
+          { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
+          { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
+          { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
+          { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
+        ]
+      },
+      {
+        title: "Promociones",
+        links: [
+          { href: '/promociones', label: 'Todas las Promociones', icon: Gift, permission: 'ver_promociones', enabled: hasActivePromotions && canSee('ver_promociones') },
+          ...activePromosLinks.map(l => ({ ...l, permission: 'ver_promociones' }))
+        ]
+      }
+    ];
+
+    return rawGroups.map(group => {
+      const visibleLinks = group.links.filter(link => {
+        if ((link as any).enabled === false) return false;
+        if (link.permission && !canSee(link.permission)) return false;
+        return true;
+      });
+      return {
+        ...group,
+        links: visibleLinks
+      };
+    }).filter(group => group.links.length > 0);
+  }, [canSee, enableBarberDashboard, hasActivePromotions, activePromosLinks]);
 
   const isAuthPage = pathname === '/login';
   const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones/');
@@ -180,40 +326,7 @@ export default function Header() {
     return name.substring(0, 2).toUpperCase();
   }
 
-  const canSee = (permission: string | string[]) => {
-    if (!user || !user.permissions) return false;
 
-    // Admin always has all permissions EXCEPT FOR personal views unless explicitly granted
-    const isPersonalPermission = Array.isArray(permission)
-      ? permission.every(p => p.startsWith('ver_mis_'))
-      : permission.startsWith('ver_mis_');
-
-    if (user.role === 'Administrador general' && !isPersonalPermission) return true;
-
-    if (Array.isArray(permission)) {
-      return permission.some(p => user.permissions!.includes(p));
-    }
-    return user.permissions.includes(permission);
-  }
-
-  const canSeeAny = (permissions: (string | string[] | undefined)[]) => {
-    if (!user || !user.permissions) return false;
-
-    // Check if ALL permissions being queried are personal
-    const allPersonal = permissions.every(p => {
-      if (!p) return true;
-      if (Array.isArray(p)) return p.every(singleP => singleP.startsWith('ver_mis_'));
-      return p.startsWith('ver_mis_');
-    });
-
-    if (user.role === 'Administrador general' && !allPersonal) return true;
-
-    return permissions.some(p => {
-      if (!p) return false;
-      if (Array.isArray(p)) return p.some(singleP => user.permissions!.includes(singleP));
-      return user.permissions!.includes(p);
-    });
-  }
 
   const dispatchCustomEvent = (eventName: string) => {
     document.dispatchEvent(new CustomEvent(eventName));
@@ -248,318 +361,113 @@ export default function Header() {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[300px] sm:w-[400px] p-0 [&>button]:text-white hover:[&>button]:text-white/80">
-                <SheetHeader className="p-4 bg-primary text-primary-foreground">
-                  <SheetTitle className="text-white flex items-center gap-2">
-                    <img src="/logo-header-blanco.png" alt="VATOS ALFA" className="h-8 w-auto object-contain" />
-                  </SheetTitle>
-                </SheetHeader>
-                <ScrollArea className="h-[calc(100vh-64px)]">
-                  <div className="flex flex-col gap-1 p-4 pb-16">
-                    <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="website" className="border-b-0">
-                        <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
+              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#070d19] text-white p-6 [&>button]:text-white hover:[&>button]:text-white/80">
+                <ScrollArea className="h-full pr-1">
+                  <div className="flex items-center justify-between mb-8 mt-2">
+                    <div>
+                      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+                        OPCIONES SECUNDARIAS
+                      </h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-semibold text-gray-300">
+                        {user?.displayName}
+                      </span>
+                      <Avatar className="h-10 w-10 border border-cyan-500/30 ring-2 ring-cyan-500/20">
+                        <AvatarImage src={user?.avatarUrl || user?.photoURL || ""} alt={user?.displayName || 'User'} />
+                        <AvatarFallback className="bg-primary text-white text-xs">{getInitials(user?.displayName)}</AvatarFallback>
+                      </Avatar>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 pb-24">
+                    {/* Website links group */}
+                    {websiteGroupLinks.length > 0 && (
+                      <div>
+                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
                           Sitio Web
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="flex flex-col space-y-4 pt-2 pb-2">
-                            {user?.role !== 'Administrador general' && (
-                              <div className="rounded-md border bg-primary/5 p-3 space-y-3">
-                                <div className="flex items-center gap-2 text-primary font-semibold text-xs">
-                                  <User className="h-3 w-3" />
-                                  Mi Enlace Personal
-                                </div>
-                                <p className="break-all text-[10px] text-muted-foreground leading-tight">
-                                  {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : ''}
-                                </p>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 flex-1 text-xs"
-                                    onClick={() => {
-                                      const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
-                                      if (baseUrl) {
-                                        const url = `${baseUrl}/reservar?professionalId=${professionalId}&preview=true`;
-                                        window.open(url, '_blank');
-                                      }
-                                    }}
-                                  >
-                                    <ExternalLink className="mr-2 h-3 w-3" />
-                                    Ir a mi enlace
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8 w-8 p-0"
-                                    onClick={() => {
-                                      const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
-                                      navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${professionalId}`);
-                                      toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
-                                    }}
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {websiteGroupLinks.map((link) => {
+                            const handleCopy = (e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(link.url);
+                              toast({
+                                title: "Enlace copiado",
+                                description: `El enlace ${link.isPersonal ? 'personal' : 'general'} ha sido copiado.`
+                              });
+                            };
 
-                            <div className="rounded-md border bg-muted/30 p-3 space-y-3">
-                              <div className="flex items-center gap-2 text-muted-foreground font-semibold text-xs">
-                                <Store className="h-3 w-3" />
-                                Enlace General
-                              </div>
-                              <p className="break-all text-[10px] text-muted-foreground leading-tight">
-                                {displayUrl}
-                              </p>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 flex-1 text-xs"
-                                  onClick={() => {
-                                    if (displayUrl) {
-                                      const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
-                                      window.open(previewUrl, '_blank');
-                                    }
-                                  }}
+                            const handleOpen = () => {
+                              const previewUrl = link.url.includes('?') ? `${link.url}&preview=true` : `${link.url}?preview=true`;
+                              window.open(previewUrl, '_blank');
+                            };
+
+                            return (
+                              <div
+                                key={link.label}
+                                onClick={handleOpen}
+                                className="relative flex flex-col items-center justify-center p-5 rounded-2xl border bg-[#11192e]/65 border-[#1e2c4f] hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] group cursor-pointer"
+                              >
+                                <button
+                                  onClick={handleCopy}
+                                  className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors z-10"
                                 >
-                                  <ExternalLink className="mr-2 h-3 w-3" />
-                                  Visitar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 w-8 p-0"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(displayUrl);
-                                    toast({
-                                      title: 'Link copiado',
-                                      description: 'El enlace se ha copiado al portapapeles.',
-                                    });
-                                  }}
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </Button>
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                                <link.icon className="h-6 w-6 text-cyan-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
+                                <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
                               </div>
-                            </div>
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                      <AccordionItem value="main" className="border-b-0">
-                        <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                          Menú Principal
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="flex flex-col space-y-1 pt-1">
-                            {mainNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                              canSee(permission) && (
-                                <Link
-                                  key={href}
-                                  href={href}
-                                  onClick={handleLinkClick}
-                                  className={cn(
-                                    'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                    (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'))
-                                      ? 'bg-primary/10 text-primary'
-                                      : 'text-foreground hover:bg-muted'
-                                  )}
-                                >
-                                  <Icon className="mr-3 h-4 w-4" />
-                                  {label}
-                                </Link>
-                              )
-                            ))}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
 
-                      {canSeeAny(salesNavLinks.map(l => l.permission)) && (
-                        <AccordionItem value="sales" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Ventas
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                                canSee(permission!) && (
-                                  <Link
-                                    key={href}
-                                    href={href!}
-                                    onClick={handleLinkClick}
-                                    className={cn(
-                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === href
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-foreground hover:bg-muted'
-                                    )}
-                                  >
-                                    <Icon className="mr-3 h-4 w-4" />
-                                    {label}
-                                  </Link>
-                                )
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
-                      {canSeeAny(productsNavLinks.map(l => l.permission)) && (
-                        <AccordionItem value="products" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Productos
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                                canSee(permission!) && (
-                                  <Link
-                                    key={href}
-                                    href={href!}
-                                    onClick={handleLinkClick}
-                                    className={cn(
-                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === href
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-foreground hover:bg-muted'
-                                    )}
-                                  >
-                                    <Icon className="mr-3 h-4 w-4" />
-                                    {label}
-                                  </Link>
-                                )
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
-                      {canSeeAny(reportsNavLinks.map(l => l.permission)) && (
-                        <AccordionItem value="reports" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Reportes
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                                canSee(permission!) && (
-                                  <Link
-                                    key={href}
-                                    href={href!}
-                                    onClick={handleLinkClick}
-                                    className={cn(
-                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === href
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-foreground hover:bg-muted'
-                                    )}
-                                  >
-                                    <Icon className="mr-3 h-4 w-4" />
-                                    {label}
-                                  </Link>
-                                )
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
-                      {canSee('ver_finanzas') && (
-                        <AccordionItem value="finances" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Finanzas
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              {finanzasNavLinks.map((item) => (
-                                canSee(item.permission!) && (
-                                  <Link
-                                    key={item.href}
-                                    href={item.href!}
-                                    onClick={handleLinkClick}
-                                    className={cn(
-                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === item.href || (item.label === 'Vista Mensual' && pathname.startsWith('/finanzas/') && pathname !== '/finanzas/resumen')
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-foreground hover:bg-muted'
-                                    )}
-                                  >
-                                    {item.icon && <item.icon className="mr-3 h-4 w-4" />}
-                                    <span>{item.label}</span>
-                                  </Link>
-                                )
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
-                      {canSeeAny(adminNavLinks.map(l => l.permission!)) && (
-                        <AccordionItem value="admin" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Administración
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
-                              {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
-                                canSee(permission!) && (
-                                  <Link
-                                    key={href}
-                                    href={href!}
-                                    onClick={handleLinkClick}
-                                    className={cn(
-                                      'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                      pathname === href
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-foreground hover:bg-muted'
-                                    )}
-                                  >
-                                    <Icon className="mr-3 h-4 w-4" />
-                                    {label}
-                                  </Link>
-                                )
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-
-                      {hasActivePromotions && canSee('ver_promociones') && (
-                        <AccordionItem value="promotions" className="border-b-0">
-                          <AccordionTrigger className="py-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
-                            Promociones
-                          </AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex flex-col space-y-1 pt-1">
+                    {/* Filtered Categories */}
+                    {filteredMenuGroups.map((group) => (
+                      <div key={group.title}>
+                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
+                          {group.title}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {group.links.map((link) => {
+                            const Icon = link.icon;
+                            const isActive = pathname === link.href || (link.href === '/agenda' && pathname.startsWith('/agenda'));
+                            return (
                               <Link
-                                href="/promociones"
+                                key={link.href}
+                                href={link.href}
                                 onClick={handleLinkClick}
                                 className={cn(
-                                  'flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
-                                  pathname === '/promociones'
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'text-foreground hover:bg-muted'
+                                  "flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-300",
+                                  "bg-[#11192e]/65 border-[#1e2c4f] hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] group",
+                                  isActive && "border-cyan-500 bg-[#11192e]/90 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
                                 )}
                               >
-                                <Gift className="mr-3 h-4 w-4" />
-                                Todas las Promociones
+                                <Icon className="h-6 w-6 text-cyan-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
+                                <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
                               </Link>
-                              {allPromotions.filter(p => p.active).map(promo => (
-                                <Link
-                                  key={promo.id}
-                                  href={`/promociones/${promo.id}`}
-                                  onClick={handleLinkClick}
-                                  className="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-foreground hover:bg-muted"
-                                >
-                                  <Tag className="mr-3 h-4 w-4 text-muted-foreground" />
-                                  <span className="truncate">{promo.name}</span>
-                                </Link>
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-                    </Accordion>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* General Actions */}
+                    <div className="border-t border-white/5 pt-6">
+                      <Button
+                        variant="destructive"
+                        className="w-full h-12 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm bg-red-950/20 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all duration-300"
+                        onClick={() => {
+                          handleLogout();
+                          setIsMobileMenuOpen(false);
+                        }}
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Cerrar Sesión
+                      </Button>
+                    </div>
                   </div>
                 </ScrollArea>
               </SheetContent>
@@ -887,6 +795,82 @@ export default function Header() {
           </div>
         </div>
       </header>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#090d16]/95 border-t border-white/5 backdrop-blur-md z-50 flex items-center justify-around px-2 pb-safe">
+        {/* Tab 1: Agenda */}
+        <Link
+          href="/agenda"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+            pathname.startsWith('/agenda') ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+          )}
+        >
+          <Calendar className="h-5 w-5 mb-0.5" />
+          <span className="text-[10px] font-semibold">Agenda</span>
+        </Link>
+
+        {/* Tab 2: Clientes */}
+        <Link
+          href="/clients"
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+            pathname === '/clients' ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+          )}
+        >
+          <Users className="h-5 w-5 mb-0.5" />
+          <span className="text-[10px] font-semibold">Clientes</span>
+        </Link>
+
+        {/* Tab 3: Center Floating Button - Nuevo */}
+        <div className="flex items-center justify-center flex-1 h-full relative">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] border border-cyan-400/20 active:scale-95 duration-200 -translate-y-4">
+                <Plus className="h-6 w-6" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" side="top" className="w-56 mb-2">
+              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
+                <Calendar className="mr-2 h-4 w-4" />
+                <span>Crear nueva reserva</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
+                <Lock className="mr-2 h-4 w-4" />
+                <span>Bloquear horario</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
+                <Tag className="mr-2 h-4 w-4" />
+                <span>Registrar nueva venta</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Tab 4: Caja / Mi Performance */}
+        <Link
+          href={canSee('ver_caja') ? '/sales/cash-box' : '/sales/my-performance'}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+            (pathname === '/sales/cash-box' || pathname === '/sales/my-performance') ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+          )}
+        >
+          {canSee('ver_caja') ? <Wallet className="h-5 w-5 mb-0.5" /> : <LineChart className="h-5 w-5 mb-0.5" />}
+          <span className="text-[10px] font-semibold">{canSee('ver_caja') ? 'Caja' : 'Mi Perf.'}</span>
+        </Link>
+
+        {/* Tab 5: Más (Menu) */}
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className={cn(
+            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+            isMobileMenuOpen ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+          )}
+        >
+          <Menu className="h-5 w-5 mb-0.5" />
+          <span className="text-[10px] font-semibold">Más</span>
+        </button>
+      </div>
     </>
   );
 }

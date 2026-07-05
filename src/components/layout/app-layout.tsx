@@ -29,7 +29,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
     <>
       <Header />
       <AppInitializer />
-      <main className="pt-16 min-h-screen">
+      <main className="pt-16 pb-20 md:pb-0 min-h-screen">
         {children}
       </main>
     </>

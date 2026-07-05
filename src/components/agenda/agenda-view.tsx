@@ -916,36 +916,53 @@ export default function AgendaView() {
       <div className={cn("flex flex-col md:grid h-[calc(100vh-4rem)] bg-muted/40 gap-2 overflow-hidden", isSidebarCollapsed ? 'md:grid-cols-[0px_1fr]' : 'md:grid-cols-[288px_1fr]')} style={{ transition: 'grid-template-columns 0.3s ease' }}>
         {/* Left Panel */}
         <aside className={cn("bg-white border-r flex flex-col flex-shrink-0 min-h-0 overflow-y-auto scrollbar-thin transition-all duration-300", isSidebarCollapsed && 'hidden md:flex md:w-0 md:overflow-hidden md:p-0 md:opacity-0')}>
-          <div className="p-4 space-y-2">
-            {user?.role === 'Administrador general' && (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="branch-select" className="text-xs flex-shrink-0">Sucursal</Label>
-                <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
-                  <SelectTrigger id="branch-select" className="h-8 text-xs">
-                    <SelectValue placeholder="Seleccionar..." />
+          <div className="p-3 grid grid-cols-2 gap-3 md:flex md:flex-col md:space-y-2 md:p-4">
+            {user?.role === 'Administrador general' ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="branch-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sucursal</Label>
+                  <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
+                    <SelectTrigger id="branch-select" className="h-8 text-xs rounded-lg">
+                      <SelectValue placeholder="Seleccionar..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locales.map(local => (
+                        <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="professional-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profesional</Label>
+                  <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
+                    <SelectTrigger id="professional-select" className="h-8 text-xs rounded-lg">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos</SelectItem>
+                      {professionals.filter(p => !p.deleted).map(prof => (
+                        <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="col-span-2 flex flex-col gap-1">
+                <Label htmlFor="professional-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profesional</Label>
+                <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
+                  <SelectTrigger id="professional-select" className="h-8 text-xs rounded-lg">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {locales.map(local => (
-                      <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    {professionals.filter(p => !p.deleted).map(prof => (
+                      <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             )}
-            <div className="flex items-center gap-2">
-              <Label htmlFor="professional-select" className="text-xs flex-shrink-0">Profesional</Label>
-              <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
-                <SelectTrigger id="professional-select" className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {professionals.filter(p => !p.deleted).map(prof => (
-                    <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           {isClientMounted && (
             <div className="hidden md:flex justify-center">
@@ -970,20 +987,25 @@ export default function AgendaView() {
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col bg-background min-h-0 overflow-hidden">
           {/* Agenda Header */}
-          <div className="flex-shrink-0 flex items-center justify-between gap-4 p-4 border-b">
-            <div className="flex items-center gap-4">
-              <Button variant="outline" onClick={handleSetToday}>Hoy</Button>
-              <div className='flex items-center gap-2'>
-                <Button variant="ghost" size="icon" onClick={handlePrevDay}><ChevronLeft className="h-5 w-5" /></Button>
-                <Button variant="ghost" size="icon" onClick={handleNextDay}><ChevronRight className="h-5 w-5" /></Button>
+          <div className="flex-shrink-0 flex items-center justify-between gap-2 p-3 md:p-4 border-b">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0">
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={handleSetToday}>Hoy</Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevDay}><ChevronLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextDay}><ChevronRight className="h-4 w-4" /></Button>
               </div>
-              <div>
-                <h2 className="text-xl font-semibold capitalize flex items-center gap-2">
-                  <span>{selectedDateFormatted}</span>
+              
+              <div className="h-4 w-[1px] bg-border hidden sm:block" />
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1">
+                  <h2 className="text-xs md:text-lg font-bold capitalize truncate">
+                    {selectedDateFormatted}
+                  </h2>
                   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary md:hidden">
-                        <CalendarDays className="h-5 w-5" />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary md:hidden flex-shrink-0">
+                        <CalendarDays className="h-4 w-4" />
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -1001,13 +1023,13 @@ export default function AgendaView() {
                       />
                     </PopoverContent>
                   </Popover>
-                </h2>
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Store className='w-4 h-4' /> {selectedLocal?.name || 'Cargando...'}
+                </div>
+                <p className="text-[10px] text-muted-foreground hidden md:flex items-center gap-1 mt-0.5">
+                  <Store className='w-3.5 h-3.5' /> {selectedLocal?.name || 'Cargando...'}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 flex-shrink-0">
               <Button
                 variant="outline"
                 size="sm"

@@ -363,6 +363,9 @@ export default function Header() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white p-6 [&>button]:text-white hover:[&>button]:text-white/80">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Opciones Secundarias</SheetTitle>
+                </SheetHeader>
                 <ScrollArea className="h-full pr-1">
                   <div className="flex items-center justify-between mb-8 mt-2">
                     <div>

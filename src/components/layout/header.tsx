@@ -34,6 +34,7 @@ import {
   Menu,
   ShieldCheck,
   LayoutDashboard,
+  X,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -361,7 +362,7 @@ export default function Header() {
                   <Menu className="h-6 w-6" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#070d19] text-white p-6 [&>button]:text-white hover:[&>button]:text-white/80">
+              <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white p-6 [&>button]:text-white hover:[&>button]:text-white/80">
                 <ScrollArea className="h-full pr-1">
                   <div className="flex items-center justify-between mb-8 mt-2">
                     <div>
@@ -373,10 +374,17 @@ export default function Header() {
                       <span className="text-xs font-semibold text-gray-300">
                         {user?.displayName}
                       </span>
-                      <Avatar className="h-10 w-10 border border-cyan-500/30 ring-2 ring-cyan-500/20">
+                      <Avatar className="h-10 w-10 border border-[#314177]/50 ring-2 ring-[#314177]/30">
                         <AvatarImage src={user?.avatarUrl || user?.photoURL || ""} alt={user?.displayName || 'User'} />
                         <AvatarFallback className="bg-primary text-white text-xs">{getInitials(user?.displayName)}</AvatarFallback>
                       </Avatar>
+                      <button
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                        aria-label="Cerrar menú"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
                     </div>
                   </div>
 
@@ -407,7 +415,7 @@ export default function Header() {
                               <div
                                 key={link.label}
                                 onClick={handleOpen}
-                                className="relative flex flex-col items-center justify-center p-5 rounded-2xl border bg-[#11192e]/65 border-[#1e2c4f] hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] group cursor-pointer"
+                                className="relative flex flex-col items-center justify-center p-5 rounded-2xl border bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_15px_rgba(49,65,119,0.3)] group cursor-pointer"
                               >
                                 <button
                                   onClick={handleCopy}
@@ -415,7 +423,7 @@ export default function Header() {
                                 >
                                   <Copy className="h-3.5 w-3.5" />
                                 </button>
-                                <link.icon className="h-6 w-6 text-cyan-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
+                                <link.icon className="h-6 w-6 text-blue-300 mb-3 group-hover:scale-110 transition-transform duration-300" />
                                 <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
                               </div>
                             );
@@ -441,11 +449,11 @@ export default function Header() {
                                 onClick={handleLinkClick}
                                 className={cn(
                                   "flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-300",
-                                  "bg-[#11192e]/65 border-[#1e2c4f] hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] group",
-                                  isActive && "border-cyan-500 bg-[#11192e]/90 shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+                                  "bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_15px_rgba(49,65,119,0.3)] group",
+                                  isActive && "border-[#314177] bg-[#1f2742] shadow-[0_0_15px_rgba(49,65,119,0.4)]"
                                 )}
                               >
-                                <Icon className="h-6 w-6 text-cyan-400 mb-3 group-hover:scale-110 transition-transform duration-300" />
+                                <Icon className="h-6 w-6 text-blue-300 mb-3 group-hover:scale-110 transition-transform duration-300" />
                                 <span className="text-xs font-semibold text-gray-200 text-center">{link.label}</span>
                               </Link>
                             );
@@ -797,36 +805,38 @@ export default function Header() {
       </header>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#090d16]/95 border-t border-white/5 backdrop-blur-md z-50 flex items-center justify-around px-2 pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#151b2e] border-t border-[#314177]/30 backdrop-blur-md z-50 flex items-center justify-around px-2 pb-safe">
         {/* Tab 1: Agenda */}
         <Link
           href="/agenda"
           className={cn(
             "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            pathname.startsWith('/agenda') ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+            pathname.startsWith('/agenda') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
           )}
         >
           <Calendar className="h-5 w-5 mb-0.5" />
           <span className="text-[10px] font-semibold">Agenda</span>
         </Link>
 
-        {/* Tab 2: Clientes */}
+        {/* Tab 2: Ventas Facturadas (fallback to Clientes) */}
         <Link
-          href="/clients"
+          href={canSee('ver_ventas_facturadas') ? '/sales/invoiced' : '/clients'}
           className={cn(
             "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            pathname === '/clients' ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+            ((canSee('ver_ventas_facturadas') && pathname === '/sales/invoiced') || (!canSee('ver_ventas_facturadas') && pathname === '/clients')) ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
           )}
         >
-          <Users className="h-5 w-5 mb-0.5" />
-          <span className="text-[10px] font-semibold">Clientes</span>
+          {canSee('ver_ventas_facturadas') ? <CreditCard className="h-5 w-5 mb-0.5" /> : <Users className="h-5 w-5 mb-0.5" />}
+          <span className="text-[10px] font-semibold">
+            {canSee('ver_ventas_facturadas') ? 'Facturadas' : 'Clientes'}
+          </span>
         </Link>
 
         {/* Tab 3: Center Floating Button - Nuevo */}
         <div className="flex items-center justify-center flex-1 h-full relative">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)] border border-cyan-400/20 active:scale-95 duration-200 -translate-y-4">
+              <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#202a49] to-[#3c4f90] text-white shadow-[0_0_12px_rgba(49,65,119,0.5)] border border-white/10 active:scale-95 duration-200 -translate-y-4">
                 <Plus className="h-6 w-6" />
               </button>
             </DropdownMenuTrigger>
@@ -852,7 +862,7 @@ export default function Header() {
           href={canSee('ver_caja') ? '/sales/cash-box' : '/sales/my-performance'}
           className={cn(
             "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            (pathname === '/sales/cash-box' || pathname === '/sales/my-performance') ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+            (pathname === '/sales/cash-box' || pathname === '/sales/my-performance') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
           )}
         >
           {canSee('ver_caja') ? <Wallet className="h-5 w-5 mb-0.5" /> : <LineChart className="h-5 w-5 mb-0.5" />}
@@ -864,7 +874,7 @@ export default function Header() {
           onClick={() => setIsMobileMenuOpen(true)}
           className={cn(
             "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            isMobileMenuOpen ? "text-cyan-400" : "text-gray-400 hover:text-gray-200"
+            isMobileMenuOpen ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
           )}
         >
           <Menu className="h-5 w-5 mb-0.5" />

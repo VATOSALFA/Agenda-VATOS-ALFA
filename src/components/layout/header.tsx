@@ -638,27 +638,29 @@ export default function Header() {
 
           </nav>
           <div className="ml-auto flex items-center space-x-1.5 flex-shrink-0">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="secondary">
-                  Nuevo
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
-                  <Calendar className="mr-2 h-4 w-4" />
-                  <span>Crear nueva reserva</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
-                  <Lock className="mr-2 h-4 w-4" />
-                  <span>Bloquear horario</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
-                  <Tag className="mr-2 h-4 w-4" />
-                  <span>Registrar nueva venta</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="hidden md:block">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="secondary">
+                    Nuevo
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
+                    <Calendar className="mr-2 h-4 w-4" />
+                    <span>Crear nueva reserva</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    <span>Bloquear horario</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
+                    <Tag className="mr-2 h-4 w-4" />
+                    <span>Registrar nueva venta</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             <Popover>
               <PopoverTrigger asChild>

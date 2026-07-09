@@ -68,7 +68,7 @@ export default function BookingPage() {
     const { data: services = [], loading: loadingServices } = useFirestoreQuery<any>('servicios');
     const { data: productsData = [], loading: loadingProducts } = useFirestoreQuery<any>('productos');
     const { data: rawProfessionals = [], loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
-    const professionals = useMemo(() => rawProfessionals.filter((p: any) => !p.deleted), [rawProfessionals]);
+    const professionals = useMemo(() => rawProfessionals.filter((p: any) => p.active && !p.deleted && p.acceptsOnline), [rawProfessionals]);
     const { data: settingsDocs = [], loading: loadingSettings } = useFirestoreQuery<any>('settings');
     const websiteSettings: any = settingsDocs.find((d: any) => d.id === 'website') || {};
     const { data: empresaData = [] } = useFirestoreQuery<any>('empresa');

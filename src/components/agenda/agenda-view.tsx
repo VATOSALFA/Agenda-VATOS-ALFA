@@ -417,7 +417,7 @@ export default function AgendaView() {
   // clientsLoading, usersLoading, productsLoading might take longer but don't prevent rendering the grid structure.
 
   const filteredProfessionals = useMemo(() => {
-    let professionalsOfLocal = professionals.filter(p => !p.deleted && p.local_id === selectedLocalId);
+    let professionalsOfLocal = professionals.filter(p => p.active !== false && !p.deleted && p.local_id === selectedLocalId);
 
     // If user cannot see global agenda, filter to only show themselves
     const canViewAll = canSee('ver_agenda_global');
@@ -940,7 +940,7 @@ export default function AgendaView() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
-                      {professionals.filter(p => !p.deleted).map(prof => (
+                      {professionals.filter(p => p.active !== false && !p.deleted).map(prof => (
                         <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -956,7 +956,7 @@ export default function AgendaView() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {professionals.filter(p => !p.deleted).map(prof => (
+                    {professionals.filter(p => p.active !== false && !p.deleted).map(prof => (
                       <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
                     ))}
                   </SelectContent>

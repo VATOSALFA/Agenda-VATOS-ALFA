@@ -252,15 +252,21 @@ export default function PromotionsPage() {
                                         <ImageIcon className="h-12 w-12 opacity-20" />
                                     </div>
                                 )}
-                                {promo.active ? (
-                                    <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
-                                        Activa
-                                    </div>
-                                ) : (
-                                    <div className="absolute top-2 right-2 bg-gray-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
-                                        Inactiva
-                                    </div>
-                                )}
+                                 {(() => {
+                                     const d = new Date();
+                                     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                     const isExpired = promo.endDate && today > promo.endDate;
+                                     const isActive = promo.active && !isExpired;
+                                     return isActive ? (
+                                         <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
+                                             Activa
+                                         </div>
+                                     ) : (
+                                         <div className="absolute top-2 right-2 bg-gray-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-sm">
+                                             Inactiva
+                                         </div>
+                                     );
+                                 })()}
                             </div>
                             <CardHeader>
                                 <CardTitle className="line-clamp-1">{promo.name}</CardTitle>

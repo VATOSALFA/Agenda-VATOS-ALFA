@@ -76,8 +76,12 @@ export default function BookingPage() {
     const { data: categories = [] } = useFirestoreQuery<any>('categorias_servicios');
     const { data: promotions = [] } = useFirestoreQuery<any>('promociones');
 
-    // Filter active promotions
-    const activePromotions = promotions?.filter((p: any) => p.active) || [];
+    // Filter active promotions (active and not expired)
+    const activePromotions = useMemo(() => {
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return promotions?.filter((p: any) => p.active && (!p.endDate || today <= p.endDate)) || [];
+    }, [promotions]);
 
 
 

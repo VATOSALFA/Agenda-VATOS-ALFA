@@ -74,8 +74,10 @@ export default function LandingPage() {
     const { data: promotions } = useFirestoreQuery<any>('promociones');
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-    // Filter active promotions
-    const activePromotions = promotions?.filter((p: any) => p.active) || [];
+    // Filter active promotions (active and not expired)
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const activePromotions = promotions?.filter((p: any) => p.active && (!p.endDate || today <= p.endDate)) || [];
 
     // Sort and filter services
     const sortedServices = services?.filter((s: any) => s.active && s.visible_en_web !== false).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];

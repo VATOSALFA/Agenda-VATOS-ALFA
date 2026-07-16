@@ -158,7 +158,11 @@ export default function Header() {
   // potential issues with Firestore where-query indexes or security rules.
   const { data: allProfessionals = [] } = useFirestoreQuery<any>('profesionales');
   const { data: allPromotions = [] } = useFirestoreQuery<Promotion>('promociones');
-  const hasActivePromotions = useMemo(() => allPromotions.some(p => p.active), [allPromotions]);
+  const hasActivePromotions = useMemo(() => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return allPromotions.some(p => p.active && (!p.endDate || today <= p.endDate));
+  }, [allPromotions]);
 
   const professionalId = useMemo(() => {
     if (!user?.uid || allProfessionals.length === 0) return user?.uid;
@@ -202,8 +206,10 @@ export default function Header() {
   }, [user?.role, personalWebsiteUrl, displayUrl]);
 
   const activePromosLinks = useMemo(() => {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     return allPromotions
-      .filter(p => p.active)
+      .filter(p => p.active && (!p.endDate || today <= p.endDate))
       .map(promo => ({
         href: `/promociones/${promo.id}`,
         label: promo.name,

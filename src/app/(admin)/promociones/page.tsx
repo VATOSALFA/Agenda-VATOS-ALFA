@@ -25,7 +25,9 @@ export default function PromocionesListView() {
         return <div className="p-8 flex justify-center"><CustomLoader /></div>;
     }
 
-    const activePromotions = promotions?.filter(p => p.active) || [];
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const activePromotions = promotions?.filter(p => p.active && (!p.endDate || today <= p.endDate)) || [];
 
     const isVideo = (url: string) => {
         return url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.webm') || url.toLowerCase().includes('alt=media&token=') && url.includes('video');

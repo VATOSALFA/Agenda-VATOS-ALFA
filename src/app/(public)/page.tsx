@@ -58,16 +58,16 @@ const jsonLd = {
   "priceRange": "$$",
   "address": {
     "@type": "PostalAddress",
-    "streetAddress": "Av. Cerro del Sombrerete 1007",
+    "streetAddress": "Av. Sombrerete 1001 Col. Cipreses",
     "addressLocality": "Santiago de Querétaro",
     "addressRegion": "QRO",
-    "postalCode": "76110",
+    "postalCode": "76125",
     "addressCountry": "MX"
   },
   "geo": {
     "@type": "GeoCoordinates",
-    "latitude": 20.6135,
-    "longitude": -100.4168
+    "latitude": 20.6277,
+    "longitude": -100.4184
   },
   "openingHoursSpecification": [
     {

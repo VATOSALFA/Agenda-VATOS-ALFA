@@ -156,3 +156,41 @@
   }
 }
 
+/* Blog content styles for dangerouslySetInnerHTML */
+.blog-content p {
+  margin-bottom: 1.25rem;
+  line-height: 1.75;
+  color: #cbd5e1; /* slate-300 */
+}
+.blog-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #ffffff;
+}
+.blog-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: #ffffff;
+}
+.blog-content blockquote {
+  border-left: 4px solid #3b82f6; /* slate blue/primary accent */
+  padding-left: 1rem;
+  font-style: italic;
+  margin: 1.5rem 0;
+  color: #94a3b8; /* slate-400 */
+}
+.blog-content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1.25rem;
+  color: #cbd5e1;
+}
+.blog-content li {
+  margin-bottom: 0.5rem;
+}
+
+

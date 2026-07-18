@@ -28,6 +28,68 @@ const isVideo = (url?: string) => {
     return url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.webm') || (url.toLowerCase().includes('alt=media') && url.includes('video'));
 };
 
+const getPackageDescription = (name: string) => {
+    const cleanName = name.toLowerCase().trim();
+    if (cleanName.includes('héroe en descanso') || cleanName.includes('heroe en descanso')) {
+        return "Corte de cabello + arreglo de ceja + lavado de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('renovación alfa') || cleanName.includes('renovacion alfa')) {
+        return "Corte de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('caballero alfa')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente.";
+    }
+    if (cleanName.includes('alfa superior')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('todo para el campeón') || cleanName.includes('todo para el campeon')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente + arreglo de ceja + lavado de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    return null;
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "HairSalon",
+  "name": "VATOS ALFA Barber Shop",
+  "image": "https://www.vatosalfa.com/logo.png", 
+  "url": "https://www.vatosalfa.com",
+  "telephone": "+524428727279",
+  "priceRange": "$$",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Av. Cerro del Sombrerete 1007",
+    "addressLocality": "Santiago de Querétaro",
+    "addressRegion": "QRO",
+    "postalCode": "76110",
+    "addressCountry": "MX"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": 20.6135,
+    "longitude": -100.4168
+  },
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday"
+      ],
+      "opens": "10:00",
+      "closes": "20:00"
+    }
+  ],
+  "sameAs": [
+    "https://www.facebook.com/vatosalfa",
+    "https://www.instagram.com/vatosalfa"
+  ]
+};
+
 // Robust media component: tries video, falls back to image on error
 function PromoMedia({ url, name, className, cover = true, muted = true, controls = false }: { url: string; name: string; className?: string; cover?: boolean; muted?: boolean; controls?: boolean }) {
     const [videoFailed, setVideoFailed] = React.useState(false);
@@ -247,11 +309,17 @@ export default function LandingPage() {
     return (
         <ParallaxHero>
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
+            {/* Structured Data (JSON-LD) for Local SEO & AEO */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
             {/* SEO & Bot Purpose Verification */}
             <div className="sr-only">
                 <h1>VATOS ALFA Barber Shop - Plataforma de Reservas</h1>
                 <p>Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.</p>
                 <nav>
+                    <Link href="/blog">Blog</Link>
                     <Link href="/privacidad">Aviso de Privacidad</Link>
                     <Link href="/terminos">Términos y Condiciones</Link>
                 </nav>
@@ -306,10 +374,13 @@ export default function LandingPage() {
                         {locales && locales.length === 1 && (
                             <div className="flex items-center gap-1 text-sm text-muted-foreground mr-2">
                                 <MapPin className="h-4 w-4" />
-                                {locales[0].name}
+                                {locales[0].name === 'VATOS ALFA Barber Shop Suc1' || locales[0].name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : locales[0].name}
                             </div>
                         )}
 
+                        <Link href="/blog" className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
+                            Blog
+                        </Link>
                         <Link href="/reservar">
                             <VatosButton variant="default" size="sm">Reservar Cita</VatosButton>
                         </Link>
@@ -328,11 +399,13 @@ export default function LandingPage() {
                       <div data-parallax-layer="2" className="absolute inset-0 bg-black/40 pointer-events-none"></div>
                   </div>
 
-                  <h1 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
+                  {/* SEO & AEO Optimized Heading */}
+                  <h1 className="sr-only">VATOS ALFA: La Mejor Barbería y Cuidado Masculino en Querétaro</h1>
+                  <h2 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
                       {companySlogan}
-                  </h1>
+                  </h2>
                   <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
-                      {heroDescription}
+                      Agenda tu cita en segundos en nuestra sucursal Sombrerete.
                   </p>
                   {/* Navigation Buttons moved to Floating Bar */}
               </section>
@@ -379,6 +452,18 @@ export default function LandingPage() {
             {/* Services */}
 
 
+
+            {/* Context Paragraph Section for Local SEO & AEO */}
+            <section className="py-16 md:py-24 bg-slate-50 border-y">
+                <div className="container max-w-4xl mx-auto px-4 text-center">
+                    <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
+                        Especialistas en Cortes y Barbas en Querétaro
+                    </h2>
+                    <p className="text-lg text-muted-foreground leading-relaxed">
+                        En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente. Utilizamos productos de la más alta calidad para garantizar un acabado impecable. Si buscas un cambio de imagen profesional, estás en el lugar correcto.
+                    </p>
+                </div>
+            </section>
 
             {/* Professionals Section */}
             {filteredProfessionals && filteredProfessionals.length > 0 && (
@@ -576,6 +661,11 @@ export default function LandingPage() {
                                                 <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
                                                     {service.name}
                                                 </h3>
+                                                {getPackageDescription(service.name) && (
+                                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                                        {getPackageDescription(service.name)}
+                                                    </p>
+                                                )}
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
                                                     {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
@@ -826,8 +916,8 @@ export default function LandingPage() {
 
                             <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
                                 <h4 className="font-semibold text-foreground mb-2">Descripción del servicio</h4>
-                                {selectedService?.description ? (
-                                    <p className="whitespace-pre-line">{selectedService.description}</p>
+                                {selectedService?.description || getPackageDescription(selectedService?.name || '') ? (
+                                    <p className="whitespace-pre-line">{selectedService.description || getPackageDescription(selectedService?.name || '')}</p>
                                 ) : (
                                     <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
                                 )}
@@ -1025,7 +1115,7 @@ export default function LandingPage() {
                                         <CardHeader>
                                             <CardTitle className="flex items-center gap-2">
                                                 <MapPin className="h-5 w-5 text-primary" />
-                                                {local.name}
+                                                {local.name === 'VATOS ALFA Barber Shop Suc1' || local.name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : local.name}
                                             </CardTitle>
                                             <CardDescription>{local.address}</CardDescription>
                                         </CardHeader>
@@ -1084,6 +1174,12 @@ export default function LandingPage() {
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
                         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
+                            <Link
+                                href="/blog"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Blog
+                            </Link>
                             <Link
                                 href="/privacidad"
                                 className="hover:underline hover:text-primary transition-colors"

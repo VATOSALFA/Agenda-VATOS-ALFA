@@ -370,7 +370,7 @@ export default function LandingPageClient() {
 
     return (
         <ParallaxHero>
-        <main className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
+        <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
             {/* Structured Data (JSON-LD) for Local SEO & AEO */}
             <script
                 type="application/ld+json"
@@ -434,10 +434,12 @@ export default function LandingPageClient() {
                 </div>
             </header>
 
-            {/* Hero with Parallax */}
-              <section
-                  className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950 min-h-[280px] md:min-h-[400px]"
-              >
+            {/* Main Content Landmark */}
+            <main className="flex-1">
+                {/* Hero with Parallax */}
+                <section
+                    className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950 min-h-[280px] md:min-h-[400px]"
+                >
                   <div data-parallax-layers className="absolute inset-0">
                       <div data-parallax-layer="1" className="absolute inset-0">
                           <BackgroundAurora />
@@ -1220,6 +1222,7 @@ export default function LandingPageClient() {
                     </section>
                 )
             }
+            </main>
 
             {/* Footer */}
             <footer className="py-12 border-t bg-card text-center text-sm text-slate-300">
@@ -1289,7 +1292,7 @@ export default function LandingPageClient() {
             {/* Floating Navigation Menu */}
             <FloatingMenu totalItems={totalItems} hasActivePromotions={activePromotions && activePromotions.length > 0} />
 
-        </main >
+        </div>
         </ParallaxHero>
     );
 }

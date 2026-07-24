@@ -458,7 +458,7 @@ export default function Header() {
           <Link href="/agenda" className="mr-4 flex items-center flex-shrink-0">
             <div className="relative h-14 w-32 md:w-40 lg:w-52">
               <Image
-                src="/logo-header-blanco.png"
+                src="/logo-header-blanco.webp"
                 alt="VATOS ALFA"
                 fill
                 className="object-contain object-left"

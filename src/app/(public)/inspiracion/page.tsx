@@ -476,7 +476,7 @@ function InspiracionContent() {
               Navega arrastrando la galaxia
             </p>
             <img 
-              src="/logo-header-blanco.png" 
+              src="/logo-header-blanco.webp" 
               alt="Vatos Alfa Logo" 
               className="h-10 md:h-14 w-auto opacity-90" 
             />

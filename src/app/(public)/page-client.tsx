@@ -1,0 +1,1372 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { CustomLoader } from '@/components/ui/custom-loader';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
+import BackgroundAurora from '@/components/ui/background-aurora';
+import { VatosButton } from '@/components/ui/vatos-button';
+import { ParallaxHero } from '@/components/ui/parallax-hero';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from '@/hooks/use-toast';
+import Image from 'next/image';
+
+
+// Hook moved inside component
+const isVideo = (url?: string) => {
+    if (!url) return false;
+    return url.toLowerCase().includes('.mp4') || url.toLowerCase().includes('.webm') || (url.toLowerCase().includes('alt=media') && url.includes('video'));
+};
+
+const getPackageDescription = (name: string) => {
+    const cleanName = name.toLowerCase().trim();
+    if (cleanName.includes('héroe en descanso') || cleanName.includes('heroe en descanso')) {
+        return "Corte de cabello + arreglo de ceja + lavado de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('renovación alfa') || cleanName.includes('renovacion alfa')) {
+        return "Corte de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('caballero alfa')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente.";
+    }
+    if (cleanName.includes('alfa superior')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente + facial completo con masajeador relajante, spa y aceites.";
+    }
+    if (cleanName.includes('todo para el campeón') || cleanName.includes('todo para el campeon')) {
+        return "Corte de cabello + arreglo de barba, afeitado clásico con toalla caliente + arreglo de ceja + lavado de cabello + facial completo con masajeador relajante, spa y aceites.";
+    }
+    return null;
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "HairSalon",
+  "name": "VATOS ALFA Barber Shop",
+  "image": "https://www.vatosalfa.com/logo.png", 
+  "url": "https://www.vatosalfa.com",
+  "telephone": "+524428727279",
+  "priceRange": "$$",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Av. Sombrerete 1001 Col. Cipreses",
+    "addressLocality": "Santiago de Querétaro",
+    "addressRegion": "QRO",
+    "postalCode": "76125",
+    "addressCountry": "MX"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": 20.6277,
+    "longitude": -100.4184
+  },
+  "openingHoursSpecification": [
+    {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday"
+      ],
+      "opens": "10:00",
+      "closes": "20:00"
+    }
+  ],
+  "sameAs": [
+    "https://www.facebook.com/vatosalfa",
+    "https://www.instagram.com/vatosalfa"
+  ]
+};
+
+// Lazy video component using IntersectionObserver
+function LazyVideo({ src, className, cover = true, muted = true, loop = true, playsInline = true, controls = false, onError }: { src: string; className?: string; cover?: boolean; muted?: boolean; loop?: boolean; playsInline?: boolean; controls?: boolean; onError?: () => void }) {
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+    const [isVisible, setIsVisible] = React.useState(false);
+
+    React.useEffect(() => {
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setIsVisible(true);
+                    observer.disconnect();
+                }
+            },
+            { rootMargin: '100px' }
+        );
+        if (videoRef.current) {
+            observer.observe(videoRef.current);
+        }
+        return () => observer.disconnect();
+    }, []);
+
+    return (
+        <video
+            ref={videoRef}
+            src={isVisible ? src : undefined}
+            className={cn(cover ? 'object-cover' : 'object-contain', 'w-full h-full', className)}
+            autoPlay={isVisible}
+            muted={muted}
+            loop={loop}
+            playsInline={playsInline}
+            controls={controls}
+            preload="none"
+            onError={onError}
+        />
+    );
+}
+
+// Robust media component: tries video, falls back to image on error
+function PromoMedia({ url, name, className, cover = true, muted = true, controls = false }: { url: string; name: string; className?: string; cover?: boolean; muted?: boolean; controls?: boolean }) {
+    const [videoFailed, setVideoFailed] = React.useState(false);
+    const isVid = isVideo(url) && !videoFailed;
+
+    if (isVid) {
+        return (
+            <LazyVideo
+                src={url}
+                className={className}
+                cover={cover}
+                muted={muted}
+                controls={controls}
+                onError={() => setVideoFailed(true)}
+            />
+        );
+    }
+
+    // Show optimized Next.js Image component
+    return (
+        <div className="relative w-full h-full">
+            <Image
+                src={url}
+                alt={name}
+                fill
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                className={cn(cover ? 'object-cover' : 'object-contain', className)}
+                loading="lazy"
+                onError={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (target.parentElement) {
+                        target.parentElement.style.display = 'none';
+                    }
+                }}
+            />
+        </div>
+    );
+}
+
+export default function LandingPageClient() {
+    const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
+    const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
+    const { data: products, loading: loadingProducts } = useFirestoreQuery<any>('productos');
+    const { data: empresa, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
+    const { data: locales, loading: loadingLocales } = useFirestoreQuery<any>('locales');
+    const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
+    const { data: categories } = useFirestoreQuery<any>('categorias_servicios');
+    const { data: promotions } = useFirestoreQuery<any>('promociones');
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    // Filter active promotions (active and not expired)
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const activePromotions = promotions?.filter((p: any) => p.active && (!p.endDate || today <= p.endDate)) || [];
+
+    // Sort and filter services
+    const sortedServices = services?.filter((s: any) => s.active && s.visible_en_web !== false).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];
+
+    // Identify Package Categories
+    const packageCategoryIds = categories?.filter((c: any) => c.name.toLowerCase().includes('paquete') || c.name.toLowerCase().includes('package')).map((c: any) => c.id) || [];
+
+    const regularServices = sortedServices.filter((s: any) => !packageCategoryIds.includes(s.category));
+    const packageServices = sortedServices.filter((s: any) => packageCategoryIds.includes(s.category));
+
+    // Dynamically build JSON-LD schema with our services catalog
+    const dynamicJsonLd = {
+        ...jsonLd,
+        "hasOfferCatalog": {
+            "@type": "OfferCatalog",
+            "name": "Servicios de Barbería y Cuidado Masculino",
+            "itemListElement": regularServices.map((service: any) => ({
+                "@type": "Offer",
+                "itemOffered": {
+                    "@type": "Service",
+                    "name": service.name,
+                    "description": getPackageDescription(service.name) || `Servicio profesional de ${service.name.toLowerCase()}`
+                },
+                "price": service.price,
+                "priceCurrency": "MXN"
+            }))
+        }
+    };
+
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const isPreview = searchParams.get('preview') === 'true';
+    const { user, loading: authLoading } = useAuth();
+
+    // Check if user is logged in to redirect to admin side
+    useEffect(() => {
+        if (!authLoading && user && !isPreview) {
+            router.push('/agenda');
+        }
+    }, [user, authLoading, router, isPreview]);
+
+    // Cart stored as array of Service IDs to allow multiples
+    const [cart, setCart] = useState<string[]>([]);
+    const [isBooking, setIsBooking] = useState(false);
+    const [productCart, setProductCart] = useState<string[]>([]); // New: Product Cart
+    const [selectedPro, setSelectedPro] = useState<any>(null);
+    const [selectedProduct, setSelectedProduct] = useState<any>(null); // New: Selected Product
+    const [selectedService, setSelectedService] = useState<any>(null); // New: Selected Service
+    const [selectedBranch, setSelectedBranch] = useState<string>('');
+    const [selectedPromotion, setSelectedPromotion] = useState<any>(null);
+    const [showTerms, setShowTerms] = useState<any>(null);
+    const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
+    const [termsModalOpen, setTermsModalOpen] = useState(false);
+
+    // Auto-select branch if only one exists or set default
+    useEffect(() => {
+        if (locales && locales.length > 0 && !selectedBranch) {
+            const activeLocales = locales.filter((l: any) => l.status === 'active');
+            if (activeLocales.length > 0) {
+                setSelectedBranch(activeLocales[0].id);
+            }
+        }
+    }, [locales, selectedBranch]);
+
+    const isLoading = loadingServices || loadingEmpresa || loadingLocales || loadingSettings || authLoading;
+
+    const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};
+    const companyName = empresa?.[0]?.name || 'VATOS ALFA Barber Shop';
+    const companySlogan = websiteSettings.slogan || empresa?.[0]?.slogan || 'Estilo y profesionalismo para el hombre moderno.';
+    const heroDescription = websiteSettings.heroDescription || 'Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.';
+    const companyDescription = empresa?.[0]?.description || 'Plataforma de gestión de citas y barbería VATOS ALFA.';
+    const logoUrl = empresa?.[0]?.logo_url;
+    const iconUrl = empresa?.[0]?.icon_url;
+
+    if (isLoading && !empresa) {
+        return (
+            <div className="flex h-screen w-full items-center justify-center bg-background">
+                <CustomLoader size={50} />
+            </div>
+        );
+    }
+
+
+
+    if (websiteSettings.onlineReservations === false) {
+        return (
+            <div className="flex flex-col h-screen w-full items-center justify-center bg-background px-4 text-center">
+                <div className="max-w-md space-y-6">
+                    <div className="flex justify-center mb-6">
+                        {/* Optional Logo */}
+                        {empresa?.[0]?.logo_url && (
+                            <img src={empresa[0].logo_url} alt="Logo" className="h-20 w-auto object-contain" />
+                        )}
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-tight">Reservas no disponibles temporalmente</h1>
+                    <p className="text-muted-foreground">
+                        En este momento no estamos aceptando reservas en línea. Por favor, contáctanos directamente o intenta más tarde.
+                    </p>
+                    {empresa?.[0]?.phone && (
+                        <Button className="mt-4" onClick={() => window.location.href = `tel:${empresa[0].phone}`}>
+                            Llamar al {empresa[0].phone}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        );
+    }
+    /* Fallback and Metadata constants moved up */
+
+    const formatPrice = (price: any) => {
+        return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
+    };
+
+    // --- SERVICE CART ACTIONS ---
+    const addToCart = (serviceId: string) => {
+        setCart(prev => [...prev, serviceId]);
+    };
+
+    const removeFromCart = (serviceId: string) => {
+        setCart(prev => {
+            const index = prev.indexOf(serviceId);
+            if (index === -1) return prev;
+            const newCart = [...prev];
+            newCart.splice(index, 1);
+            return newCart;
+        });
+    };
+
+    // --- PRODUCT CART ACTIONS ---
+    const addToProductCart = (productId: string) => {
+        setProductCart(prev => [...prev, productId]);
+    };
+
+    const removeFromProductCart = (productId: string) => {
+        setProductCart(prev => {
+            const index = prev.indexOf(productId);
+            if (index === -1) return prev;
+            const newCart = [...prev];
+            newCart.splice(index, 1);
+            return newCart;
+        });
+    };
+
+    const getCount = (serviceId: string) => cart.filter(id => id === serviceId).length;
+    const getProductCount = (productId: string) => productCart.filter(id => id === productId).length;
+
+    // Calculate total
+    const totalPrice = cart.reduce((total, id) => {
+        const service = services.find((s: any) => s.id === id);
+        return total + (service?.price || 0);
+    }, 0) + productCart.reduce((total, id) => {
+        const product = products?.find((p: any) => p.id === id);
+        return total + (product?.public_price || 0);
+    }, 0);
+
+    const handleBooking = () => {
+        if (cart.length === 0 && productCart.length === 0) return;
+        setIsBooking(true);
+        const serviceQuery = cart.join(',');
+        const productQuery = productCart.join(',');
+
+        // Pass both services and products to the booking page
+        let url = '/reservar?';
+        const params = [];
+        if (cart.length > 0) params.push(`services=${serviceQuery}`);
+        if (productCart.length > 0) params.push(`products=${productQuery}`);
+        if (selectedBranch) params.push(`branchId=${selectedBranch}`);
+
+        router.push(url + params.join('&'));
+    };
+
+    const totalItems = cart.length + productCart.length;
+
+    // Filter Professionals by Selected Branch
+    let filteredProfessionals = professionals?.filter((p: any) => p.active && !p.deleted && p.acceptsOnline && (!selectedBranch || p.local_id === selectedBranch)) || [];
+    
+    // Manual reorder: Swap 1st (index 0) and 3rd (index 2) positions as requested
+    if (filteredProfessionals.length >= 3) {
+        const result = [...filteredProfessionals];
+        const temp = result[0];
+        result[0] = result[2];
+        result[2] = temp;
+        filteredProfessionals = result;
+    }
+
+    return (
+        <ParallaxHero>
+        <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
+            {/* Structured Data (JSON-LD) for Local SEO & AEO */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(dynamicJsonLd) }}
+            />
+            {/* SEO & Bot Purpose Verification */}
+            <div className="sr-only">
+                <h1>VATOS ALFA Barber Shop - Plataforma de Reservas</h1>
+                <p>Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.</p>
+                <nav>
+                    <Link href="/blog">Blog</Link>
+                    <Link href="/privacidad">Aviso de Privacidad</Link>
+                    <Link href="/terminos">Términos y Condiciones</Link>
+                </nav>
+            </div>
+            {/* Header */}
+            <header className="sticky top-0 z-50 w-full border-b bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
+                <div className="container flex h-16 items-center justify-between px-4 md:px-6">
+                    <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
+                        <Link href="/" className="flex items-center gap-2">
+                            {iconUrl ? (
+                                <img 
+                                    src={iconUrl} 
+                                    alt="Icon" 
+                                    className="h-9 w-9 rounded-full object-cover border border-slate-200" 
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : logoUrl ? (
+                                <img 
+                                    src={logoUrl} 
+                                    alt="Logo" 
+                                    className="h-8 w-auto object-contain"
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
+                                    }}
+                                />
+                            ) : null}
+                            <div className={cn("fallback-icon", (iconUrl || logoUrl) ? "hidden" : "")}>
+                                <Scissors className="h-6 w-6 text-primary" />
+                            </div>
+                            <span className="hidden sm:inline-block">{companyName}</span>
+                        </Link>
+                    </div>
+
+                    <div className="flex gap-2 items-center">
+                        {/* Branch Selector */}
+                        {locales && locales.length > 1 && (
+                            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue placeholder="Seleccionar Sucursal" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {locales.filter((l: any) => l.status === 'active').map((local: any) => (
+                                        <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {locales && locales.length === 1 && (
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground mr-2">
+                                <MapPin className="h-4 w-4" />
+                                {locales[0].name === 'VATOS ALFA Barber Shop Suc1' || locales[0].name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : locales[0].name}
+                            </div>
+                        )}
+
+                        <Link href="/blog" className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
+                            Blog
+                        </Link>
+                        <Link href="/reservar">
+                            <VatosButton variant="default" size="sm">Reservar Cita</VatosButton>
+                        </Link>
+                    </div>
+                </div>
+            </header>
+
+            {/* Hero with Parallax */}
+              <section
+                  className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950"
+              >
+                  <div data-parallax-layers className="absolute inset-0">
+                      <div data-parallax-layer="1" className="absolute inset-0">
+                          <BackgroundAurora />
+                      </div>
+                      <div data-parallax-layer="2" className="absolute inset-0 bg-black/40 pointer-events-none"></div>
+                  </div>
+
+                  {/* SEO & AEO Optimized Heading */}
+                  <h1 className="sr-only">VATOS ALFA: La Mejor Barbería y Cuidado Masculino en Querétaro</h1>
+                  <h2 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
+                      {companySlogan}
+                  </h2>
+                  <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
+                      Agenda tu cita en segundos en nuestra sucursal Sombrerete.
+                  </p>
+                  {/* Navigation Buttons moved to Floating Bar */}
+              </section>
+
+            {/* Professional Profile Dialog */}
+            <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
+                    {/* Image Section - Large and Square-ish */}
+                    <div className="w-full sm:w-1/2 bg-slate-100 flex items-center justify-center p-6 lg:p-10 relative">
+                        <div className="relative w-full aspect-square max-w-[350px] shadow-xl rounded-lg overflow-hidden border-4 border-white transform transition-transform hover:scale-[1.02] duration-500">
+                            {selectedPro?.avatarUrl ? (
+                                <img src={selectedPro.avatarUrl} alt={selectedPro.publicName || selectedPro.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full bg-muted flex items-center justify-center">
+                                    <User className="h-24 w-24 text-muted-foreground/50" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Info Section */}
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto flex-1 sm:flex-none">
+                        <DialogHeader>
+                            <DialogTitle className="text-3xl lg:text-4xl font-extrabold mb-2 text-primary tracking-tight text-center sm:text-left">{selectedPro?.publicName || selectedPro?.name}</DialogTitle>
+                        </DialogHeader>
+                        <div className="h-1 w-20 bg-primary/20 mx-auto sm:mx-0 mb-6 rounded-full shrink-0"></div>
+
+                        <div className="prose prose-sm text-muted-foreground leading-relaxed text-lg italic mb-6">
+                            "{selectedPro?.biography || "Sin biografía disponible."}"
+                        </div>
+
+                        <div className="mt-auto pt-4">
+                            <VatosButton className="w-full h-12 text-lg" onClick={() => {
+                                setSelectedPro(null);
+                                router.push(`/reservar?professionalId=${selectedPro.id}`);
+                            }}>
+                                <Scissors className="mr-2 h-5 w-5" /> Reservar Ahora
+                            </VatosButton>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog >
+
+            {/* Services */}
+
+
+
+            {/* Context Paragraph Section for Local SEO & AEO */}
+            <section className="py-16 md:py-24 bg-slate-50 border-y">
+                <div className="container max-w-4xl mx-auto px-4 text-center">
+                    <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
+                        Especialistas en Cortes y Barbas en Querétaro
+                    </h2>
+                    <p className="text-lg text-muted-foreground leading-relaxed">
+                        En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente. Utilizamos productos de la más alta calidad para garantizar un acabado impecable. Si buscas un cambio de imagen profesional, estás en el lugar correcto.
+                    </p>
+                </div>
+            </section>
+
+            {/* Professionals Section */}
+            {filteredProfessionals && filteredProfessionals.length > 0 && (
+                <section id="profesionales" className="py-16 md:py-24 bg-white">
+                    <div className="container px-4 md:px-6">
+                        {activePromotions.length > 0 && (
+                            <div className="flex justify-center mb-10">
+                                <Link 
+                                    href="#promociones" 
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        document.getElementById('promociones')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="group relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-slate-950 text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-500/30 overflow-hidden shadow-md"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
+                                    
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
+                                    </span>
+                                    
+                                    <span className="relative z-10 flex items-center gap-2">
+                                        <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
+                                        ¡Tenemos Promociones Activas! Ver ofertas
+                                    </span>
+                                    
+                                    <ArrowRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
+                                </Link>
+                            </div>
+                        )}
+
+                        <div className="text-center mb-12">
+                            <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestro Equipo</h2>
+                            <p className="text-muted-foreground">Expertos listos para atenderte.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-center max-w-6xl mx-auto">
+                            {filteredProfessionals.map((pro: any) => (
+                                <Card key={pro.id} className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all text-center bg-slate-50">
+                                    <div className="relative w-full aspect-square overflow-hidden bg-slate-200 group">
+                                        {pro.avatarUrl ? (
+                                            <Image
+                                                src={pro.avatarUrl}
+                                                alt={pro.publicName || pro.name}
+                                                fill
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                                <User className="h-20 w-20" />
+                                            </div>
+                                        )}
+                                        {/* Overlay with Booking Action */}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+                                            <VatosButton variant="secondary" className="font-semibold" onClick={() => setSelectedPro(pro)}>
+                                                <Eye className="mr-2 h-4 w-4" /> Ver Perfil
+                                            </VatosButton>
+                                        </div>
+                                    </div>
+
+                                    <CardFooter className="p-4 justify-center">
+                                        <VatosButton className="w-full" onClick={() => router.push(`/reservar?professionalId=${pro.id}`)}>
+                                            Reservar
+                                        </VatosButton>
+                                    </CardFooter>
+                                </Card>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            )}
+
+            <section id="servicios" className="py-16 md:py-24 bg-muted/30">
+                <div className="container px-4 md:px-6">
+                    <div className="text-center mb-12">
+                        <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestros Servicios</h2>
+                        <p className="text-muted-foreground">Calidad y detalle en cada corte.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+                        {regularServices.map((service: any) => {
+                            const count = getCount(service.id);
+                            const isSelected = count > 0;
+
+                            return (
+                                <Card
+                                    key={service.id}
+                                    className={cn(
+                                        "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
+                                        isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
+                                    )}
+                                    onClick={() => setSelectedService(service)}
+                                >
+                                    {/* Small Square Image/Icon */}
+                                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
+                                        {service.images && service.images.length > 0 ? (
+                                            <Image
+                                                src={service.images[0]}
+                                                alt={service.name}
+                                                fill
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="80px"
+                                            />
+                                        ) : (
+                                            <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                                <Scissors className="h-8 w-8" />
+                                            </div>
+                                        )}
+                                        {/* Optional "Added" indicator overlay if selected */}
+                                        {isSelected && (
+                                            <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
+                                                    <Check className="h-4 w-4" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                        <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                            {service.name}
+                                        </h3>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
+                                            {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
+                                        </div>
+                                    </div>
+
+                                    {/* Simple Arrow or Action Icon */}
+                                    <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                        <ChevronRight className="h-6 w-6" />
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                        {regularServices.length === 0 && !loadingServices && (
+                            <div className="col-span-full text-center text-muted-foreground p-10 border rounded-lg border-dashed">
+                                No hay servicios disponibles en este momento.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </section >
+
+            {/* Packages Section */}
+            {
+                packageServices.length > 0 && (
+                    <section id="paquetes" className="py-16 md:py-24 bg-white">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Paquetes</h2>
+                                <p className="text-muted-foreground">Las mejores combinaciones para ti.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+                                {packageServices.map((service: any) => {
+                                    const count = getCount(service.id);
+                                    const isSelected = count > 0;
+
+                                    return (
+                                        <Card
+                                            key={service.id}
+                                            className={cn(
+                                                "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-slate-50 overflow-hidden p-2",
+                                                isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-100"
+                                            )}
+                                            onClick={() => setSelectedService(service)}
+                                        >
+                                            <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative">
+                                                {service.images && service.images.length > 0 ? (
+                                                    <Image
+                                                        src={service.images[0]}
+                                                        alt={service.name}
+                                                        fill
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        sizes="80px"
+                                                    />
+                                                ) : (
+                                                    <div className="h-full w-full flex items-center justify-center text-slate-400">
+                                                        <Scissors className="h-8 w-8" />
+                                                    </div>
+                                                )}
+                                                {isSelected && (
+                                                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                        <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
+                                                            <Check className="h-4 w-4" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                                <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                                    {service.name}
+                                                </h3>
+                                                {getPackageDescription(service.name) && (
+                                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                                        {getPackageDescription(service.name)}
+                                                    </p>
+                                                )}
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
+                                                    {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
+                                                </div>
+                                            </div>
+
+                                            <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                                <ChevronRight className="h-6 w-6" />
+                                            </div>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </section>
+                )
+            }
+
+            {/* Products Section */}
+            {
+                products && products.length > 0 && (
+                    <section id="productos" className="py-16 md:py-24 bg-slate-50">
+                        <div className="container px-4 md:px-6">
+                        <div className="text-center mb-12">
+                            <h2 className="text-3xl font-bold tracking-tight mb-2">Productos Destacados</h2>
+                            <p className="text-muted-foreground">Lleva la experiencia de la barbería a tu casa.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
+                            {products.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
+                                const pCount = getProductCount(product.id);
+                                const isPSelected = pCount > 0;
+
+                                return (
+                                    <Card
+                                        key={product.id}
+                                        className={cn(
+                                            "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
+                                            isPSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
+                                        )}
+                                        onClick={() => setSelectedProduct(product)}
+                                    >
+                                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
+                                            {product.images && product.images.length > 0 ? (
+                                                <Image
+                                                    src={product.images[0]}
+                                                    alt={product.nombre}
+                                                    fill
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    sizes="80px"
+                                                />
+                                            ) : (
+                                                <div className="h-full w-full flex items-center justify-center text-slate-300">
+                                                    <ShoppingBag className="h-8 w-8" />
+                                                </div>
+                                            )}
+
+                                            {/* Quantity Badge if selected */}
+                                            {isPSelected && (
+                                                <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
+                                                    <div className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center shadow-sm text-xs font-bold">
+                                                        {pCount}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
+                                            <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
+                                                {product.nombre}
+                                            </h3>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="font-bold text-lg text-slate-900">{formatPrice(product.public_price)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                                            <ChevronRight className="h-6 w-6" />
+                                        </div>
+                                    </Card>
+                                )
+                            })}
+                        </div>
+                        </div>
+                    </section>
+                )
+            }
+
+            {/* Promotions Section */}
+            {
+                activePromotions && activePromotions.length > 0 && (
+                    <section id="promociones" className="py-16 md:py-24 bg-slate-50 border-t">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestras Promociones</h2>
+                                <p className="text-muted-foreground">Aprovecha nuestras ofertas exclusivas.</p>
+                            </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+                                {activePromotions.map((promo: any) => (
+                                    <Card 
+                                        key={promo.id} 
+                                        className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-none group cursor-pointer"
+                                        onClick={() => setSelectedPromotion(promo)}
+                                    >
+                                        <div className="relative aspect-[4/5] sm:aspect-square w-full bg-slate-200 overflow-hidden">
+                                            {promo.imageUrl ? (
+                                                <PromoMedia
+                                                    url={promo.imageUrl}
+                                                    name={promo.name}
+                                                    className="group-hover:scale-105 transition-transform duration-500"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-slate-100">
+                                                    <ShoppingBag className="h-16 w-16 opacity-20" />
+                                                </div>
+                                            )}
+                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm z-10">
+                                                Oferta
+                                            </div>
+                                        </div>
+                                        <CardContent className="p-6">
+                                            <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
+                                            <div className="flex items-center text-sm text-muted-foreground mb-4">
+                                                <Clock className="w-4 h-4 mr-1" />
+                                                <span>
+                                                    {(() => {
+                                                        const formatDate = (date: any) => {
+                                                            if (!date) return null;
+                                                            if (typeof date === 'string') return parseISO(date);
+                                                            if (date.toDate) return date.toDate();
+                                                            return date;
+                                                        };
+
+                                                        const start = formatDate(promo.startDate);
+                                                        const end = formatDate(promo.endDate);
+
+                                                        if (start && end) {
+                                                            return `Del ${format(start, "d 'de' MMMM", { locale: es })} al ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
+                                                        } else if (end) {
+                                                            return `Válido hasta: ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
+                                                        }
+                                                        return 'Tiempo limitado';
+                                                    })()}
+                                                </span>
+                                            </div>
+                                            <div className="text-muted-foreground text-sm h-28 overflow-y-auto mb-4 pr-1 custom-scrollbar whitespace-pre-line">
+                                                {promo.description}
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setSelectedPromotion(promo);
+                                                    }}
+                                                    className="text-xs font-bold text-primary hover:underline transition-colors flex items-center gap-1"
+                                                >
+                                                    {promo.imageUrl && isVideo(promo.imageUrl) ? (
+                                                        <>
+                                                            <Video className="w-3 h-3" /> Ver video
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <ImageIcon className="w-3 h-3" /> Ver imagen
+                                                        </>
+                                                    )}
+                                                </button>
+                                                {promo.termsAndConditions && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            window.open(`/promociones/${promo.id}/terminos`, '_blank');
+                                                        }}
+                                                        className="text-xs font-medium text-muted-foreground hover:text-primary underline transition-colors"
+                                                    >
+                                                        Términos y condiciones
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                        <CardFooter className="p-6 pt-0 z-20 relative">
+                                            <VatosButton className="w-full" onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push('/reservar');
+                                            }}>
+                                                Reservar Ahora
+                                            </VatosButton>
+                                        </CardFooter>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )
+            }
+
+            {/* Service Details Modal */}
+            <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
+                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
+                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
+                            {selectedService?.images && selectedService.images.length > 0 ? (
+                                <Image 
+                                    src={selectedService.images[0]} 
+                                    alt={selectedService.name} 
+                                    fill
+                                    className="object-contain p-2" 
+                                    sizes="(max-width: 768px) 100vw, 400px"
+                                />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
+                                    <Scissors className="h-24 w-24 text-muted-foreground/30" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto flex-1 sm:flex-none">
+                        <div>
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedService?.name}</DialogTitle>
+                            </DialogHeader>
+
+                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
+                                <span className="text-3xl font-bold text-primary">{selectedService ? formatPrice(selectedService.price) : ''}</span>
+                                <div className="flex items-center text-muted-foreground gap-1">
+                                    <Clock className="h-4 w-4" />
+                                    <span className="text-sm font-medium">{selectedService?.duration} min</span>
+                                </div>
+                            </div>
+
+                            {selectedService?.payment_type === 'online-deposit' && (
+                                <div className="mb-6">
+                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                        </span>
+                                        {(() => {
+                                            const type = selectedService.payment_amount_type || '%';
+                                            const val = selectedService.payment_amount_value;
+                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                            return 'Requiere anticipo del 50%';
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
+                                <h4 className="font-semibold text-foreground mb-2">Descripción del servicio</h4>
+                                {selectedService?.description || getPackageDescription(selectedService?.name || '') ? (
+                                    <p className="whitespace-pre-line">{selectedService.description || getPackageDescription(selectedService?.name || '')}</p>
+                                ) : (
+                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t">
+                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
+                                addToCart(selectedService.id);
+                                setSelectedService(null);
+                            }}>
+                                <Plus className="mr-2 h-5 w-5" /> Agregar y Seguir Explorando
+                            </VatosButton>
+                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedService(null)}>
+                                Volver a Servicios
+                            </VatosButton>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Product Details Modal */}
+            <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
+                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
+                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
+                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
+                            {selectedProduct?.images && selectedProduct.images.length > 0 ? (
+                                <img src={selectedProduct.images[0]} alt={selectedProduct.nombre} className="h-full w-full object-contain p-4" />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
+                                    <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto flex-1 sm:flex-none">
+                        <div>
+                            <DialogHeader>
+                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedProduct?.nombre}</DialogTitle>
+                            </DialogHeader>
+
+                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
+                                <span className="text-3xl font-bold text-primary">{selectedProduct ? formatPrice(selectedProduct.public_price) : ''}</span>
+                            </div>
+
+                            {selectedProduct?.payment_type === 'deposit' && (
+                                <div className="mb-6">
+                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                                        </span>
+                                        {(() => {
+                                            const type = selectedProduct.payment_amount_type || '%';
+                                            const val = selectedProduct.payment_amount_value;
+                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                            return 'Requiere anticipo';
+                                        })()}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
+                                <h4 className="font-semibold text-foreground mb-2">Descripción del producto</h4>
+                                {selectedProduct?.description ? (
+                                    <p className="whitespace-pre-line">{selectedProduct.description}</p>
+                                ) : (
+                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="mt-4 pt-4 border-t">
+                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
+                                addToProductCart(selectedProduct.id);
+                                setSelectedProduct(null);
+                            }}>
+                                <ShoppingBag className="mr-2 h-5 w-5" /> Agregar al Pedido
+                            </VatosButton>
+                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedProduct(null)}>
+                                Volver a Productos
+                            </VatosButton>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Promotion Reel Modal - CLEAN VIDEO ONLY */}
+            <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
+                <DialogContent className="max-w-none w-full h-[100dvh] sm:w-[400px] sm:h-[800px] sm:max-h-[90vh] bg-black p-0 rounded-none sm:rounded-[2rem] overflow-hidden border-none sm:border sm:border-white/20 shadow-2xl flex flex-col">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>{selectedPromotion?.name || 'Ver Promoción'}</DialogTitle>
+                        <DialogDescription>{selectedPromotion?.description || 'Detalle de la promoción'}</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 w-full h-full bg-black relative flex items-center justify-center">
+                        {selectedPromotion?.imageUrl ? (
+                            <PromoMedia
+                                url={selectedPromotion.imageUrl}
+                                name={selectedPromotion?.name || 'Promoción'}
+                                cover={false}
+                                muted={false}
+                                controls={true}
+                            />
+                        ) : (
+                            <div className="text-white/50 text-center p-8">
+                                <Sparkles className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                                <p>Sin contenido visual</p>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button 
+                        onClick={() => setSelectedPromotion(null)}
+                        className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50 shadow-lg"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                </DialogContent>
+            </Dialog>
+
+            {/* Terms and Conditions Modal */}
+            <Dialog open={!!showTerms} onOpenChange={(open) => !open && setShowTerms(null)}>
+                <DialogContent className="max-w-md bg-white p-6 rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            <Info className="w-5 h-5 text-primary" /> Términos y Condiciones
+                        </DialogTitle>
+                        <DialogDescription>
+                            {showTerms?.name}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar text-sm text-slate-600 whitespace-pre-line leading-relaxed">
+                        {showTerms?.termsAndConditions}
+                    </div>
+                    <div className="mt-6 flex gap-3">
+                        <Button 
+                            variant="outline" 
+                            className="flex-1" 
+                            onClick={() => {
+                                const url = `${window.location.origin}/promociones/${showTerms?.id}/terminos`;
+                                navigator.clipboard.writeText(url);
+                                toast({
+                                    title: "Link de términos copiado",
+                                    description: "El enlace público de los términos y condiciones se ha copiado al portapapeles.",
+                                });
+                            }}
+                        >
+                            <Share2 className="w-4 h-4 mr-2" /> Copiar Link
+                        </Button>
+                        <VatosButton className="flex-1" onClick={() => setShowTerms(null)}>
+                            Entendido
+                        </VatosButton>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cart Sticky Footer */}
+            {
+                totalItems > 0 && (
+                    <div className="fixed bottom-0 left-0 w-full bg-white border-t-2 border-primary/20 p-4 shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-50 animate-in slide-in-from-bottom-20 duration-500">
+                        <div className="container max-w-4xl mx-auto flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-medium text-muted-foreground">{totalItems} item{totalItems > 1 ? 's' : ''} seleccionado{totalItems > 1 ? 's' : ''}</span>
+                                <span className="text-2xl font-bold text-primary">{formatPrice(totalPrice)}</span>
+                            </div>
+                            <VatosButton size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking} disabled={isBooking} variant="default">
+                                {isBooking ? (
+                                    <CustomLoader size={24} className="text-primary-foreground" />
+                                ) : cart.length > 0 ? (
+                                    <>Confirmar Reserva <ArrowRight className="ml-2 h-5 w-5" /></>
+                                ) : (
+                                    <>Comprar Productos <ShoppingBag className="ml-2 h-5 w-5" /></>
+                                )}
+                            </VatosButton>
+                        </div>
+                    </div>
+                )
+            }
+
+            {/* Locations / Branches Section */}
+            {
+                locales && locales.length > 0 && (
+                    <section className="py-16 bg-slate-50 border-t">
+                        <div className="container px-4 md:px-6">
+                            <div className="text-center mb-12">
+                                <h2 className="text-3xl font-bold tracking-tight mb-2">Visítanos</h2>
+                                <p className="text-muted-foreground">Encuentra tu sucursal más cercana.</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
+                                {locales.filter((l: any) => l.status === 'active').map((local: any) => (
+                                    <Card key={local.id} className="border-none shadow-md hover:shadow-xl transition-all">
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <MapPin className="h-5 w-5 text-primary" />
+                                                {local.name === 'VATOS ALFA Barber Shop Suc1' || local.name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : local.name}
+                                            </CardTitle>
+                                            <CardDescription>{local.address}</CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-2 text-sm text-muted-foreground">
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-foreground">Teléfono:</span>
+                                                    <a
+                                                        href={`https://wa.me/52${local.phone.replace(/\D/g, '')}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="flex items-center gap-1.5 hover:text-green-600 hover:underline transition-colors"
+                                                    >
+                                                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-green-500 fill-current" fill="currentColor" role="img" xmlns="http://www.w3.org/2000/svg"><title>WhatsApp</title><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1-5.106c0-5.445 4.406-9.885 9.885-9.885 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.444-4.437 9.884-9.886 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                                        {local.phone}
+                                                    </a>
+                                                </p>
+                                                <p className="flex items-center gap-2">
+                                                    <span className="font-semibold text-foreground">Horario:</span>
+                                                    {local.schedule ? (() => {
+                                                        const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                                                        const todayIndex = new Date().getDay();
+                                                        const todayKey = days[todayIndex];
+                                                        const schedule = local.schedule[todayKey];
+
+                                                        return (
+                                                            <span className="text-muted-foreground">
+                                                                {schedule?.enabled ? `${schedule.start} - ${schedule.end}` : 'Cerrado hoy'}
+                                                            </span>
+                                                        );
+                                                    })() : (
+                                                        <span className="text-muted-foreground">Lunes a Sábado: 10:00 - 20:00</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </CardContent>
+                                        <CardFooter>
+                                            <VatosButton variant="outline" className="w-full" asChild>
+                                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
+                                                    Ver en Mapa
+                                                </a>
+                                            </VatosButton>
+                                        </CardFooter>
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )
+            }
+
+            {/* Footer */}
+            <footer className="py-12 border-t bg-card text-center text-sm text-muted-foreground">
+                <div className="container px-4 flex flex-col items-center gap-4">
+                    <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
+
+                    {websiteSettings.privacyPolicyEnabled !== false && (
+                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
+                            <Link
+                                href="/blog"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Blog
+                            </Link>
+                            <Link
+                                href="/privacidad"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Aviso de Privacidad
+                            </Link>
+                            <Link
+                                href="/terminos"
+                                className="hover:underline hover:text-primary transition-colors"
+                            >
+                                Términos y Condiciones
+                            </Link>
+                        </div>
+                    )}
+
+                    {/* Modals for Landing Page */}
+                    <Dialog open={privacyModalOpen} onOpenChange={setPrivacyModalOpen}>
+                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl font-bold">Aviso de Privacidad</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                    {websiteSettings.privacyText || 'Sin contenido de privacidad.'}
+                                </div>
+                            </div>
+                            <DialogFooter className="mt-4">
+                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Cerrar</VatosButton>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Dialog open={termsModalOpen} onOpenChange={setTermsModalOpen}>
+                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
+                            <DialogHeader>
+                                <DialogTitle className="text-xl font-bold">Términos y Condiciones</DialogTitle>
+                            </DialogHeader>
+                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
+                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                                    {websiteSettings.termsText || 'Sin términos y condiciones definidos.'}
+                                </div>
+                            </div>
+                            <DialogFooter className="mt-4">
+                                <VatosButton onClick={() => setTermsModalOpen(false)}>Cerrar</VatosButton>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    <Link href="/login" className="mt-2 inline-block text-xs hover:underline text-slate-400 hover:text-white transition-colors">Acceso Staff</Link>
+                </div>
+            </footer>
+
+            {/* Floating Navigation Menu - Option 3: Radial / Expanding FAB */}
+            <div className={cn("fixed right-6 z-50 transition-all duration-500", totalItems > 0 ? "bottom-24" : "bottom-8")}>
+                <div className="relative flex flex-col items-center">
+                    <AnimatePresence>
+                        {isMenuOpen && (
+                            <motion.div 
+                                className="flex flex-col items-center gap-4 mb-4"
+                                initial="closed"
+                                animate="open"
+                                exit="closed"
+                                variants={{
+                                    open: { transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
+                                    closed: { transition: { staggerChildren: 0.05, staggerDirection: -1 } }
+                                }}
+                            >
+                                {[
+                                    { href: "#servicios", label: "Servicios", icon: Scissors },
+                                    { href: "/inspiracion", label: "Inspiración", icon: ImageIcon },
+                                    { href: "#profesionales", label: "Equipo", icon: User },
+                                    { href: "#productos", label: "Productos", icon: ShoppingBag },
+                                    { href: "#promociones", label: "Promos", icon: Sparkles, show: activePromotions && activePromotions.length > 0 }
+                                ].map((item, i) => (
+                                    (item.show === undefined || item.show) && (
+                                        <motion.div
+                                            key={item.href}
+                                            variants={{
+                                                open: { opacity: 1, y: 0, scale: 1 },
+                                                closed: { opacity: 0, y: 20, scale: 0.5 }
+                                            }}
+                                            className="flex items-center group"
+                                        >
+                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none shadow-lg">
+                                                {item.label}
+                                            </span>
+                                            <Link href={item.href} onClick={() => setIsMenuOpen(false)}>
+                                                <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-xl border border-blue-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-500/60 hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] transition-all">
+                                                    <item.icon className="w-5 h-5 text-blue-400" />
+                                                </div>
+                                            </Link>
+                                        </motion.div>
+                                    )
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Main FAB Toggle */}
+                    <button
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className={cn(
+                            "w-14 h-14 rounded-full bg-black flex items-center justify-center border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.4)] z-50 transition-transform duration-300",
+                            isMenuOpen ? "rotate-45" : "rotate-0"
+                        )}
+                    >
+                        {isMenuOpen ? (
+                            <X className="w-7 h-7 text-white" />
+                        ) : (
+                            <div className="relative w-10 h-10 flex items-center justify-center">
+                                <img 
+                                    src="/logo-vatos-wa.webp" 
+                                    alt="Vatos Alfa" 
+                                    className="w-full h-full rounded-full object-cover border border-white/10" 
+                                />
+                            </div>
+                        )}
+                        
+                        {/* Pulse effect when closed */}
+                        {!isMenuOpen && (
+                            <span className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping" />
+                        )}
+                    </button>
+                </div>
+            </div>
+
+        </div >
+        </ParallaxHero>
+    );
+}

@@ -1257,7 +1257,7 @@ export default function BookingPage() {
                                                         className="relative w-10 h-10 flex items-center justify-center"
                                                     >
                                                         <Image 
-                                                            src="/logo-vatos-wa.webp" 
+                                                            src="/icono-pagina-web.webp" 
                                                             alt="Vatos Alfa" 
                                                             fill
                                                             className="rounded-full object-cover border border-white/10"

@@ -390,30 +390,11 @@ export default function LandingPageClient() {
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
                         <Link href="/" className="flex items-center gap-2">
-                            {iconUrl ? (
-                                <img 
-                                    src={iconUrl} 
-                                    alt="Icon" 
-                                    className="h-9 w-9 rounded-full object-cover border border-slate-200" 
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
-                                    }}
-                                />
-                            ) : logoUrl ? (
-                                <img 
-                                    src={logoUrl} 
-                                    alt="Logo" 
-                                    className="h-8 w-auto object-contain"
-                                    onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                        (e.target as HTMLImageElement).parentElement?.querySelector('.fallback-icon')?.classList.remove('hidden');
-                                    }}
-                                />
-                            ) : null}
-                            <div className={cn("fallback-icon", (iconUrl || logoUrl) ? "hidden" : "")}>
-                                <Scissors className="h-6 w-6 text-primary" />
-                            </div>
+                            <img 
+                                src="/logo-v-400x400.webp" 
+                                alt="VATOS ALFA" 
+                                className="h-9 w-9 rounded-full object-cover border border-slate-200" 
+                            />
                             <span className="hidden sm:inline-block">{companyName}</span>
                         </Link>
                     </div>
@@ -1289,7 +1270,7 @@ export default function LandingPageClient() {
                         </DialogContent>
                     </Dialog>
 
-                    <Link href="/login" className="mt-2 inline-block text-xs hover:underline text-slate-400 hover:text-white transition-colors">Acceso Staff</Link>
+                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-black hover:underline transition-colors">Acceso Staff</Link>
                 </div>
             </footer>
 
@@ -1352,7 +1333,7 @@ export default function LandingPageClient() {
                         ) : (
                             <div className="relative w-10 h-10 flex items-center justify-center">
                                 <img 
-                                    src="/logo-vatos-wa.webp" 
+                                    src="/icono-pagina-web.webp" 
                                     alt="Vatos Alfa" 
                                     className="w-full h-full rounded-full object-cover border border-white/10" 
                                 />

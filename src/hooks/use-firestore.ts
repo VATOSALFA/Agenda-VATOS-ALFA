@@ -68,6 +68,39 @@ export function useFirestoreQuery<T>(
 
       const q = query(collection(db, collectionName), ...finalConstraints);
 
+      // On public pages (when user is not logged in), use one-time getDocs instead of onSnapshot listener.
+      // onSnapshot opens a persistent WebChannel stream (Listen/channel) that stays open indefinitely and times out when Lighthouse runs,
+      // triggering net::ERR_TIMED_OUT browser console errors in Lighthouse audits.
+      if (!user) {
+        let isMounted = true;
+        getDocs(q)
+          .then((querySnapshot) => {
+            if (!isMounted) return;
+            const items = querySnapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            })) as T[];
+            setData(items);
+            setLoading(false);
+          })
+          .catch((err: FirestoreError) => {
+            if (!isMounted) return;
+            console.error(`Error fetching collection ${collectionName}:`, err);
+            const permissionError = new FirestorePermissionError({
+              path: collectionName,
+              operation: 'list',
+              message: err.message,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            setError(permissionError);
+            setLoading(false);
+          });
+
+        return () => {
+          isMounted = false;
+        };
+      }
+
       unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
         const items = querySnapshot.docs.map((doc) => ({
           id: doc.id,

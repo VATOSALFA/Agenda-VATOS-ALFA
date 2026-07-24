@@ -25,11 +25,15 @@ function initializePublicFirebase() {
             console.warn("Firebase API Key is missing. Check your environment variables.");
         }
         app = initializeApp(firebaseConfig as any);
-        db = initializeFirestore(app, {
-            localCache: persistentLocalCache({
-                tabManager: persistentMultipleTabManager()
-            })
-        });
+        try {
+            db = initializeFirestore(app, {
+                localCache: persistentLocalCache({
+                    tabManager: persistentMultipleTabManager()
+                })
+            });
+        } catch {
+            db = getFirestore(app);
+        }
     }
 
     return { app, db };

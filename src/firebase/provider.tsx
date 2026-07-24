@@ -4,7 +4,14 @@
 import React, { createContext, useContext, ReactNode, useEffect, useState } from "react";
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getAuth, Auth, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, Firestore, connectFirestoreEmulator } from "firebase/firestore";
+import { 
+    getFirestore, 
+    initializeFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager,
+    Firestore, 
+    connectFirestoreEmulator 
+} from "firebase/firestore";
 import { getStorage, FirebaseStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, Functions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 import { firebaseConfig } from "./config";
@@ -37,7 +44,16 @@ function initializeFirebase() {
     
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    let db: Firestore;
+    try {
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+    } catch {
+        db = getFirestore(app);
+    }
     const storage = getStorage(app);
     const functions = getFunctions(app, 'us-central1'); // Specify region if needed
 

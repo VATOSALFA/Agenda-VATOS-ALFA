@@ -32,11 +32,16 @@ function initializeFirebase() {
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-            tabManager: persistentMultipleTabManager()
-        })
-    });
+    let db: any;
+    try {
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
+        });
+    } catch {
+        db = getFirestore(app);
+    }
     const storage = getStorage(app);
     const functions = getFunctions(app, 'us-central1'); // Specify region if needed
 

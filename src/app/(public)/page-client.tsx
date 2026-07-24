@@ -12,15 +12,17 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import BackgroundAurora from '@/components/ui/background-aurora';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { ParallaxHero } from '@/components/ui/parallax-hero';
-import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { getServiceLocalImage } from '@/lib/service-images';
+
+const BackgroundAurora = dynamic(() => import('@/components/ui/background-aurora'), { ssr: false });
+const FloatingMenu = dynamic(() => import('@/components/ui/floating-menu'), { ssr: false });
 
 
 // Hook moved inside component
@@ -176,7 +178,6 @@ export default function LandingPageClient() {
     const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
     const { data: categories } = useFirestoreQuery<any>('categorias_servicios');
     const { data: promotions } = useFirestoreQuery<any>('promociones');
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     // Filter active promotions (active and not expired)
     const d = new Date();
@@ -462,7 +463,7 @@ export default function LandingPageClient() {
                     <div className="w-full sm:w-1/2 bg-slate-100 flex items-center justify-center p-6 lg:p-10 relative">
                         <div className="relative w-full aspect-square max-w-[350px] shadow-xl rounded-lg overflow-hidden border-4 border-white transform transition-transform hover:scale-[1.02] duration-500">
                             {selectedPro?.avatarUrl ? (
-                                <img src={selectedPro.avatarUrl} alt={selectedPro.publicName || selectedPro.name} className="h-full w-full object-cover" />
+                                <Image src={selectedPro.avatarUrl} alt={selectedPro.publicName || selectedPro.name} fill sizes="(max-width: 768px) 100vw, 350px" className="object-cover" />
                             ) : (
                                 <div className="h-full w-full bg-muted flex items-center justify-center">
                                     <User className="h-24 w-24 text-muted-foreground/50" />
@@ -499,7 +500,7 @@ export default function LandingPageClient() {
 
 
             {/* Context Paragraph Section for Local SEO & AEO */}
-            <section className="py-16 md:py-24 bg-slate-50 border-y min-h-[180px] md:min-h-[200px]">
+            <section className="py-14 md:py-24 bg-slate-50 border-y min-h-[250px] md:min-h-[350px] flex flex-col justify-center">
                 <div className="container max-w-4xl mx-auto px-4 text-center">
                     <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
                         Especialistas en Cortes y Barbas en Querétaro
@@ -554,12 +555,11 @@ export default function LandingPageClient() {
                                             <Image
                                                 src={pro.avatarUrl}
                                                 alt={pro.publicName || pro.name}
-                                                width={300}
-                                                height={300}
+                                                fill
                                                 quality={75}
                                                 loading="lazy"
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 150px, 300px"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-400">
@@ -608,17 +608,16 @@ export default function LandingPageClient() {
                                     onClick={() => setSelectedService(service)}
                                 >
                                     {/* Small Square Image/Icon */}
-                                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative aspect-square">
+                                    <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 aspect-square">
                                         {getServiceLocalImage(service.name, service.images) ? (
                                             <Image
                                                 src={getServiceLocalImage(service.name, service.images)!}
                                                 alt={service.name}
-                                                width={160}
-                                                height={160}
+                                                fill
                                                 quality={75}
                                                 loading="lazy"
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="80px"
+                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 100px, 160px"
                                             />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -685,17 +684,16 @@ export default function LandingPageClient() {
                                             )}
                                             onClick={() => setSelectedService(service)}
                                         >
-                                            <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative aspect-square">
+                                            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 aspect-square">
                                                 {getServiceLocalImage(service.name, service.images) ? (
                                                     <Image
                                                         src={getServiceLocalImage(service.name, service.images)!}
                                                         alt={service.name}
-                                                        width={160}
-                                                        height={160}
+                                                        fill
                                                         quality={75}
                                                         loading="lazy"
-                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="80px"
+                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        sizes="(max-width: 768px) 100px, 160px"
                                                     />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -762,17 +760,16 @@ export default function LandingPageClient() {
                                         )}
                                         onClick={() => setSelectedProduct(product)}
                                     >
-                                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative aspect-square">
+                                        <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 aspect-square">
                                             {product.images && product.images.length > 0 ? (
                                                 <Image
                                                     src={product.images[0]}
                                                     alt={product.nombre}
-                                                    width={160}
-                                                    height={160}
+                                                    fill
                                                     quality={75}
                                                     loading="lazy"
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                    sizes="80px"
+                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    sizes="(max-width: 768px) 100px, 160px"
                                                 />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -1002,7 +999,7 @@ export default function LandingPageClient() {
                     <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
                         <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedProduct?.images && selectedProduct.images.length > 0 ? (
-                                <img src={selectedProduct.images[0]} alt={selectedProduct.nombre} className="h-full w-full object-contain p-4" />
+                                <Image src={selectedProduct.images[0]} alt={selectedProduct.nombre} fill sizes="(max-width: 768px) 100vw, 350px" className="object-contain p-4" />
                             ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-slate-200">
                                     <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />
@@ -1289,82 +1286,8 @@ export default function LandingPageClient() {
                 </div>
             </footer>
 
-            {/* Floating Navigation Menu - Option 3: Radial / Expanding FAB */}
-            <div className={cn("fixed right-6 z-50 transition-all duration-500", totalItems > 0 ? "bottom-24" : "bottom-8")}>
-                <div className="relative flex flex-col items-center">
-                    <AnimatePresence>
-                        {isMenuOpen && (
-                            <motion.div 
-                                className="flex flex-col items-center gap-4 mb-4"
-                                initial="closed"
-                                animate="open"
-                                exit="closed"
-                                variants={{
-                                    open: { transition: { staggerChildren: 0.05, delayChildren: 0.05 } },
-                                    closed: { transition: { staggerChildren: 0.05, staggerDirection: -1 } }
-                                }}
-                            >
-                                {[
-                                    { href: "#servicios", label: "Servicios", icon: Scissors },
-                                    { href: "/inspiracion", label: "Inspiración", icon: ImageIcon },
-                                    { href: "#profesionales", label: "Equipo", icon: User },
-                                    { href: "#productos", label: "Productos", icon: ShoppingBag },
-                                    { href: "#promociones", label: "Promos", icon: Sparkles, show: activePromotions && activePromotions.length > 0 }
-                                ].map((item, i) => (
-                                    (item.show === undefined || item.show) && (
-                                        <motion.div
-                                            key={item.href}
-                                            variants={{
-                                                open: { opacity: 1, y: 0, scale: 1 },
-                                                closed: { opacity: 0, y: 20, scale: 0.5 }
-                                            }}
-                                            className="flex items-center group"
-                                        >
-                                            <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none shadow-lg">
-                                                {item.label}
-                                            </span>
-                                            <Link href={item.href} onClick={() => setIsMenuOpen(false)}>
-                                                <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-xl border border-blue-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-500/60 hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] transition-all">
-                                                    <item.icon className="w-5 h-5 text-blue-400" />
-                                                </div>
-                                            </Link>
-                                        </motion.div>
-                                    )
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-
-                    {/* Main FAB Toggle */}
-                    <button
-                        onClick={() => setIsMenuOpen(!isMenuOpen)}
-                        className={cn(
-                            "w-14 h-14 rounded-full bg-black flex items-center justify-center border-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.4)] z-50 transition-transform duration-300",
-                            isMenuOpen ? "rotate-45" : "rotate-0"
-                        )}
-                    >
-                        {isMenuOpen ? (
-                            <X className="w-7 h-7 text-white" />
-                        ) : (
-                            <div className="relative w-10 h-10 flex items-center justify-center">
-                                <Image 
-                                    src="/icono-pagina-web.webp" 
-                                    alt="Vatos Alfa" 
-                                    width={80}
-                                    height={80}
-                                    className="w-full h-full rounded-full object-cover border border-white/10" 
-                                    sizes="40px"
-                                />
-                            </div>
-                        )}
-                        
-                        {/* Pulse effect when closed */}
-                        {!isMenuOpen && (
-                            <span className="absolute inset-0 rounded-full border-2 border-blue-500/50 animate-ping" />
-                        )}
-                    </button>
-                </div>
-            </div>
+            {/* Floating Navigation Menu */}
+            <FloatingMenu totalItems={totalItems} hasActivePromotions={activePromotions && activePromotions.length > 0} />
 
         </main >
         </ParallaxHero>

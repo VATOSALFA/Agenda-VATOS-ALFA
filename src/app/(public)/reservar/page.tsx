@@ -20,6 +20,7 @@ import { createPublicReservation, getAvailableSlots } from '@/lib/actions/bookin
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
+import { getServiceLocalImage } from '@/lib/service-images';
 
 
 // Helper Interfaces
@@ -915,7 +916,7 @@ export default function BookingPage() {
                                                         {(service.images && service.images.length > 0) && (
                                                             <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
                                                                 <Image 
-                                                                    src={service.images[0]} 
+                                                                    src={getServiceLocalImage(service.name, service.images) || service.images[0]}
                                                                     alt={service.name} 
                                                                     fill
                                                                     className="object-cover" 
@@ -979,7 +980,7 @@ export default function BookingPage() {
                                                         {(service.images && service.images.length > 0) && (
                                                             <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
                                                                 <Image 
-                                                                    src={service.images[0]} 
+                                                                    src={getServiceLocalImage(service.name, service.images) || service.images[0]}
                                                                     alt={service.name} 
                                                                     fill
                                                                     className="object-cover" 

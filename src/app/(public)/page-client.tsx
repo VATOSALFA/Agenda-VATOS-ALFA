@@ -20,6 +20,7 @@ import { ParallaxHero } from '@/components/ui/parallax-hero';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import { getServiceLocalImage } from '@/lib/service-images';
 
 
 // Hook moved inside component
@@ -621,9 +622,9 @@ export default function LandingPageClient() {
                                 >
                                     {/* Small Square Image/Icon */}
                                     <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
-                                        {service.images && service.images.length > 0 ? (
+                                        {getServiceLocalImage(service.name, service.images) ? (
                                             <Image
-                                                src={service.images[0]}
+                                                src={getServiceLocalImage(service.name, service.images)!}
                                                 alt={service.name}
                                                 fill
                                                 className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -695,9 +696,9 @@ export default function LandingPageClient() {
                                             onClick={() => setSelectedService(service)}
                                         >
                                             <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative">
-                                                {service.images && service.images.length > 0 ? (
+                                                {getServiceLocalImage(service.name, service.images) ? (
                                                     <Image
-                                                        src={service.images[0]}
+                                                        src={getServiceLocalImage(service.name, service.images)!}
                                                         alt={service.name}
                                                         fill
                                                         className="object-cover group-hover:scale-105 transition-transform duration-500"

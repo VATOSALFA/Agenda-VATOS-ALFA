@@ -1,7 +1,12 @@
 'use client';
 
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { 
+    getFirestore, 
+    initializeFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager 
+} from "firebase/firestore";
 import { firebaseConfig } from "./firebase-config";
 
 // This file initializes ONLY Firestore and App.
@@ -9,21 +14,21 @@ import { firebaseConfig } from "./firebase-config";
 // from loading on public pages where auth is not needed.
 
 function initializePublicFirebase() {
-    let app;
+    let app: any;
+    let db: any;
+
     if (getApps().length > 0) {
         app = getApp();
+        db = getFirestore(app);
     } else {
         if (!firebaseConfig.apiKey) {
             console.warn("Firebase API Key is missing. Check your environment variables.");
         }
         app = initializeApp(firebaseConfig as any);
-    }
-
-    const db = getFirestore(app);
-
-    if (typeof window !== 'undefined') {
-        enableIndexedDbPersistence(db).catch(() => {
-            // Silently ignore persistence errors in multi-tab/unsupported browsers
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({
+                tabManager: persistentMultipleTabManager()
+            })
         });
     }
 

@@ -2,7 +2,12 @@
 
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth, connectAuthEmulator } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator, enableIndexedDbPersistence } from "firebase/firestore";
+import { 
+    getFirestore, 
+    initializeFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager 
+} from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/functions";
 
@@ -11,12 +16,13 @@ import { firebaseConfig } from "./firebase-config";
 
 function initializeFirebase() {
     if (getApps().length > 0) {
+        const existingApp = getApp();
         return {
-            app: getApp(),
-            auth: getAuth(),
-            db: getFirestore(),
-            storage: getStorage(),
-            functions: getFunctions(getApp())
+            app: existingApp,
+            auth: getAuth(existingApp),
+            db: getFirestore(existingApp),
+            storage: getStorage(existingApp),
+            functions: getFunctions(existingApp)
         };
     }
 
@@ -26,19 +32,13 @@ function initializeFirebase() {
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    const db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+            tabManager: persistentMultipleTabManager()
+        })
+    });
     const storage = getStorage(app);
     const functions = getFunctions(app, 'us-central1'); // Specify region if needed
-
-    if (typeof window !== 'undefined') {
-        enableIndexedDbPersistence(db).catch((err: any) => {
-            if (err.code == 'failed-precondition') {
-                console.warn('Firebase persistence failed: multiple tabs open');
-            } else if (err.code == 'unimplemented') {
-                console.warn('Firebase persistence not available in this browser');
-            }
-        });
-    }
 
     // Example for connecting to emulators in development
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {

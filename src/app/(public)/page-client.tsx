@@ -155,7 +155,7 @@ function PromoMedia({ url, name, className, cover = true, muted = true, controls
                 src={url}
                 alt={name}
                 fill
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                sizes="(max-width: 768px) 150px, 300px"
                 className={cn(cover ? 'object-cover' : 'object-contain', className)}
                 loading="lazy"
                 onError={(e) => {
@@ -502,7 +502,7 @@ export default function LandingPageClient() {
 
 
             {/* Context Paragraph Section for Local SEO & AEO */}
-            <section className="py-14 md:py-24 bg-slate-50 border-y min-h-[250px] md:min-h-[350px] flex flex-col justify-center">
+            <section className="py-14 md:py-24 bg-slate-50 border-y min-h-[300px] flex flex-col justify-center">
                 <div className="container max-w-4xl mx-auto px-4 text-center">
                     <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
                         Especialistas en Cortes y Barbas en Querétaro
@@ -619,7 +619,7 @@ export default function LandingPageClient() {
                                                 quality={75}
                                                 loading="lazy"
                                                 className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 100px, 160px"
+                                                sizes="(max-width: 768px) 150px, 300px"
                                             />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -695,7 +695,7 @@ export default function LandingPageClient() {
                                                         quality={75}
                                                         loading="lazy"
                                                         className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="(max-width: 768px) 100px, 160px"
+                                                        sizes="(max-width: 768px) 150px, 300px"
                                                     />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -771,7 +771,7 @@ export default function LandingPageClient() {
                                                     quality={75}
                                                     loading="lazy"
                                                     className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                    sizes="(max-width: 768px) 100px, 160px"
+                                                    sizes="(max-width: 768px) 150px, 300px"
                                                 />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -928,7 +928,7 @@ export default function LandingPageClient() {
                                     alt={selectedService.name} 
                                     fill
                                     className="object-contain p-2" 
-                                    sizes="(max-width: 768px) 100vw, 400px"
+                                    sizes="(max-width: 768px) 150px, 300px"
                                 />
                             ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-slate-200">
@@ -1001,7 +1001,7 @@ export default function LandingPageClient() {
                     <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
                         <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
                             {selectedProduct?.images && selectedProduct.images.length > 0 ? (
-                                <Image src={selectedProduct.images[0]} alt={selectedProduct.nombre} fill sizes="(max-width: 768px) 100vw, 350px" className="object-contain p-4" />
+                                <Image src={selectedProduct.images[0]} alt={selectedProduct.nombre} fill sizes="(max-width: 768px) 150px, 300px" className="object-contain p-4" />
                             ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-slate-200">
                                     <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />

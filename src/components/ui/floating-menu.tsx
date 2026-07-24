@@ -79,7 +79,7 @@ export default function FloatingMenu({ totalItems, hasActivePromotions }: Floati
                                 alt="Vatos Alfa" 
                                 fill
                                 className="rounded-full object-cover border border-white/10" 
-                                sizes="40px"
+                                sizes="(max-width: 768px) 150px, 300px"
                             />
                         </div>
                     )}

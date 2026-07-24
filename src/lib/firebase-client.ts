@@ -8,10 +8,6 @@ import { getFunctions, httpsCallable, connectFunctionsEmulator } from "firebase/
 
 import { firebaseConfig } from "./firebase-config";
 
-console.log("[FirebaseConfig] Loading...", {
-    apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 5) + '...' : 'MISSING',
-    projectId: firebaseConfig.projectId
-});
 
 function initializeFirebase() {
     if (getApps().length > 0) {

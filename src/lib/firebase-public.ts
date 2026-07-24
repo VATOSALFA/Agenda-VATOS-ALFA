@@ -22,12 +22,8 @@ function initializePublicFirebase() {
     const db = getFirestore(app);
 
     if (typeof window !== 'undefined') {
-        enableIndexedDbPersistence(db).catch((err: any) => {
-            if (err.code == 'failed-precondition') {
-                console.warn('Firebase persistence failed: multiple tabs open');
-            } else if (err.code == 'unimplemented') {
-                console.warn('Firebase persistence not available in this browser');
-            }
+        enableIndexedDbPersistence(db).catch(() => {
+            // Silently ignore persistence errors in multi-tab/unsupported browsers
         });
     }
 

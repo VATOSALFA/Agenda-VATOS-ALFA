@@ -390,10 +390,13 @@ export default function LandingPageClient() {
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
                         <Link href="/" className="flex items-center gap-2">
-                            <img 
+                            <Image 
                                 src="/logo-v-400x400.webp" 
                                 alt="VATOS ALFA" 
-                                className="h-9 w-9 rounded-full object-cover border border-slate-200" 
+                                width={36}
+                                height={36}
+                                priority
+                                className="h-9 w-9 rounded-full object-cover border border-slate-200 aspect-square" 
                             />
                             <span className="hidden sm:inline-block">{companyName}</span>
                         </Link>
@@ -551,9 +554,12 @@ export default function LandingPageClient() {
                                             <Image
                                                 src={pro.avatarUrl}
                                                 alt={pro.publicName || pro.name}
-                                                fill
+                                                width={300}
+                                                height={300}
+                                                quality={75}
+                                                loading="lazy"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                                                sizes="(max-width: 768px) 150px, 300px"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-400">
@@ -602,14 +608,17 @@ export default function LandingPageClient() {
                                     onClick={() => setSelectedService(service)}
                                 >
                                     {/* Small Square Image/Icon */}
-                                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
+                                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative aspect-square">
                                         {getServiceLocalImage(service.name, service.images) ? (
                                             <Image
                                                 src={getServiceLocalImage(service.name, service.images)!}
                                                 alt={service.name}
-                                                fill
-                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="80px"
+                                                width={300}
+                                                height={300}
+                                                quality={75}
+                                                loading="lazy"
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                sizes="(max-width: 768px) 150px, 300px"
                                             />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -676,14 +685,17 @@ export default function LandingPageClient() {
                                             )}
                                             onClick={() => setSelectedService(service)}
                                         >
-                                            <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative">
+                                            <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 relative aspect-square">
                                                 {getServiceLocalImage(service.name, service.images) ? (
                                                     <Image
                                                         src={getServiceLocalImage(service.name, service.images)!}
                                                         alt={service.name}
-                                                        fill
-                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="80px"
+                                                        width={300}
+                                                        height={300}
+                                                        quality={75}
+                                                        loading="lazy"
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                        sizes="(max-width: 768px) 150px, 300px"
                                                     />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -750,14 +762,17 @@ export default function LandingPageClient() {
                                         )}
                                         onClick={() => setSelectedProduct(product)}
                                     >
-                                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative">
+                                        <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 relative aspect-square">
                                             {product.images && product.images.length > 0 ? (
                                                 <Image
                                                     src={product.images[0]}
                                                     alt={product.nombre}
-                                                    fill
-                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                    sizes="80px"
+                                                    width={300}
+                                                    height={300}
+                                                    quality={75}
+                                                    loading="lazy"
+                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    sizes="(max-width: 768px) 150px, 300px"
                                                 />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -1210,27 +1225,27 @@ export default function LandingPageClient() {
             }
 
             {/* Footer */}
-            <footer className="py-12 border-t bg-card text-center text-sm text-muted-foreground">
-                <div className="container px-4 flex flex-col items-center gap-4">
+            <footer className="py-12 border-t bg-card text-center text-sm text-slate-300">
+                <div className="container px-4 flex flex-col items-center gap-4 text-slate-300">
                     <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
-                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium">
+                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-300">
                             <Link
                                 href="/blog"
-                                className="hover:underline hover:text-primary transition-colors"
+                                className="hover:underline hover:text-primary transition-colors text-slate-300"
                             >
                                 Blog
                             </Link>
                             <Link
                                 href="/privacidad"
-                                className="hover:underline hover:text-primary transition-colors"
+                                className="hover:underline hover:text-primary transition-colors text-slate-300"
                             >
                                 Aviso de Privacidad
                             </Link>
                             <Link
                                 href="/terminos"
-                                className="hover:underline hover:text-primary transition-colors"
+                                className="hover:underline hover:text-primary transition-colors text-slate-300"
                             >
                                 Términos y Condiciones
                             </Link>
@@ -1270,7 +1285,7 @@ export default function LandingPageClient() {
                         </DialogContent>
                     </Dialog>
 
-                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-black hover:underline transition-colors">Acceso Staff</Link>
+                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-slate-300 hover:text-white hover:underline transition-colors">Acceso Staff</Link>
                 </div>
             </footer>
 

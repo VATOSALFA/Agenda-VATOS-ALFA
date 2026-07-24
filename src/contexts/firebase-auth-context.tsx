@@ -214,16 +214,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // On public pages, skip Firebase Auth entirely — no iframe, no SDK load
-    if (isPublicPage) {
-      setLoading(false);
-      return;
-    }
-
-    // For non-public pages (admin, login), load Firebase and set up auth listener
     let unsubscribe: (() => void) | undefined;
 
     (async () => {
+      // On public pages, load only the public Firebase client (Firestore only)
+      if (isPublicPage) {
+        const publicFb = await import('@/lib/firebase-public');
+        setFirebaseDb(publicFb.db);
+        setLoading(false);
+        return;
+      }
+
+      // For non-public pages (admin, login), load full Firebase client and set up auth listener
       const fb = await getFirebase();
       setFirebaseDb(fb.db);
       setFirebaseStorage(fb.storage);

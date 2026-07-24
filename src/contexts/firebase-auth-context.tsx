@@ -2,15 +2,52 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { onAuthStateChanged, signOut as firebaseSignOut, signInWithEmailAndPassword, type User as FirebaseUser, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { db, auth, storage } from '@/lib/firebase-client';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import type { User as FirebaseUser } from 'firebase/auth';
 import { allPermissions, initialRoles } from '@/lib/permissions';
 import { usePathname, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { CustomLoader } from "@/components/ui/custom-loader";
 
 import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
+
+// Lazy-loaded Firebase modules (avoid loading ~163KB on public pages)
+let _firebaseModules: Awaited<ReturnType<typeof loadFirebaseModules>> | null = null;
+
+async function loadFirebaseModules() {
+  const [clientMod, authMod, firestoreMod] = await Promise.all([
+    import('@/lib/firebase-client'),
+    import('firebase/auth'),
+    import('firebase/firestore'),
+  ]);
+  return {
+    auth: clientMod.auth,
+    db: clientMod.db,
+    storage: clientMod.storage,
+    onAuthStateChanged: authMod.onAuthStateChanged,
+    firebaseSignOut: authMod.signOut,
+    signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
+    setPersistence: authMod.setPersistence,
+    browserLocalPersistence: authMod.browserLocalPersistence,
+    browserSessionPersistence: authMod.browserSessionPersistence,
+    GoogleAuthProvider: authMod.GoogleAuthProvider,
+    signInWithPopup: authMod.signInWithPopup,
+    doc: firestoreMod.doc,
+    getDoc: firestoreMod.getDoc,
+    collection: firestoreMod.collection,
+    query: firestoreMod.query,
+    where: firestoreMod.where,
+    getDocs: firestoreMod.getDocs,
+    addDoc: firestoreMod.addDoc,
+    serverTimestamp: firestoreMod.serverTimestamp,
+    updateDoc: firestoreMod.updateDoc,
+  };
+}
+
+async function getFirebase() {
+  if (_firebaseModules) return _firebaseModules;
+  _firebaseModules = await loadFirebaseModules();
+  return _firebaseModules;
+}
 
 
 export interface CustomUser extends FirebaseUser {
@@ -22,8 +59,8 @@ export interface CustomUser extends FirebaseUser {
 interface AuthContextType {
   user: CustomUser | null;
   loading: boolean;
-  db: typeof db;
-  storage: typeof storage;
+  db: any;
+  storage: any;
   signInAndSetup: (email: string, pass: string, rememberMe?: boolean) => Promise<FirebaseUser>;
   signInWithGoogle: () => Promise<FirebaseUser>;
   signOut: () => Promise<void>;
@@ -43,29 +80,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<CustomUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [firebaseDb, setFirebaseDb] = useState<any>(null);
+  const [firebaseStorage, setFirebaseStorage] = useState<any>(null);
 
   const pathname = usePathname();
   const router = useRouter();
 
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/inspiracion' || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
+  const isAuthPage = pathname === '/login';
+
   // Helper function to validate user against Firestore
   const validateUserPermissions = async (firebaseUser: FirebaseUser) => {
+    const fb = await getFirebase();
     let customData: any;
     let userRole: string = 'Staff (Sin edición)';
     let userPermissions: string[] = [];
     let userDoc: any;
 
     // 1. Check 'usuarios' collection by UID
-    const userDocRef = doc(db, 'usuarios', firebaseUser.uid);
-    userDoc = await getDoc(userDocRef);
+    const userDocRef = fb.doc(fb.db, 'usuarios', firebaseUser.uid);
+    userDoc = await fb.getDoc(userDocRef);
 
     if (userDoc.exists()) {
       customData = userDoc.data();
       userRole = customData.role || 'Staff (Sin edición)';
     } else {
       // 1.5. Fallback: Check 'usuarios' by EMAIL
-      const usersRef = collection(db, 'usuarios');
-      const q = query(usersRef, where('email', '==', firebaseUser.email));
-      const querySnapshot = await getDocs(q);
+      const usersRef = fb.collection(fb.db, 'usuarios');
+      const q = fb.query(usersRef, fb.where('email', '==', firebaseUser.email));
+      const querySnapshot = await fb.getDocs(q);
 
       if (!querySnapshot.empty) {
         userDoc = querySnapshot.docs[0];
@@ -73,17 +116,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         userRole = customData.role || 'Staff (Sin edición)';
       } else {
         // 2. Check 'profesionales' collection by UID
-        const profDocRef = doc(db, 'profesionales', firebaseUser.uid);
-        const profDoc = await getDoc(profDocRef);
+        const profDocRef = fb.doc(fb.db, 'profesionales', firebaseUser.uid);
+        const profDoc = await fb.getDoc(profDocRef);
 
         if (profDoc.exists()) {
           customData = profDoc.data();
           userRole = 'Staff (Sin edición)';
         } else {
           // 2.5 Fallback: Check 'profesionales' by email
-          const prosRef = collection(db, 'profesionales');
-          const qPro = query(prosRef, where('email', '==', firebaseUser.email));
-          const querySnapshotPro = await getDocs(qPro);
+          const prosRef = fb.collection(fb.db, 'profesionales');
+          const qPro = fb.query(prosRef, fb.where('email', '==', firebaseUser.email));
+          const querySnapshotPro = await fb.getDocs(qPro);
 
           if (!querySnapshotPro.empty) {
             customData = querySnapshotPro.docs[0].data();
@@ -102,8 +145,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       userPermissions = allPermissions.map(p => p.key);
     } else {
       const roleId = userRole.toLowerCase().replace(/ /g, '_');
-      const roleDocRef = doc(db, 'roles', roleId);
-      const roleDoc = await getDoc(roleDocRef);
+      const roleDocRef = fb.doc(fb.db, 'roles', roleId);
+      const roleDoc = await fb.getDoc(roleDocRef);
 
       if (roleDoc.exists()) {
         userPermissions = roleDoc.data().permissions || [];
@@ -127,8 +170,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const checkLocalSchedule = async (localId: string): Promise<boolean> => {
     try {
-      const localDocRef = doc(db, 'locales', localId);
-      const localDoc = await getDoc(localDocRef);
+      const fb = await getFirebase();
+      const localDocRef = fb.doc(fb.db, 'locales', localId);
+      const localDoc = await fb.getDoc(localDocRef);
       if (!localDoc.exists()) return true;
 
       const localData = localDoc.data();
@@ -170,49 +214,64 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setCurrentSessionId(localStorage.getItem('current_session_id'));
+    // On public pages, skip Firebase Auth entirely — no iframe, no SDK load
+    if (isPublicPage) {
+      setLoading(false);
+      return;
     }
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        try {
-          const customUser = await validateUserPermissions(firebaseUser);
 
-          // Enforce schedule limits for Receptionists
-          if (customUser.role === 'Recepcionista' && customUser.local_id) {
-            const isWithinHours = await checkLocalSchedule(customUser.local_id);
-            if (!isWithinHours) {
-              console.warn(`User ${customUser.email} denied access: outside working hours.`);
-              throw new Error("OUTSIDE_HOURS");
-            }
-          }
+    // For non-public pages (admin, login), load Firebase and set up auth listener
+    let unsubscribe: (() => void) | undefined;
 
-          setUser(customUser);
-        } catch (error: any) {
-          if (error.message === "ACCESS_DENIED") {
-            console.warn("Access denied for user:", firebaseUser.email);
-            await firebaseSignOut(auth);
-          } else if (error.message === "OUTSIDE_HOURS") {
-            if (typeof window !== 'undefined') {
-              alert("Acceso Restringido: Las recepcionistas no pueden acceder a la plataforma fuera del horario de la sucursal (permitido desde 30 mins antes de abrir hasta las 11:00 PM).");
+    (async () => {
+      const fb = await getFirebase();
+      setFirebaseDb(fb.db);
+      setFirebaseStorage(fb.storage);
+
+      if (typeof window !== 'undefined') {
+        setCurrentSessionId(localStorage.getItem('current_session_id'));
+      }
+
+      unsubscribe = fb.onAuthStateChanged(fb.auth, async (firebaseUser) => {
+        if (firebaseUser) {
+          try {
+            const customUser = await validateUserPermissions(firebaseUser);
+
+            // Enforce schedule limits for Receptionists
+            if (customUser.role === 'Recepcionista' && customUser.local_id) {
+              const isWithinHours = await checkLocalSchedule(customUser.local_id);
+              if (!isWithinHours) {
+                console.warn(`User ${customUser.email} denied access: outside working hours.`);
+                throw new Error("OUTSIDE_HOURS");
+              }
             }
-            await firebaseSignOut(auth);
-          } else {
-            console.error("Error fetching user data from Firestore:", error);
+
+            setUser(customUser);
+          } catch (error: any) {
+            if (error.message === "ACCESS_DENIED") {
+              console.warn("Access denied for user:", firebaseUser.email);
+              await fb.firebaseSignOut(fb.auth);
+            } else if (error.message === "OUTSIDE_HOURS") {
+              if (typeof window !== 'undefined') {
+                alert("Acceso Restringido: Las recepcionistas no pueden acceder a la plataforma fuera del horario de la sucursal (permitido desde 30 mins antes de abrir hasta las 11:00 PM).");
+              }
+              await fb.firebaseSignOut(fb.auth);
+            } else {
+              console.error("Error fetching user data from Firestore:", error);
+            }
+            setUser(null);
           }
+        } else {
           setUser(null);
         }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
+        setLoading(false);
+      });
+    })();
 
-    return () => unsubscribe();
-  }, []);
-
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/inspiracion' || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
-  const isAuthPage = pathname === '/login';
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [isPublicPage]);
 
   // Handling redirects in a separate effect to avoid updates during render
   useEffect(() => {
@@ -262,9 +321,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Only create session for non-clients (e.g. receptionists, admins)
     if (user && user.role !== 'Cliente') {
       try {
+        const fb = await getFirebase();
         const activeSessionId = localStorage.getItem('current_session_id');
         if (activeSessionId) {
-          const sessionDoc = await getDoc(doc(db, 'sesiones_trabajo', activeSessionId));
+          const sessionDoc = await fb.getDoc(fb.doc(fb.db, 'sesiones_trabajo', activeSessionId));
           if (sessionDoc.exists()) {
             const sessionData = sessionDoc.data();
             const start = sessionData.hora_entrada?.toDate();
@@ -276,8 +336,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             if (!isSameDay) {
               // Auto-close session from previous day using its last activity or start time
-              await updateDoc(doc(db, 'sesiones_trabajo', activeSessionId), {
-                hora_salida: sessionData.ultima_actividad || sessionData.hora_entrada || serverTimestamp(),
+              await fb.updateDoc(fb.doc(fb.db, 'sesiones_trabajo', activeSessionId), {
+                hora_salida: sessionData.ultima_actividad || sessionData.hora_entrada || fb.serverTimestamp(),
                 estado: 'cerrada'
               });
               localStorage.removeItem('current_session_id');
@@ -289,17 +349,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
-        const sessionRef = await addDoc(collection(db, 'sesiones_trabajo'), {
+        const sessionRef = await fb.addDoc(fb.collection(fb.db, 'sesiones_trabajo'), {
           empleado_id: user.uid,
           empleado_nombre: user.displayName || user.email,
           rol: user.role,
-          hora_entrada: serverTimestamp(),
+          hora_entrada: fb.serverTimestamp(),
           hora_salida: null,
           local_id: user.local_id || null,
           estado: 'activa',
           pagado: false,
           dispositivo: getDeviceInfo(),
-          ultima_actividad: serverTimestamp()
+          ultima_actividad: fb.serverTimestamp()
         });
         localStorage.setItem('current_session_id', sessionRef.id);
         setCurrentSessionId(sessionRef.id);
@@ -313,8 +373,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const activeSessionId = localStorage.getItem('current_session_id');
     if (activeSessionId) {
       try {
-        await updateDoc(doc(db, 'sesiones_trabajo', activeSessionId), {
-          hora_salida: serverTimestamp(),
+        const fb = await getFirebase();
+        await fb.updateDoc(fb.doc(fb.db, 'sesiones_trabajo', activeSessionId), {
+          hora_salida: fb.serverTimestamp(),
           estado: 'cerrada'
         });
         localStorage.removeItem('current_session_id');
@@ -331,8 +392,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const intervalId = setInterval(async () => {
       try {
-        await updateDoc(doc(db, 'sesiones_trabajo', currentSessionId), {
-          ultima_actividad: serverTimestamp()
+        const fb = await getFirebase();
+        await fb.updateDoc(fb.doc(fb.db, 'sesiones_trabajo', currentSessionId), {
+          ultima_actividad: fb.serverTimestamp()
         });
       } catch (e) {
         console.error("Error updating session heartbeat:", e);
@@ -345,16 +407,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [currentSessionId, user]);
 
   const signOut = async () => {
+    const fb = await getFirebase();
     await closeCurrentSession();
-    await firebaseSignOut(auth);
+    await fb.firebaseSignOut(fb.auth);
     setUser(null);
     router.push('/login');
   };
 
   const signInAndSetup = async (email: string, pass: string, rememberMe: boolean = false) => {
-    const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-    await setPersistence(auth, persistence);
-    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    const fb = await getFirebase();
+    const persistence = rememberMe ? fb.browserLocalPersistence : fb.browserSessionPersistence;
+    await fb.setPersistence(fb.auth, persistence);
+    const userCredential = await fb.signInWithEmailAndPassword(fb.auth, email, pass);
     
     // Explicitly validate user and start session
     try {
@@ -368,8 +432,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
+    const fb = await getFirebase();
+    const provider = new fb.GoogleAuthProvider();
+    const userCredential = await fb.signInWithPopup(fb.auth, provider);
 
     // Explicitly validate user immediately to prevent inconsistent UI state
     try {
@@ -377,7 +442,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await createSession(customUser);
     } catch (error) {
       // If validation fails, sign out and re-throw so the UI catches it
-      await firebaseSignOut(auth);
+      await fb.firebaseSignOut(fb.auth);
       throw error;
     }
 
@@ -390,12 +455,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signInAndSetup,
     signInWithGoogle,
     signOut,
-    db,
-    storage,
+    db: firebaseDb,
+    storage: firebaseStorage,
   };
 
 
   if (loading) {
+    // On public pages, loading is immediately false so this won't show
     return (
       <div className="flex justify-center items-center h-screen bg-muted/40">
         <CustomLoader size={80} />

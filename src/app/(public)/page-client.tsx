@@ -369,7 +369,7 @@ export default function LandingPageClient() {
 
     return (
         <ParallaxHero>
-        <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
+        <main className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
             {/* Structured Data (JSON-LD) for Local SEO & AEO */}
             <script
                 type="application/ld+json"
@@ -435,7 +435,7 @@ export default function LandingPageClient() {
 
             {/* Hero with Parallax */}
               <section
-                  className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950"
+                  className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950 min-h-[280px] md:min-h-[400px]"
               >
                   <div data-parallax-layers className="absolute inset-0">
                       <div data-parallax-layer="1" className="absolute inset-0">
@@ -499,7 +499,7 @@ export default function LandingPageClient() {
 
 
             {/* Context Paragraph Section for Local SEO & AEO */}
-            <section className="py-16 md:py-24 bg-slate-50 border-y">
+            <section className="py-16 md:py-24 bg-slate-50 border-y min-h-[180px] md:min-h-[200px]">
                 <div className="container max-w-4xl mx-auto px-4 text-center">
                     <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
                         Especialistas en Cortes y Barbas en Querétaro
@@ -559,7 +559,7 @@ export default function LandingPageClient() {
                                                 quality={75}
                                                 loading="lazy"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 150px, 300px"
+                                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center text-slate-400">
@@ -613,12 +613,12 @@ export default function LandingPageClient() {
                                             <Image
                                                 src={getServiceLocalImage(service.name, service.images)!}
                                                 alt={service.name}
-                                                width={300}
-                                                height={300}
+                                                width={160}
+                                                height={160}
                                                 quality={75}
                                                 loading="lazy"
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 150px, 300px"
+                                                sizes="80px"
                                             />
                                         ) : (
                                             <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -690,12 +690,12 @@ export default function LandingPageClient() {
                                                     <Image
                                                         src={getServiceLocalImage(service.name, service.images)!}
                                                         alt={service.name}
-                                                        width={300}
-                                                        height={300}
+                                                        width={160}
+                                                        height={160}
                                                         quality={75}
                                                         loading="lazy"
                                                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="(max-width: 768px) 150px, 300px"
+                                                        sizes="80px"
                                                     />
                                                 ) : (
                                                     <div className="h-full w-full flex items-center justify-center text-slate-400">
@@ -767,12 +767,12 @@ export default function LandingPageClient() {
                                                 <Image
                                                     src={product.images[0]}
                                                     alt={product.nombre}
-                                                    width={300}
-                                                    height={300}
+                                                    width={160}
+                                                    height={160}
                                                     quality={75}
                                                     loading="lazy"
                                                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                                                    sizes="(max-width: 768px) 150px, 300px"
+                                                    sizes="80px"
                                                 />
                                             ) : (
                                                 <div className="h-full w-full flex items-center justify-center text-slate-300">
@@ -1347,10 +1347,13 @@ export default function LandingPageClient() {
                             <X className="w-7 h-7 text-white" />
                         ) : (
                             <div className="relative w-10 h-10 flex items-center justify-center">
-                                <img 
+                                <Image 
                                     src="/icono-pagina-web.webp" 
                                     alt="Vatos Alfa" 
+                                    width={80}
+                                    height={80}
                                     className="w-full h-full rounded-full object-cover border border-white/10" 
+                                    sizes="40px"
                                 />
                             </div>
                         )}
@@ -1363,7 +1366,7 @@ export default function LandingPageClient() {
                 </div>
             </div>
 
-        </div >
+        </main >
         </ParallaxHero>
     );
 }

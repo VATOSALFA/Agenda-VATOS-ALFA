@@ -26,9 +26,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     return {
         title: `${post.title} | VATOS ALFA`,
         description: post.description,
+        alternates: {
+            canonical: `https://vatosalfa.com/blog/${post.slug}`,
+        },
         openGraph: {
             title: post.title,
             description: post.description,
+            url: `https://vatosalfa.com/blog/${post.slug}`,
             type: 'article',
             publishedTime: post.date,
             authors: [post.author],

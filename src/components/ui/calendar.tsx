@@ -4,6 +4,7 @@
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { DayPicker, DropdownProps } from "react-day-picker"
+import { es } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
@@ -16,17 +17,19 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  locale = es,
   ...props
 }: CalendarProps) {
   return (
     <DayPicker
+      locale={locale}
       showOutsideDays={showOutsideDays}
       className={cn("p-2", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-2",
         caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption_label: "text-sm font-medium capitalize",
         caption_dropdowns: "flex justify-center gap-1",
         nav: "space-x-1 flex items-center",
         nav_button: cn(
@@ -38,7 +41,7 @@ function Calendar({
         table: "w-full border-collapse space-y-1",
         head_row: "flex",
         head_cell:
-          "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem]",
+          "text-muted-foreground rounded-md w-8 font-normal text-[0.8rem] capitalize",
         row: "flex w-full mt-1",
         cell: "h-8 w-8 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected].day-range-end)]:bg-accent [&:has([aria-selected].day-range-start)]:bg-accent [&:has([aria-selected].day-range-middle)]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
         day: cn(
@@ -75,7 +78,8 @@ function Calendar({
 
           if (name === 'months' && value !== undefined) {
             selectValue = String(value);
-            triggerDisplayValue = new Date(new Date().getFullYear(), value as number).toLocaleString('default', { month: 'long' });
+            const monthName = new Date(new Date().getFullYear(), value as number).toLocaleString('es-ES', { month: 'long' });
+            triggerDisplayValue = monthName.charAt(0).toUpperCase() + monthName.slice(1);
           } else if (name === 'years' && value !== undefined) {
             selectValue = String(value);
             triggerDisplayValue = String(value);

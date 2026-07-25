@@ -402,6 +402,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                                             }}
                                             disabled={(date) => isBefore(date, startOfDay(new Date()))}
                                             initialFocus
+                                            locale={es}
                                         />
                                     </PopoverContent>
                                 </Popover>

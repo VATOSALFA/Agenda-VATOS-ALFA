@@ -278,17 +278,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (loading) return;
 
-    // Check if running as PWA (standalone app)
-    const isStandalonePWA = typeof window !== 'undefined' && (
-      window.matchMedia('(display-mode: standalone)').matches || 
-      (window.navigator as any).standalone === true
-    );
-
-    // If staff member is logged in, redirect them to /agenda if they are on /login OR if they open the root page / in PWA mode
-    if (user) {
-      if (isAuthPage || (pathname === '/' && isStandalonePWA)) {
-        router.replace('/agenda');
-      }
+    if (user && isAuthPage) {
+      router.replace('/agenda');
     }
 
     if (!user && !isAuthPage && !isPublicPage) {

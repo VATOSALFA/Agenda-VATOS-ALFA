@@ -424,6 +424,14 @@ export default function LandingPageClient() {
                             </div>
                         )}
 
+                        {user && (
+                            <Link href="/agenda" prefetch={false} className="mr-2">
+                                <Button variant="outline" size="sm" className="border-primary text-primary font-bold">
+                                    Ir a Panel Staff
+                                </Button>
+                            </Link>
+                        )}
+
                         <Link href="/blog" prefetch={false} className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
                             Blog
                         </Link>

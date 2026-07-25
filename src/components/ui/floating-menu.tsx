@@ -49,7 +49,7 @@ export default function FloatingMenu({ totalItems, hasActivePromotions }: Floati
                                         <span className="absolute right-full mr-3 bg-black/60 backdrop-blur-md text-white text-xs font-bold px-3 py-1.5 rounded-lg opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/10 pointer-events-none shadow-lg">
                                             {item.label}
                                         </span>
-                                        <Link href={item.href} onClick={() => setIsMenuOpen(false)}>
+                                        <Link href={item.href} onClick={() => setIsMenuOpen(false)} aria-label={item.label}>
                                             <div className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-xl border border-blue-500/30 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.2)] hover:border-blue-500/60 hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] transition-all">
                                                 <item.icon className="w-5 h-5 text-blue-400" />
                                             </div>

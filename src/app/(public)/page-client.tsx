@@ -1225,27 +1225,27 @@ export default function LandingPageClient() {
             </main>
 
             {/* Footer */}
-            <footer className="py-12 border-t bg-card text-center text-sm text-slate-300">
-                <div className="container px-4 flex flex-col items-center gap-4 text-slate-300">
+            <footer className="py-12 border-t border-slate-200 bg-slate-50 text-center text-sm text-slate-700">
+                <div className="container px-4 flex flex-col items-center gap-4 text-slate-700">
                     <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
-                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-300">
+                        <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-700">
                             <Link
                                 href="/blog"
-                                className="hover:underline hover:text-primary transition-colors text-slate-300"
+                                className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Blog
                             </Link>
                             <Link
                                 href="/privacidad"
-                                className="hover:underline hover:text-primary transition-colors text-slate-300"
+                                className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Aviso de Privacidad
                             </Link>
                             <Link
                                 href="/terminos"
-                                className="hover:underline hover:text-primary transition-colors text-slate-300"
+                                className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Términos y Condiciones
                             </Link>
@@ -1285,7 +1285,7 @@ export default function LandingPageClient() {
                         </DialogContent>
                     </Dialog>
 
-                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-slate-300 hover:text-white hover:underline transition-colors">Acceso Staff</Link>
+                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline transition-colors">Acceso Staff</Link>
                 </div>
             </footer>
 

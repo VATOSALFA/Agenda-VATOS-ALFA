@@ -381,16 +381,16 @@ export default function LandingPageClient() {
                 <h1>VATOS ALFA Barber Shop - Plataforma de Reservas</h1>
                 <p>Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.</p>
                 <nav>
-                    <Link href="/blog">Blog</Link>
-                    <Link href="/privacidad">Aviso de Privacidad</Link>
-                    <Link href="/terminos">Términos y Condiciones</Link>
+                    <Link href="/blog" prefetch={false}>Blog</Link>
+                    <Link href="/privacidad" prefetch={false}>Aviso de Privacidad</Link>
+                    <Link href="/terminos" prefetch={false}>Términos y Condiciones</Link>
                 </nav>
             </div>
             {/* Header */}
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                        <Link href="/" className="flex items-center gap-2">
+                        <Link href="/" prefetch={false} className="flex items-center gap-2">
                             <Image 
                                 src="/logo-v-400x400.webp" 
                                 alt="VATOS ALFA" 
@@ -424,10 +424,10 @@ export default function LandingPageClient() {
                             </div>
                         )}
 
-                        <Link href="/blog" className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
+                        <Link href="/blog" prefetch={false} className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
                             Blog
                         </Link>
-                        <Link href="/reservar">
+                        <Link href="/reservar" prefetch={false}>
                             <VatosButton variant="default" size="sm">Reservar Cita</VatosButton>
                         </Link>
                     </div>
@@ -1233,18 +1233,21 @@ export default function LandingPageClient() {
                         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-700">
                             <Link
                                 href="/blog"
+                                prefetch={false}
                                 className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Blog
                             </Link>
                             <Link
                                 href="/privacidad"
+                                prefetch={false}
                                 className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Aviso de Privacidad
                             </Link>
                             <Link
                                 href="/terminos"
+                                prefetch={false}
                                 className="hover:underline hover:text-primary transition-colors text-slate-700 font-semibold"
                             >
                                 Términos y Condiciones
@@ -1285,7 +1288,7 @@ export default function LandingPageClient() {
                         </DialogContent>
                     </Dialog>
 
-                    <Link href="/login" className="mt-2 inline-block text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline transition-colors">Acceso Staff</Link>
+                    <Link href="/login" prefetch={false} className="mt-2 inline-block text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline transition-colors">Acceso Staff</Link>
                 </div>
             </footer>
 

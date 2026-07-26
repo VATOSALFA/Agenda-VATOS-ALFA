@@ -15,8 +15,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
         {
             url: baseUrl,
             lastModified: new Date(),
-            changeFrequency: 'monthly',
-            priority: 1,
+            changeFrequency: 'weekly',
+            priority: 1.0,
         },
         {
             url: `${baseUrl}/blog`,
@@ -27,8 +27,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
         {
             url: `${baseUrl}/reservar`,
             lastModified: new Date(),
+            changeFrequency: 'weekly',
+            priority: 0.9,
+        },
+        {
+            url: `${baseUrl}/inspiracion`,
+            lastModified: new Date(),
             changeFrequency: 'monthly',
-            priority: 0.8,
+            priority: 0.7,
+        },
+        {
+            url: `${baseUrl}/promociones`,
+            lastModified: new Date(),
+            changeFrequency: 'weekly',
+            priority: 0.7,
         },
         {
             url: `${baseUrl}/privacidad`,

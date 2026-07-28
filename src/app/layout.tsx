@@ -12,6 +12,7 @@ import { Metadata, Viewport } from 'next';
 
 
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
+import { GoogleAdsScript } from '@/components/providers/google-ads-script';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
 import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
 
@@ -75,6 +76,7 @@ export default function RootLayout({
   return (
     <html lang="es" className={inter.variable}>
       <body>
+        <GoogleAdsScript />
         <LocalProvider>
           <AuthProvider>
             <AuthGuard>

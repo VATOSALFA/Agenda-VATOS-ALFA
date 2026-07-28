@@ -17,6 +17,7 @@ import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2,
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
+import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
@@ -757,6 +758,14 @@ export default function BookingPage() {
                 }
 
                 if (errorCount === 0 && createdReservationIds.length > 0) {
+                    // Trigger isolated Google Ads conversion tracking for each confirmed reservation ID
+                    createdReservationIds.forEach((resId) => {
+                        trackGoogleAdsReservation({
+                            reservationId: resId,
+                            value: totalPrice,
+                            currency: 'MXN',
+                        });
+                    });
                     setStep(4);
                     setIsSubmitting(false);
                 } else {

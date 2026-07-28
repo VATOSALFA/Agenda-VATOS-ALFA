@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
+import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -31,7 +32,15 @@ export default function ReservaConfirmadaPage() {
                 const docRef = doc(db, 'reservas', reservationId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    setReservation({ id: docSnap.id, ...docSnap.data() });
+                    const resData: any = { id: docSnap.id, ...(docSnap.data() as any) };
+                    setReservation(resData);
+
+                    // Trigger isolated conversion tracking for confirmed online reservation
+                    trackGoogleAdsReservation({
+                        reservationId: docSnap.id,
+                        value: Number(resData.totalAmount || resData.precio_total || resData.precio || 0),
+                        currency: 'MXN',
+                    });
                 }
             } catch (error) {
                 console.error("Error fetching reservation:", error);

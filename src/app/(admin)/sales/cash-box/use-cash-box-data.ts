@@ -2,7 +2,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay } from "date-fns";
-import { where, Timestamp, type QueryConstraint, doc, getDoc } from 'firebase/firestore';
+import { where, Timestamp, type QueryConstraint, doc, getDoc, collection, query, getDocs, documentId } from 'firebase/firestore';
 import { db } from "@/lib/firebase-client";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Sale, Egreso, IngresoManual, Client, Profesional, Local, User } from "@/lib/types";
@@ -81,7 +81,7 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: users, loading: usersLoading } = useFirestoreQuery<User>('usuarios');
 
-    // 2.b Fetch ONLY needed clients to optimize loaded memory
+    // 2.b Fetch ONLY needed clients in fast batched queries (30 per chunk)
     const fetchedClientIds = useRef<Set<string>>(new Set());
     const [clientsInSales, setClientsInSales] = useState<Client[]>([]);
     const [clientsLoading, setClientsLoading] = useState(false);
@@ -93,30 +93,41 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
         const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIds.current.has(id));
 
         if (idsToFetch.length > 0) {
-            const fetchClients = async () => {
+            const fetchClientsBatch = async () => {
                 setClientsLoading(true);
                 try {
-                    const promises = idsToFetch.map(id => getDoc(doc(db, 'clientes', id)));
-                    const results = await Promise.all(promises);
+                    const CHUNK_SIZE = 30;
+                    const chunks: string[][] = [];
+                    for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) {
+                        chunks.push(idsToFetch.slice(i, i + CHUNK_SIZE));
+                    }
+
+                    const batchPromises = chunks.map(chunk =>
+                        getDocs(query(collection(db, 'clientes'), where(documentId(), 'in', chunk)))
+                    );
+
+                    const snapshots = await Promise.all(batchPromises);
                     const newClients: Client[] = [];
-                    results.forEach(snapshot => {
-                        if (snapshot.exists()) {
-                            fetchedClientIds.current.add(snapshot.id);
-                            newClients.push({ id: snapshot.id, ...snapshot.data() } as Client);
-                        }
+                    snapshots.forEach(snapshot => {
+                        snapshot.docs.forEach(docSnap => {
+                            if (!fetchedClientIds.current.has(docSnap.id)) {
+                                fetchedClientIds.current.add(docSnap.id);
+                                newClients.push({ id: docSnap.id, ...docSnap.data() } as Client);
+                            }
+                        });
                     });
                     setClientsInSales(prev => [...prev, ...newClients]);
                 } catch (err) {
-                    console.error("Error fetching clients", err);
+                    console.error("Error fetching batched clients", err);
                 } finally {
                     setClientsLoading(false);
                 }
             };
-            fetchClients();
+            fetchClientsBatch();
         }
     }, [sales]);
 
-    const loading = salesLoading || egresosLoading || ingresosLoading || localesLoading || clientsLoading || professionalsLoading || usersLoading;
+    const loading = salesLoading || egresosLoading || ingresosLoading || localesLoading || professionalsLoading || usersLoading;
 
     // 3. Filter in Memory (Local for Egresos/Ingresos if needed - though query constraints handles some, local filtering for egresos/ingresos was partly manual in original?)
     // Original code: egresos = activeFilters.localId === 'todos' ? allEgresos : allEgresos.filter...
@@ -177,7 +188,7 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
 
 
     const salesWithClientData = useMemo(() => {
-        if (salesLoading || clientsLoading) return [];
+        if (salesLoading) return [];
         const sortedSales = [...sales].sort((a, b) => {
             const tA = a.fecha_hora_venta instanceof Timestamp ? a.fecha_hora_venta.toMillis() : 0;
             const tB = b.fecha_hora_venta instanceof Timestamp ? b.fecha_hora_venta.toMillis() : 0;
@@ -185,9 +196,9 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
         });
         return sortedSales.map(sale => ({
             ...sale,
-            client: clientMap.get(sale.cliente_id)
-        }))
-    }, [sales, clientMap, salesLoading, clientsLoading]);
+            client: clientMap.get(sale.cliente_id) || (sale as any).customer || ((sale as any).cliente_nombre ? ({ nombre: (sale as any).cliente_nombre } as Client) : undefined)
+        }));
+    }, [sales, clientMap, salesLoading]);
 
     const egresosWithData = useMemo(() => {
         if (egresosLoading || professionalsLoading) return [];

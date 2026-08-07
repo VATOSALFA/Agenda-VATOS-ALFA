@@ -1,0 +1,38 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "ventas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha_hora_venta", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "egresos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ingresos_manuales",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reservas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" },
+        { "fieldPath": "hora_inicio", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

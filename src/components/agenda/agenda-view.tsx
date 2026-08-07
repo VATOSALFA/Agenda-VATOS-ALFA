@@ -1456,12 +1456,9 @@ export default function AgendaView() {
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
                                 {event.layout.isMinimized ? (
-                                  <div className="flex flex-col justify-between h-full w-full overflow-hidden leading-tight">
-                                    <span className="text-[10px] font-black truncate tracking-tighter uppercase">
-                                      {(event as any).estado === 'No asiste' ? 'NO ASISTIÓ' : 'CANCELADO'}
-                                    </span>
-                                    <span className="text-[9px] font-medium truncate opacity-90">
-                                      {formatClientName(event.customer?.nombre, (event.customer as any)?.apellido)}
+                                  <div className="flex items-center justify-center h-full w-full overflow-hidden px-1 text-center">
+                                    <span className="text-[11px] font-bold truncate uppercase tracking-tight">
+                                      {(event as any).estado === 'No asiste' ? 'No Asistió' : 'Cancelado'}
                                     </span>
                                   </div>
                                 ) : (

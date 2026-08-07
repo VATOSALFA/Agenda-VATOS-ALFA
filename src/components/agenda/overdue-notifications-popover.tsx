@@ -106,12 +106,12 @@ export function OverdueNotificationsPopover({
           className={cn(
             "relative gap-1.5 h-8 rounded-xl transition-all border",
             count > 0
-              ? "border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+              ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
               : "border-muted text-muted-foreground hover:text-foreground"
           )}
           title="Notificaciones de citas por etiquetar"
         >
-          <Bell className={cn("h-4 w-4", count > 0 && "animate-bounce text-amber-500")} />
+          <Bell className={cn("h-4 w-4", count > 0 && "animate-bounce text-primary")} />
           <span className="hidden md:inline font-bold text-xs">Avisos</span>
 
           {count > 0 && (
@@ -122,11 +122,11 @@ export function OverdueNotificationsPopover({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-80 sm:w-96 p-0 shadow-xl border-amber-500/30" align="end">
-        <div className="p-3.5 border-b bg-amber-500/10 flex items-center justify-between">
+      <PopoverContent className="w-80 sm:w-96 p-0 shadow-xl border-primary/20 bg-background" align="end">
+        <div className="p-3.5 border-b bg-primary/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <h4 className="font-bold text-sm text-foreground">Citas por Etiquetar ({count})</h4>
+            <Bell className="h-4 w-4 text-primary" />
+            <h4 className="font-bold text-sm text-primary">Citas por Etiquetar ({count})</h4>
           </div>
           <Badge variant={count > 0 ? "destructive" : "outline"} className="text-[10px]">
             {count > 0 ? "Atención Requerida" : "Al día"}

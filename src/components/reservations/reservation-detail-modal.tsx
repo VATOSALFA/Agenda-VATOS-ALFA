@@ -31,6 +31,7 @@ import {
   CheckCircle2,
   MessageCircle,
   Send,
+  XCircle,
 } from 'lucide-react';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
@@ -566,7 +567,12 @@ export function ReservationDetailModal({
               </Button>
             )}
 
-            {reservation.pago_estado !== 'Pagado' ? (
+            {reservation.estado === 'Cancelado' ? (
+              <Button disabled variant="outline" className="opacity-60 cursor-not-allowed border-gray-300 text-gray-500">
+                <XCircle className="mr-2 h-4 w-4 text-gray-400" />
+                Cita Cancelada
+              </Button>
+            ) : reservation.pago_estado !== 'Pagado' ? (
               <Button onClick={onPay} className={cn(
                 "hover:bg-primary/90",
                 reservation.pago_estado === 'deposit_paid' ? "bg-orange-600 hover:bg-orange-700" : "bg-primary"

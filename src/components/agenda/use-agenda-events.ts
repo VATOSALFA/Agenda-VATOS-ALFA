@@ -17,7 +17,6 @@ export function useAgendaEvents(
         const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
 
         const appointmentEvents: AgendaEvent[] = reservations
-            .filter(res => res.estado !== 'Cancelado')
             .flatMap(res => {
                 const [startH, startM] = res.hora_inicio.split(':').map(Number);
                 const [endH, endM] = res.hora_fin.split(':').map(Number);
@@ -122,27 +121,14 @@ export function useAgendaEvents(
                 type: 'block' as const,
                 id: block.id,
                 barbero_id: block.barbero_id,
-                customer: { nombre: block.motivo } as any, // Cast to any to satisfy Client-ish usage
-                // service property doesn't exist on TimeBlock but is used in rendering? Needs checking.
-                // In original code: service: isAvailable ? 'Disponible' : 'Bloqueado',
-                // But AgendaEvent is a union. Let's cast as necessary or update type.
-                // AgendaEvent union has (TimeBlock & ...). TimeBlock doesn't have 'service'.
-                // However, the original code added 'service' property.
-                // We can add it to the expanding type or just let it be (if TS complains).
-                // Let's stick to TS definitions. If TimeBlock doesn't have service, we shouldn't add it unless we extend the type.
-                // The original type definition in `agenda-view.tsx` did not explicitly add `service`.
-                // Wait, `Reservation` has `servicio`. `TimeBlock` does not.
-                // If the rendering code accesses `event.servicio`, it works for Reservation.
-                // If it accesses it for Block, it will be undefined unless we add it. 
-                // Original code: service: isAvailable ? 'Disponible' : 'Bloqueado',
-                // We will add it via type assertion to AgendaEvent which is intersection.
+                customer: { nombre: block.motivo } as any,
                 start: start,
                 end: end,
                 duration: Math.max(0.0833, end - start),
                 color: isAvailable ? 'bg-background border-dashed border-green-500 z-10' : 'bg-striped-gray border-gray-400 text-gray-600',
                 originalType: block.type,
                 layout: { width: 100, left: 0, col: 0, totalCols: 1 },
-                servicio: isAvailable ? 'Disponible' : 'Bloqueado' // Added to match logic
+                servicio: isAvailable ? 'Disponible' : 'Bloqueado'
             } as AgendaEvent;
         });
 
@@ -150,11 +136,9 @@ export function useAgendaEvents(
         const validBlockEvents = mappedBlockEvents.filter(block => {
             if ((block as any).originalType === 'available') return true;
 
-            // Check if this blocking block is overridden by an available block
             const isOverridden = mappedBlockEvents.some(other =>
                 (other as any).originalType === 'available' &&
                 other.barbero_id === block.barbero_id &&
-                // Check overlap
                 (other.start < block.end && other.end > block.start)
             );
 
@@ -165,15 +149,32 @@ export function useAgendaEvents(
     }, [reservations, timeBlocks, clients, professionals]);
 
     const eventsWithLayout: AgendaEvent[] = useMemo(() => {
-        const processedEvents: AgendaEvent[] = allEvents.map(event => ({ ...event, layout: { width: 100, left: 0, col: 0, totalCols: 1 } }));
+        const MINIMIZED_WIDTH = 22; // 22% left strip width for No asiste / Cancelado
+        const REMAINING_WIDTH = 78; // 78% remaining width for active appointments
 
-        for (let i = 0; i < processedEvents.length; i++) {
-            const eventA = processedEvents[i];
+        const processedEvents: AgendaEvent[] = allEvents.map(event => {
+            const isMinimized = event.type === 'appointment' && (event.estado === 'No asiste' || event.estado === 'Cancelado');
+            return {
+                ...event,
+                layout: {
+                    width: isMinimized ? MINIMIZED_WIDTH : 100,
+                    left: 0,
+                    col: 0,
+                    totalCols: 1,
+                    isMinimized
+                }
+            };
+        });
 
+        // Filter non-minimized active events for standard column width partitioning
+        const activeEvents = processedEvents.filter(e => !e.layout.isMinimized);
+
+        for (let i = 0; i < activeEvents.length; i++) {
+            const eventA = activeEvents[i];
             const overlappingEvents: AgendaEvent[] = [eventA];
 
-            for (let j = i + 1; j < processedEvents.length; j++) {
-                const eventB = processedEvents[j];
+            for (let j = i + 1; j < activeEvents.length; j++) {
+                const eventB = activeEvents[j];
 
                 const eventAProfessionals = eventA.type === 'appointment'
                     ? ((eventA as any).target_barber_id ? [(eventA as any).target_barber_id] : (eventA.items ? eventA.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
@@ -186,7 +187,6 @@ export function useAgendaEvents(
 
                 const isAAvailable = (eventA as any).originalType === 'available';
                 const isBAvailable = (eventB as any).originalType === 'available';
-                const eitherIsAvailable = isAAvailable || isBAvailable;
 
                 const ignoreCollision = (eventA.type === 'appointment' && isBAvailable) ||
                     (eventB.type === 'appointment' && isAAvailable);
@@ -225,6 +225,31 @@ export function useAgendaEvents(
                 });
             }
         }
+
+        // Adjust active events layout if they overlap with a minimized event in the same slot
+        const minimizedEvents = processedEvents.filter(e => e.layout.isMinimized);
+
+        activeEvents.forEach(activeEvent => {
+            const activeProfs = activeEvent.type === 'appointment'
+                ? ((activeEvent as any).target_barber_id ? [(activeEvent as any).target_barber_id] : (activeEvent.items ? activeEvent.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
+                : [activeEvent.barbero_id];
+
+            const hasMinimizedOverlap = minimizedEvents.some(minEvent => {
+                const minProfs = minEvent.type === 'appointment'
+                    ? ((minEvent as any).target_barber_id ? [(minEvent as any).target_barber_id] : (minEvent.items ? minEvent.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
+                    : [minEvent.barbero_id];
+
+                const sameProf = activeProfs.some(p => minProfs.includes(p));
+                return sameProf && activeEvent.start < minEvent.end && activeEvent.end > minEvent.start;
+            });
+
+            if (hasMinimizedOverlap) {
+                // Scale width to fit in remaining 78% and shift left position by 22%
+                activeEvent.layout.width = (activeEvent.layout.width * REMAINING_WIDTH) / 100;
+                activeEvent.layout.left = MINIMIZED_WIDTH + (activeEvent.layout.left * REMAINING_WIDTH) / 100;
+            }
+        });
+
         return processedEvents;
     }, [allEvents]);
 

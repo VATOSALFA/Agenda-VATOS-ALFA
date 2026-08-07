@@ -212,7 +212,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
 
         reservationsSnapshot.forEach(doc => {
             const data = doc.data();
-            if (data.estado === 'Cancelado') return;
+            if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
 
             // Robust check for professional match
             let isForProf = data.barbero_id === professionalId;
@@ -676,7 +676,7 @@ export async function createPublicReservation(data: any) {
 
         const hasReservationConflict = reservationsSnapshot.docs.some(doc => {
             const res = doc.data();
-            if (res.estado === 'Cancelado') return false;
+            if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
 
             // Check if it's the same professional
             const isForProf = res.barbero_id === data.professionalId || (res.items && res.items.some((i: any) => i.barbero_id === data.professionalId));

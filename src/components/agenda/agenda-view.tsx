@@ -59,6 +59,7 @@ import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservat
 import { useAgendaEvents } from './use-agenda-events';
 import { getStatusColor, formatClientName } from './agenda-utils';
 import { logAuditAction } from '@/lib/audit-logger';
+import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 
 import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
 import { ClientDetailModal } from '../clients/client-detail-modal';
@@ -1030,6 +1031,14 @@ export default function AgendaView() {
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
+              <OverdueNotificationsPopover
+                reservations={reservations}
+                professionals={professionals}
+                clients={clients}
+                onUpdateStatus={handleUpdateStatus}
+                onSelectReservation={handleOpenDetailModal}
+              />
+
               <Button
                 variant="outline"
                 size="sm"
@@ -1428,60 +1437,78 @@ export default function AgendaView() {
                                   }
                                 }}
                                 className={cn(
-                                  "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg hover:scale-[1.02] flex items-center justify-between text-left p-2 overflow-hidden cursor-pointer select-none",
-                                  event.color,
-                                  event.type === 'appointment' ? 'z-20' : 'z-10',
+                                  "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg flex items-center justify-between text-left p-1.5 overflow-hidden cursor-pointer select-none",
+                                  event.layout.isMinimized
+                                    ? ((event as any).estado === 'No asiste'
+                                      ? "bg-orange-500/20 border-orange-500 text-orange-800 dark:text-orange-200 z-15"
+                                      : "bg-gray-500/20 border-gray-400 text-gray-700 dark:text-gray-300 opacity-80 z-15")
+                                    : event.color,
+                                  !event.layout.isMinimized && (event.type === 'appointment' ? 'z-20' : 'z-10'),
                                   (event.type === 'appointment' &&
+                                    !event.layout.isMinimized &&
                                     event.pago_estado !== 'Pagado' &&
-                                    event.estado !== 'No asiste' &&
-                                    event.estado !== 'En espera' && (
+                                    (event as any).estado !== 'No asiste' &&
+                                    (event as any).estado !== 'En espera' && (
                                       (whatsappConfirmationAnimation && !event.whatsappConfirmationSent) ||
                                       (whatsappReminderAnimation && !event.whatsappReminderSent)
                                     )) && "animate-pending-notification"
                                 )}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
-                                <div className="flex-grow overflow-hidden pr-1">
-                                  <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
-                                </div>
+                                {event.layout.isMinimized ? (
+                                  <div className="flex flex-col justify-between h-full w-full overflow-hidden leading-tight">
+                                    <span className="text-[10px] font-black truncate tracking-tighter uppercase">
+                                      {(event as any).estado === 'No asiste' ? 'NO ASISTIÓ' : 'CANCELADO'}
+                                    </span>
+                                    <span className="text-[9px] font-medium truncate opacity-90">
+                                      {formatClientName(event.customer?.nombre, (event.customer as any)?.apellido)}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex-grow overflow-hidden pr-1">
+                                      <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
+                                    </div>
 
-                                {(event.type === 'appointment') && (
-                                  <div className="absolute top-0 right-0 h-full flex">
-                                    {/* Product Indicator (Blue) - Left of A */}
-                                    {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
-                                      <div className="h-full px-1 flex items-center justify-center bg-blue-600">
-                                        <span className="text-white font-bold text-[10px]">P</span>
-                                      </div>
-                                    )}
+                                    {(event.type === 'appointment') && (
+                                      <div className="absolute top-0 right-0 h-full flex">
+                                        {/* Product Indicator (Blue) - Left of A */}
+                                        {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
+                                          <div className="h-full px-1 flex items-center justify-center bg-blue-600">
+                                            <span className="text-white font-bold text-[10px]">P</span>
+                                          </div>
+                                        )}
 
-                                    {/* Payment Status Indicator (A/$) - Right */}
-                                    {(event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') && (
-                                      <div className={cn(
-                                        "h-full px-1 flex items-center justify-center min-w-[20px]",
-                                        event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500'
-                                      )}>
-                                        {event.pago_estado === 'deposit_paid' ? (
-                                          <span className="text-black font-bold text-[10px]">A</span>
-                                        ) : (
-                                          <DollarSign className="h-3 w-3 text-black font-bold" />
+                                        {/* Payment Status Indicator (A/$) - Right */}
+                                        {(event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') && (
+                                          <div className={cn(
+                                            "h-full px-1 flex items-center justify-center min-w-[20px]",
+                                            event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500'
+                                          )}>
+                                            {event.pago_estado === 'deposit_paid' ? (
+                                              <span className="text-black font-bold text-[10px]">A</span>
+                                            ) : (
+                                              <DollarSign className="h-3 w-3 text-black font-bold" />
+                                            )}
+                                          </div>
                                         )}
                                       </div>
                                     )}
-                                  </div>
-                                )}
 
-                                <div className={cn("absolute top-0 h-full flex items-center gap-0.5", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-12" : "right-1")}>
-                                  {event.type === 'appointment' && (
-                                    <div className="flex items-center gap-0.5 h-full px-1">
-                                      {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
-                                        <Globe className="w-3.5 h-3.5 text-primary" />
-                                      )}
-                                      {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')))) && (
-                                        <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                                    <div className={cn("absolute top-0 h-full flex items-center gap-0.5", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-12" : "right-1")}>
+                                      {event.type === 'appointment' && (
+                                        <div className="flex items-center gap-0.5 h-full px-1">
+                                          {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
+                                            <Globe className="w-3.5 h-3.5 text-primary" />
+                                          )}
+                                          {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')))) && (
+                                            <Lock className="w-3.5 h-3.5 text-muted-foreground" />
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
-                                </div>
+                                  </>
+                                )}
                               </div>
                             </TooltipTrigger>
                             {event.type === 'appointment' ? (

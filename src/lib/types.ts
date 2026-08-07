@@ -396,6 +396,7 @@ export interface AgendaLayout {
   left: number;
   col: number;
   totalCols: number;
+  isMinimized?: boolean;
 }
 
 export type AgendaEvent = (Reservation & { type: 'appointment', duration: number, start: number, end: number, color: string, layout: AgendaLayout }) |

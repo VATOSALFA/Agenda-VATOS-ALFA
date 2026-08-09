@@ -47,7 +47,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
@@ -710,6 +710,80 @@ export default function AgendaView() {
 
 
 
+  const handleRegisterDeposit = async (depositAmount: number, paymentMethod: string) => {
+    if (!selectedReservation || !db) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No hay reserva seleccionada o la base de datos no está disponible.' });
+      return;
+    }
+
+    try {
+      const resId = selectedReservation.id;
+      const total = selectedReservation.total || 0;
+      const saldoPendiente = Math.max(0, total - depositAmount);
+
+      const depositSaleId = `deposit_${resId}_${Date.now()}`;
+      const resRef = doc(db, 'reservas', resId);
+      const saleRef = doc(db, 'ventas', depositSaleId);
+
+      // Create deposit sale record in 'ventas' for Cash Box income tracking
+      const saleData = {
+        id: depositSaleId,
+        reservationId: resId,
+        cliente_id: selectedReservation.cliente_id || '',
+        cliente_nombre: formatClientName(selectedReservation.customer?.nombre, selectedReservation.customer?.apellido),
+        local_id: selectedReservation.local_id || selectedLocalId || 'default',
+        fecha_hora_venta: Timestamp.now(),
+        tipo_venta: 'anticipo',
+        total: total,
+        monto_pagado_real: depositAmount,
+        monto_anticipo: depositAmount,
+        saldo_pendiente: saldoPendiente,
+        pago_estado: 'deposit_paid',
+        metodo_pago: paymentMethod,
+        items: selectedReservation.items || [],
+        creado_por: user?.email || 'recepcion'
+      };
+
+      await setDoc(saleRef, saleData);
+
+      // Update reservation document with deposit state
+      const updateData = {
+        pago_estado: 'deposit_paid',
+        monto_anticipo: depositAmount,
+        saldo_pendiente: saldoPendiente,
+        monto_pagado_real: depositAmount,
+        metodo_pago_anticipo: paymentMethod,
+        deposit_payment_id: depositSaleId,
+        deposit_paid_at: Timestamp.now()
+      };
+
+      await updateDoc(resRef, updateData);
+
+      setSelectedReservation({
+        ...selectedReservation,
+        ...updateData
+      });
+
+      toast({
+        title: 'Anticipo Registrado',
+        description: `Se registró el anticipo de $${depositAmount.toFixed(2)} correctamente.`,
+      });
+
+      await logAuditAction({
+        action: 'Registrar Anticipo',
+        details: `Anticipo de $${depositAmount.toFixed(2)} (${paymentMethod}) registrado para ${selectedReservation.customer?.nombre || 'Cliente'}. Saldo pendiente: $${saldoPendiente.toFixed(2)}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'info',
+        localId: selectedReservation.local_id || 'unknown'
+      });
+    } catch (err: any) {
+      console.error('Error registrando anticipo:', err);
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || 'No se pudo registrar el anticipo.' });
+    }
+  };
+
   const handleUpdateStatus = async (reservationId: string, newStatus: string) => {
     if (!db) {
       toast({ variant: 'destructive', title: 'Error', description: 'No hay conexión con la base de datos.' });
@@ -717,13 +791,84 @@ export default function AgendaView() {
     }
     try {
       const resRef = doc(db, 'reservas', reservationId);
+      const resSnap = await getDoc(resRef);
+      const resData = resSnap.exists() ? (resSnap.data() as Reservation) : selectedReservation;
+
+      // Retained Deposit logic for "No asistió" (No asiste)
+      if (newStatus === 'No asiste' && (resData?.pago_estado === 'deposit_paid' || (resData?.monto_anticipo && resData.monto_anticipo > 0))) {
+        const depositAmount = resData?.monto_anticipo || resData?.monto_pagado_real || 0;
+
+        if (depositAmount > 0) {
+          const totalRes = resData?.total || depositAmount;
+          const ratio = depositAmount / (totalRes || 1);
+
+          // Scale item prices to deposit amount so professional commission calculates 50% of the retained deposit
+          const scaledItems = resData?.items?.map(item => ({
+            ...item,
+            precio: Math.round((item.precio || item.subtotal || 0) * ratio * 100) / 100,
+            subtotal: Math.round((item.subtotal || item.precio || 0) * ratio * 100) / 100,
+          })) || [{
+            id: 'anticipo-retenido',
+            nombre: 'Anticipo Retenido por Inasistencia',
+            tipo: 'servicio',
+            precio: depositAmount,
+            subtotal: depositAmount,
+            barbero_id: resData?.barbero_id
+          }];
+
+          const depositSaleId = resData?.deposit_payment_id || `deposit_${reservationId}`;
+          const saleRef = doc(db, 'ventas', depositSaleId);
+
+          await setDoc(saleRef, {
+            id: depositSaleId,
+            reservationId: reservationId,
+            cliente_id: resData?.cliente_id || '',
+            cliente_nombre: formatClientName((resData as any)?.customer?.nombre, (resData as any)?.customer?.apellido),
+            local_id: resData?.local_id || selectedLocalId || 'default',
+            fecha_hora_venta: Timestamp.now(),
+            tipo_venta: 'anticipo_retenido',
+            total: depositAmount,
+            monto_pagado_real: depositAmount,
+            saldo_pendiente: 0,
+            pago_estado: 'Pagado',
+            metodo_pago: resData?.metodo_pago_anticipo || 'efectivo',
+            items: scaledItems,
+            motivo: 'Anticipo Retenido por Inasistencia'
+          }, { merge: true });
+
+          await updateDoc(resRef, {
+            estado: 'No asiste',
+            pago_estado: 'Pagado',
+            saldo_pendiente: 0,
+            monto_retenido: depositAmount
+          });
+
+          toast({
+            title: 'No Asistió - Anticipo Retenido',
+            description: `Se registró la inasistencia. Se retuvo el anticipo de $${depositAmount.toFixed(2)} y se asignó la comisión al profesional.`,
+          });
+
+          if (selectedReservation && selectedReservation.id === reservationId) {
+            setSelectedReservation({
+              ...selectedReservation,
+              estado: 'No asiste',
+              pago_estado: 'Pagado',
+              saldo_pendiente: 0,
+              monto_retenido: depositAmount
+            });
+          }
+          return;
+        }
+      }
+
       await updateDoc(resRef, { estado: newStatus });
       toast({ title: 'Estado actualizado', description: `La reserva ahora está en estado: ${newStatus}` });
-      if (selectedReservation) {
-        setSelectedReservation({ ...selectedReservation, estado: newStatus })
+      if (selectedReservation && selectedReservation.id === reservationId) {
+        setSelectedReservation({ ...selectedReservation, estado: newStatus });
       }
-    } catch (err) {
-      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.' })
+    } catch (err: any) {
+      console.error('Error actualizando estado:', err);
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el estado.' });
     }
   };
 
@@ -1583,6 +1728,7 @@ export default function AgendaView() {
             onUpdateStatus={handleUpdateStatus}
             onEdit={canSee('editar_reservas') ? handleEditFromDetail : undefined}
             onClientClick={handleViewClientFile}
+            onRegisterDeposit={handleRegisterDeposit}
           />
         )
       }

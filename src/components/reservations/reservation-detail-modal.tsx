@@ -29,10 +29,11 @@ import {
   Eye,
   Lock,
   CheckCircle2,
-  MessageCircle,
-  Send,
   XCircle,
+  DollarSign,
+  Send,
 } from 'lucide-react';
+import { RegisterDepositModal } from './register-deposit-modal';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
 import { format, parse, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -66,6 +67,7 @@ interface ReservationDetailModalProps {
   onUpdateStatus: (reservationId: string, status: string) => void;
   onEdit?: () => void;
   onClientClick?: (clientId: string) => void;
+  onRegisterDeposit?: (depositAmount: number, paymentMethod: string) => Promise<void>;
 }
 
 const statusOptions = [
@@ -85,9 +87,11 @@ export function ReservationDetailModal({
   onPay,
   onUpdateStatus,
   onEdit,
-  onClientClick
+  onClientClick,
+  onRegisterDeposit,
 }: ReservationDetailModalProps) {
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
@@ -567,6 +571,16 @@ export function ReservationDetailModal({
               </Button>
             )}
 
+            {reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid' && (
+              <Button
+                variant="outline"
+                className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 font-bold"
+                onClick={() => setIsDepositModalOpen(true)}
+              >
+                <DollarSign className="mr-1.5 h-4 w-4 text-orange-500" /> Anticipo
+              </Button>
+            )}
+
             {reservation.estado === 'Cancelado' ? (
               <Button disabled variant="outline" className="opacity-60 cursor-not-allowed border-gray-300 text-gray-500">
                 <XCircle className="mr-2 h-4 w-4 text-gray-400" />
@@ -591,6 +605,17 @@ export function ReservationDetailModal({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RegisterDepositModal
+        isOpen={isDepositModalOpen}
+        onOpenChange={setIsDepositModalOpen}
+        reservation={reservation}
+        onConfirmDeposit={async (amount, method) => {
+          if (onRegisterDeposit) {
+            await onRegisterDeposit(amount, method);
+          }
+        }}
+      />
 
       <CancelReservationModal
         isOpen={isCancelModalOpen}

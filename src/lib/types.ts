@@ -91,6 +91,11 @@ export interface Reservation {
     email_confirmation_sent_at?: Timestamp;
   };
   monto_pagado?: number;
+  monto_pagado_real?: number;
+  monto_anticipo?: number;
+  metodo_pago_anticipo?: string;
+  deposit_paid_at?: any;
+  monto_retenido?: number;
   anticipo_pagado?: number;
   deposit_payment_id?: string;
   professional_lock?: boolean;

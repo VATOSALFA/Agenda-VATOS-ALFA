@@ -97,6 +97,9 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
 
             const batch = writeBatch(db);
 
+            let extraPoints = 0;
+            const extraNotes: string[] = [];
+
             // Move reservations and sales from secondary clients to primary
             for (const secondaryClient of secondaryClients) {
                 const reservationsQuery = query(collection(db, 'reservas'), where('cliente_id', '==', secondaryClient.id));
@@ -107,27 +110,78 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     getDocs(salesQuery)
                 ]);
 
-                reservationsSnapshot.forEach(doc => {
-                    batch.update(doc.ref, { cliente_id: primaryClientId });
+                reservationsSnapshot.forEach(docSnap => {
+                    batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
 
-                salesSnapshot.forEach(doc => {
-                    batch.update(doc.ref, { cliente_id: primaryClientId });
+                salesSnapshot.forEach(docSnap => {
+                    batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
+
+                if (secondaryClient.puntos) {
+                    extraPoints += secondaryClient.puntos;
+                }
+
+                if (secondaryClient.notas && secondaryClient.notas.trim()) {
+                    extraNotes.push(secondaryClient.notas.trim());
+                }
 
                 // Delete secondary client
                 batch.delete(doc(db, 'clientes', secondaryClient.id));
             }
 
-            // Here you could add logic to merge specific fields into the primary client if needed
-            // For now, we are just re-assigning historical data and deleting the duplicate.
-            // Example: batch.update(doc(db, 'clientes', primaryClientId), { notas: mergedNotes });
+            // Fetch ALL reservations and sales for primary client (including newly assigned ones)
+            const allPrimaryReservationsQuery = query(collection(db, 'reservas'), where('cliente_id', '==', primaryClientId));
+            const allPrimarySalesQuery = query(collection(db, 'ventas'), where('cliente_id', '==', primaryClientId));
+
+            const [allResSnap, allSalesSnap] = await Promise.all([
+                getDocs(allPrimaryReservationsQuery),
+                getDocs(allPrimarySalesQuery)
+            ]);
+
+            const allRes = allResSnap.docs.map(d => d.data());
+            const allSales = allSalesSnap.docs.map(d => d.data());
+
+            const totalCount = allRes.length;
+            const attendedCount = allRes.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
+            const unattendedCount = allRes.filter(r => r.estado === 'No asiste').length;
+            const cancelledCount = allRes.filter(r => r.estado === 'Cancelado').length;
+
+            const validSales = allSales.filter(s => !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || ''));
+            const totalSpent = validSales.reduce((acc, sale) => {
+                const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null)
+                    ? sale.monto_pagado_real
+                    : (sale.total || 0);
+                return acc + amount;
+            }, 0);
+
+            const finalPoints = (primaryClient.puntos || 0) + extraPoints;
+
+            let finalNotes = primaryClient.notas || '';
+            if (extraNotes.length > 0) {
+                const mergedText = extraNotes.filter(n => !finalNotes.includes(n)).join(' | ');
+                if (mergedText) {
+                    finalNotes = finalNotes ? `${finalNotes}\n[Notas combinadas]: ${mergedText}` : `[Notas combinadas]: ${mergedText}`;
+                }
+            }
+
+            // Update primary client document with consolidated stats
+            const primaryRef = doc(db, 'clientes', primaryClientId);
+            batch.update(primaryRef, {
+                citas_totales: totalCount,
+                citas_asistidas: attendedCount,
+                citas_no_asistidas: unattendedCount,
+                citas_canceladas: cancelledCount,
+                gasto_total: totalSpent,
+                puntos: finalPoints,
+                notas: finalNotes
+            });
 
             await batch.commit();
 
             toast({
                 title: "¡Clientes Combinados!",
-                description: `Se combinaron ${secondaryClients.length + 1} registros en uno solo.`,
+                description: `Se combinaron ${secondaryClients.length + 1} registros en uno solo. Citas totales: ${totalCount}, Gasto acumulado: $${totalSpent.toFixed(2)}.`,
             });
 
             onClientsCombined();

@@ -171,10 +171,10 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
       return acc + amount;
     }, 0);
 
-  const attendedAppointments = client.citas_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length);
-  const unattendedAppointments = client.citas_no_asistidas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'No asiste').length);
-  const cancelledAppointments = client.citas_canceladas || (reservationsLoading ? 0 : reservations.filter(r => r.estado === 'Cancelado').length);
-  const totalAppointments = client.citas_totales || (reservationsLoading ? 0 : reservations.length);
+  const attendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length : (client.citas_asistidas || 0);
+  const unattendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'No asiste').length : (client.citas_no_asistidas || 0);
+  const cancelledAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Cancelado').length : (client.citas_canceladas || 0);
+  const totalAppointments = (!reservationsLoading && reservations) ? reservations.length : (client.citas_totales || 0);
 
   const SortableHeader = ({ label, sortKey, config, onSort, className, align = 'left' }: { 
     label: string; 

@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
@@ -259,6 +259,15 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const selectedClient = useMemo(() => {
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
+
+  const unattendedCount = useMemo(() => {
+    if (!selectedClient) return 0;
+    if (selectedClient.citas_no_asistidas !== undefined && selectedClient.citas_no_asistidas !== null && selectedClient.citas_no_asistidas > 0) {
+      return selectedClient.citas_no_asistidas;
+    }
+    if (!allReservations) return 0;
+    return allReservations.filter(r => r.cliente_id === selectedClient.id && r.estado === 'No asiste').length;
+  }, [selectedClient, allReservations]);
 
   const servicesMap = useMemo(() => {
     if (!services) return new Map<string, ServiceType>();
@@ -922,6 +931,13 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       setIsSubmitting(false);
       if (success) {
         toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
+        if (unattendedCount > 0 && !isEditMode) {
+          toast({
+            title: '⚠️ Atención: Cliente con Inasistencias',
+            description: `Este cliente tiene ${unattendedCount} inasistencia(s) previa(s). Recuerda solicitarle el anticipo del 50%.`,
+            duration: 8000,
+          });
+        }
         onFormSubmit();
         if (onOpenChange) onOpenChange(false);
       }
@@ -1078,25 +1094,41 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </div>
 
                 {selectedClient ? (
-                  <Card>
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
-                            <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                  <div className="space-y-2">
+                    <Card>
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
+                              <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}><Edit className="h-4 w-4" /></Button>
+                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                          <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
+                      </CardContent>
+                    </Card>
+
+                    {unattendedCount > 0 && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2.5">
+                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                            ⚠️ Cliente con {unattendedCount} {unattendedCount === 1 ? 'cita no asistida' : 'citas no asistidas'} previa{unattendedCount === 1 ? '' : 's'}
+                          </p>
+                          <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-tight">
+                            Este cliente tiene historial de inasistencia. <strong>Al guardar la reserva se recomienda cobrar un anticipo del 50%</strong> para asegurar su espacio.
+                          </p>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    )}
+                  </div>
                 ) : (
                   <FormField control={form.control} name="cliente_id" render={({ field }) => (
                     <FormItem>

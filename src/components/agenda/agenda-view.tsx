@@ -721,11 +721,13 @@ export default function AgendaView() {
       const total = (computedTotal && computedTotal > 0) ? computedTotal : (selectedReservation.total || selectedReservation.precio || 0);
       const saldoPendiente = Math.max(0, total - depositAmount);
 
+      const isTerminal = paymentMethod === 'mercadopago';
       const depositSaleId = `deposit_${resId}_${Date.now()}`;
       const resRef = doc(db, 'reservas', resId);
       const saleRef = doc(db, 'ventas', depositSaleId);
 
-      // Create deposit sale record in 'ventas' for Cash Box income tracking
+      // Create deposit sale record in 'ventas'
+      // If paymentMethod === 'mercadopago', set initial status to 'Pendiente' until MP Terminal confirms via Webhook
       const saleData = {
         id: depositSaleId,
         reservationId: resId,
@@ -735,10 +737,10 @@ export default function AgendaView() {
         fecha_hora_venta: Timestamp.now(),
         tipo_venta: 'anticipo',
         total: total,
-        monto_pagado_real: depositAmount,
+        monto_pagado_real: isTerminal ? 0 : depositAmount,
         monto_anticipo: depositAmount,
-        saldo_pendiente: saldoPendiente,
-        pago_estado: 'deposit_paid',
+        saldo_pendiente: isTerminal ? total : saldoPendiente,
+        pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
         metodo_pago: paymentMethod,
         items: selectedReservation.items || [],
         creado_por: user?.email || 'recepcion'
@@ -746,29 +748,39 @@ export default function AgendaView() {
 
       await setDoc(saleRef, saleData);
 
-      // Update reservation document with deposit state
-      const updateData = {
-        total: total,
-        pago_estado: 'deposit_paid',
-        monto_anticipo: depositAmount,
-        saldo_pendiente: saldoPendiente,
-        monto_pagado_real: depositAmount,
-        metodo_pago_anticipo: paymentMethod,
-        deposit_payment_id: depositSaleId,
-        deposit_paid_at: Timestamp.now()
-      };
+      // For cash / bank transfer, update reservation immediately as deposit_paid
+      if (!isTerminal) {
+        const updateData = {
+          total: total,
+          pago_estado: 'deposit_paid',
+          monto_anticipo: depositAmount,
+          saldo_pendiente: saldoPendiente,
+          monto_pagado_real: depositAmount,
+          metodo_pago_anticipo: paymentMethod,
+          deposit_payment_id: depositSaleId,
+          deposit_paid_at: Timestamp.now()
+        };
 
-      await updateDoc(resRef, updateData);
+        await updateDoc(resRef, updateData);
 
-      setSelectedReservation({
-        ...selectedReservation,
-        ...updateData
-      });
+        setSelectedReservation({
+          ...selectedReservation,
+          ...updateData
+        });
 
-      toast({
-        title: 'Anticipo Registrado',
-        description: `Se registró el anticipo de $${depositAmount.toFixed(2)} correctamente.`,
-      });
+        toast({
+          title: 'Anticipo Registrado',
+          description: `Se registró el anticipo de $${depositAmount.toFixed(2)} correctamente.`,
+        });
+      } else {
+        // Store reference and deposit metadata on reservation without marking as paid yet
+        await updateDoc(resRef, {
+          total: total,
+          monto_anticipo: depositAmount,
+          metodo_pago_anticipo: paymentMethod,
+          deposit_payment_id: depositSaleId
+        });
+      }
 
       await logAuditAction({
         action: 'Registrar Anticipo',

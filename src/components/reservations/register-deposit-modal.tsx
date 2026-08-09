@@ -19,11 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { DollarSign, CreditCard, Loader2, Wifi, CheckCircle2 } from 'lucide-react';
+import { DollarSign, CreditCard, Loader2, Wifi } from 'lucide-react';
 import type { Reservation, Service } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { functions, httpsCallable, db } from '@/lib/firebase-client';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, deleteDoc, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 interface RegisterDepositModalProps {
@@ -51,6 +51,7 @@ export function RegisterDepositModal({
   const [error, setError] = useState<string | null>(null);
 
   const unsubscribeRef = useRef<(() => void) | undefined>(undefined);
+  const currentSaleIdRef = useRef<string | null>(null);
 
   // Preselect default terminal if available
   useEffect(() => {
@@ -116,6 +117,27 @@ export function RegisterDepositModal({
     };
   }, [isOpen, total]);
 
+  const handleCancelTerminalWait = async () => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = undefined;
+    }
+    if (currentSaleIdRef.current && db) {
+      try {
+        const saleRef = doc(db, 'ventas', currentSaleIdRef.current);
+        const snap = await getDoc(saleRef);
+        if (snap.exists() && snap.data().pago_estado === 'Pendiente') {
+          await deleteDoc(saleRef);
+        }
+      } catch (e) {
+        console.warn("Could not delete pending sale on cancel:", e);
+      }
+    }
+    setIsWaitingForTerminal(false);
+    setIsSubmitting(false);
+    onOpenChange(false);
+  };
+
   const handleConfirm = async () => {
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
@@ -135,8 +157,9 @@ export function RegisterDepositModal({
       setIsSubmitting(true);
       setError(null);
 
-      // 1. Create deposit reservation record
+      // 1. Create deposit reservation record (creates 'Pendiente' sale if paymentMethod === 'mercadopago')
       const depositSaleId = await onConfirmDeposit(amount, paymentMethod, total);
+      currentSaleIdRef.current = depositSaleId || null;
 
       // 2. If Mercado Pago / Terminal and a physical terminal is selected, trigger physical Point device API
       if (paymentMethod === 'mercadopago' && selectedTerminalId && depositSaleId && functions && db) {
@@ -156,7 +179,7 @@ export function RegisterDepositModal({
           if (result.data.success) {
             toast({ title: 'Cobro Enviado a Terminal', description: 'Por favor completa el pago en la terminal Mercado Pago.' });
 
-            // Listen for payment confirmation via webhook
+            // Listen for payment confirmation via webhook (or snapshot update when approved)
             const saleDocRef = doc(db, 'ventas', depositSaleId);
             const unsubscribe = onSnapshot(saleDocRef, (docSnapshot) => {
               if (docSnapshot.exists()) {
@@ -164,7 +187,7 @@ export function RegisterDepositModal({
                 if (data && (data.pago_estado === 'deposit_paid' || data.pago_estado === 'Pagado')) {
                   setIsWaitingForTerminal(false);
                   setIsSubmitting(false);
-                  toast({ title: 'Anticipo Recibido', description: 'Pago confirmado exitosamente en la terminal.' });
+                  toast({ title: '¡Anticipo Recibido!', description: 'Pago verificado y confirmado exitosamente en la terminal.' });
                   onOpenChange(false);
                 }
               }
@@ -178,9 +201,11 @@ export function RegisterDepositModal({
           console.error("Error al conectar con la terminal MP:", termErr);
           toast({
             variant: 'destructive',
-            title: 'Aviso de Terminal',
-            description: termErr?.message || 'Se registró el anticipo localmente, pero no se pudo enviar el cobro a la terminal física.'
+            title: 'Error de Terminal',
+            description: termErr?.message || 'No se pudo enviar el cobro a la terminal física.'
           });
+          handleCancelTerminalWait();
+          return;
         }
       }
 
@@ -199,7 +224,13 @@ export function RegisterDepositModal({
   const remainingBalance = Math.max(0, total - depositAmount);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open && isWaitingForTerminal) {
+        handleCancelTerminalWait();
+      } else {
+        onOpenChange(open);
+      }
+    }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-lg font-bold text-primary">
@@ -223,20 +254,16 @@ export function RegisterDepositModal({
                 Monto del Anticipo: <strong className="text-primary">${depositAmount.toFixed(2)}</strong>
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Por favor desliza, inserta o aproxima la tarjeta del cliente en la terminal.
+                Por favor desliza, inserta o aproxima la tarjeta del cliente en la terminal física.
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                setIsWaitingForTerminal(false);
-                setIsSubmitting(false);
-                onOpenChange(false);
-              }}
+              onClick={handleCancelTerminalWait}
               className="mt-2 text-xs"
             >
-              Cerrar Ventana
+              Cancelar Cobro en Terminal
             </Button>
           </div>
         ) : (
@@ -337,7 +364,13 @@ export function RegisterDepositModal({
         )}
 
         <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+          <Button variant="outline" onClick={() => {
+            if (isWaitingForTerminal) {
+              handleCancelTerminalWait();
+            } else {
+              onOpenChange(false);
+            }
+          }} disabled={isSubmitting && !isWaitingForTerminal}>
             Cancelar
           </Button>
           <Button
@@ -348,7 +381,7 @@ export function RegisterDepositModal({
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Registrando...
+                {isWaitingForTerminal ? 'Esperando Terminal...' : 'Procesando...'}
               </>
             ) : paymentMethod === 'mercadopago' && selectedTerminalId ? (
               <>

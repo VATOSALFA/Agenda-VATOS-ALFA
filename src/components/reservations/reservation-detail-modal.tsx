@@ -67,7 +67,7 @@ interface ReservationDetailModalProps {
   onUpdateStatus: (reservationId: string, status: string) => void;
   onEdit?: () => void;
   onClientClick?: (clientId: string) => void;
-  onRegisterDeposit?: (depositAmount: number, paymentMethod: string, computedTotal?: number) => Promise<void>;
+  onRegisterDeposit?: (depositAmount: number, paymentMethod: string, computedTotal?: number) => Promise<string | undefined>;
 }
 
 const statusOptions = [
@@ -612,7 +612,7 @@ export function ReservationDetailModal({
         reservation={reservation}
         onConfirmDeposit={async (amount, method, computedTotal) => {
           if (onRegisterDeposit) {
-            await onRegisterDeposit(amount, method, computedTotal);
+            return await onRegisterDeposit(amount, method, computedTotal);
           }
         }}
       />

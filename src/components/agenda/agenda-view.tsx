@@ -779,6 +779,8 @@ export default function AgendaView() {
         severity: 'info',
         localId: selectedReservation.local_id || 'unknown'
       });
+
+      return depositSaleId;
     } catch (err: any) {
       console.error('Error registrando anticipo:', err);
       toast({ variant: 'destructive', title: 'Error', description: err?.message || 'No se pudo registrar el anticipo.' });

@@ -67,7 +67,7 @@ interface ReservationDetailModalProps {
   onUpdateStatus: (reservationId: string, status: string) => void;
   onEdit?: () => void;
   onClientClick?: (clientId: string) => void;
-  onRegisterDeposit?: (depositAmount: number, paymentMethod: string) => Promise<void>;
+  onRegisterDeposit?: (depositAmount: number, paymentMethod: string, computedTotal?: number) => Promise<void>;
 }
 
 const statusOptions = [
@@ -574,10 +574,10 @@ export function ReservationDetailModal({
             {reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid' && (
               <Button
                 variant="outline"
-                className="border-orange-500 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/20 font-bold"
+                className="border-primary text-primary hover:bg-primary/10 font-bold"
                 onClick={() => setIsDepositModalOpen(true)}
               >
-                <DollarSign className="mr-1.5 h-4 w-4 text-orange-500" /> Anticipo
+                <DollarSign className="mr-1.5 h-4 w-4 text-primary" /> Anticipo
               </Button>
             )}
 
@@ -610,9 +610,9 @@ export function ReservationDetailModal({
         isOpen={isDepositModalOpen}
         onOpenChange={setIsDepositModalOpen}
         reservation={reservation}
-        onConfirmDeposit={async (amount, method) => {
+        onConfirmDeposit={async (amount, method, computedTotal) => {
           if (onRegisterDeposit) {
-            await onRegisterDeposit(amount, method);
+            await onRegisterDeposit(amount, method, computedTotal);
           }
         }}
       />

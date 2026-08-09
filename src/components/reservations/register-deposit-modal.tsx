@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,13 +20,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DollarSign, CreditCard, Loader2 } from 'lucide-react';
-import type { Reservation } from '@/lib/types';
+import type { Reservation, Service } from '@/lib/types';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 interface RegisterDepositModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   reservation: Reservation | null;
-  onConfirmDeposit: (depositAmount: number, paymentMethod: string) => Promise<void>;
+  onConfirmDeposit: (depositAmount: number, paymentMethod: string, computedTotal: number) => Promise<void>;
 }
 
 export function RegisterDepositModal({
@@ -35,7 +36,42 @@ export function RegisterDepositModal({
   reservation,
   onConfirmDeposit,
 }: RegisterDepositModalProps) {
-  const total = reservation?.total || 0;
+  const { data: services } = useFirestoreQuery<Service>('servicios');
+
+  // Compute total dynamically in case reservation.total is 0 or missing on Firestore document
+  const total = useMemo(() => {
+    if (!reservation) return 0;
+    if (typeof reservation.total === 'number' && reservation.total > 0) return reservation.total;
+    if (typeof reservation.precio === 'number' && reservation.precio > 0) return reservation.precio;
+
+    let sum = 0;
+    if (reservation.items && reservation.items.length > 0) {
+      reservation.items.forEach((item: any) => {
+        const itemPrice = item.precio || item.subtotal || item.price;
+        if (typeof itemPrice === 'number' && itemPrice > 0) {
+          sum += itemPrice;
+        } else if (services && services.length > 0) {
+          const foundSvc = services.find(s => s.id === item.id || s.name?.toLowerCase() === (item.nombre || item.servicio)?.toLowerCase());
+          if (foundSvc && typeof foundSvc.price === 'number') {
+            sum += foundSvc.price;
+          }
+        }
+      });
+    }
+
+    if (sum === 0 && services && services.length > 0 && (reservation as any).servicio) {
+      const names = (reservation as any).servicio.split(',').map((s: string) => s.trim().toLowerCase());
+      names.forEach((name: string) => {
+        const found = services.find(s => s.name?.toLowerCase() === name || s.id === name);
+        if (found && typeof found.price === 'number') {
+          sum += found.price;
+        }
+      });
+    }
+
+    return sum;
+  }, [reservation, services]);
+
   const minDeposit = Math.round(total * 0.5 * 100) / 100;
 
   const [amountStr, setAmountStr] = useState<string>('');
@@ -44,24 +80,29 @@ export function RegisterDepositModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isOpen && total > 0) {
-      setAmountStr(minDeposit.toString());
+    if (isOpen) {
+      if (total > 0) {
+        const calculatedMin = Math.round(total * 0.5 * 100) / 100;
+        setAmountStr(calculatedMin.toString());
+      } else {
+        setAmountStr('0');
+      }
       setPaymentMethod('efectivo');
       setError(null);
     }
-  }, [isOpen, total, minDeposit]);
+  }, [isOpen, total]);
 
   const handleConfirm = async () => {
     const amount = parseFloat(amountStr);
     if (isNaN(amount) || amount <= 0) {
-      setError('Por favor ingresa un monto válido.');
+      setError('Por favor ingresa un monto de anticipo válido.');
       return;
     }
-    if (amount < minDeposit) {
+    if (total > 0 && amount < minDeposit) {
       setError(`El anticipo debe ser de al menos $${minDeposit.toFixed(2)} (50% del total).`);
       return;
     }
-    if (amount > total) {
+    if (total > 0 && amount > total) {
       setError(`El anticipo no puede ser mayor al total ($${total.toFixed(2)}).`);
       return;
     }
@@ -69,7 +110,7 @@ export function RegisterDepositModal({
     try {
       setIsSubmitting(true);
       setError(null);
-      await onConfirmDeposit(amount, paymentMethod);
+      await onConfirmDeposit(amount, paymentMethod, total);
       onOpenChange(false);
     } catch (err: any) {
       setError(err?.message || 'Error al registrar el anticipo.');
@@ -87,8 +128,8 @@ export function RegisterDepositModal({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-            <DollarSign className="h-5 w-5 text-orange-500" />
+          <DialogTitle className="flex items-center gap-2 text-lg font-bold text-primary">
+            <DollarSign className="h-5 w-5 text-primary" />
             Registrar Anticipo de Reserva
           </DialogTitle>
           <DialogDescription>
@@ -102,14 +143,14 @@ export function RegisterDepositModal({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cliente:</span>
               <span className="font-semibold text-foreground">
-                {reservation.customer?.nombre} {reservation.customer?.apellido || ''}
+                {reservation.customer?.nombre || 'Cliente'} {reservation.customer?.apellido || ''}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total del Servicio:</span>
               <span className="font-bold text-foreground">${total.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-xs text-orange-600 dark:text-orange-400 font-semibold">
+            <div className="flex justify-between text-xs text-primary font-semibold">
               <span>Mínimo Requerido (50%):</span>
               <span>${minDeposit.toFixed(2)}</span>
             </div>
@@ -127,10 +168,10 @@ export function RegisterDepositModal({
                 type="number"
                 step="0.01"
                 min={minDeposit}
-                max={total}
+                max={total > 0 ? total : undefined}
                 value={amountStr}
                 onChange={(e) => setAmountStr(e.target.value)}
-                className="pl-7 font-bold text-base"
+                className="pl-7 font-bold text-base border-primary/30 focus-visible:ring-primary"
                 placeholder="0.00"
               />
             </div>
@@ -155,11 +196,11 @@ export function RegisterDepositModal({
           </div>
 
           {/* Remaining Balance Summary */}
-          <div className="flex justify-between items-center p-2.5 bg-orange-500/10 border border-orange-500/20 rounded-md text-xs">
-            <span className="font-semibold text-orange-700 dark:text-orange-300">
+          <div className="flex justify-between items-center p-2.5 bg-primary/10 border border-primary/20 rounded-md text-xs">
+            <span className="font-semibold text-primary">
               Saldo Restante a Cobrar:
             </span>
-            <span className="font-bold text-orange-700 dark:text-orange-300 text-sm">
+            <span className="font-bold text-primary text-sm">
               ${remainingBalance.toFixed(2)}
             </span>
           </div>
@@ -178,7 +219,7 @@ export function RegisterDepositModal({
           <Button
             onClick={handleConfirm}
             disabled={isSubmitting}
-            className="bg-orange-600 hover:bg-orange-700 text-white font-bold"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
           >
             {isSubmitting ? (
               <>

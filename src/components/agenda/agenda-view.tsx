@@ -710,7 +710,7 @@ export default function AgendaView() {
 
 
 
-  const handleRegisterDeposit = async (depositAmount: number, paymentMethod: string) => {
+  const handleRegisterDeposit = async (depositAmount: number, paymentMethod: string, computedTotal?: number) => {
     if (!selectedReservation || !db) {
       toast({ variant: 'destructive', title: 'Error', description: 'No hay reserva seleccionada o la base de datos no está disponible.' });
       return;
@@ -718,7 +718,7 @@ export default function AgendaView() {
 
     try {
       const resId = selectedReservation.id;
-      const total = selectedReservation.total || 0;
+      const total = (computedTotal && computedTotal > 0) ? computedTotal : (selectedReservation.total || selectedReservation.precio || 0);
       const saldoPendiente = Math.max(0, total - depositAmount);
 
       const depositSaleId = `deposit_${resId}_${Date.now()}`;
@@ -748,6 +748,7 @@ export default function AgendaView() {
 
       // Update reservation document with deposit state
       const updateData = {
+        total: total,
         pago_estado: 'deposit_paid',
         monto_anticipo: depositAmount,
         saldo_pendiente: saldoPendiente,

@@ -145,7 +145,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
       const querySnapshot = await getDocs(conflictQuery);
       const activeConflicts = querySnapshot.docs.filter(doc => {
         const res = doc.data();
-        if (res.estado === 'Cancelado') return false;
+        if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
 
         // Verificar si pertenece al barbero seleccionado (principal o en items)
         const isForBarber = res.barbero_id === data.barbero_id ||

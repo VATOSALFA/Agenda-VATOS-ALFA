@@ -1,4 +1,3 @@
-
 import { useMemo } from 'react';
 import { Reservation, TimeBlock, Client, Profesional, AgendaEvent, SaleItem } from '@/lib/types';
 import { getStatusColor } from './agenda-utils';
@@ -132,7 +131,7 @@ export function useAgendaEvents(
             } as AgendaEvent;
         });
 
-        // Valid blocks filtering: remove 'blocking' blocks if they are overlapped by an 'available' block
+        // Valid blocks filtering: remove 'blocking' blocks if they are overridden by an 'available' block
         const validBlockEvents = mappedBlockEvents.filter(block => {
             if ((block as any).originalType === 'available') return true;
 
@@ -149,15 +148,14 @@ export function useAgendaEvents(
     }, [reservations, timeBlocks, clients, professionals]);
 
     const eventsWithLayout: AgendaEvent[] = useMemo(() => {
-        const MINIMIZED_WIDTH = 22; // 22% left strip width for No asiste / Cancelado
-        const REMAINING_WIDTH = 78; // 78% remaining width for active appointments
+        const DEFAULT_MIN_WIDTH = 22; // 22% left strip width for a single No asiste / Cancelado
 
         const processedEvents: AgendaEvent[] = allEvents.map(event => {
             const isMinimized = event.type === 'appointment' && (event.estado === 'No asiste' || event.estado === 'Cancelado');
             return {
                 ...event,
                 layout: {
-                    width: isMinimized ? MINIMIZED_WIDTH : 100,
+                    width: isMinimized ? DEFAULT_MIN_WIDTH : 100,
                     left: 0,
                     col: 0,
                     totalCols: 1,
@@ -166,7 +164,7 @@ export function useAgendaEvents(
             };
         });
 
-        // Filter non-minimized active events for standard column width partitioning
+        // 1. Process and layout active (non-minimized) events for standard column width partitioning
         const activeEvents = processedEvents.filter(e => !e.layout.isMinimized);
 
         for (let i = 0; i < activeEvents.length; i++) {
@@ -226,15 +224,70 @@ export function useAgendaEvents(
             }
         }
 
-        // Adjust active events layout if they overlap with a minimized event in the same slot
+        // 2. Process and layout minimized events (No asiste / Cancelado) side-by-side if multiple exist in the same slot
         const minimizedEvents = processedEvents.filter(e => e.layout.isMinimized);
 
+        for (let i = 0; i < minimizedEvents.length; i++) {
+            const minA = minimizedEvents[i];
+            const overlappingMinEvents: AgendaEvent[] = [minA];
+
+            for (let j = i + 1; j < minimizedEvents.length; j++) {
+                const minB = minimizedEvents[j];
+
+                const profsA = minA.type === 'appointment'
+                    ? ((minA as any).target_barber_id ? [(minA as any).target_barber_id] : (minA.items ? minA.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
+                    : [minA.barbero_id];
+                const profsB = minB.type === 'appointment'
+                    ? ((minB as any).target_barber_id ? [(minB as any).target_barber_id] : (minB.items ? minB.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
+                    : [minB.barbero_id];
+
+                const hasCommonProf = profsA.some(p => profsB.includes(p));
+
+                if (hasCommonProf && minA.start < minB.end && minA.end > minB.start) {
+                    overlappingMinEvents.push(minB);
+                }
+            }
+
+            if (overlappingMinEvents.length > 1) {
+                overlappingMinEvents.sort((a, b) => a.start - b.start);
+
+                const count = overlappingMinEvents.length;
+                const singleMinColWidth = count === 2 ? 15 : Math.max(10, Math.floor(36 / count));
+
+                const columns: AgendaEvent[][] = [];
+                overlappingMinEvents.forEach(event => {
+                    let placed = false;
+                    for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+                        const lastEventInColumn = columns[colIndex][columns[colIndex].length - 1];
+                        if (event.start >= lastEventInColumn.end) {
+                            columns[colIndex].push(event);
+                            event.layout.col = colIndex;
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        columns.push([event]);
+                        event.layout.col = columns.length - 1;
+                    }
+                });
+
+                const totalMinCols = columns.length;
+                overlappingMinEvents.forEach(event => {
+                    event.layout.totalCols = totalMinCols;
+                    event.layout.width = singleMinColWidth;
+                    event.layout.left = event.layout.col * singleMinColWidth;
+                });
+            }
+        }
+
+        // 3. Adjust active events layout if they overlap with one or more minimized events in the same slot
         activeEvents.forEach(activeEvent => {
             const activeProfs = activeEvent.type === 'appointment'
                 ? ((activeEvent as any).target_barber_id ? [(activeEvent as any).target_barber_id] : (activeEvent.items ? activeEvent.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
                 : [activeEvent.barbero_id];
 
-            const hasMinimizedOverlap = minimizedEvents.some(minEvent => {
+            const overlappingMins = minimizedEvents.filter(minEvent => {
                 const minProfs = minEvent.type === 'appointment'
                     ? ((minEvent as any).target_barber_id ? [(minEvent as any).target_barber_id] : (minEvent.items ? minEvent.items.filter((item: any) => item.tipo !== 'producto').map((item: any) => item.barbero_id) : []))
                     : [minEvent.barbero_id];
@@ -243,10 +296,12 @@ export function useAgendaEvents(
                 return sameProf && activeEvent.start < minEvent.end && activeEvent.end > minEvent.start;
             });
 
-            if (hasMinimizedOverlap) {
-                // Scale width to fit in remaining 78% and shift left position by 22%
-                activeEvent.layout.width = (activeEvent.layout.width * REMAINING_WIDTH) / 100;
-                activeEvent.layout.left = MINIMIZED_WIDTH + (activeEvent.layout.left * REMAINING_WIDTH) / 100;
+            if (overlappingMins.length > 0) {
+                const reservedLeftWidth = Math.max(...overlappingMins.map(m => m.layout.left + m.layout.width));
+                const remainingWidthForActive = Math.max(20, 100 - reservedLeftWidth);
+
+                activeEvent.layout.width = (activeEvent.layout.width * remainingWidthForActive) / 100;
+                activeEvent.layout.left = reservedLeftWidth + (activeEvent.layout.left * remainingWidthForActive) / 100;
             }
         });
 

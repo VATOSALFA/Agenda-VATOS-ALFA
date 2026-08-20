@@ -1616,8 +1616,8 @@ export default function AgendaView() {
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
                               >
                                 {event.layout.isMinimized ? (
-                                  <div className="flex items-center justify-center h-full w-full overflow-hidden px-1 text-center">
-                                    <span className="text-[11px] font-bold truncate uppercase tracking-tight">
+                                  <div className="flex items-center justify-center h-full w-full overflow-hidden px-0.5 text-center">
+                                    <span className="text-[10px] sm:text-[11px] font-bold truncate uppercase tracking-tighter" title={(event as any).estado === 'No asiste' ? 'No Asistió' : 'Cancelado'}>
                                       {(event as any).estado === 'No asiste' ? 'No Asistió' : 'Cancelado'}
                                     </span>
                                   </div>

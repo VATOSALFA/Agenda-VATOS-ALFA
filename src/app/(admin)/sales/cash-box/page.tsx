@@ -513,9 +513,10 @@ export default function CashBoxPage() {
                 }
 
                 // C. Guardar en ventas_canceladas
-                const canceladaRef = doc(collection(db, 'ventas_canceladas'), currentSaleData.id);
+                const canceladaRef = doc(collection(db, 'ventas_canceladas'), saleRef.id);
                 transaction.set(canceladaRef, {
                     ...currentSaleData,
+                    id: saleRef.id,
                     estado_venta: 'cancelada',
                     eliminada_el: Timestamp.now(),
                     eliminada_por: user?.uid || 'unknown',

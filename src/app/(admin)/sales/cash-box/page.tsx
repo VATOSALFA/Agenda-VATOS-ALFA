@@ -77,8 +77,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing, Role } from '@/lib/types';
-import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit, writeBatch, increment } from 'firebase/firestore';
+import type { Sale, Local, Client, Egreso, Profesional, User, IngresoManual, CashClosing, Role, Product } from '@/lib/types';
+import { where, Timestamp, QueryConstraint, doc, deleteDoc, getDocs, collection, query, getDoc, orderBy, limit, writeBatch, increment, runTransaction } from 'firebase/firestore';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { AddIngresoModal } from '@/components/finanzas/add-ingreso-modal';
 import { SaleDetailModal } from '@/components/sales/sale-detail-modal';
@@ -164,6 +164,7 @@ export default function CashBoxPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+    const [isDeletingSale, setIsDeletingSale] = useState(false);
     const [editingEgreso, setEditingEgreso] = useState<Egreso | null>(null);
     const [editingIngreso, setEditingIngreso] = useState<IngresoManual | null>(null);
     const [egresoToDelete, setEgresoToDelete] = useState<Egreso | null>(null);
@@ -423,93 +424,111 @@ export default function CashBoxPage() {
     };
 
     const handleDeleteSale = async () => {
-        if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db) return;
+        if (!saleToDelete || deleteConfirmationText !== 'ELIMINAR' || !db || isDeletingSale) return;
         try {
-            const batch = writeBatch(db);
+            setIsDeletingSale(true);
             const saleRef = doc(db, 'ventas', saleToDelete.id);
 
-            // Revertir inventario si hay productos
-            if (saleToDelete.items && saleToDelete.items.length > 0) {
+            // 1. Consolidar productos por ID para evitar múltiples devoluciones del mismo producto
+            const productQuantitiesToReturn = new Map<string, { quantity: number; name: string }>();
+            if (saleToDelete.items && Array.isArray(saleToDelete.items)) {
                 for (const item of saleToDelete.items) {
                     if (item.tipo === 'producto' && item.id) {
-                        const productRef = doc(db, 'productos', item.id);
-                        const productSnap = await getDoc(productRef);
-
-                        if (productSnap.exists()) {
-                            const productData = productSnap.data();
-                            const currentStock = productData.stock || 0;
-                            const quantityToReturn = item.cantidad || 1;
-                            const newStock = currentStock + quantityToReturn;
-
-                            // 1. Incrementar Stock
-                            batch.update(productRef, {
-                                stock: increment(quantityToReturn)
-                            });
-
-                            // 2. Registrar Movimiento
-                            const movementRef = doc(collection(db, 'movimientos_inventario'));
-                            batch.set(movementRef, {
-                                date: Timestamp.now(),
-                                local_id: saleToDelete.local_id || 'unknown',
-                                product_id: item.id,
-                                presentation_id: productData.presentation_id || 'default',
-                                from: currentStock,
-                                to: newStock,
-                                cause: 'Cancellation',
-                                staff_id: user?.uid || 'unknown',
-                                comment: `Devolución automática por cancelación de venta: ${saleToDelete.id}`,
-                                product_name: item.nombre || productData.nombre,
-                                staff_name: user?.displayName || user?.email || 'Admin',
-                                local_name: 'System',
-                                concepto: 'Devolución por venta cancelada'
-                            });
-                        }
+                        const current = productQuantitiesToReturn.get(item.id) || { quantity: 0, name: item.nombre || 'Producto' };
+                        current.quantity += (Number(item.cantidad) || 1);
+                        productQuantitiesToReturn.set(item.id, current);
                     }
                 }
             }
 
-            // Revertir Reserva asociada (si existe)
-            if (saleToDelete.reservationId) {
-                const reservationRef = doc(db, 'reservas', saleToDelete.reservationId);
-                const reservationSnap = await getDoc(reservationRef);
-
-                if (reservationSnap.exists()) {
-                    const resData = reservationSnap.data();
-                    const anticipo = Number(resData.anticipo_pagado || 0);
-                    const total = Number(resData.total || 0);
-
-                    // Determinar el estado de pago previo (si hubo anticipo)
-                    const newPagoEstado = anticipo > 0 ? 'deposit_paid' : 'pendiente';
-                    const newSaldoPendiente = total > anticipo ? (total - anticipo) : total;
-
-                    batch.update(reservationRef, {
-                        estado: 'Reservado', // Regresa a estado de "Reservado" (Azul)
-                        pago_estado: newPagoEstado,
-                        saldo_pendiente: newSaldoPendiente,
-                        // Limpiamos campos de cierre si existen
-                        monto_pagado: anticipo, // Regresamos al anticipo (o 0)
-                    });
+            // 2. Ejecutar transacción atómica e idempotente
+            await runTransaction(db, async (transaction) => {
+                const saleDoc = await transaction.get(saleRef);
+                // Si la venta ya no existe (ej. eliminada concurrentemente), abortar inmediatamente
+                if (!saleDoc.exists()) {
+                    return;
                 }
-            }
 
-            // Guardar en ventas_canceladas
-            const canceladaRef = doc(collection(db, 'ventas_canceladas'), saleToDelete.id);
-            batch.set(canceladaRef, {
-                ...saleToDelete,
-                estado_venta: 'cancelada',
-                eliminada_el: Timestamp.now(),
-                eliminada_por: user?.uid || 'unknown',
-                eliminada_por_nombre: user?.displayName || 'unknown'
+                const currentSaleData = saleDoc.data() as Sale;
+
+                // A. Revertir inventario de productos consolidados
+                for (const [productId, { quantity, name }] of productQuantitiesToReturn.entries()) {
+                    const productRef = doc(db, 'productos', productId);
+                    const productSnap = await transaction.get(productRef);
+
+                    if (productSnap.exists()) {
+                        const productData = productSnap.data() as Product;
+                        const currentStock = productData.stock || 0;
+                        const newStock = currentStock + quantity;
+
+                        // 1. Incrementar Stock
+                        transaction.update(productRef, {
+                            stock: newStock
+                        });
+
+                        // 2. Registrar Movimiento con Comentarios Claros y Nombre de Producto
+                        const movementRef = doc(collection(db, 'movimientos_inventario'));
+                        const clientName = (currentSaleData as any).cliente_nombre || currentSaleData.client?.nombre || 'Cliente';
+                        const prodName = name || productData.nombre || 'Producto';
+                        const selectedLocal = locales.find(l => l.id === currentSaleData.local_id);
+
+                        transaction.set(movementRef, {
+                            date: Timestamp.now(),
+                            local_id: currentSaleData.local_id || 'unknown',
+                            product_id: productId,
+                            presentation_id: (productData as any).presentation_id || 'default',
+                            from: currentStock,
+                            to: newStock,
+                            cause: 'Cancellation',
+                            staff_id: user?.uid || 'unknown',
+                            comment: `Devolución de ${prodName} por cancelación de venta a ${clientName}`,
+                            product_name: prodName,
+                            staff_name: user?.displayName || user?.email || 'Admin',
+                            local_name: selectedLocal?.name || 'Local',
+                            concepto: 'Devolución por venta cancelada'
+                        });
+                    }
+                }
+
+                // B. Revertir Reserva asociada (si existe)
+                if (currentSaleData.reservationId) {
+                    const reservationRef = doc(db, 'reservas', currentSaleData.reservationId);
+                    const reservationSnap = await transaction.get(reservationRef);
+
+                    if (reservationSnap.exists()) {
+                        const resData = reservationSnap.data();
+                        const anticipo = Number(resData.anticipo_pagado || 0);
+                        const total = Number(resData.total || 0);
+
+                        const newPagoEstado = anticipo > 0 ? 'deposit_paid' : 'pendiente';
+                        const newSaldoPendiente = total > anticipo ? (total - anticipo) : total;
+
+                        transaction.update(reservationRef, {
+                            estado: 'Reservado',
+                            pago_estado: newPagoEstado,
+                            saldo_pendiente: newSaldoPendiente,
+                            monto_pagado: anticipo,
+                        });
+                    }
+                }
+
+                // C. Guardar en ventas_canceladas
+                const canceladaRef = doc(collection(db, 'ventas_canceladas'), currentSaleData.id);
+                transaction.set(canceladaRef, {
+                    ...currentSaleData,
+                    estado_venta: 'cancelada',
+                    eliminada_el: Timestamp.now(),
+                    eliminada_por: user?.uid || 'unknown',
+                    eliminada_por_nombre: user?.displayName || 'unknown'
+                });
+
+                // D. Eliminar Venta
+                transaction.delete(saleRef);
             });
-
-            // Eliminar Venta
-            batch.delete(saleRef);
-
-            await batch.commit();
 
             toast({
                 title: "Venta Eliminada",
-                description: "La venta ha sido eliminada y el stock revertido.",
+                description: "La venta ha sido eliminada y el stock revertido correctamente.",
             });
             setQueryKey(prevKey => prevKey + 1);
 
@@ -528,9 +547,10 @@ export default function CashBoxPage() {
             toast({
                 variant: "destructive",
                 title: "Error",
-                description: "No se pudo eliminar la venta completemente.",
+                description: "No se pudo eliminar la venta.",
             });
         } finally {
+            setIsDeletingSale(false);
             setSaleToDelete(null);
             setDeleteConfirmationText('');
         }
@@ -1477,13 +1497,20 @@ export default function CashBoxPage() {
                                 />
                             </div>
                             <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
+                                <AlertDialogCancel disabled={isDeletingSale} onClick={() => { setSaleToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</AlertDialogCancel>
                                 <AlertDialogAction
                                     onClick={handleDeleteSale}
-                                    disabled={deleteConfirmationText !== 'ELIMINAR'}
-                                    className="bg-destructive hover:bg-destructive/90"
+                                    disabled={deleteConfirmationText !== 'ELIMINAR' || isDeletingSale}
+                                    className="bg-destructive hover:bg-destructive/90 font-bold"
                                 >
-                                    Sí, eliminar venta
+                                    {isDeletingSale ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Eliminando...
+                                        </>
+                                    ) : (
+                                        'Sí, eliminar venta'
+                                    )}
                                 </AlertDialogAction>
                             </AlertDialogFooter>
                         </AlertDialogContent>

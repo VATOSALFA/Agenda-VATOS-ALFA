@@ -314,7 +314,7 @@ export default function StockMovementPage() {
                                         <SortIcon field="staff" />
                                     </div>
                                 </TableHead>
-                                <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('comment')}>
+                                <TableHead className="min-w-[280px] cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('comment')}>
                                     <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                         COMENTARIOS
                                         <SortIcon field="comment" />
@@ -349,7 +349,7 @@ export default function StockMovementPage() {
                                             {format(date, "dd/MM/yyyy HH:mm", { locale: es })}
                                         </TableCell>
                                         <TableCell>{movement.local_name || movement.local_id}</TableCell>
-                                        <TableCell>{movement.product_name || 'Producto desconocido'}</TableCell>
+                                        <TableCell className="font-medium text-foreground">{movement.product_name || 'Producto desconocido'}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-muted-foreground">{movement.from}</span>
@@ -372,7 +372,7 @@ export default function StockMovementPage() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-sm">{movement.staff_name || 'Sistema'}</TableCell>
-                                        <TableCell className="max-w-[200px] truncate" title={movement.comment}>
+                                        <TableCell className="min-w-[260px] max-w-[450px] text-xs leading-relaxed whitespace-normal break-words py-2 text-foreground/80 font-normal" title={movement.comment}>
                                             {movement.comment || '-'}
                                         </TableCell>
                                     </TableRow>

@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addMinutes, isToday, set, getDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { where } from 'firebase/firestore';
+import { where, collection, query, getDocs, documentId } from 'firebase/firestore';
 import Image from 'next/image';
 import { Clock, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -81,12 +81,15 @@ export default function AgendaDisplayPage() {
 
     // Queries
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
-    const { data: clients } = useFirestoreQuery<Client>('clientes');
     const { data: services } = useFirestoreQuery<ServiceType>('servicios');
     const { data: locales } = useFirestoreQuery<Local>('locales');
     const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa', 'main', where('__name__', '==', 'main'));
     const { data: users } = useFirestoreQuery<AppUser>('usuarios');
     const logoUrl = empresaData?.[0]?.receipt_logo_url;
+
+    const [clientsMap, setClientsMap] = useState<Map<string, Client>>(new Map());
+    const fetchedClientIdsRef = useRef<Set<string>>(new Set());
+    const clients = useMemo(() => Array.from(clientsMap.values()), [clientsMap]);
 
     // Set local
     useEffect(() => {
@@ -147,6 +150,45 @@ export default function AgendaDisplayPage() {
 
     const { data: reservations } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
     const { data: timeBlocks } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
+
+    useEffect(() => {
+        if (!reservations || reservations.length === 0 || !db) return;
+
+        const uniqueClientIds = Array.from(new Set(reservations.map(r => r.cliente_id).filter(Boolean)));
+        const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIdsRef.current.has(id));
+
+        if (idsToFetch.length > 0) {
+            const fetchBatch = async () => {
+                try {
+                    const CHUNK_SIZE = 30;
+                    const chunks: string[][] = [];
+                    for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) {
+                        chunks.push(idsToFetch.slice(i, i + CHUNK_SIZE));
+                    }
+
+                    const batchPromises = chunks.map(chunk =>
+                        getDocs(query(collection(db, 'clientes'), where(documentId(), 'in', chunk)))
+                    );
+
+                    const snapshots = await Promise.all(batchPromises);
+                    setClientsMap(prev => {
+                        const next = new Map(prev);
+                        snapshots.forEach(snap => {
+                            snap.docs.forEach(doc => {
+                                const c = { id: doc.id, ...doc.data() } as Client;
+                                next.set(doc.id, c);
+                                fetchedClientIdsRef.current.add(doc.id);
+                            });
+                        });
+                        return next;
+                    });
+                } catch (err) {
+                    console.error("Error fetching display clients:", err);
+                }
+            };
+            fetchBatch();
+        }
+    }, [reservations, db]);
 
     const filteredProfessionals = useMemo(() => {
         return professionals

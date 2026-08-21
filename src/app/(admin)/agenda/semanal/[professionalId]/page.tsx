@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -15,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Profesional, Reservation, Local, Client } from '@/lib/types';
-import { where, doc, updateDoc } from 'firebase/firestore';
+import { where, doc, updateDoc, collection, query, getDocs, documentId } from 'firebase/firestore';
 import { ReservationDetailModal } from '@/components/reservations/reservation-detail-modal';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -52,7 +51,12 @@ export default function WeeklyAgendaPage() {
   const professional = useMemo(() => allProfessionals.find(b => b.id === professionalId), [professionalId, allProfessionals]);
 
   const { data: allLocals, loading: localsLoading } = useFirestoreQuery<Local>('locales');
-  const { data: allClients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
+  
+  const [clientsMap, setClientsMap] = useState<Map<string, Client>>(new Map());
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const fetchedClientIdsRef = useRef<Set<string>>(new Set());
+  const allClients = useMemo(() => Array.from(clientsMap.values()), [clientsMap]);
+
   const local = useMemo(() => {
     if (!professional || !allLocals) return null;
     return allLocals.find(l => l.id === professional.local_id);
@@ -83,6 +87,45 @@ export default function WeeklyAgendaPage() {
   }, [currentDate, professional]);
 
   const { data: rawAppointments, loading: rawAppointmentsLoading } = useFirestoreQuery<Reservation>('reservas', queryKey, ...constraints);
+
+  useEffect(() => {
+    if (!rawAppointments || rawAppointments.length === 0 || !db) return;
+
+    const uniqueClientIds = Array.from(new Set(rawAppointments.map(r => r.cliente_id).filter(Boolean)));
+    const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIdsRef.current.has(id));
+
+    if (idsToFetch.length > 0) {
+      const fetchBatch = async () => {
+        try {
+          const CHUNK_SIZE = 30;
+          const chunks: string[][] = [];
+          for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) {
+            chunks.push(idsToFetch.slice(i, i + CHUNK_SIZE));
+          }
+
+          const batchPromises = chunks.map(chunk =>
+            getDocs(query(collection(db, 'clientes'), where(documentId(), 'in', chunk)))
+          );
+
+          const snapshots = await Promise.all(batchPromises);
+          setClientsMap(prev => {
+            const next = new Map(prev);
+            snapshots.forEach(snap => {
+              snap.docs.forEach(doc => {
+                const c = { id: doc.id, ...doc.data() } as Client;
+                next.set(doc.id, c);
+                fetchedClientIdsRef.current.add(doc.id);
+              });
+            });
+            return next;
+          });
+        } catch (err) {
+          console.error("Error fetching weekly clients:", err);
+        }
+      };
+      fetchBatch();
+    }
+  }, [rawAppointments, db]);
 
   const appointmentsForWeek = useMemo(() => {
     if (!rawAppointments) return [];

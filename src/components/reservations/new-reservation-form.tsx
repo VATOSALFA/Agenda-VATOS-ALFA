@@ -190,22 +190,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const { user, db } = useAuth();
-
-  const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
-  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
-  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
-  const { data: serviceCategories } = useFirestoreQuery<any>('categorias_servicios');
-  const { data: products } = useFirestoreQuery<Product>('productos'); // <--- Added products query
-  const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas');
-  const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario');
   const { selectedLocalId } = useLocal();
-  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
-  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', undefined, where('__name__', '==', 'recordatorios'));
-  const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', undefined, where('__name__', '==', 'agenda'));
-  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales');
-
-  const reminderSettings = reminderSettingsData?.[0];
-  const agendaSettings = agendaSettingsData?.[0];
 
   // Helper for checking permissions
   const canSee = useCallback((permission: string) => {
@@ -213,21 +198,6 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     if (user.role === 'Administrador general') return true;
     return user.permissions.includes(permission);
   }, [user]);
-
-  const filteredProfessionals = useMemo(() => {
-    let pros = professionals;
-    if (!canSee('ver_agenda_global')) {
-      const myProf = pros.find(p => p.email === user?.email);
-      if (myProf) {
-        pros = [myProf];
-      } else {
-        pros = [];
-      }
-    }
-    return pros;
-  }, [professionals, canSee, user]);
-
-
 
   const formSchema = useMemo(() => createReservationSchema(isEditMode), [isEditMode]);
 
@@ -253,6 +223,49 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     name: "items"
   });
 
+  const watchedDate = form.watch('fecha');
+  const selectedDateStr = useMemo(() => {
+    if (!watchedDate) return format(new Date(), 'yyyy-MM-dd');
+    const parsed = safeParseDate(watchedDate);
+    return parsed ? format(parsed, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+  }, [watchedDate]);
+
+  const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
+  const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
+  const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
+  const { data: serviceCategories } = useFirestoreQuery<any>('categorias_servicios');
+  const { data: products } = useFirestoreQuery<Product>('productos');
+  const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
+    'reservas',
+    `reservations-form-${selectedDateStr}-${selectedLocalId}`,
+    where('fecha', '==', selectedDateStr)
+  );
+  const { data: allTimeBlocks, loading: blocksLoading } = useFirestoreQuery<TimeBlock>(
+    'bloqueos_horario',
+    `blocks-form-${selectedDateStr}-${selectedLocalId}`,
+    where('fecha', '==', selectedDateStr)
+  );
+  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
+  const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', undefined, where('__name__', '==', 'recordatorios'));
+  const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', undefined, where('__name__', '==', 'agenda'));
+  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales');
+
+  const reminderSettings = reminderSettingsData?.[0];
+  const agendaSettings = agendaSettingsData?.[0];
+
+  const filteredProfessionals = useMemo(() => {
+    let pros = professionals;
+    if (!canSee('ver_agenda_global')) {
+      const myProf = pros.find(p => p.email === user?.email);
+      if (myProf) {
+        pros = [myProf];
+      } else {
+        pros = [];
+      }
+    }
+    return pros;
+  }, [professionals, canSee, user]);
+
   const selectedClientId = form.watch('cliente_id');
   const watchedItems = form.watch('items');
 
@@ -260,14 +273,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
 
-  const unattendedCount = useMemo(() => {
-    if (!selectedClient) return 0;
-    if (selectedClient.citas_no_asistidas !== undefined && selectedClient.citas_no_asistidas !== null && selectedClient.citas_no_asistidas > 0) {
-      return selectedClient.citas_no_asistidas;
+  const [unattendedCount, setUnattendedCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (!selectedClient) {
+      setUnattendedCount(0);
+      return;
     }
-    if (!allReservations) return 0;
-    return allReservations.filter(r => r.cliente_id === selectedClient.id && r.estado === 'No asiste').length;
-  }, [selectedClient, allReservations]);
+    if (selectedClient.citas_no_asistidas !== undefined && selectedClient.citas_no_asistidas !== null) {
+      setUnattendedCount(selectedClient.citas_no_asistidas);
+      return;
+    }
+    if (!db) return;
+    const checkNoShows = async () => {
+      try {
+        const q = query(collection(db, 'reservas'), where('cliente_id', '==', selectedClient.id), where('estado', '==', 'No asiste'));
+        const snap = await getDocs(q);
+        setUnattendedCount(snap.size);
+      } catch (err) {
+        console.error("Error checking unattended reservations:", err);
+      }
+    };
+    checkNoShows();
+  }, [selectedClient, db]);
 
   const servicesMap = useMemo(() => {
     if (!services) return new Map<string, ServiceType>();

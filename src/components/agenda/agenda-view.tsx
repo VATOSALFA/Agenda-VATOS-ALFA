@@ -47,7 +47,7 @@ import { BlockScheduleForm } from '../reservations/block-schedule-form';
 import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp, collection, query, getDocs, documentId } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
 import { Label } from '../ui/label';
@@ -314,7 +314,6 @@ export default function AgendaView() {
   }, []);
 
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', queryKey);
-  const { data: clients, loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios');
   const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
@@ -409,6 +408,55 @@ export default function AgendaView() {
 
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
   const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
+
+  // Fast on-demand batched client fetcher (loads only clients for current day's reservations)
+  const [clientsMap, setClientsMap] = useState<Map<string, Client>>(new Map());
+  const [clientsLoading, setClientsLoading] = useState(false);
+  const fetchedClientIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!reservations || reservations.length === 0 || !db) return;
+
+    const uniqueClientIds = Array.from(new Set(reservations.map(r => r.cliente_id).filter(Boolean)));
+    const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIdsRef.current.has(id));
+
+    if (idsToFetch.length > 0) {
+      const fetchClientsBatch = async () => {
+        setClientsLoading(true);
+        try {
+          const CHUNK_SIZE = 30;
+          const chunks: string[][] = [];
+          for (let i = 0; i < idsToFetch.length; i += CHUNK_SIZE) {
+            chunks.push(idsToFetch.slice(i, i + CHUNK_SIZE));
+          }
+
+          const batchPromises = chunks.map(chunk =>
+            getDocs(query(collection(db, 'clientes'), where(documentId(), 'in', chunk)))
+          );
+
+          const snapshots = await Promise.all(batchPromises);
+          setClientsMap(prev => {
+            const next = new Map(prev);
+            snapshots.forEach(snap => {
+              snap.docs.forEach(doc => {
+                const c = { id: doc.id, ...doc.data() } as Client;
+                next.set(doc.id, c);
+                fetchedClientIdsRef.current.add(doc.id);
+              });
+            });
+            return next;
+          });
+        } catch (err) {
+          console.error("Error fetching agenda clients:", err);
+        } finally {
+          setClientsLoading(false);
+        }
+      };
+      fetchClientsBatch();
+    }
+  }, [reservations, db]);
+
+  const clients = useMemo(() => Array.from(clientsMap.values()), [clientsMap]);
 
   // Determine if we are in a 'critical' loading state (initial load or date change)
   // We exclude some non-critical loads if we want optimistic UI, but for now we block to prevent empty grid.
@@ -956,8 +1004,18 @@ export default function AgendaView() {
     }
   };
 
-  const handleViewClientFile = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
+  const handleViewClientFile = async (clientId: string) => {
+    let client = clients.find(c => c.id === clientId);
+    if (!client && db) {
+      try {
+        const snap = await getDoc(doc(db, 'clientes', clientId));
+        if (snap.exists()) {
+          client = { id: snap.id, ...snap.data() } as Client;
+        }
+      } catch (e) {
+        console.error("Error fetching client details:", e);
+      }
+    }
     if (client) {
       setSelectedClientForModal(client);
       setIsClientDetailModalOpen(true);

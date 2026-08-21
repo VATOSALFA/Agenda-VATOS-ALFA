@@ -9,9 +9,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Trophy, TrendingUp, Calendar, Target, DollarSign, Star, Award, Share2 } from 'lucide-react';
 import { useMemo } from 'react';
-import { startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, format } from 'date-fns';
 import { Sale } from '@/lib/types';
-import { where } from 'firebase/firestore';
+import { where, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
@@ -22,16 +22,12 @@ export default function DashboardPage() {
     const start = startOfMonth(new Date());
     const end = endOfMonth(new Date());
 
-    // We fetch all sales for the month to calculate ranking and personal stats
-    // Optimization: In a real app, we might need a dedicated aggregated collection or Cloud Function.
-    // For now, client-side filtering of recent sales is acceptable if volume isn't huge.
-    // Better: Query by date range if possible, but Firestore constraints might apply.
-    // Let's just fetch 'ventas' and filter in memory for prototype.
-    // Actually, fetching ALL sales is bad. Let's try to limit if possible, or accept the cost for now.
-    // Given the constraints and previous files viewing, let's stick to simple query if possible.
-    // However, without a composite index on date, we might struggle.
-    // Let's assume we can fetch 'ventas'.
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+        'ventas',
+        `dashboard-sales-${format(start, 'yyyy-MM')}`,
+        where('fecha_hora_venta', '>=', Timestamp.fromDate(start)),
+        where('fecha_hora_venta', '<=', Timestamp.fromDate(end))
+    );
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<any>('profesionales');
     const { data: empresaData } = useFirestoreQuery<any>('empresa');
     const { toast } = useToast();

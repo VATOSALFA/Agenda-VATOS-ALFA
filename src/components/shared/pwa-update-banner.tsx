@@ -1,13 +1,20 @@
 'use client';
 
-// Test comment to trigger PWA update banner simulation
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RotateCw } from 'lucide-react';
+import { Sparkles, RotateCw, CheckCircle2 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
+
+interface UpdateInfo {
+    version: string;
+    title?: string;
+    summary?: string;
+    notes?: string[];
+}
 
 export function PwaUpdateBanner() {
     const [hasUpdate, setHasUpdate] = useState(false);
+    const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
     const pathname = usePathname();
 
@@ -22,11 +29,12 @@ export function PwaUpdateBanner() {
                 // Fetch version with a cache-buster query parameter to bypass service worker & browser cache
                 const res = await fetch(`/version.json?t=${Date.now()}`);
                 if (!res.ok) return;
-                const data = await res.json();
+                const data: UpdateInfo = await res.json();
                 const serverVersion = data.version;
                 const localVersion = process.env.NEXT_PUBLIC_BUILD_VERSION;
 
                 if (serverVersion && localVersion && serverVersion !== localVersion) {
+                    setUpdateInfo(data);
                     setHasUpdate(true);
                 }
             } catch (error) {
@@ -82,34 +90,57 @@ export function PwaUpdateBanner() {
     if (isPublicPage || !hasUpdate) return null;
 
     return (
-        <div className="fixed bottom-6 left-6 z-[100] max-w-sm w-[calc(100vw-3rem)] animate-in slide-in-from-bottom-10 fade-in duration-500">
-            <div className="rounded-xl border border-blue-500/35 bg-slate-950/90 text-white p-4 shadow-[0_10px_35px_rgba(59,130,246,0.25)] backdrop-blur-xl flex flex-col gap-3">
+        <div className="fixed bottom-6 left-4 sm:left-6 z-[100] max-w-sm sm:max-w-md w-[calc(100vw-2rem)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+            <div className="rounded-2xl border border-blue-500/40 bg-slate-950/95 text-white p-4 sm:p-5 shadow-[0_15px_45px_rgba(30,58,138,0.45)] backdrop-blur-2xl flex flex-col gap-3.5 ring-1 ring-white/10">
                 <div className="flex items-start gap-3">
-                    <div className="p-2 bg-blue-500/10 rounded-lg shrink-0 text-blue-400 border border-blue-500/25">
-                        <Sparkles className="h-5 w-5 animate-pulse" />
+                    <div className="p-2.5 bg-blue-500/15 rounded-xl shrink-0 text-blue-400 border border-blue-500/30">
+                        <Sparkles className="h-5 w-5 animate-pulse text-blue-300" />
                     </div>
                     <div className="flex-1 space-y-1">
-                        <h4 className="font-bold text-sm leading-tight text-white tracking-wide uppercase">
-                            Actualización disponible
-                        </h4>
+                        <div className="flex items-center justify-between gap-2">
+                            <h4 className="font-bold text-sm leading-tight text-white tracking-wide uppercase">
+                                {updateInfo?.title || 'Actualización disponible'}
+                            </h4>
+                            <span className="text-[10px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 shrink-0">
+                                Nuevo
+                            </span>
+                        </div>
                         <p className="text-xs text-slate-300 leading-normal">
-                            Hay mejoras y nuevas funciones listas en el servidor. Actualiza ahora para cargarlas.
+                            {updateInfo?.summary || 'Hay nuevas mejoras listas en el sistema.'}
                         </p>
                     </div>
                 </div>
-                <div className="flex justify-end">
-                    <div className="relative p-[1.5px] overflow-hidden rounded-lg group">
-                        {/* Animated border light beam with fade */}
+
+                {/* Bullets de Cambios */}
+                {updateInfo?.notes && updateInfo.notes.length > 0 && (
+                    <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800 space-y-1.5 text-xs text-slate-200">
+                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1">
+                            Cambios en esta versión:
+                        </p>
+                        <ul className="space-y-1.5 pl-0.5">
+                            {updateInfo.notes.map((note, idx) => (
+                                <li key={idx} className="flex items-start gap-2 leading-tight">
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                                    <span>{note}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                <div className="flex justify-end pt-1">
+                    <div className="relative p-[1.5px] overflow-hidden rounded-xl group w-full">
+                        {/* Animated border light beam */}
                         <div className="absolute inset-[-1000%] animate-[spin_4s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_60%,#93c5fd_85%,#3b82f6_95%,transparent_100%)]" />
                         
                         <Button 
                             size="sm" 
                             onClick={handleUpdate}
                             disabled={isUpdating}
-                            className="relative bg-secondary hover:bg-secondary/90 text-secondary-foreground text-xs font-semibold py-1.5 px-4 h-auto border-none rounded-[7px] flex items-center gap-1.5 active:scale-95 transition-all w-full shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                            className="relative w-full bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold py-2 px-4 h-auto border-none rounded-[10px] flex items-center justify-center gap-2 active:scale-95 transition-all shadow-[0_0_20px_rgba(59,130,246,0.35)]"
                         >
-                            <RotateCw className={`h-3.5 w-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
-                            {isUpdating ? 'Actualizando...' : 'Actualizar ahora'}
+                            <RotateCw className={`h-4 w-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                            {isUpdating ? 'Instalando actualización...' : 'Actualizar ahora'}
                         </Button>
                     </div>
                 </div>

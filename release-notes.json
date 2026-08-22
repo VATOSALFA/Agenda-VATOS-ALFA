@@ -1,0 +1,9 @@
+{
+  "title": "Actualización Disponible",
+  "summary": "Mejoras de rendimiento y cobro de anticipos",
+  "notes": [
+    "Carga ultra rápida de citas y clientes en tablets y móviles.",
+    "Cálculo y descuento exacto de anticipos pagados al cobrar en caja.",
+    "Regla de anticipo automático por monto mínimo en reservas web."
+  ]
+}

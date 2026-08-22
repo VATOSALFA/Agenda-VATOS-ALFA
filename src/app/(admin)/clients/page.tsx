@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, Trophy } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
@@ -63,6 +64,7 @@ const FiltersSidebar = ({
   birthdayMonthFilter, setBirthdayMonthFilter,
   professionalFilter, setProfessionalFilter,
   inactiveTimeFilter, setInactiveTimeFilter,
+  topSpentFilter, setTopSpentFilter,
   locales,
   professionals,
   isLoading,
@@ -82,6 +84,8 @@ const FiltersSidebar = ({
   setProfessionalFilter: (val: string) => void,
   inactiveTimeFilter: string,
   setInactiveTimeFilter: (val: string) => void,
+  topSpentFilter: string,
+  setTopSpentFilter: (val: string) => void,
   locales: Local[],
   professionals: Profesional[],
   isLoading: boolean,
@@ -121,6 +125,25 @@ const FiltersSidebar = ({
                 <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} locale={es} />
               </PopoverContent>
             </Popover>
+          </div>
+          <div className="space-y-1">
+            <Label className="flex items-center gap-1.5 font-medium text-slate-700">
+              <Trophy className="h-3.5 w-3.5 text-amber-500" />
+              Mejores clientes (Consumo)
+            </Label>
+            <Select value={topSpentFilter} onValueChange={setTopSpentFilter} disabled={isLoading}>
+              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los clientes</SelectItem>
+                <SelectItem value="top10">⭐ Top 10 que más consumen</SelectItem>
+                <SelectItem value="top25">⭐ Top 25 que más consumen</SelectItem>
+                <SelectItem value="top50">⭐ Top 50 que más consumen</SelectItem>
+                <SelectItem value="min500">Consumo mayor a $500</SelectItem>
+                <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
+                <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
+                <SelectItem value="min5000">Consumo mayor a $5,000</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label>Tiempo sin visita</Label>
@@ -204,7 +227,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | null;
+  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | 'gasto_total' | null;
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -215,13 +238,15 @@ export default function ClientsPage() {
   const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
+  const [topSpentFilter, setTopSpentFilter] = useState('todos');
 
   const [activeFilters, setActiveFilters] = useState({
     dateRange: dateRange,
     local: 'todos',
     birthdayMonth: 'todos',
     professional: 'todos',
-    inactiveTime: 'todos'
+    inactiveTime: 'todos',
+    topSpent: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
@@ -251,6 +276,46 @@ export default function ClientsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
 
+  const clientSpentMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const salesSource = hasLoadedHistory ? historicalSales : sales;
+
+    // Inicializar con gasto_total del cliente si existe
+    clients.forEach(c => {
+      map.set(c.id, typeof c.gasto_total === 'number' ? c.gasto_total : 0);
+    });
+
+    // Calcular con precisión sumando las ventas
+    if (salesSource && salesSource.length > 0) {
+      const salesSum = new Map<string, number>();
+      salesSource.forEach(sale => {
+        const clientId = sale.cliente_id;
+        if (!clientId) return;
+
+        if (activeFilters.dateRange) {
+          let saleDate: Date | null = null;
+          if (sale.fecha_hora_venta instanceof Timestamp) saleDate = sale.fecha_hora_venta.toDate();
+          else if ((sale.fecha_hora_venta as any)?.seconds) saleDate = new Date((sale.fecha_hora_venta as any).seconds * 1000);
+          else if (typeof sale.fecha_hora_venta === 'string') saleDate = parseISO(sale.fecha_hora_venta);
+
+          if (saleDate) {
+            if (activeFilters.dateRange.from && saleDate < startOfDay(activeFilters.dateRange.from)) return;
+            if (activeFilters.dateRange.to && saleDate > endOfDay(activeFilters.dateRange.to)) return;
+          }
+        }
+
+        const total = Number(sale.total) || 0;
+        salesSum.set(clientId, (salesSum.get(clientId) || 0) + total);
+      });
+
+      salesSum.forEach((amt, clientId) => {
+        map.set(clientId, amt);
+      });
+    }
+
+    return map;
+  }, [clients, sales, historicalSales, hasLoadedHistory, activeFilters.dateRange]);
+
   const isLoading = clientsLoading || localesLoading || professionalsLoading || isHistoryLoading;
 
   const canViewPhone = useMemo(() => {
@@ -273,6 +338,7 @@ export default function ClientsPage() {
       inactiveTimeFilter !== 'todos' ||
       professionalFilter !== 'todos' ||
       localFilter !== 'todos' ||
+      topSpentFilter !== 'todos' ||
       dateRange !== undefined;
 
     if (needsHistory && !hasLoadedHistory) {
@@ -303,12 +369,18 @@ export default function ClientsPage() {
       }
     }
 
+    if (topSpentFilter !== 'todos') {
+      setSortField('gasto_total');
+      setSortDirection('desc');
+    }
+
     setActiveFilters({
       dateRange,
       local: localFilter,
       birthdayMonth: birthdayMonthFilter,
       professional: professionalFilter,
-      inactiveTime: inactiveTimeFilter
+      inactiveTime: inactiveTimeFilter,
+      topSpent: topSpentFilter
     });
     setCurrentPage(1);
     toast({ title: "Filtros aplicados" });
@@ -320,12 +392,16 @@ export default function ClientsPage() {
     setBirthdayMonthFilter('todos');
     setProfessionalFilter('todos');
     setInactiveTimeFilter('todos');
+    setTopSpentFilter('todos');
+    setSortField(null);
+    setSortDirection('asc');
     setActiveFilters({
       dateRange: undefined,
       local: user?.local_id || 'todos',
       birthdayMonth: 'todos',
       professional: 'todos',
-      inactiveTime: 'todos'
+      inactiveTime: 'todos',
+      topSpent: 'todos'
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -473,6 +549,29 @@ export default function ClientsPage() {
           return getMonth(birthDate) === monthToFilter;
         });
       }
+
+      // Filter by Top Spenders (Mejores Clientes)
+      if (activeFilters.topSpent !== 'todos') {
+        if (activeFilters.topSpent === 'top10') {
+          filtered = [...filtered]
+            .sort((a, b) => (clientSpentMap.get(b.id) || 0) - (clientSpentMap.get(a.id) || 0))
+            .filter(c => (clientSpentMap.get(c.id) || 0) > 0)
+            .slice(0, 10);
+        } else if (activeFilters.topSpent === 'top25') {
+          filtered = [...filtered]
+            .sort((a, b) => (clientSpentMap.get(b.id) || 0) - (clientSpentMap.get(a.id) || 0))
+            .filter(c => (clientSpentMap.get(c.id) || 0) > 0)
+            .slice(0, 25);
+        } else if (activeFilters.topSpent === 'top50') {
+          filtered = [...filtered]
+            .sort((a, b) => (clientSpentMap.get(b.id) || 0) - (clientSpentMap.get(a.id) || 0))
+            .filter(c => (clientSpentMap.get(c.id) || 0) > 0)
+            .slice(0, 50);
+        } else if (activeFilters.topSpent.startsWith('min')) {
+          const minAmount = parseInt(activeFilters.topSpent.replace('min', ''), 10);
+          filtered = filtered.filter(c => (clientSpentMap.get(c.id) || 0) >= minAmount);
+        }
+      }
     }
 
 
@@ -494,7 +593,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, debouncedSearchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory]);
+  }, [clients, sales, debouncedSearchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -532,6 +631,10 @@ export default function ClientsPage() {
           valA = getDateValue(a.creado_en);
           valB = getDateValue(b.creado_en);
           break;
+        case 'gasto_total':
+          valA = clientSpentMap.get(a.id) || 0;
+          valB = clientSpentMap.get(b.id) || 0;
+          break;
         default:
           return 0;
       }
@@ -540,7 +643,7 @@ export default function ClientsPage() {
       if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredClients, sortField, sortDirection]);
+  }, [filteredClients, sortField, sortDirection, clientSpentMap]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -552,7 +655,7 @@ export default function ClientsPage() {
       }
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection(field === 'gasto_total' ? 'desc' : 'asc');
     }
     setCurrentPage(1);
   };
@@ -764,6 +867,8 @@ export default function ClientsPage() {
               setProfessionalFilter={setProfessionalFilter}
               inactiveTimeFilter={inactiveTimeFilter}
               setInactiveTimeFilter={setInactiveTimeFilter}
+              topSpentFilter={topSpentFilter}
+              setTopSpentFilter={setTopSpentFilter}
               professionals={professionals}
               locales={locales}
               isLoading={isLoading}
@@ -826,6 +931,9 @@ export default function ClientsPage() {
                       <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
+                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors text-right" onClick={() => handleSort('gasto_total')}>
+                        <span className="flex items-center justify-end">Consumo <SortIcon field="gasto_total" /></span>
+                      </TableHead>
                       {enableMarketing && <TableHead className="w-[50px]">Contacto</TableHead>}
                       <TableHead className="text-right">Opciones</TableHead>
                     </TableRow>
@@ -840,7 +948,8 @@ export default function ClientsPage() {
                           <TableCell><Skeleton className="h-5 w-40" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                           <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                          <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                          <TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
+                          {enableMarketing && <TableCell><Skeleton className="h-8 w-8" /></TableCell>}
                           <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
@@ -859,6 +968,22 @@ export default function ClientsPage() {
                           <TableCell>{client.correo}</TableCell>
                           <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
                           <TableCell>{formatDate(client.creado_en)}</TableCell>
+                          <TableCell className="text-right">
+                            {(() => {
+                              const spent = clientSpentMap.get(client.id) || 0;
+                              return (
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded-md",
+                                  spent >= 2000 ? "bg-amber-100/90 text-amber-900 font-bold border border-amber-300" :
+                                  spent >= 500 ? "bg-blue-50 text-blue-900 font-medium border border-blue-200" :
+                                  "text-slate-600 bg-slate-100/70"
+                                )}>
+                                  {spent >= 2000 && <span className="text-[11px]">👑</span>}
+                                  ${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              );
+                            })()}
+                          </TableCell>
                           {enableMarketing && (
                             <TableCell>
                               <DropdownMenu>

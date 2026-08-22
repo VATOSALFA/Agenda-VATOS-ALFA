@@ -744,12 +744,26 @@ export default function AgendaView() {
         }
       }).filter((i): i is any => !!i);
 
+      const depositPaid = Number(
+        selectedReservation.anticipoPagado ||
+        selectedReservation.anticipo_pagado ||
+        selectedReservation.monto_anticipo ||
+        selectedReservation.monto_pagado_real ||
+        selectedReservation.monto_pagado ||
+        (selectedReservation.pago_estado === 'deposit_paid' && selectedReservation.total && selectedReservation.saldo_pendiente !== undefined
+          ? Math.max(0, Number(selectedReservation.total) - Number(selectedReservation.saldo_pendiente))
+          : 0)
+      ) || 0;
+
       const saleData = {
         client,
         items: cartItems,
         reservationId: selectedReservation.id,
         local_id: selectedReservation.local_id,
-        anticipoPagado: selectedReservation.anticipo_pagado || selectedReservation.monto_pagado || 0
+        anticipoPagado: depositPaid,
+        anticipo_pagado: depositPaid,
+        monto_anticipo: depositPaid,
+        monto_pagado_real: depositPaid
       };
       setIsDetailModalOpen(false);
       document.dispatchEvent(new CustomEvent('new-sale', { detail: saleData }));
@@ -787,6 +801,9 @@ export default function AgendaView() {
         total: total,
         monto_pagado_real: isTerminal ? 0 : depositAmount,
         monto_anticipo: depositAmount,
+        anticipoPagado: depositAmount,
+        anticipo_pagado: depositAmount,
+        monto_pagado: isTerminal ? 0 : depositAmount,
         saldo_pendiente: isTerminal ? total : saldoPendiente,
         pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
         metodo_pago: paymentMethod,
@@ -802,6 +819,9 @@ export default function AgendaView() {
           total: total,
           pago_estado: 'deposit_paid',
           monto_anticipo: depositAmount,
+          anticipo_pagado: depositAmount,
+          anticipoPagado: depositAmount,
+          monto_pagado: depositAmount,
           saldo_pendiente: saldoPendiente,
           monto_pagado_real: depositAmount,
           metodo_pago_anticipo: paymentMethod,
@@ -825,6 +845,8 @@ export default function AgendaView() {
         await updateDoc(resRef, {
           total: total,
           monto_anticipo: depositAmount,
+          anticipo_pagado: depositAmount,
+          anticipoPagado: depositAmount,
           metodo_pago_anticipo: paymentMethod,
           deposit_payment_id: depositSaleId
         });

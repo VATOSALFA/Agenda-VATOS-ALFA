@@ -20,6 +20,7 @@ import { createPublicReservation, getAvailableSlots } from '@/lib/actions/bookin
 import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
+import { where } from 'firebase/firestore';
 import Image from 'next/image';
 import { getServiceLocalImage } from '@/lib/service-images';
 
@@ -77,6 +78,8 @@ export default function BookingPage() {
     const { data: locales = [] } = useFirestoreQuery<any>('locales');
     const { data: categories = [] } = useFirestoreQuery<any>('categorias_servicios');
     const { data: promotions = [] } = useFirestoreQuery<any>('promociones');
+    const { data: configServiciosDocs = [] } = useFirestoreQuery<any>('configuracion', 'servicios-config', where('__name__', '==', 'servicios'));
+    const serviciosConfig = configServiciosDocs[0] || {};
 
     // Filter active promotions (active and not expired)
     const activePromotions = useMemo(() => {
@@ -249,9 +252,9 @@ export default function BookingPage() {
 
     // --- COMPUTED ---
     const activeServiceIds = useMemo(() => cart.map(c => c.serviceId), [cart]);
-    const { totalPrice, upfrontTotal } = useMemo(() => {
+    const { totalPrice, upfrontTotal, isThresholdDepositApplied } = useMemo(() => {
         const total = cart.reduce((acc, item) => acc + Number(item.service.price || 0), 0);
-        const upfront = cart.reduce((sum, item) => {
+        let upfront = cart.reduce((sum, item) => {
             const pType = item.service.payment_type || 'no-payment';
             if (pType === 'online-deposit') {
                 const amountType = item.service.payment_amount_type || '%';
@@ -269,6 +272,21 @@ export default function BookingPage() {
             if (pType === 'full-payment') return sum + Number(item.service.price || 0);
             return sum;
         }, 0);
+
+        // Regla Global: Anticipo automático si el monto total de servicios alcanza o supera el umbral configurado
+        let thresholdApplied = false;
+        if (
+            serviciosConfig?.anticipo_monto_minimo_activo &&
+            Number(serviciosConfig.anticipo_monto_minimo) > 0 &&
+            total >= Number(serviciosConfig.anticipo_monto_minimo)
+        ) {
+            const pct = (Number(serviciosConfig.anticipo_porcentaje_defecto) || 50) / 100;
+            const requiredMinDeposit = total * pct;
+            if (upfront < requiredMinDeposit) {
+                upfront = requiredMinDeposit;
+                thresholdApplied = true;
+            }
+        }
 
         // Calculate Product Totals with Deposit Logic
         const productTotal = productCart.reduce((sum, p) => sum + Number(p.public_price || 0), 0);
@@ -297,9 +315,10 @@ export default function BookingPage() {
 
         return {
             totalPrice: total + productTotal,
-            upfrontTotal: upfront + productUpfront
+            upfrontTotal: upfront + productUpfront,
+            isThresholdDepositApplied: thresholdApplied
         };
-    }, [cart, productCart]);
+    }, [cart, productCart, serviciosConfig]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- SORTED SERVICES ---
@@ -650,8 +669,13 @@ export default function BookingPage() {
                     const cfg = configs[item.uniqueId];
                     if (!cfg) continue;
 
+                    const itemPrice = Number(item.service.price || 0);
                     const pType = item.service.payment_type || 'no-payment';
-                    const itemUpfront = (pType === 'online-deposit' ? Number(item.service.price || 0) * 0.5 : (pType === 'full-payment' ? Number(item.service.price || 0) : 0));
+                    let itemUpfront = (pType === 'online-deposit' ? itemPrice * 0.5 : (pType === 'full-payment' ? itemPrice : 0));
+                    if (isThresholdDepositApplied && itemUpfront === 0) {
+                        const pct = (Number(serviciosConfig.anticipo_porcentaje_defecto) || 50) / 100;
+                        itemUpfront = itemPrice * pct;
+                    }
 
                     const customDur = item.service.durationPorProfesional?.[cfg.professionalId || ''];
                     const duration = Number(customDur !== undefined ? customDur : (item.service.duration || 30));
@@ -1618,13 +1642,19 @@ export default function BookingPage() {
                                         {upfrontTotal > 0 && (
                                             <>
                                                 <div className="flex justify-between text-base font-semibold text-blue-600">
-                                                    <span>Pagar ahora en línea</span>
+                                                    <span>Pagar ahora en línea (Anticipo)</span>
                                                     <span>{formatPrice(upfrontTotal)}</span>
                                                 </div>
                                                 <div className="flex justify-between text-sm text-muted-foreground">
                                                     <span>Pendiente en local</span>
                                                     <span>{formatPrice(totalPrice - upfrontTotal)}</span>
                                                 </div>
+                                                {isThresholdDepositApplied && (
+                                                    <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-2.5 rounded-lg flex items-start gap-2 mt-2">
+                                                        <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                                                        <span>Por el monto acumulado de tus servicios (${totalPrice.toFixed(2)}), se requiere un anticipo del {serviciosConfig?.anticipo_porcentaje_defecto || 50}% para asegurar y confirmar tu espacio.</span>
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                     </div>

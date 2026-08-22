@@ -5,18 +5,20 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Filter, Circle, Search, Pencil, Trash2, GripVertical, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Filter, Circle, Search, Pencil, Trash2, GripVertical, ChevronDown, ArrowUp, ArrowDown, ShieldCheck, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, deleteDoc, writeBatch, getDocs, query, collection, where } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc, setDoc, query, collection, where, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { logAuditAction } from '@/lib/audit-logger';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, DragOverlay, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -204,6 +206,71 @@ export default function ServiciosPage() {
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
+
+  const [depositSettings, setDepositSettings] = useState({
+    activo: false,
+    monto_minimo: 190,
+    porcentaje: 50
+  });
+  const [isSavingDepositSettings, setIsSavingDepositSettings] = useState(false);
+
+  useEffect(() => {
+    if (!db) return;
+    const fetchDepositSettings = async () => {
+      try {
+        const docRef = doc(db, 'configuracion', 'servicios');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setDepositSettings({
+            activo: data.anticipo_monto_minimo_activo ?? false,
+            monto_minimo: data.anticipo_monto_minimo ?? 190,
+            porcentaje: data.anticipo_porcentaje_defecto ?? 50
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching deposit settings:", err);
+      }
+    };
+    fetchDepositSettings();
+  }, [db]);
+
+  const handleSaveDepositSettings = async (overrideSettings?: typeof depositSettings) => {
+    if (!db) return;
+    const target = overrideSettings || depositSettings;
+    setIsSavingDepositSettings(true);
+    try {
+      const docRef = doc(db, 'configuracion', 'servicios');
+      await setDoc(docRef, {
+        anticipo_monto_minimo_activo: Boolean(target.activo),
+        anticipo_monto_minimo: Number(target.monto_minimo) || 0,
+        anticipo_porcentaje_defecto: Number(target.porcentaje) || 50,
+        actualizado_el: Timestamp.now(),
+        actualizado_por: user?.email || 'admin'
+      }, { merge: true });
+
+      toast({
+        title: "Configuración de Anticipo Guardada",
+        description: target.activo
+          ? `Se cobrará un anticipo del ${target.porcentaje}% en reservas en línea que sumen $${target.monto_minimo} o más.`
+          : "El cobro de anticipo automático por monto mínimo ha sido desactivado."
+      });
+
+      await logAuditAction({
+        action: 'Actualizar Regla de Anticipo',
+        details: `Regla de anticipo web actualizada: Activo=${target.activo}, Mínimo=$${target.monto_minimo}, Porcentaje=${target.porcentaje}%.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'info'
+      });
+    } catch (err) {
+      console.error("Error saving deposit settings:", err);
+      toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar la configuración." });
+    } finally {
+      setIsSavingDepositSettings(false);
+    }
+  };
 
   const handleDataUpdated = (newCategory?: ServiceCategory) => {
     setQueryKey(prev => prev + 1);
@@ -430,7 +497,102 @@ export default function ServiciosPage() {
         </div>
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}>
-        <div className="space-y-8">
+        <div className="space-y-6">
+          {/* Card: Configuración de Anticipo por Monto Mínimo */}
+          <Card className="border border-amber-200 bg-amber-50/40 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0 mt-0.5">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base md:text-lg font-bold text-amber-950">
+                      Anticipo Automático por Monto Mínimo (Reservas Web)
+                    </CardTitle>
+                    <CardDescription className="text-xs md:text-sm text-amber-800 mt-0.5">
+                      Exige automáticamente un cobro de anticipo en línea cuando la suma de los servicios seleccionados por el cliente alcance o supere el monto configurado.
+                    </CardDescription>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 self-end md:self-center bg-white/80 px-3 py-1.5 rounded-lg border border-amber-200 shadow-xs">
+                  <span className="text-sm font-semibold text-amber-950">
+                    {depositSettings.activo ? 'Activado' : 'Desactivado'}
+                  </span>
+                  <Switch
+                    checked={depositSettings.activo}
+                    onCheckedChange={(checked) => {
+                      const updated = { ...depositSettings, activo: checked };
+                      setDepositSettings(updated);
+                      handleSaveDepositSettings(updated);
+                    }}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            {depositSettings.activo && (
+              <CardContent className="pt-0 pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-3 border-t border-amber-200/60 items-end">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-amber-950">
+                      Monto mínimo acumulado ($ MXN)
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="10"
+                        className="pl-7 bg-white border-amber-200 focus-visible:ring-amber-500 font-medium"
+                        value={depositSettings.monto_minimo}
+                        onChange={(e) => setDepositSettings(prev => ({ ...prev, monto_minimo: Number(e.target.value) || 0 }))}
+                      />
+                    </div>
+                    <p className="text-[11px] text-amber-800">
+                      Si el carrito suma este monto o más, se cobrará anticipo.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-amber-950">
+                      Porcentaje de anticipo (%)
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min="1"
+                        max="100"
+                        className="pr-7 bg-white border-amber-200 focus-visible:ring-amber-500 font-medium"
+                        value={depositSettings.porcentaje}
+                        onChange={(e) => setDepositSettings(prev => ({ ...prev, porcentaje: Number(e.target.value) || 50 }))}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[11px] text-amber-800">
+                      Porcentaje a cobrar en línea (ej. 50%).
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end sm:col-span-2 md:col-span-1">
+                    <Button
+                      onClick={() => handleSaveDepositSettings()}
+                      disabled={isSavingDepositSettings}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white shadow-sm font-semibold"
+                    >
+                      {isSavingDepositSettings ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...
+                        </>
+                      ) : (
+                        'Guardar Valores'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
           {/* Services Section */}
           <Card>
             <CardHeader>

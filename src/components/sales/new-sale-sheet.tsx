@@ -718,10 +718,40 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 };
             });
             setCart(initialCartItems);
-            setAnticipoPagado(initialData.anticipoPagado || 0);
+            const passedDeposit = Number(
+                initialData.anticipoPagado ||
+                (initialData as any).anticipo_pagado ||
+                (initialData as any).monto_anticipo ||
+                (initialData as any).monto_pagado_real ||
+                (initialData as any).monto_pagado ||
+                0
+            );
+            setAnticipoPagado(passedDeposit);
+
+            // Double security: If passedDeposit is 0 but there is a reservationId, fetch reservation from DB to verify
+            if (passedDeposit === 0 && initialData.reservationId && db) {
+                getDoc(doc(db, 'reservas', initialData.reservationId)).then(snap => {
+                    if (snap.exists()) {
+                        const res = snap.data();
+                        const dbDeposit = Number(
+                            res.anticipoPagado ||
+                            res.anticipo_pagado ||
+                            res.monto_anticipo ||
+                            res.monto_pagado_real ||
+                            res.monto_pagado ||
+                            (res.pago_estado === 'deposit_paid' && res.total && res.saldo_pendiente !== undefined
+                                ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
+                                : 0)
+                        ) || 0;
+                        if (dbDeposit > 0) {
+                            setAnticipoPagado(dbDeposit);
+                        }
+                    }
+                }).catch(console.error);
+            }
             setStep(2);
         }
-    }, [initialData, form, isOpen]);
+    }, [initialData, form, isOpen, db]);
 
 
     const finalizeSaleProcess = async (clientId: string, localId: string) => {

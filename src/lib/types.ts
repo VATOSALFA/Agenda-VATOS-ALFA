@@ -97,6 +97,7 @@ export interface Reservation {
   deposit_paid_at?: any;
   monto_retenido?: number;
   anticipo_pagado?: number;
+  anticipoPagado?: number;
   deposit_payment_id?: string;
   professional_lock?: boolean;
   whatsappConfirmationSent?: boolean;

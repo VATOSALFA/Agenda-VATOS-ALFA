@@ -137,7 +137,11 @@ export async function POST(req: NextRequest) {
                                 pago_estado: 'deposit_paid', // or 'Pagado'
                                 estado: 'Confirmado',
                                 deposit_payment_id: String(paymentInfo.id),
-                                monto_pagado: (i === 0) ? paidAmount : 0, // Attribute to first? Or split?
+                                monto_pagado: (i === 0) ? paidAmount : 0,
+                                monto_anticipo: (i === 0) ? paidAmount : 0,
+                                monto_pagado_real: (i === 0) ? paidAmount : 0,
+                                anticipo_pagado: (i === 0) ? paidAmount : 0,
+                                anticipoPagado: (i === 0) ? paidAmount : 0,
                             });
                         } else {
                             // Create New
@@ -149,6 +153,10 @@ export async function POST(req: NextRequest) {
                                 estado: 'Confirmado',
                                 pago_estado: 'deposit_paid',
                                 monto_pagado: (i === 0) ? paidAmount : 0,
+                                monto_anticipo: (i === 0) ? paidAmount : 0,
+                                monto_pagado_real: (i === 0) ? paidAmount : 0,
+                                anticipo_pagado: (i === 0) ? paidAmount : 0,
+                                anticipoPagado: (i === 0) ? paidAmount : 0,
                                 deposit_payment_id: String(paymentInfo.id),
                                 payment_method: 'Pagos en linea', // As requested
                                 // Ensure fields required by frontend exist

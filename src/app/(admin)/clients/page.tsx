@@ -413,7 +413,8 @@ export default function ClientsPage() {
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
       activeFilters.professional !== 'todos' ||
-      activeFilters.inactiveTime !== 'todos';
+      activeFilters.inactiveTime !== 'todos' ||
+      activeFilters.topSpent !== 'todos';
 
     if (hasAdvancedFilters) {
 

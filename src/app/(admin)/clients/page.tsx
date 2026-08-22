@@ -664,6 +664,18 @@ export default function ClientsPage() {
     return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
   };
 
+  const hasActiveFilters = useMemo(() => {
+    return (
+      activeFilters.local !== 'todos' ||
+      activeFilters.dateRange !== undefined ||
+      activeFilters.birthdayMonth !== 'todos' ||
+      activeFilters.professional !== 'todos' ||
+      activeFilters.inactiveTime !== 'todos' ||
+      activeFilters.topSpent !== 'todos' ||
+      Boolean(debouncedSearchTerm)
+    );
+  }, [activeFilters, debouncedSearchTerm]);
+
   const totalPages = Math.ceil(sortedClients.length / itemsPerPage);
   const paginatedClients = sortedClients.slice(
     (currentPage - 1) * itemsPerPage,
@@ -910,6 +922,31 @@ export default function ClientsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+
+            <div className="flex items-center justify-between text-xs text-muted-foreground px-0.5">
+              <span>
+                {isLoading ? (
+                  "Cargando clientes..."
+                ) : (
+                  <>
+                    Se {filteredClients.length === 1 ? 'encontró' : 'encontraron'}{' '}
+                    <strong className="text-slate-900 font-semibold">{filteredClients.length.toLocaleString('es-MX')}</strong>{' '}
+                    {filteredClients.length === 1 ? 'cliente' : 'clientes'}
+                    {hasActiveFilters && (
+                      <span className="text-slate-500 ml-1">
+                        (de {clients.length.toLocaleString('es-MX')} en total)
+                      </span>
+                    )}
+                  </>
+                )}
+              </span>
+              {filteredClients.length > 0 && !isLoading && (
+                <span className="text-slate-500">
+                  Página {currentPage} de {Math.max(1, totalPages)}
+                </span>
+              )}
+            </div>
+
             <Card>
               <CardContent className="p-0">
                 <Table>

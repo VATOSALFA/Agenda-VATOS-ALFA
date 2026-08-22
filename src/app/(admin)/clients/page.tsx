@@ -62,6 +62,7 @@ const FiltersSidebar = ({
   dateRange, setDateRange,
   localFilter, setLocalFilter,
   birthdayMonthFilter, setBirthdayMonthFilter,
+  newClientsMonthFilter, setNewClientsMonthFilter,
   professionalFilter, setProfessionalFilter,
   inactiveTimeFilter, setInactiveTimeFilter,
   topSpentFilter, setTopSpentFilter,
@@ -80,6 +81,8 @@ const FiltersSidebar = ({
   setLocalFilter: (val: string) => void,
   birthdayMonthFilter: string,
   setBirthdayMonthFilter: (val: string) => void,
+  newClientsMonthFilter: string,
+  setNewClientsMonthFilter: (val: string) => void,
   professionalFilter: string,
   setProfessionalFilter: (val: string) => void,
   inactiveTimeFilter: string,
@@ -125,6 +128,16 @@ const FiltersSidebar = ({
                 <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} locale={es} />
               </PopoverContent>
             </Popover>
+          </div>
+          <div className="space-y-1">
+            <Label>Clientes nuevos (Mes)</Label>
+            <Select value={newClientsMonthFilter} onValueChange={setNewClientsMonthFilter} disabled={isLoading}>
+              <SelectTrigger><SelectValue placeholder="Seleccione un mes" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los meses</SelectItem>
+                {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label>Mejores clientes (Consumo)</Label>
@@ -233,6 +246,7 @@ export default function ClientsPage() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
   const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
+  const [newClientsMonthFilter, setNewClientsMonthFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
   const [topSpentFilter, setTopSpentFilter] = useState('todos');
@@ -241,6 +255,7 @@ export default function ClientsPage() {
     dateRange: dateRange,
     local: 'todos',
     birthdayMonth: 'todos',
+    newClientsMonth: 'todos',
     professional: 'todos',
     inactiveTime: 'todos',
     topSpent: 'todos'
@@ -369,12 +384,16 @@ export default function ClientsPage() {
     if (topSpentFilter !== 'todos') {
       setSortField('gasto_total');
       setSortDirection('desc');
+    } else if (newClientsMonthFilter !== 'todos' && !sortField) {
+      setSortField('creado_en');
+      setSortDirection('desc');
     }
 
     setActiveFilters({
       dateRange,
       local: localFilter,
       birthdayMonth: birthdayMonthFilter,
+      newClientsMonth: newClientsMonthFilter,
       professional: professionalFilter,
       inactiveTime: inactiveTimeFilter,
       topSpent: topSpentFilter
@@ -387,6 +406,7 @@ export default function ClientsPage() {
     setDateRange(undefined);
     setLocalFilter(user?.local_id || 'todos');
     setBirthdayMonthFilter('todos');
+    setNewClientsMonthFilter('todos');
     setProfessionalFilter('todos');
     setInactiveTimeFilter('todos');
     setTopSpentFilter('todos');
@@ -396,6 +416,7 @@ export default function ClientsPage() {
       dateRange: undefined,
       local: user?.local_id || 'todos',
       birthdayMonth: 'todos',
+      newClientsMonth: 'todos',
       professional: 'todos',
       inactiveTime: 'todos',
       topSpent: 'todos'
@@ -412,6 +433,7 @@ export default function ClientsPage() {
       activeFilters.local !== 'todos' ||
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
+      activeFilters.newClientsMonth !== 'todos' ||
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos';
@@ -548,6 +570,24 @@ export default function ClientsPage() {
         });
       }
 
+      // Filter by New Clients (Registration Month)
+      if (activeFilters.newClientsMonth !== 'todos') {
+        const monthToFilter = parseInt(activeFilters.newClientsMonth, 10);
+        filtered = filtered.filter(client => {
+          if (!client.creado_en) return false;
+          let createdDate: Date | null = null;
+          if (client.creado_en instanceof Timestamp) {
+            createdDate = client.creado_en.toDate();
+          } else if ((client.creado_en as any)?.seconds) {
+            createdDate = new Date((client.creado_en as any).seconds * 1000);
+          } else if (typeof client.creado_en === 'string') {
+            createdDate = parseISO(client.creado_en);
+          }
+          if (!createdDate || isNaN(createdDate.getTime())) return false;
+          return getMonth(createdDate) === monthToFilter;
+        });
+      }
+
       // Filter by Top Spenders (Mejores Clientes)
       if (activeFilters.topSpent !== 'todos') {
         if (activeFilters.topSpent === 'top10') {
@@ -669,6 +709,7 @@ export default function ClientsPage() {
       activeFilters.local !== 'todos' ||
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
+      activeFilters.newClientsMonth !== 'todos' ||
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
@@ -873,6 +914,7 @@ export default function ClientsPage() {
               dateRange={dateRange} setDateRange={setDateRange}
               localFilter={localFilter} setLocalFilter={setLocalFilter}
               birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
+              newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
               professionalFilter={professionalFilter}
               setProfessionalFilter={setProfessionalFilter}
               inactiveTimeFilter={inactiveTimeFilter}

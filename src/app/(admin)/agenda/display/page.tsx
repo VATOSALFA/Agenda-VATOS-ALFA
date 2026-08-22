@@ -441,7 +441,7 @@ export default function AgendaDisplayPage() {
                                                 <div className="flex-grow overflow-hidden">
                                                     <p className="font-bold text-lg truncate leading-tight">
                                                         {event.type === 'appointment'
-                                                            ? (event.customer?.nombre || 'Cliente')
+                                                            ? (event.customer?.nombre || 'Cargando datos...')
                                                             : event.motivo}
                                                     </p>
                                                 </div>

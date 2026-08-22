@@ -26,7 +26,7 @@ export const getStatusColor = (status: string | undefined) => {
 }
 
 export const formatClientName = (nombre?: string, apellido?: string) => {
-    if (!nombre) return 'Cliente Eliminado';
+    if (!nombre) return 'Cargando datos...';
 
     const nameWords = nombre.trim().split(/\s+/).filter(Boolean);
 

@@ -349,7 +349,7 @@ export default function WeeklyAgendaPage() {
                               >
                                 <div className="flex justify-between items-start w-full overflow-hidden">
                                   <p className="font-bold truncate leading-tight text-xs flex-1">
-                                    {appointment.customer ? `${appointment.customer.nombre} ${appointment.customer.apellido || ''}` : 'Sin cliente'}
+                                    {appointment.customer ? `${appointment.customer.nombre} ${appointment.customer.apellido || ''}`.trim() : 'Cargando datos...'}
                                   </p>
                                   <div className="flex flex-col gap-0.5 ml-1 shrink-0">
                                     {appointment.pago_estado === 'Pagado' && (

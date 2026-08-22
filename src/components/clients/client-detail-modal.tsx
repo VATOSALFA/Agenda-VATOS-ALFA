@@ -132,7 +132,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
       if (key === 'total') return ((a.total || 0) - (b.total || 0)) * dir;
       if (key === 'metodo_pago') return (a.metodo_pago || '').localeCompare(b.metodo_pago || '') * dir;
       if (key === 'profesional') {
-        const getNames = (s: Sale) => Array.from(new Set(s.items?.map(i => i.barbero_id ? professionalMap.get(i.barbero_id) : '').filter(Boolean))).join(', ');
+        const getNames = (s: Sale) => Array.from(new Set(s.items?.map(i => (i.barbero_id ? professionalMap.get(i.barbero_id) : null) || (i as any).barbero_nombre || (i as any).barbero || (s as any).barbero_nombre || (s as any).profesional_nombre).filter(Boolean))).join(', ');
         return getNames(a).localeCompare(getNames(b)) * dir;
       }
       return 0;
@@ -315,7 +315,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                           <TableBody>
                             {sortedSales.map(sale => {
                               const professionalNames = Array.from(
-                                new Set(sale.items?.map(item => item.barbero_id ? professionalMap.get(item.barbero_id) : null).filter(Boolean))
+                                new Set(sale.items?.map(item => (item.barbero_id ? professionalMap.get(item.barbero_id) : null) || (item as any).barbero_nombre || (item as any).barbero || (sale as any).barbero_nombre || (sale as any).profesional_nombre).filter(Boolean))
                               ).join(', ') || 'N/A';
 
                               return (

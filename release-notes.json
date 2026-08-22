@@ -1,9 +1,10 @@
 {
-  "title": "Actualización Disponible",
-  "summary": "Mejoras de rendimiento y cobro de anticipos",
+  "title": "Nueva Actualización Disponible",
+  "summary": "Mejoras en caja, reservas y base de clientes",
   "notes": [
-    "Carga ultra rápida de citas y clientes en tablets y móviles.",
-    "Cálculo y descuento exacto de anticipos pagados al cobrar en caja.",
-    "Regla de anticipo automático por monto mínimo en reservas web."
+    "Descuento automático de anticipos al cobrar en caja y anticipo por monto mínimo en reservas.",
+    "Filtro de Mejores Clientes (Consumo acumulado y por periodo).",
+    "Filtro de Clientes Nuevos por mes y año de registro.",
+    "Paginación superior e indicador de clientes encontrados."
   ]
 }

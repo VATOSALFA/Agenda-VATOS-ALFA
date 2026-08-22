@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, Trophy } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -127,17 +127,14 @@ const FiltersSidebar = ({
             </Popover>
           </div>
           <div className="space-y-1">
-            <Label className="flex items-center gap-1.5 font-medium text-slate-700">
-              <Trophy className="h-3.5 w-3.5 text-amber-500" />
-              Mejores clientes (Consumo)
-            </Label>
+            <Label>Mejores clientes (Consumo)</Label>
             <Select value={topSpentFilter} onValueChange={setTopSpentFilter} disabled={isLoading}>
               <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los clientes</SelectItem>
-                <SelectItem value="top10">⭐ Top 10 que más consumen</SelectItem>
-                <SelectItem value="top25">⭐ Top 25 que más consumen</SelectItem>
-                <SelectItem value="top50">⭐ Top 50 que más consumen</SelectItem>
+                <SelectItem value="top10">Top 10 que más consumen</SelectItem>
+                <SelectItem value="top25">Top 25 que más consumen</SelectItem>
+                <SelectItem value="top50">Top 50 que más consumen</SelectItem>
                 <SelectItem value="min500">Consumo mayor a $500</SelectItem>
                 <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
                 <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
@@ -968,20 +965,10 @@ export default function ClientsPage() {
                           <TableCell>{client.correo}</TableCell>
                           <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
                           <TableCell>{formatDate(client.creado_en)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right font-medium text-slate-800">
                             {(() => {
                               const spent = clientSpentMap.get(client.id) || 0;
-                              return (
-                                <span className={cn(
-                                  "inline-flex items-center gap-1 font-mono text-xs px-2 py-0.5 rounded-md",
-                                  spent >= 2000 ? "bg-amber-100/90 text-amber-900 font-bold border border-amber-300" :
-                                  spent >= 500 ? "bg-blue-50 text-blue-900 font-medium border border-blue-200" :
-                                  "text-slate-600 bg-slate-100/70"
-                                )}>
-                                  {spent >= 2000 && <span className="text-[11px]">👑</span>}
-                                  ${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                              );
+                              return `$${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                             })()}
                           </TableCell>
                           {enableMarketing && (

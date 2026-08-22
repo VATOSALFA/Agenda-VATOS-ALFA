@@ -923,7 +923,7 @@ export default function ClientsPage() {
               </DropdownMenu>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground px-0.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-0.5">
               <span>
                 {isLoading ? (
                   "Cargando clientes..."
@@ -940,10 +940,57 @@ export default function ClientsPage() {
                   </>
                 )}
               </span>
-              {filteredClients.length > 0 && !isLoading && (
-                <span className="text-slate-500">
-                  Página {currentPage} de {Math.max(1, totalPages)}
-                </span>
+
+              {!isLoading && paginatedClients.length > 0 && (
+                <div className="flex items-center gap-3 ml-auto">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">Por pág:</span>
+                    <Select
+                      value={`${itemsPerPage}`}
+                      onValueChange={(value) => {
+                        setItemsPerPage(Number(value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-[64px] text-xs px-2">
+                        <SelectValue placeholder={itemsPerPage} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <span className="text-xs text-slate-700 font-medium whitespace-nowrap">
+                    Página {currentPage} de {Math.max(1, totalPages)}
+                  </span>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                      Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages || totalPages === 0}
+                    >
+                      Siguiente
+                      <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
 

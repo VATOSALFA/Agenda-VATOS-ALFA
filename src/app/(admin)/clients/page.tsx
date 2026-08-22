@@ -17,7 +17,7 @@ import { NewClientForm } from "@/components/clients/new-client-form";
 import { ClientDetailModal } from "@/components/clients/client-detail-modal";
 import { NewReservationForm } from "@/components/reservations/new-reservation-form";
 import { CombineClientsModal } from "@/components/clients/combine-clients-modal";
-import { format, startOfDay, endOfDay, parseISO, getMonth, subMonths } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO, getMonth, getYear, subMonths } from "date-fns";
 import { es } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import {
@@ -55,6 +55,9 @@ const months = Array.from({ length: 12 }, (_, i) => ({
   label: format(new Date(2000, i, 1), 'LLLL', { locale: es })
 }));
 
+const currentCalendarYear = new Date().getFullYear();
+const availableYears = Array.from({ length: 6 }, (_, i) => currentCalendarYear - i);
+
 
 const FiltersSidebar = ({
   onApply,
@@ -63,6 +66,7 @@ const FiltersSidebar = ({
   localFilter, setLocalFilter,
   birthdayMonthFilter, setBirthdayMonthFilter,
   newClientsMonthFilter, setNewClientsMonthFilter,
+  newClientsYearFilter, setNewClientsYearFilter,
   professionalFilter, setProfessionalFilter,
   inactiveTimeFilter, setInactiveTimeFilter,
   topSpentFilter, setTopSpentFilter,
@@ -83,6 +87,8 @@ const FiltersSidebar = ({
   setBirthdayMonthFilter: (val: string) => void,
   newClientsMonthFilter: string,
   setNewClientsMonthFilter: (val: string) => void,
+  newClientsYearFilter: string,
+  setNewClientsYearFilter: (val: string) => void,
   professionalFilter: string,
   setProfessionalFilter: (val: string) => void,
   inactiveTimeFilter: string,
@@ -130,14 +136,25 @@ const FiltersSidebar = ({
             </Popover>
           </div>
           <div className="space-y-1">
-            <Label>Clientes nuevos (Mes)</Label>
-            <Select value={newClientsMonthFilter} onValueChange={setNewClientsMonthFilter} disabled={isLoading}>
-              <SelectTrigger><SelectValue placeholder="Seleccione un mes" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los meses</SelectItem>
-                {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Label>Clientes nuevos</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={newClientsMonthFilter} onValueChange={setNewClientsMonthFilter} disabled={isLoading}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los meses</SelectItem>
+                  {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={newClientsYearFilter} onValueChange={setNewClientsYearFilter} disabled={isLoading}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Año" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los años</SelectItem>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-1">
             <Label>Mejores clientes (Consumo)</Label>
@@ -247,6 +264,7 @@ export default function ClientsPage() {
   const [localFilter, setLocalFilter] = useState('todos');
   const [birthdayMonthFilter, setBirthdayMonthFilter] = useState('todos');
   const [newClientsMonthFilter, setNewClientsMonthFilter] = useState('todos');
+  const [newClientsYearFilter, setNewClientsYearFilter] = useState('todos');
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
   const [topSpentFilter, setTopSpentFilter] = useState('todos');
@@ -256,6 +274,7 @@ export default function ClientsPage() {
     local: 'todos',
     birthdayMonth: 'todos',
     newClientsMonth: 'todos',
+    newClientsYear: 'todos',
     professional: 'todos',
     inactiveTime: 'todos',
     topSpent: 'todos'
@@ -384,7 +403,7 @@ export default function ClientsPage() {
     if (topSpentFilter !== 'todos') {
       setSortField('gasto_total');
       setSortDirection('desc');
-    } else if (newClientsMonthFilter !== 'todos' && !sortField) {
+    } else if ((newClientsMonthFilter !== 'todos' || newClientsYearFilter !== 'todos') && !sortField) {
       setSortField('creado_en');
       setSortDirection('desc');
     }
@@ -394,6 +413,7 @@ export default function ClientsPage() {
       local: localFilter,
       birthdayMonth: birthdayMonthFilter,
       newClientsMonth: newClientsMonthFilter,
+      newClientsYear: newClientsYearFilter,
       professional: professionalFilter,
       inactiveTime: inactiveTimeFilter,
       topSpent: topSpentFilter
@@ -407,6 +427,7 @@ export default function ClientsPage() {
     setLocalFilter(user?.local_id || 'todos');
     setBirthdayMonthFilter('todos');
     setNewClientsMonthFilter('todos');
+    setNewClientsYearFilter('todos');
     setProfessionalFilter('todos');
     setInactiveTimeFilter('todos');
     setTopSpentFilter('todos');
@@ -417,6 +438,7 @@ export default function ClientsPage() {
       local: user?.local_id || 'todos',
       birthdayMonth: 'todos',
       newClientsMonth: 'todos',
+      newClientsYear: 'todos',
       professional: 'todos',
       inactiveTime: 'todos',
       topSpent: 'todos'
@@ -434,6 +456,7 @@ export default function ClientsPage() {
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
       activeFilters.newClientsMonth !== 'todos' ||
+      activeFilters.newClientsYear !== 'todos' ||
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos';
@@ -570,9 +593,11 @@ export default function ClientsPage() {
         });
       }
 
-      // Filter by New Clients (Registration Month)
-      if (activeFilters.newClientsMonth !== 'todos') {
-        const monthToFilter = parseInt(activeFilters.newClientsMonth, 10);
+      // Filter by New Clients (Registration Month & Year)
+      if (activeFilters.newClientsMonth !== 'todos' || activeFilters.newClientsYear !== 'todos') {
+        const monthToFilter = activeFilters.newClientsMonth !== 'todos' ? parseInt(activeFilters.newClientsMonth, 10) : null;
+        const yearToFilter = activeFilters.newClientsYear !== 'todos' ? parseInt(activeFilters.newClientsYear, 10) : null;
+
         filtered = filtered.filter(client => {
           if (!client.creado_en) return false;
           let createdDate: Date | null = null;
@@ -584,7 +609,14 @@ export default function ClientsPage() {
             createdDate = parseISO(client.creado_en);
           }
           if (!createdDate || isNaN(createdDate.getTime())) return false;
-          return getMonth(createdDate) === monthToFilter;
+
+          if (monthToFilter !== null && getMonth(createdDate) !== monthToFilter) {
+            return false;
+          }
+          if (yearToFilter !== null && getYear(createdDate) !== yearToFilter) {
+            return false;
+          }
+          return true;
         });
       }
 
@@ -710,6 +742,7 @@ export default function ClientsPage() {
       activeFilters.dateRange !== undefined ||
       activeFilters.birthdayMonth !== 'todos' ||
       activeFilters.newClientsMonth !== 'todos' ||
+      activeFilters.newClientsYear !== 'todos' ||
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
@@ -915,6 +948,7 @@ export default function ClientsPage() {
               localFilter={localFilter} setLocalFilter={setLocalFilter}
               birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
               newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
+              newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
               professionalFilter={professionalFilter}
               setProfessionalFilter={setProfessionalFilter}
               inactiveTimeFilter={inactiveTimeFilter}

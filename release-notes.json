@@ -1,10 +1,9 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Mejoras en caja, reservas y base de clientes",
+  "summary": "Términos, privacidad y políticas de servicio",
   "notes": [
-    "Descuento automático de anticipos al cobrar en caja y anticipo por monto mínimo en reservas.",
-    "Filtro de Mejores Clientes (Consumo acumulado y por periodo).",
-    "Filtro de Clientes Nuevos por mes y año de registro.",
-    "Paginación superior e indicador de clientes encontrados."
+    "Sincronización en tiempo real de Términos y Condiciones y Aviso de Privacidad desde Configuración.",
+    "Blindaje de anticipos, cancelaciones y no-shows en reservas públicas y caja.",
+    "Filtros avanzados de mejores clientes y clientes nuevos por mes/año."
   ]
 }

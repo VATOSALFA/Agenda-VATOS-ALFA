@@ -8,10 +8,13 @@ import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 
 export default function TerminosPage() {
-    const { data: empresaData, loading } = useFirestoreQuery<any>('empresa');
+    const { data: empresaData, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
+    const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
 
-    const isLoading = loading && !empresaData;
+    const isLoading = (loadingEmpresa || loadingSettings) && !empresaData;
     const companyName = empresaData?.[0]?.name || 'VATOS ALFA Barber Shop';
+    const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};
+    const customTermsText = websiteSettings.termsText?.trim();
 
     return (
         <div className="container mx-auto py-12 px-4 max-w-3xl">
@@ -26,10 +29,15 @@ export default function TerminosPage() {
                 {isLoading && <CustomLoader size={20} />}
             </h1>
             <p className="text-sm text-muted-foreground mb-8">
-                Última actualización: Agosto 2026 &bull; {companyName}
+                {companyName}
             </p>
 
-            <div className="prose prose-slate max-w-none space-y-8 text-slate-700 leading-relaxed">
+            {customTermsText ? (
+                <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed whitespace-pre-line bg-card/60 p-6 md:p-8 rounded-2xl border border-border shadow-sm text-sm sm:text-base">
+                    {customTermsText}
+                </div>
+            ) : (
+                <div className="prose prose-slate max-w-none space-y-8 text-slate-700 leading-relaxed">
 
                 <section className="bg-slate-50/80 p-5 rounded-xl border border-slate-200/80 space-y-2">
                     <h3 className="text-lg font-bold text-slate-900 m-0">1. ACEPTACIÓN Y ALCANCE</h3>
@@ -143,6 +151,7 @@ export default function TerminosPage() {
                     <strong>{companyName}</strong> &bull; Términos y Condiciones de Servicio &bull; Todos los derechos reservados.
                 </p>
             </div>
+            )}
         </div>
     );
 }

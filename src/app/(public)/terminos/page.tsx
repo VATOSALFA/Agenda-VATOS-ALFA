@@ -95,16 +95,13 @@ export default function TerminosPage() {
                 </section>
 
                 <section className="space-y-3">
-                    <h3 className="text-lg font-bold text-slate-900 border-b pb-2">5. PRECIOS, FORMAS DE PAGO Y FACTURACIÓN</h3>
+                    <h3 className="text-lg font-bold text-slate-900 border-b pb-2">5. PRECIOS Y FORMAS DE PAGO</h3>
                     <ul className="list-disc pl-5 space-y-2 text-sm">
                         <li>
-                            <strong>Precios e IVA:</strong> Todos los precios están expresados en Pesos Mexicanos (MXN) e incluyen el Impuesto al Valor Agregado (IVA). Los precios vigentes se respetarán en todas las citas confirmadas con anterioridad a cualquier modificación de tarifa.
+                            <strong>Precios:</strong> Todos los precios están expresados en Pesos Mexicanos (MXN). Los precios vigentes se respetarán en todas las citas confirmadas con anterioridad a cualquier modificación de tarifa.
                         </li>
                         <li>
                             <strong>Formas de pago en sucursal:</strong> Se acepta efectivo, tarjetas de débito y crédito, transferencias bancarias y pagos digitales autorizados.
-                        </li>
-                        <li>
-                            <strong>Facturación electrónica (CFDI):</strong> Si requiere factura fiscal, deberá solicitarla dentro del mismo mes calendario en que se realizó el pago del servicio o producto, proporcionando su Constancia de Situación Fiscal actualizada y uso de CFDI.
                         </li>
                     </ul>
                 </section>
@@ -131,7 +128,7 @@ export default function TerminosPage() {
                 <section className="space-y-3">
                     <h3 className="text-lg font-bold text-slate-900 border-b pb-2">8. PROTECCIÓN DE DATOS PERSONALES</h3>
                     <p className="text-sm">
-                        Los datos de contacto, facturación e historial recabados durante su proceso de reserva o visita son tratados con estricta confidencialidad de conformidad con la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y nuestro <Link href="/privacidad" className="text-primary underline">Aviso de Privacidad</Link>.
+                        Los datos de contacto e historial recabados durante su proceso de reserva o visita son tratados con estricta confidencialidad de conformidad con la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y nuestro <Link href="/privacidad" className="text-primary underline">Aviso de Privacidad</Link>.
                     </p>
                 </section>
 

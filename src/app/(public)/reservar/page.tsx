@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { Button } from '@/components/ui/button';
@@ -1811,11 +1812,10 @@ export default function BookingPage() {
                                             ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
                                         </VatosButton>
                                     </div>
-                                    {upfrontTotal > 0 && (
-                                        <p className="text-[10px] text-center text-muted-foreground mt-2">
-                                            Tu pago será procesado de forma segura por Mercado Pago.
-                                        </p>
-                                    )}
+                                    <p className="text-[10px] text-center text-muted-foreground mt-2">
+                                        Al continuar, aceptas nuestros <Link href="/terminos" target="_blank" className="underline text-slate-700 hover:text-primary font-medium">Términos y Condiciones</Link>.
+                                        {upfrontTotal > 0 && " Tu pago de anticipo será procesado de forma segura por Mercado Pago."}
+                                    </p>
                                 </div>
                             </motion.div>
                         )}

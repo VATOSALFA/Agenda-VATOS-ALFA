@@ -1565,6 +1565,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     let prevOnline = 0;
 
                     const prevCombined = existingSaleData.detalle_pago_combinado;
+                    const prevDepositAmount = Number(existingSaleData.monto_pagado_real) || Number(existingSaleData.monto_anticipo) || Number(existingSaleData.anticipoPagado) || Number(existingSaleData.anticipo_pagado) || Number(anticipoPagado) || 0;
 
                     if (existingSaleData.metodo_pago === 'combinado' && prevCombined) {
                         prevEfectivo = prevCombined.efectivo || 0;
@@ -1572,14 +1573,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         prevTransferencia = prevCombined.transferencia || 0;
                         prevOnline = prevCombined.pagos_en_linea || 0;
                     } else if (existingSaleData.metodo_pago === 'mercadopago') {
-                        // The deposit was likely 'mercadopago'
-                        prevOnline = existingSaleData.monto_pagado_real || existingSaleData.total || 0;
+                        // The deposit was 'mercadopago'
+                        prevOnline = prevDepositAmount > 0 ? prevDepositAmount : (existingSaleData.total || 0);
                     } else if (existingSaleData.metodo_pago === 'efectivo') {
-                        prevEfectivo = existingSaleData.total || 0;
+                        prevEfectivo = prevDepositAmount > 0 ? prevDepositAmount : (existingSaleData.total || 0);
                     } else if (existingSaleData.metodo_pago === 'tarjeta') {
-                        prevTarjeta = existingSaleData.total || 0;
+                        prevTarjeta = prevDepositAmount > 0 ? prevDepositAmount : (existingSaleData.total || 0);
                     } else if (existingSaleData.metodo_pago === 'transferencia') {
-                        prevTransferencia = existingSaleData.total || 0;
+                        prevTransferencia = prevDepositAmount > 0 ? prevDepositAmount : (existingSaleData.total || 0);
                     }
 
                     // 2. Extract current payments (amountBeingPaid is the balance being paid NOW)
@@ -1600,13 +1601,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
 
                     // 3. Combine
+                    const totalEfectivo = prevEfectivo + currEfectivo;
+                    const totalTarjeta = prevTarjeta + currTarjeta;
+                    const totalTransferencia = prevTransferencia + currTransferencia;
+                    const totalOnline = prevOnline;
+
+                    const nonZeroMethods = [
+                        totalEfectivo > 0 ? 'efectivo' : null,
+                        totalTarjeta > 0 ? 'tarjeta' : null,
+                        totalTransferencia > 0 ? 'transferencia' : null,
+                        totalOnline > 0 ? 'mercadopago' : null,
+                    ].filter(Boolean);
+
                     saleDataToSave.detalle_pago_combinado = {
-                        efectivo: prevEfectivo + currEfectivo,
-                        tarjeta: prevTarjeta + currTarjeta,
-                        transferencia: prevTransferencia + currTransferencia,
-                        pagos_en_linea: prevOnline
+                        efectivo: totalEfectivo,
+                        tarjeta: totalTarjeta,
+                        transferencia: totalTransferencia,
+                        pagos_en_linea: totalOnline
                     };
-                    saleDataToSave.metodo_pago = 'combinado'; // Always combined when merging multiple payments
+
+                    if (nonZeroMethods.length > 1) {
+                        saleDataToSave.metodo_pago = 'combinado';
+                    } else if (nonZeroMethods.length === 1) {
+                        saleDataToSave.metodo_pago = nonZeroMethods[0];
+                    } else {
+                        saleDataToSave.metodo_pago = data.metodo_pago || 'efectivo';
+                    }
 
                     transaction.update(saleDocRef, removeUndefinedFields(saleDataToSave));
                 } else {

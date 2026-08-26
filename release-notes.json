@@ -1,9 +1,9 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Términos, privacidad y políticas de servicio",
+  "summary": "Mejoras en caja, anticipos y políticas de servicio",
   "notes": [
+    "Ajuste en arqueo de caja y comprobantes al liquidar citas con anticipos previos.",
     "Sincronización en tiempo real de Términos y Condiciones y Aviso de Privacidad desde Configuración.",
-    "Blindaje de anticipos, cancelaciones y no-shows en reservas públicas y caja.",
-    "Filtros avanzados de mejores clientes y clientes nuevos por mes/año."
+    "Filtros de mejores clientes y clientes nuevos por mes/año."
   ]
 }

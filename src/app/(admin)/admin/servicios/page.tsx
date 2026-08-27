@@ -499,24 +499,24 @@ export default function ServiciosPage() {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}>
         <div className="space-y-6">
           {/* Card: Configuración de Anticipo por Monto Mínimo */}
-          <Card className="border border-amber-200 bg-amber-50/40 shadow-sm">
+          <Card className="border border-border/70 bg-card shadow-xs">
             <CardHeader className="pb-3">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 bg-amber-100 rounded-lg text-amber-800 shrink-0 mt-0.5">
+                  <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-600 border border-blue-500/20 shrink-0 mt-0.5">
                     <ShieldCheck className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-base md:text-lg font-bold text-amber-950">
+                    <CardTitle className="text-base md:text-lg font-bold text-foreground">
                       Anticipo Automático por Monto Mínimo (Reservas Web)
                     </CardTitle>
-                    <CardDescription className="text-xs md:text-sm text-amber-800 mt-0.5">
+                    <CardDescription className="text-xs md:text-sm text-muted-foreground mt-0.5">
                       Exige automáticamente un cobro de anticipo en línea cuando la suma de los servicios seleccionados por el cliente alcance o supere el monto configurado.
                     </CardDescription>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 self-end md:self-center bg-white/80 px-3 py-1.5 rounded-lg border border-amber-200 shadow-xs">
-                  <span className="text-sm font-semibold text-amber-950">
+                <div className="flex items-center gap-3 self-end md:self-center bg-muted/40 px-3 py-1.5 rounded-lg border border-border/60 shadow-2xs">
+                  <span className="text-sm font-semibold text-foreground">
                     {depositSettings.activo ? 'Activado' : 'Desactivado'}
                   </span>
                   <Switch
@@ -532,9 +532,9 @@ export default function ServiciosPage() {
             </CardHeader>
             {depositSettings.activo && (
               <CardContent className="pt-0 pb-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-3 border-t border-amber-200/60 items-end">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border/50">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-amber-950">
+                    <Label className="text-xs font-semibold text-foreground">
                       Monto mínimo acumulado ($ MXN)
                     </Label>
                     <div className="relative">
@@ -543,18 +543,18 @@ export default function ServiciosPage() {
                         type="number"
                         min="0"
                         step="10"
-                        className="pl-7 bg-white border-amber-200 focus-visible:ring-amber-500 font-medium"
+                        className="pl-7 bg-background font-medium h-10"
                         value={depositSettings.monto_minimo}
                         onChange={(e) => setDepositSettings(prev => ({ ...prev, monto_minimo: Number(e.target.value) || 0 }))}
                       />
                     </div>
-                    <p className="text-[11px] text-amber-800">
+                    <p className="text-[11px] text-muted-foreground">
                       Si el carrito suma este monto o más, se cobrará anticipo.
                     </p>
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-amber-950">
+                    <Label className="text-xs font-semibold text-foreground">
                       Porcentaje de anticipo (%)
                     </Label>
                     <div className="relative">
@@ -562,22 +562,25 @@ export default function ServiciosPage() {
                         type="number"
                         min="1"
                         max="100"
-                        className="pr-7 bg-white border-amber-200 focus-visible:ring-amber-500 font-medium"
+                        className="pr-7 bg-background font-medium h-10"
                         value={depositSettings.porcentaje}
                         onChange={(e) => setDepositSettings(prev => ({ ...prev, porcentaje: Number(e.target.value) || 50 }))}
                       />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                     </div>
-                    <p className="text-[11px] text-amber-800">
+                    <p className="text-[11px] text-muted-foreground">
                       Porcentaje a cobrar en línea (ej. 50%).
                     </p>
                   </div>
 
-                  <div className="flex justify-end sm:col-span-2 md:col-span-1">
+                  <div className="space-y-1.5 sm:col-span-2 md:col-span-1">
+                    <Label className="text-xs font-semibold text-transparent select-none hidden md:block" aria-hidden="true">
+                      Acción
+                    </Label>
                     <Button
                       onClick={() => handleSaveDepositSettings()}
                       disabled={isSavingDepositSettings}
-                      className="w-full bg-amber-600 hover:bg-amber-700 text-white shadow-sm font-semibold"
+                      className="w-full h-10 font-semibold shadow-xs"
                     >
                       {isSavingDepositSettings ? (
                         <>
@@ -587,6 +590,9 @@ export default function ServiciosPage() {
                         'Guardar Valores'
                       )}
                     </Button>
+                    <p className="text-[11px] text-transparent select-none hidden md:block" aria-hidden="true">
+                      &nbsp;
+                    </p>
                   </div>
                 </div>
               </CardContent>

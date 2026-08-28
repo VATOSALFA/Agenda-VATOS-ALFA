@@ -1,9 +1,9 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Mejoras en diseño, anticipos y servicios",
+  "summary": "Control de anticipos y sincronización de caja",
   "notes": [
-    "Alineación visual y paleta oficial en la configuración de anticipos automáticos por monto mínimo.",
-    "Ajuste en arqueo de caja y comprobantes al liquidar citas con anticipos previos.",
-    "Sincronización en tiempo real de Términos y Condiciones y Aviso de Privacidad."
+    "Sincronización automática de citas al anular ventas de anticipo en caja.",
+    "Alineación visual oficial en la configuración de anticipos por monto mínimo.",
+    "Ajuste en arqueo de caja y comprobantes al liquidar citas con anticipos."
   ]
 }

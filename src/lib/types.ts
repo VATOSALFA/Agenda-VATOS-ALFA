@@ -256,6 +256,7 @@ export interface Sale {
   tipsPaidTo?: string[];
   tipPaid?: boolean;
   pago_estado?: string;
+  tipo_venta?: string;
   monto_pagado_real?: number;
   anticipoPagado?: number;
   propina?: number;

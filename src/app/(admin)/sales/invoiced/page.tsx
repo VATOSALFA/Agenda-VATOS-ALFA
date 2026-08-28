@@ -320,18 +320,35 @@ export default function InvoicedSalesPage() {
 
                     if (reservationSnap.exists()) {
                         const resData = reservationSnap.data();
-                        const anticipo = Number(resData.anticipo_pagado || 0);
-                        const total = Number(resData.total || 0);
+                        const isDepositSale = currentSaleData.tipo_venta === 'anticipo' || saleRef.id.startsWith('deposit_') || currentSaleData.pago_estado === 'deposit_paid';
 
-                        const newPagoEstado = anticipo > 0 ? 'deposit_paid' : 'pendiente';
-                        const newSaldoPendiente = total > anticipo ? (total - anticipo) : total;
+                        if (isDepositSale) {
+                            // If the deleted sale was the deposit itself, clear the deposit from the reservation
+                            transaction.update(reservationRef, {
+                                pago_estado: 'pendiente',
+                                monto_anticipo: 0,
+                                anticipo_pagado: 0,
+                                anticipoPagado: 0,
+                                monto_pagado: 0,
+                                monto_pagado_real: 0,
+                                saldo_pendiente: Number(resData.total || resData.precio || 0),
+                                deposit_payment_id: null,
+                                metodo_pago_anticipo: null,
+                            });
+                        } else {
+                            const anticipo = Number(resData.anticipo_pagado || 0);
+                            const total = Number(resData.total || 0);
 
-                        transaction.update(reservationRef, {
-                            estado: 'Reservado',
-                            pago_estado: newPagoEstado,
-                            saldo_pendiente: newSaldoPendiente,
-                            monto_pagado: anticipo,
-                        });
+                            const newPagoEstado = anticipo > 0 ? 'deposit_paid' : 'pendiente';
+                            const newSaldoPendiente = total > anticipo ? (total - anticipo) : total;
+
+                            transaction.update(reservationRef, {
+                                estado: 'Reservado',
+                                pago_estado: newPagoEstado,
+                                saldo_pendiente: newSaldoPendiente,
+                                monto_pagado: anticipo,
+                            });
+                        }
                     }
                 }
 

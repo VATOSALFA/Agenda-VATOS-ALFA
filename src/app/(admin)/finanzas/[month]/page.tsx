@@ -341,7 +341,7 @@ export default function FinanzasMensualesPage() {
 
             const metodoPago = sale.metodo_pago;
 
-            if (sale.pago_estado === 'deposit_paid' || metodoPago === 'mercadopago') {
+            if (metodoPago === 'mercadopago') {
                 acc[saleDate].pagos_en_linea += realPaid;
                 acc[saleDate].deposito += realPaid;
             } else if (metodoPago === 'efectivo') {
@@ -358,6 +358,9 @@ export default function FinanzasMensualesPage() {
                 acc[saleDate].transferencia += sale.detalle_pago_combinado.transferencia || 0;
                 acc[saleDate].pagos_en_linea += sale.detalle_pago_combinado.pagos_en_linea || 0;
                 acc[saleDate].deposito += (sale.detalle_pago_combinado.tarjeta || 0) + (sale.detalle_pago_combinado.transferencia || 0) + (sale.detalle_pago_combinado.pagos_en_linea || 0);
+            } else if (sale.pago_estado === 'deposit_paid') {
+                acc[saleDate].pagos_en_linea += realPaid;
+                acc[saleDate].deposito += realPaid;
             }
 
             acc[saleDate].total += realPaid;
@@ -844,18 +847,18 @@ export default function FinanzasMensualesPage() {
         if (!sales) return 0;
         let total = 0;
         sales.forEach(sale => {
-            const saleTotal = sale.total || 1;
-            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
-            const ratio = realPaid / saleTotal;
+            const saleTotal = sale.total || 0;
+            const realPaid = (sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal))
+                ? (sale.monto_pagado_real || 0)
+                : saleTotal;
+
+            const computedSubtotal = sale.subtotal || sale.items?.reduce((sum, it) => sum + (it.subtotal ?? (((it.precio || 0) * (it.cantidad || 1)))), 0) || realPaid || 1;
 
             sale.items?.forEach(item => {
-                if (item.tipo === 'servicio') {
-                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
-                    const itemDiscount = item.descuento?.monto || 0;
-                    const finalItemPrice = (itemSubtotal - itemDiscount) * ratio;
-                    total += finalItemPrice;
+                if (item.tipo !== 'producto') {
+                    const itemSubtotal = item.subtotal ?? (((item.precio || 0) * (item.cantidad || 1)));
+                    const proportion = computedSubtotal > 0 ? (itemSubtotal / computedSubtotal) : 0;
+                    total += proportion * realPaid;
                 }
             });
         });
@@ -877,23 +880,25 @@ export default function FinanzasMensualesPage() {
         let comisionProfesionales = 0;
 
         sales.forEach(sale => {
-            const saleTotal = sale.total || 1;
-            const realPaid = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
-            const ratio = realPaid / saleTotal;
+            const saleTotal = sale.total || 0;
+            const realPaid = (sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal))
+                ? (sale.monto_pagado_real || 0)
+                : saleTotal;
+
+            const computedSubtotal = sale.subtotal || sale.items?.reduce((sum, it) => sum + (it.subtotal ?? (((it.precio || 0) * (it.cantidad || 1)))), 0) || realPaid || 1;
 
             sale.items?.forEach(item => {
                 if (item.tipo === 'producto') {
-                    const itemSubtotal = item.subtotal || ((item.precio || 0) * item.cantidad) || 0;
-                    const itemDiscount = item.descuento?.monto || 0;
-                    const finalItemPrice = (itemSubtotal - itemDiscount) * ratio;
+                    const itemQty = item.cantidad || 1;
+                    const itemSubtotal = item.subtotal ?? (((item.precio || 0) * itemQty));
+                    const proportion = computedSubtotal > 0 ? (itemSubtotal / computedSubtotal) : 0;
+                    const finalItemPrice = proportion * realPaid;
 
                     ventaProductos += finalItemPrice;
 
                     const product = productMap.get(item.id);
                     if (product && product.purchase_cost) {
-                        reinversion += product.purchase_cost * item.cantidad;
+                        reinversion += product.purchase_cost * itemQty;
                     }
 
                     if (product && item.barbero_id) {
@@ -2526,4 +2531,4 @@ function AddLiquidacionModal({ isOpen, onOpenChange, onSuccess, monthYear }: { i
             </DialogContent>
         </Dialog>
     );
-}
+}

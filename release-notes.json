@@ -1,9 +1,9 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Control de anticipos y sincronización de caja",
+  "summary": "Conciliación contable y sincronización de ventas facturadas",
   "notes": [
-    "Sincronización automática de citas al anular ventas de anticipo en caja.",
-    "Alineación visual oficial en la configuración de anticipos por monto mínimo.",
-    "Ajuste en arqueo de caja y comprobantes al liquidar citas con anticipos."
+    "Sincronización exacta entre Finanzas del mes y Ventas Facturadas (servicios y productos).",
+    "Cuadre total en gráficas y tablas de medios de pago considerando anticipos y pagos combinados.",
+    "Ajuste en la distribución proporcional de ingresos netos por ticket."
   ]
 }

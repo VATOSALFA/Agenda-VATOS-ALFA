@@ -145,7 +145,6 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         }
 
         const salesByType = populatedSales.reduce((acc, sale) => {
-            const saleSubtotal = sale.subtotal || 1; // Avoid division by zero
             let saleTotal = sale.total || 0;
 
             // Use real paid amount if available (for deposits/partial)
@@ -153,11 +152,13 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
                 saleTotal = sale.monto_pagado_real || 0;
             }
 
+            const computedSaleSubtotal = sale.subtotal || sale.items?.reduce((sum, it: any) => sum + (it.subtotal ?? (((it.precio || 0) * (it.cantidad || 1)))), 0) || saleTotal || 1;
+
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
                     const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
-                    const itemSubtotal = (item as any).subtotal || 0;
-                    const proportion = itemSubtotal / saleSubtotal;
+                    const itemSubtotal = (item as any).subtotal ?? (((item as any).precio || 0) * ((item as any).cantidad || 1));
+                    const proportion = computedSaleSubtotal > 0 ? (itemSubtotal / computedSaleSubtotal) : 0;
                     const proportionalTotal = proportion * saleTotal;
                     acc[type] = (acc[type] || 0) + proportionalTotal;
                 });
@@ -166,23 +167,36 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         }, {} as Record<string, number>);
 
         const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
-            if (sale.metodo_pago === 'combinado') {
-                acc['efectivo'] = (acc['efectivo'] || 0) + (sale.detalle_pago_combinado?.efectivo || 0);
-                acc['tarjeta'] = (acc['tarjeta'] || 0) + (sale.detalle_pago_combinado?.tarjeta || 0);
-                acc['transferencia'] = (acc['transferencia'] || 0) + (sale.detalle_pago_combinado?.transferencia || 0);
+            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                ? sale.monto_pagado_real
+                : (sale.total || 0);
 
-                // Add online payments if present in combined
-                const onlineAmount = sale.detalle_pago_combinado?.pagos_en_linea || 0;
-                if (onlineAmount > 0) {
-                    acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + onlineAmount;
+            if (sale.metodo_pago === 'combinado') {
+                const combinedEfectivo = sale.detalle_pago_combinado?.efectivo || 0;
+                const combinedTarjeta = sale.detalle_pago_combinado?.tarjeta || 0;
+                const combinedTransferencia = sale.detalle_pago_combinado?.transferencia || 0;
+                const combinedOnline = sale.detalle_pago_combinado?.pagos_en_linea || 0;
+                const combinedSum = combinedEfectivo + combinedTarjeta + combinedTransferencia + combinedOnline;
+
+                if (combinedSum > 0 && Math.abs(combinedSum - actualRevenue) > 0.01) {
+                    const factor = actualRevenue / combinedSum;
+                    acc['efectivo'] = (acc['efectivo'] || 0) + (combinedEfectivo * factor);
+                    acc['tarjeta'] = (acc['tarjeta'] || 0) + (combinedTarjeta * factor);
+                    acc['transferencia'] = (acc['transferencia'] || 0) + (combinedTransferencia * factor);
+                    if (combinedOnline > 0) {
+                        acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + (combinedOnline * factor);
+                    }
+                } else {
+                    acc['efectivo'] = (acc['efectivo'] || 0) + combinedEfectivo;
+                    acc['tarjeta'] = (acc['tarjeta'] || 0) + combinedTarjeta;
+                    acc['transferencia'] = (acc['transferencia'] || 0) + combinedTransferencia;
+                    if (combinedOnline > 0) {
+                        acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + combinedOnline;
+                    }
                 }
             } else {
                 let method = sale.metodo_pago || 'otro';
-                let amount = sale.total || 0;
-
-                if (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) { // Updated safegaurd
-                    amount = sale.monto_pagado_real;
-                }
+                let amount = actualRevenue;
 
                 if (method === 'mercadopago') method = 'Pagos en Linea';
 

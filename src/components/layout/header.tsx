@@ -99,6 +99,7 @@ const getCurrentMonthName = () => monthNamesNav[new Date().getMonth()];
 const finanzasNavLinks = [
   { href: '/finanzas/resumen', label: 'Resumen Anual', icon: LineChart, permission: 'ver_finanzas' },
   { href: `/finanzas/${getCurrentMonthName()}`, label: 'Vista Mensual', icon: DollarSign, permission: 'ver_finanzas' },
+  { href: '/finanzas/fiscal', label: 'Control Fiscal RESICO', icon: Landmark, permission: 'ver_finanzas' },
 ];
 
 const adminNavLinks = [

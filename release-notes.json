@@ -1,9 +1,10 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Conciliación contable y sincronización de ventas facturadas",
+  "summary": "Módulo de Control Fiscal RESICO y Autogestión SAT",
   "notes": [
-    "Sincronización exacta entre Finanzas del mes y Ventas Facturadas (servicios y productos).",
-    "Cuadre total en gráficas y tablas de medios de pago considerando anticipos y pagos combinados.",
-    "Ajuste en la distribución proporcional de ingresos netos por ticket."
+    "Nuevo módulo de Control Fiscal RESICO en la sección de Finanzas.",
+    "Pre-cálculo automático de ISR e IVA diferenciando ingresos bancarizados de efectivo.",
+    "Guía copia-pega interactiva con redondeo oficial para presentar declaraciones ante el SAT.",
+    "Historial y archivo digital de acuses, líneas de captura y estatus de pago."
   ]
 }

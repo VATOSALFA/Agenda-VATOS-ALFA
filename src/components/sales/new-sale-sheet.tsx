@@ -681,6 +681,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const remainingAmount = totalConPropina - combinedTotal;
 
+    const [selectedPropinaMetodo, setSelectedPropinaMetodo] = useState<string>('tarjeta');
+
+    useEffect(() => {
+        if (paymentMethod === 'combinado' && watchedPropina > 0) {
+            const cardAmt = Number(watchedCard || 0);
+            const cashAmt = Number(watchedCash || 0);
+            const transAmt = Number(watchedTransfer || 0);
+            if (cardAmt > 0 && Math.abs(cardAmt - watchedPropina) < 0.01) {
+                setSelectedPropinaMetodo('tarjeta');
+            } else if (cashAmt > 0 && Math.abs(cashAmt - watchedPropina) < 0.01) {
+                setSelectedPropinaMetodo('efectivo');
+            } else if (transAmt > 0 && Math.abs(transAmt - watchedPropina) < 0.01) {
+                setSelectedPropinaMetodo('transferencia');
+            }
+        }
+    }, [paymentMethod, watchedPropina, watchedCard, watchedCash, watchedTransfer]);
+
     const cartBarberoNames = useMemo(() => {
         const ids = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
         return ids.map(id => professionals?.find(p => p.id === id)?.name).filter(Boolean) as string[];
@@ -1025,16 +1042,40 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pendiente', // <--- IMPORTANTE: Nace como pendiente
-                    ...(paymentMethod === 'combinado' && {
-                        detalle_pago_combinado: {
-                            efectivo: formData.pago_efectivo || 0,
-                            tarjeta: formData.pago_tarjeta || 0,
-                            transferencia: formData.pago_transferencia || 0,
-                            pagos_en_linea: 0
+                    ...(paymentMethod === 'combinado' ? (() => {
+                        const propMetodo = selectedPropinaMetodo || 'tarjeta';
+                        let effE = Number(formData.pago_efectivo) || 0;
+                        let effT = Number(formData.pago_tarjeta) || 0;
+                        let effTr = Number(formData.pago_transferencia) || 0;
+                        const propVal = Number(formData.propina) || 0;
+
+                        if (propVal > 0) {
+                            if (propMetodo === 'tarjeta') effT = Math.max(0, effT - propVal);
+                            else if (propMetodo === 'efectivo') effE = Math.max(0, effE - propVal);
+                            else if (propMetodo === 'transferencia') effTr = Math.max(0, effTr - propVal);
                         }
+
+                        const nonZero = [
+                            effE > 0 ? 'efectivo' : null,
+                            effT > 0 ? 'tarjeta' : null,
+                            effTr > 0 ? 'transferencia' : null
+                        ].filter(Boolean);
+
+                        return {
+                            detalle_pago_combinado: {
+                                efectivo: effE,
+                                tarjeta: effT,
+                                transferencia: effTr,
+                                pagos_en_linea: 0
+                            },
+                            propina_metodo: propMetodo,
+                            ...(nonZero.length === 1 ? { metodo_pago: nonZero[0] } : {})
+                        };
+                    })() : {
+                        propina_metodo: paymentMethod
                     }),
                     propina: formData.propina || 0, // Registrar propina
-                    monto_pagado_real: paymentMethod === 'combinado' ? amountToCharge : (total + Number(formData.propina || 0)),
+                    monto_pagado_real: totalConPropina,
                     saldo_pendiente: 0,
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
@@ -1582,11 +1623,36 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 };
 
                 if (data.metodo_pago === 'combinado') {
+                    const propMetodo = selectedPropinaMetodo || 'tarjeta';
+                    let effE = Number(data.pago_efectivo) || 0;
+                    let effT = Number(data.pago_tarjeta) || 0;
+                    let effTr = Number(data.pago_transferencia) || 0;
+
+                    if (propinaToSave > 0) {
+                        if (propMetodo === 'tarjeta') effT = Math.max(0, effT - propinaToSave);
+                        else if (propMetodo === 'efectivo') effE = Math.max(0, effE - propinaToSave);
+                        else if (propMetodo === 'transferencia') effTr = Math.max(0, effTr - propinaToSave);
+                    }
+
+                    saleDataToSave.propina_metodo = propMetodo;
                     saleDataToSave.detalle_pago_combinado = {
-                        efectivo: data.pago_efectivo,
-                        tarjeta: data.pago_tarjeta,
-                        transferencia: data.pago_transferencia,
+                        efectivo: effE,
+                        tarjeta: effT,
+                        transferencia: effTr,
+                        pagos_en_linea: 0
                     };
+
+                    const nonZero = [
+                        effE > 0 ? 'efectivo' : null,
+                        effT > 0 ? 'tarjeta' : null,
+                        effTr > 0 ? 'transferencia' : null
+                    ].filter(Boolean);
+
+                    if (nonZero.length === 1) {
+                        saleDataToSave.metodo_pago = nonZero[0];
+                    }
+                } else {
+                    saleDataToSave.propina_metodo = data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo');
                 }
 
                 if (isUpdate) {
@@ -2340,6 +2406,34 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         <span>${remainingAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>
                                                 </div>
+                                                {watchedPropina > 0 && (
+                                                    <div className="pt-3 border-t mt-3 space-y-1.5">
+                                                        <FormLabel className="text-xs font-semibold text-primary">
+                                                            ¿En qué método pagó la propina de ${watchedPropina}?
+                                                        </FormLabel>
+                                                        <div className="grid grid-cols-3 gap-2">
+                                                            {[
+                                                                { id: 'tarjeta', label: 'Tarjeta' },
+                                                                { id: 'efectivo', label: 'Efectivo' },
+                                                                { id: 'transferencia', label: 'Transferencia' }
+                                                            ].map((m) => (
+                                                                <Button
+                                                                    key={m.id}
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant={selectedPropinaMetodo === m.id ? "default" : "outline"}
+                                                                    className={cn(
+                                                                        "h-8 text-xs font-semibold",
+                                                                        selectedPropinaMetodo === m.id && "bg-primary text-primary-foreground hover:bg-primary/90"
+                                                                    )}
+                                                                    onClick={() => setSelectedPropinaMetodo(m.id)}
+                                                                >
+                                                                    {m.label}
+                                                                </Button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 <FormMessage className="mt-2 text-center text-xs">
                                                     {form.formState.errors.pago_tarjeta?.message}
                                                 </FormMessage>

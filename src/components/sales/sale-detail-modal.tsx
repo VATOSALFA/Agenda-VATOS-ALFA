@@ -254,10 +254,10 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                 )}
                                 {sale.propina && sale.propina > 0 && (
                                     <TableRow className="text-primary font-medium bg-primary/5">
-                                        <TableCell colSpan={2} className="text-right">
-                                            Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''}
-                                        </TableCell>
-                                        <TableCell className="text-right">+${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         <TableCell colSpan={2} className="text-right">
+                                             Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''} {(sale as any).propina_metodo ? `• ${(sale as any).propina_metodo.charAt(0).toUpperCase() + (sale as any).propina_metodo.slice(1)}` : ''}
+                                         </TableCell>
+                                         <TableCell className="text-right">+${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 )}
                                 <TableRow className="font-bold text-lg border-t-2">

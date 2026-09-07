@@ -353,11 +353,35 @@ export default function FinanzasMensualesPage() {
                 acc[saleDate].transferencia += realPaid;
                 acc[saleDate].deposito += realPaid;
             } else if (metodoPago === 'combinado' && sale.detalle_pago_combinado) {
-                acc[saleDate].efectivo += sale.detalle_pago_combinado.efectivo || 0;
-                acc[saleDate].tarjeta += sale.detalle_pago_combinado.tarjeta || 0;
-                acc[saleDate].transferencia += sale.detalle_pago_combinado.transferencia || 0;
-                acc[saleDate].pagos_en_linea += sale.detalle_pago_combinado.pagos_en_linea || 0;
-                acc[saleDate].deposito += (sale.detalle_pago_combinado.tarjeta || 0) + (sale.detalle_pago_combinado.transferencia || 0) + (sale.detalle_pago_combinado.pagos_en_linea || 0);
+                const ce = sale.detalle_pago_combinado.efectivo || 0;
+                const ct = sale.detalle_pago_combinado.tarjeta || 0;
+                const ctr = sale.detalle_pago_combinado.transferencia || 0;
+                const co = sale.detalle_pago_combinado.pagos_en_linea || 0;
+                const csum = ce + ct + ctr + co;
+
+                if (csum > realPaid && sale.propina && Math.abs(csum - (realPaid + sale.propina)) < 0.05) {
+                    const pMetodo = (sale as any).propina_metodo;
+                    let adjE = ce, adjT = ct, adjTr = ctr, adjO = co;
+                    if (pMetodo === 'tarjeta') adjT = Math.max(0, ct - sale.propina);
+                    else if (pMetodo === 'efectivo') adjE = Math.max(0, ce - sale.propina);
+                    else if (pMetodo === 'transferencia') adjTr = Math.max(0, ctr - sale.propina);
+                    else if (pMetodo === 'mercadopago' || pMetodo === 'en_linea') adjO = Math.max(0, co - sale.propina);
+                    else {
+                        const f = realPaid / csum;
+                        adjE = ce * f; adjT = ct * f; adjTr = ctr * f; adjO = co * f;
+                    }
+                    acc[saleDate].efectivo += adjE;
+                    acc[saleDate].tarjeta += adjT;
+                    acc[saleDate].transferencia += adjTr;
+                    acc[saleDate].pagos_en_linea += adjO;
+                    acc[saleDate].deposito += adjT + adjTr + adjO;
+                } else {
+                    acc[saleDate].efectivo += ce;
+                    acc[saleDate].tarjeta += ct;
+                    acc[saleDate].transferencia += ctr;
+                    acc[saleDate].pagos_en_linea += co;
+                    acc[saleDate].deposito += ct + ctr + co;
+                }
             } else if (sale.pago_estado === 'deposit_paid') {
                 acc[saleDate].pagos_en_linea += realPaid;
                 acc[saleDate].deposito += realPaid;

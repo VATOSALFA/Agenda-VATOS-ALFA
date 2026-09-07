@@ -221,12 +221,31 @@ export default function ControlFiscalResicoPage() {
                 const csum = ce + ct + ctr + co;
 
                 if (csum > 0 && Math.abs(csum - actualRevenue) > 0.01) {
-                    const factor = actualRevenue / csum;
-                    efectivo += ce * factor;
-                    tarjetaTotal += ct * factor;
-                    transferenciaTotal += ctr * factor;
-                    onlineTotal += co * factor;
-                    bancarizado += (ct + ctr + co) * factor;
+                    const propinaVal = Number(sale.propina) || 0;
+                    const pMetodo = (sale as any).propina_metodo;
+                    if (propinaVal > 0 && pMetodo && Math.abs(csum - (actualRevenue + propinaVal)) < 0.05) {
+                        let adjE = ce;
+                        let adjT = ct;
+                        let adjTr = ctr;
+                        let adjO = co;
+                        if (pMetodo === 'tarjeta') adjT = Math.max(0, adjT - propinaVal);
+                        else if (pMetodo === 'efectivo') adjE = Math.max(0, adjE - propinaVal);
+                        else if (pMetodo === 'transferencia') adjTr = Math.max(0, adjTr - propinaVal);
+                        else if (pMetodo === 'mercadopago' || pMetodo === 'en_linea') adjO = Math.max(0, adjO - propinaVal);
+
+                        efectivo += adjE;
+                        tarjetaTotal += adjT;
+                        transferenciaTotal += adjTr;
+                        onlineTotal += adjO;
+                        bancarizado += (adjT + adjTr + adjO);
+                    } else {
+                        const factor = actualRevenue / csum;
+                        efectivo += ce * factor;
+                        tarjetaTotal += ct * factor;
+                        transferenciaTotal += ctr * factor;
+                        onlineTotal += co * factor;
+                        bancarizado += (ct + ctr + co) * factor;
+                    }
                 } else {
                     efectivo += ce;
                     tarjetaTotal += ct;

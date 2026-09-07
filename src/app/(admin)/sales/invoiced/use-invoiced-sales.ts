@@ -179,12 +179,30 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
                 const combinedSum = combinedEfectivo + combinedTarjeta + combinedTransferencia + combinedOnline;
 
                 if (combinedSum > 0 && Math.abs(combinedSum - actualRevenue) > 0.01) {
-                    const factor = actualRevenue / combinedSum;
-                    acc['efectivo'] = (acc['efectivo'] || 0) + (combinedEfectivo * factor);
-                    acc['tarjeta'] = (acc['tarjeta'] || 0) + (combinedTarjeta * factor);
-                    acc['transferencia'] = (acc['transferencia'] || 0) + (combinedTransferencia * factor);
-                    if (combinedOnline > 0) {
-                        acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + (combinedOnline * factor);
+                    const propinaVal = Number(sale.propina) || 0;
+                    const pMetodo = (sale as any).propina_metodo;
+                    if (propinaVal > 0 && pMetodo && Math.abs(combinedSum - (actualRevenue + propinaVal)) < 0.05) {
+                        let adjE = combinedEfectivo;
+                        let adjT = combinedTarjeta;
+                        let adjTr = combinedTransferencia;
+                        let adjO = combinedOnline;
+                        if (pMetodo === 'tarjeta') adjT = Math.max(0, adjT - propinaVal);
+                        else if (pMetodo === 'efectivo') adjE = Math.max(0, adjE - propinaVal);
+                        else if (pMetodo === 'transferencia') adjTr = Math.max(0, adjTr - propinaVal);
+                        else if (pMetodo === 'mercadopago' || pMetodo === 'en_linea') adjO = Math.max(0, adjO - propinaVal);
+
+                        acc['efectivo'] = (acc['efectivo'] || 0) + adjE;
+                        acc['tarjeta'] = (acc['tarjeta'] || 0) + adjT;
+                        acc['transferencia'] = (acc['transferencia'] || 0) + adjTr;
+                        if (adjO > 0) acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + adjO;
+                    } else {
+                        const factor = actualRevenue / combinedSum;
+                        acc['efectivo'] = (acc['efectivo'] || 0) + (combinedEfectivo * factor);
+                        acc['tarjeta'] = (acc['tarjeta'] || 0) + (combinedTarjeta * factor);
+                        acc['transferencia'] = (acc['transferencia'] || 0) + (combinedTransferencia * factor);
+                        if (combinedOnline > 0) {
+                            acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + (combinedOnline * factor);
+                        }
                     }
                 } else {
                     acc['efectivo'] = (acc['efectivo'] || 0) + combinedEfectivo;

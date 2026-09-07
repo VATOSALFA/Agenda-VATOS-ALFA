@@ -280,7 +280,7 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                     </div>
                 )}
                 {Number(propina || 0) > 0 && (
-                    <div className="flex justify-between text-amber-700 dark:text-amber-400 font-medium">
+                    <div className="flex justify-between text-primary font-medium">
                         <span>Propina:</span>
                         <span>+${Number(propina).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
@@ -2077,14 +2077,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
-                                        <Card className="p-4 bg-amber-500/5 border-amber-500/20">
+                                        <Card className="p-4 bg-primary/5 border-primary/20">
                                             <div className="space-y-3">
                                                 <div className="flex items-center justify-between">
-                                                    <FormLabel className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
-                                                        <Sparkles className="h-4 w-4" /> Propina (Opcional)
+                                                    <FormLabel className="flex items-center gap-1.5 text-sm font-semibold text-primary">
+                                                        <Sparkles className="h-4 w-4 text-primary" /> Propina (Opcional)
                                                     </FormLabel>
                                                     {cartBarberoNames.length > 0 && (
-                                                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full font-medium">
                                                             {cartBarberoNames.length === 1 ? `Para ${cartBarberoNames[0]}` : `Para: ${cartBarberoNames.join(', ')}`}
                                                         </span>
                                                     )}
@@ -2100,8 +2100,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 variant={isSelected ? "default" : "outline"}
                                                                 size="sm"
                                                                 className={cn(
-                                                                    "h-8 text-xs font-semibold px-1",
-                                                                    isSelected && "bg-amber-600 hover:bg-amber-700 text-white"
+                                                                    "h-8 text-xs font-semibold px-1 transition-all",
+                                                                    isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
                                                                 )}
                                                                 onClick={() => {
                                                                     form.setValue('propina', amount, { shouldValidate: true });

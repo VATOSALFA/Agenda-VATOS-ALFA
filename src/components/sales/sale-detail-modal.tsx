@@ -253,7 +253,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                     </TableRow>
                                 )}
                                 {sale.propina && sale.propina > 0 && (
-                                    <TableRow className="text-amber-800 font-medium bg-amber-50/50">
+                                    <TableRow className="text-primary font-medium bg-primary/5">
                                         <TableCell colSpan={2} className="text-right">
                                             Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''}
                                         </TableCell>

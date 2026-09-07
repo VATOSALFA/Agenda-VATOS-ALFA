@@ -1,10 +1,10 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Módulo de Control Fiscal RESICO y Autogestión SAT",
+  "summary": "Sistema Universal de Propinas en Caja y Control Fiscal RESICO",
   "notes": [
-    "Nuevo módulo de Control Fiscal RESICO en la sección de Finanzas.",
-    "Pre-cálculo automático de ISR e IVA diferenciando ingresos bancarizados de efectivo.",
-    "Guía copia-pega interactiva con redondeo oficial para presentar declaraciones ante el SAT.",
-    "Historial y archivo digital de acuses, líneas de captura y estatus de pago."
+    "Sistema Universal de Propinas: botones rápidos ($20, $30, $50, $100) y monto libre para todos los métodos de pago.",
+    "Pago Combinado con Propina: soporte completo para pagos divididos (ej. transferencia + tarjeta) cuadrando el total exacto sin errores.",
+    "Desglose de propina en tickets impresos Bluetooth y detalle de venta acreditado directamente al barbero.",
+    "Módulo de Control Fiscal RESICO: guía paso a paso para Factura Global CFDI 4.0 en el SAT y opción de monto personalizado."
   ]
 }

@@ -57,7 +57,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send, Gift, Sparkles } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { ClientInput } from '../reservations/client-input';
 import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
@@ -115,14 +115,16 @@ const saleSchema = (total: number) => z.object({
     notas: z.string().optional(),
 }).refine(data => {
     if (data.metodo_pago === 'combinado') {
+        const propinaVal = Number(data.propina || 0);
+        const totalToCover = total + propinaVal;
         const combinedTotal = Number(data.pago_efectivo || 0) + Number(data.pago_tarjeta || 0) + Number(data.pago_transferencia || 0);
-        return combinedTotal === total;
+        return Math.abs(combinedTotal - totalToCover) < 0.01;
     }
     return true;
-}, {
-    message: `La suma debe ser exactamente $${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+}, data => ({
+    message: `La suma debe ser exactamente $${(total + Number(data.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     path: ['pago_tarjeta'],
-});
+}));
 
 
 type SaleFormData = z.infer<ReturnType<typeof saleSchema>>;
@@ -179,7 +181,7 @@ ClientCombobox.displayName = 'ClientCombobox';
 
 import { Switch } from '@/components/ui/switch';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, redeemPoints, setRedeemPoints }: any) => (
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, redeemPoints, setRedeemPoints, propina }: any) => (
     <div className="col-span-1 bg-card/50 rounded-lg flex flex-col shadow-lg h-[450px] md:h-full md:min-h-0">
         <div className="p-4 border-b flex justify-between items-center flex-shrink-0">
             <h3 className="font-semibold flex items-center text-lg"><ShoppingCart className="mr-2 h-5 w-5" /> Carrito de Venta</h3>
@@ -277,9 +279,15 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                         <span>-${Math.min(client?.puntos || 0, Math.ceil(subtotal - totalDiscount - anticipoPagado)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 )}
+                {Number(propina || 0) > 0 && (
+                    <div className="flex justify-between text-amber-700 dark:text-amber-400 font-medium">
+                        <span>Propina:</span>
+                        <span>+${Number(propina).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                )}
                 <div className="flex justify-between font-bold text-xl pt-2 border-t">
-                    <span>Total:</span>
-                    <span className="text-primary">${Math.max(0, total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span>{Number(propina || 0) > 0 ? "Total a Cobrar:" : "Total:"}</span>
+                    <span className="text-primary">${Math.max(0, total + Number(propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
             </div>
         )}
@@ -545,6 +553,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             pago_efectivo: 0,
             pago_tarjeta: 0,
             pago_transferencia: 0,
+            propina: 0,
         },
     });
 
@@ -650,14 +659,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const watchedCash = form.watch('pago_efectivo');
     const watchedCard = form.watch('pago_tarjeta');
     const watchedTransfer = form.watch('pago_transferencia');
+    const watchedPropina = Number(form.watch('propina') || 0);
+
+    const totalConPropina = total + watchedPropina;
 
     const isCombinedPaymentInvalid = useMemo(() => {
         if (paymentMethod !== 'combinado') return false;
         const cashAmount = Number(watchedCash || 0);
         const cardAmount = Number(watchedCard || 0);
         const transferAmount = Number(watchedTransfer || 0);
-        return cashAmount + cardAmount + transferAmount !== total;
-    }, [paymentMethod, total, watchedCash, watchedCard, watchedTransfer]);
+        return Math.abs((cashAmount + cardAmount + transferAmount) - totalConPropina) > 0.01;
+    }, [paymentMethod, totalConPropina, watchedCash, watchedCard, watchedTransfer]);
 
     const combinedTotal = useMemo(() => {
         if (paymentMethod !== 'combinado') return 0;
@@ -667,7 +679,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         return cashAmount + cardAmount + transferAmount;
     }, [paymentMethod, watchedCash, watchedCard, watchedTransfer]);
 
-    const remainingAmount = total - combinedTotal;
+    const remainingAmount = totalConPropina - combinedTotal;
+
+    const cartBarberoNames = useMemo(() => {
+        const ids = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
+        return ids.map(id => professionals?.find(p => p.id === id)?.name).filter(Boolean) as string[];
+    }, [cart, professionals]);
 
 
     useEffect(() => {
@@ -837,9 +854,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             subtotal: subtotal,
                             anticipoPagado: anticipoPagado === undefined ? (initialData?.anticipoPagado || 0) : anticipoPagado,
                             discount: totalDiscount,
-                            total: total,
+                            propina: watchedPropina,
+                            total: totalConPropina,
                             cashPaid: paymentMethod === 'efectivo' ? amountPaid : undefined,
-                            change: paymentMethod === 'efectivo' ? Math.max(0, amountPaid - total) : undefined,
+                            change: paymentMethod === 'efectivo' ? Math.max(0, amountPaid - totalConPropina) : undefined,
                             combinedDetails: paymentMethod === 'combinado' ? {
                                 efectivo: watchedCash || 0,
                                 tarjeta: watchedCard || 0,
@@ -880,7 +898,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     // --- LOGICA DE COBRO CON TERMINAL CORREGIDA ---
     const handleSendToTerminal = async () => {
         const formData = form.getValues();
-        const amountToCharge = paymentMethod === 'combinado' ? (formData.pago_tarjeta || 0) : total;
+        const amountToCharge = paymentMethod === 'combinado' ? (formData.pago_tarjeta || 0) : (total + Number(formData.propina || 0));
         if (!db || !selectedTerminalId || amountToCharge <= 0 || !selectedClient) return;
 
         if (cart.some(item => !item.barbero_id)) {
@@ -1016,6 +1034,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         }
                     }),
                     propina: formData.propina || 0, // Registrar propina
+                    monto_pagado_real: paymentMethod === 'combinado' ? amountToCharge : (total + Number(formData.propina || 0)),
+                    saldo_pendiente: 0,
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
                 };
@@ -1523,6 +1543,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 // Calculate correct totals
                 const grandTotal = subtotal - totalDiscount; // Full value of the service/products
                 const amountBeingPaid = total; // The remainder being paid now
+                const propinaToSave = Number(data.propina || 0);
+
+                const allBarberos = Array.from(new Set(itemsToSave.map(i => i.barbero_id).filter(id => id)));
+                const uniqueBarberos = allBarberos.filter(id => professionals?.some(p => p.id === id));
+                let propinaDetalles: any[] = [];
+                if (propinaToSave > 0 && uniqueBarberos.length > 0) {
+                    const propinaSplit = Math.round((propinaToSave / uniqueBarberos.length) * 100) / 100;
+                    propinaDetalles = uniqueBarberos.map(bId => ({
+                        barbero_id: bId,
+                        monto: propinaSplit
+                    }));
+                }
 
                 const saleDataToSave: any = {
                     ...data,
@@ -1535,6 +1567,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         monto: totalDiscount
                     },
                     total: grandTotal, // Save the full value, not just the remainder
+                    propina: propinaToSave,
+                    ...(propinaDetalles.length > 0 ? { propina_detalles: propinaDetalles } : {}),
                     fecha_hora_venta: Timestamp.now(),
                     fecha_pago: Timestamp.now(),
                     creado_por_id: user?.uid,
@@ -1542,7 +1576,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
-                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid,
+                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid + propinaToSave,
                     saldo_pendiente: 0,
                     status: 'completed'
                 };
@@ -1593,11 +1627,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         currTarjeta = data.pago_tarjeta || 0;
                         currTransferencia = data.pago_transferencia || 0;
                     } else if (data.metodo_pago === 'efectivo') {
-                        currEfectivo = amountBeingPaid;
+                        currEfectivo = amountBeingPaid + propinaToSave;
                     } else if (data.metodo_pago === 'tarjeta') {
-                        currTarjeta = amountBeingPaid;
+                        currTarjeta = amountBeingPaid + propinaToSave;
                     } else if (data.metodo_pago === 'transferencia') {
-                        currTransferencia = amountBeingPaid;
+                        currTransferencia = amountBeingPaid + propinaToSave;
                     }
 
                     // 3. Combine
@@ -1905,6 +1939,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     setRedeemPoints={setRedeemPoints}
                                     pointsDiscount={pointsDiscount}
                                     enableLoyaltyPoints={enableLoyaltyPoints}
+                                    propina={watchedPropina}
                                 />
                             </div>
                         )}
@@ -2042,38 +2077,70 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
-                                        {(paymentMethod === 'transferencia' || (paymentMethod === 'combinado' && watchedTransfer > 0)) && (
-                                            <Card className="p-4 bg-muted/50 mt-2">
+                                        <Card className="p-4 bg-amber-500/5 border-amber-500/20">
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <FormLabel className="flex items-center gap-1.5 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                                                        <Sparkles className="h-4 w-4" /> Propina (Opcional)
+                                                    </FormLabel>
+                                                    {cartBarberoNames.length > 0 && (
+                                                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                                                            {cartBarberoNames.length === 1 ? `Para ${cartBarberoNames[0]}` : `Para: ${cartBarberoNames.join(', ')}`}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                <div className="grid grid-cols-5 gap-1.5">
+                                                    {[0, 20, 30, 50, 100].map((amount) => {
+                                                        const isSelected = watchedPropina === amount;
+                                                        return (
+                                                            <Button
+                                                                key={amount}
+                                                                type="button"
+                                                                variant={isSelected ? "default" : "outline"}
+                                                                size="sm"
+                                                                className={cn(
+                                                                    "h-8 text-xs font-semibold px-1",
+                                                                    isSelected && "bg-amber-600 hover:bg-amber-700 text-white"
+                                                                )}
+                                                                onClick={() => {
+                                                                    form.setValue('propina', amount, { shouldValidate: true });
+                                                                }}
+                                                            >
+                                                                {amount === 0 ? 'Sin propina' : `$${amount}`}
+                                                            </Button>
+                                                        );
+                                                    })}
+                                                </div>
+
                                                 <FormField
                                                     control={form.control}
                                                     name="propina"
                                                     render={({ field }) => (
                                                         <FormItem>
-                                                            <FormLabel className="flex items-center space-x-2">
-                                                                <span className="font-semibold">Propina (Opcional)</span>
-                                                            </FormLabel>
                                                             <FormControl>
                                                                 <div className="relative">
-                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
                                                                     <Input
                                                                         type="number"
-                                                                        placeholder="0.00"
-                                                                        className="pl-7"
+                                                                        placeholder="Otro monto..."
+                                                                        className="pl-7 h-9 text-sm"
                                                                         min="0"
-                                                                        step="0.01"
-                                                                        {...field}
+                                                                        step="1"
+                                                                        value={field.value ?? ''}
+                                                                        onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
                                                                     />
                                                                 </div>
                                                             </FormControl>
                                                             <FormMessage />
-                                                            <p className="text-xs text-muted-foreground mt-1">
-                                                                Si el cliente transfirió un monto extra como propina, ingrésalo aquí para considerarlo en las comisiones.
-                                                            </p>
                                                         </FormItem>
                                                     )}
                                                 />
-                                            </Card>
-                                        )}
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Se acredita directamente al barbero y se desglosa en su comisión y ticket.
+                                                </p>
+                                            </div>
+                                        </Card>
 
                                         {(paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0)) && (
                                             <Card className="p-4 bg-muted/50">
@@ -2102,7 +2169,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         ) : (
                                                             <>
                                                                 <Send className="mr-2 h-4 w-4" />
-                                                                Cobrar ${(paymentMethod === 'combinado' ? (watchedCard || 0) : total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en Terminal
+                                                                Cobrar ${(paymentMethod === 'combinado' ? (watchedCard || 0) : totalConPropina).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en Terminal
                                                             </>
                                                         )}
                                                     </Button>
@@ -2151,7 +2218,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                             await updateDoc(saleRef, {
                                                                                 pago_estado: 'Pagado',
                                                                                 metodo_pago: paymentMethod, // Respect initial choice
-                                                                                monto_pagado_real: total,
+                                                                                monto_pagado_real: totalConPropina,
+                                                                                saldo_pendiente: 0,
+                                                                                propina: form.getValues('propina') || 0,
                                                                                 fecha_pago: new Date(),
                                                                                 notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
                                                                             });
@@ -2208,15 +2277,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <div className="space-y-2">
                                                     <div className="grid grid-cols-2 gap-4 items-center">
                                                         <FormItem>
-                                                            <FormLabel className={cn("text-xs transition-colors", amountPaid < total && "text-destructive animate-pulse font-bold")}>Paga con</FormLabel>
+                                                            <FormLabel className={cn("text-xs transition-colors", amountPaid < totalConPropina && "text-destructive animate-pulse font-bold")}>Paga con</FormLabel>
                                                             <div className="relative">
                                                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                                                <Input type="number" placeholder="0" className={cn("pl-6 transition-colors", amountPaid < total && "border-destructive focus-visible:ring-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse")} value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
+                                                                <Input type="number" placeholder="0" className={cn("pl-6 transition-colors", amountPaid < totalConPropina && "border-destructive focus-visible:ring-destructive shadow-[0_0_10px_rgba(239,68,68,0.3)] animate-pulse")} value={amountPaid || ''} onChange={(e) => setAmountPaid(Number(e.target.value))} />
                                                             </div>
                                                         </FormItem>
                                                         <div className="text-center">
                                                             <p className="text-xs text-muted-foreground">Cambio</p>
-                                                            <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                                            <p className="font-bold text-lg text-primary">${Math.max(0, amountPaid - totalConPropina).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -2259,10 +2328,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 </div>
                                                 <div className="mt-4 space-y-1 text-sm">
                                                     <div className="flex justify-between">
+                                                        <span className="text-muted-foreground">Total a Cobrar:</span>
+                                                        <span className="font-medium">${totalConPropina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </div>
+                                                    <div className="flex justify-between">
                                                         <span className="text-muted-foreground">Total Ingresado:</span>
                                                         <span className="font-medium">${combinedTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>
-                                                    <div className={cn("flex justify-between font-semibold", remainingAmount === 0 ? "text-primary" : "text-destructive")}>
+                                                    <div className={cn("flex justify-between font-semibold", Math.abs(remainingAmount) < 0.01 ? "text-primary" : "text-destructive")}>
                                                         <span>Faltante:</span>
                                                         <span>${remainingAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                     </div>
@@ -2280,17 +2353,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </FormItem>
                                         )} />
                                     </div>
-                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} />
+                                    <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} propina={watchedPropina} />
                                 </div>
                                 <SheetFooter className="p-6 bg-background border-t mt-auto">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
-                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || (total > 0 && !paymentMethod) || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < total)} onClick={(e) => {
-                                        if (paymentMethod === 'efectivo' && amountPaid < total) {
+                                    <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || (total > 0 && !paymentMethod) || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < totalConPropina)} onClick={(e) => {
+                                        if (paymentMethod === 'efectivo' && amountPaid < totalConPropina) {
                                             e.preventDefault();
                                             toast({
                                                 variant: 'destructive',
                                                 title: 'Falta efectivo',
-                                                description: 'Ingresa la cantidad con la que te paga el cliente. (Debe ser mayor o igual al total)'
+                                                description: 'Ingresa la cantidad con la que te paga el cliente. (Debe ser mayor o igual al total a cobrar con propina)'
                                             });
                                             return;
                                         }
@@ -2321,7 +2394,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                         {(paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
                                             ? `Usa el botón de Cobrar en Terminal arriba`
-                                            : `Finalizar Venta por $${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                            : `Finalizar Venta por $${totalConPropina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                     </Button>
                                 </SheetFooter>
                             </div>

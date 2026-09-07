@@ -260,6 +260,7 @@ export interface Sale {
   monto_pagado_real?: number;
   anticipoPagado?: number;
   propina?: number;
+  propina_detalles?: { barbero_id: string; monto: number }[];
 }
 
 

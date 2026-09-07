@@ -215,7 +215,10 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                             ) : (
                                 <InfoItem label="Método de pago" value={sale.metodo_pago === 'mercadopago' ? 'Pagos en Linea' : sale.metodo_pago} />
                             )}
-                            <InfoItem label="Monto total" value={`$${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
+                            <InfoItem 
+                                label="Monto total" 
+                                value={`$${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${sale.propina && sale.propina > 0 ? ` (Incluye $${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2 })} propina)` : ''}`} 
+                            />
                         </div>
                     </div>
 
@@ -249,6 +252,14 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 )}
+                                {sale.propina && sale.propina > 0 && (
+                                    <TableRow className="text-amber-800 font-medium bg-amber-50/50">
+                                        <TableCell colSpan={2} className="text-right">
+                                            Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''}
+                                        </TableCell>
+                                        <TableCell className="text-right">+${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    </TableRow>
+                                )}
                                 <TableRow className="font-bold text-lg border-t-2">
                                     {/* Logic to detailed breakdown if it's a partial payment */}
                                     {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)) ? (
@@ -258,8 +269,8 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         </>
                                     ) : (
                                         <>
-                                            <TableCell colSpan={2} className="text-right">Total</TableCell>
-                                            <TableCell className="text-right">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell colSpan={2} className="text-right">{sale.propina && sale.propina > 0 ? "Total Pagado" : "Total"}</TableCell>
+                                            <TableCell className="text-right">${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                         </>
                                     )}
                                 </TableRow>

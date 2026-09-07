@@ -35,7 +35,12 @@ import {
     Calculator,
     CheckCircle2,
     Clock,
-    Lock
+    Lock,
+    Sparkles,
+    ArrowRight,
+    AlertCircle,
+    Download,
+    FileCheck
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
@@ -114,7 +119,7 @@ export default function ControlFiscalResicoPage() {
     const [fiscalData, setFiscalData] = useState<DeclaracionFiscalData>({
         estado: 'pendiente',
         estrategia: 'bancarizado',
-        montoPersonalizado: 0,
+        montoPersonalizado: 3200,
         porcentajeEfectivo: 20,
         comisionMercadoPagoFacturada: 2100,
         ivaComisionesAcreditable: 289.65,
@@ -128,6 +133,11 @@ export default function ControlFiscalResicoPage() {
 
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [facturaStepsDone, setFacturaStepsDone] = useState<Record<string, boolean>>({});
+
+    const toggleStep = (stepKey: string) => {
+        setFacturaStepsDone(prev => ({ ...prev, [stepKey]: !prev[stepKey] }));
+    };
 
     // Cargar datos de persistencia de Firestore para el mes seleccionado
     useEffect(() => {
@@ -139,12 +149,13 @@ export default function ControlFiscalResicoPage() {
                     setFiscalData(prev => ({
                         ...prev,
                         ...data.declaracion_fiscal,
+                        montoPersonalizado: data.declaracion_fiscal.montoPersonalizado || 3200,
                     }));
                 } else {
                     setFiscalData({
                         estado: 'pendiente',
                         estrategia: 'bancarizado',
-                        montoPersonalizado: 0,
+                        montoPersonalizado: 3200,
                         porcentajeEfectivo: 20,
                         comisionMercadoPagoFacturada: 2100,
                         ivaComisionesAcreditable: 289.65,
@@ -614,22 +625,42 @@ export default function ControlFiscalResicoPage() {
                         <div 
                             onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }))}
                             className={cn(
-                                "cursor-pointer rounded-xl border p-4 transition-all",
+                                "cursor-pointer rounded-xl border p-4 transition-all flex flex-col justify-between",
                                 fiscalData.estrategia === 'personalizado'
                                     ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
                                     : "border-slate-200 hover:border-slate-300 bg-white"
                             )}
                         >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold text-slate-700">OPCIÓN D</span>
-                                {fiscalData.estrategia === 'personalizado' && <Check className="h-4 w-4 text-primary" />}
+                            <div>
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-bold text-slate-700">OPCIÓN D</span>
+                                    {fiscalData.estrategia === 'personalizado' && <Check className="h-4 w-4 text-primary" />}
+                                </div>
+                                <div className="font-semibold text-sm text-[#202A49]">Monto Personalizado</div>
+                                <p className="text-[11px] text-muted-foreground mt-1">
+                                    Haz clic y escribe aquí la cantidad que deseas declarar (ej. $3,200).
+                                </p>
                             </div>
-                            <div className="font-semibold text-sm text-[#202A49]">Monto Personalizado</div>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                                Tú defines libremente una cifra específica para simular o cumplir un objetivo puntual.
-                            </p>
-                            <div className="mt-3 text-sm font-extrabold text-[#202A49]">
-                                ${(fiscalData.montoPersonalizado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                                <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">$</span>
+                                    <Input 
+                                        type="number" 
+                                        min={0}
+                                        value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
+                                        onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setFiscalData(prev => ({ ...prev, estrategia: 'personalizado', montoPersonalizado: val }));
+                                        }}
+                                        onFocus={() => {
+                                            if (fiscalData.estrategia !== 'personalizado') {
+                                                setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }));
+                                            }
+                                        }}
+                                        placeholder="3200"
+                                        className="h-9 pl-6 text-sm font-bold text-[#202A49] bg-white border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary shadow-inner"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -653,17 +684,38 @@ export default function ControlFiscalResicoPage() {
                     )}
 
                     {fiscalData.estrategia === 'personalizado' && (
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border text-sm">
-                            <Label className="text-xs font-medium">Monto bruto que deseas declarar ($):</Label>
-                            <div className="w-48">
-                                <Input 
-                                    type="number" 
-                                    min={0} 
-                                    value={fiscalData.montoPersonalizado || ''}
-                                    onChange={(e) => setFiscalData(prev => ({ ...prev, montoPersonalizado: Number(e.target.value) }))}
-                                    placeholder="Ej. 60000"
-                                    className="h-8 text-xs"
-                                />
+                        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-sm">
+                            <div className="flex items-center gap-2">
+                                <Label className="text-xs font-bold text-blue-950">Monto personalizado a declarar:</Label>
+                                <div className="w-36 relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">$</span>
+                                    <Input 
+                                        type="number" 
+                                        min={0} 
+                                        value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
+                                        onChange={(e) => setFiscalData(prev => ({ ...prev, montoPersonalizado: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                                        placeholder="3200"
+                                        className="h-8 pl-6 text-xs font-bold bg-white"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[11px] text-muted-foreground mr-1">Atajos para pagar ~$300-$400:</span>
+                                {[2900, 3200, 3500, 4000].map((preset) => (
+                                    <Button
+                                        key={preset}
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className={cn(
+                                            "h-7 text-xs font-medium bg-white border-slate-200 hover:border-primary",
+                                            fiscalData.montoPersonalizado === preset && "border-primary text-primary font-bold bg-primary/10"
+                                        )}
+                                        onClick={() => setFiscalData(prev => ({ ...prev, montoPersonalizado: preset }))}
+                                    >
+                                        ${preset.toLocaleString('es-MX')}
+                                    </Button>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -807,17 +859,501 @@ export default function ControlFiscalResicoPage() {
                 </div>
             </div>
 
-            {/* BLOQUE 4: LA GUÍA COPIA-PEGA DEL SAT */}
-            <Card className="border-primary/30 shadow-md">
+            {/* BLOQUE 4: PASO 1 - GENERAR FACTURA GLOBAL (CFDI 4.0) */}
+            <Card className="border-amber-300/80 bg-gradient-to-br from-amber-50/20 via-white to-white shadow-md">
+                <CardHeader className="bg-amber-100/60 pb-4 border-b border-amber-200">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <Badge className="bg-amber-700 text-white font-bold text-xs">PASO 1 OBLIGATORIO (3 MINUTOS)</Badge>
+                                <span className="text-xs text-amber-800 font-medium">Autogestión SAT RESICO</span>
+                            </div>
+                            <CardTitle className="text-lg font-bold text-[#202A49] flex items-center gap-2 mt-1">
+                                <FileText className="h-5 w-5 text-amber-700 shrink-0" />
+                                Generar Factura Global al Público en General (CFDI 4.0)
+                            </CardTitle>
+                            <CardDescription className="text-xs text-amber-900/90 mt-1 max-w-3xl">
+                                Esta es la factura mensual que tu contadora generaba. Al timbrarla gratis en el SAT con los <strong>${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong> que elegiste, tu declaración del Paso 2 se prellenará en automático y pagarás únicamente los impuestos estimados (~$300-$400).
+                            </CardDescription>
+                        </div>
+
+                        {/* Botones directos al portal de facturación del SAT */}
+                        <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row gap-2 shrink-0">
+                            <Button 
+                                variant="default" 
+                                size="sm"
+                                className="bg-amber-700 hover:bg-amber-800 text-white font-bold gap-2 shadow-md hover:shadow-lg transition-all text-xs h-10 px-4"
+                                onClick={() => window.open('https://portal.facturaelectronica.sat.gob.mx/', '_blank')}
+                            >
+                                <ExternalLink className="h-4 w-4" />
+                                🚀 Abrir Facturación CFDI 4.0 del SAT
+                            </Button>
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="border-amber-300 text-amber-900 hover:bg-amber-100/50 text-xs h-10"
+                                onClick={() => window.open('https://www.sat.gob.mx/aplicacion/operacion/53027/genera-tu-factura-electronica', '_blank')}
+                            >
+                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                Portal Alterno SAT
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Acceso Rápido con RFC del Usuario */}
+                    <div className="mt-3 pt-3 border-t border-amber-200/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="text-amber-950 font-semibold">Tu RFC para ingresar al SAT:</span>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-7 text-xs font-mono font-bold bg-white text-[#202A49] border-amber-300 gap-1.5"
+                                onClick={() => copyToClipboard('PABA850207PA6', 'user_rfc')}
+                            >
+                                {copiedField === 'user_rfc' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                PABA850207PA6
+                            </Button>
+                            <span className="text-[11px] text-muted-foreground hidden sm:inline">(JOSE ALEJANDRO PACHECO BARCENAS)</span>
+                        </div>
+                        <div className="text-[11px] text-amber-800 flex items-center gap-1 font-medium">
+                            <Info className="h-3.5 w-3.5 text-amber-700" />
+                            Abre el portal en una pestaña nueva y sigue los 6 pasos ordenados aquí abajo:
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="pt-5 space-y-6">
+                    {/* Barra de Progreso del Checklist */}
+                    <div className="p-3 bg-slate-50 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#202A49]">Lista de Pasos para no equivocarte:</span>
+                            <Badge variant="secondary" className="bg-amber-100 text-amber-900 border-amber-200 font-bold text-[11px]">
+                                {Object.values(facturaStepsDone).filter(Boolean).length} de 6 pasos completados
+                            </Badge>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">
+                            Haz clic en cada botón para copiar su valor exacto y pegarlo en el SAT
+                        </span>
+                    </div>
+
+                    {/* GUÍA PASO A PASO SECUENCIAL (1.1 a 1.6) */}
+                    <div className="space-y-4">
+                        {/* PASO 1.1: Iniciar Sesión en el SAT */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_1'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.1
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Iniciar Sesión en el SAT e ir a "Generación de CFDI"
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_1'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_1')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_1'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_1'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-700">
+                                <div className="space-y-1.5">
+                                    <p>1. Entra a <a href="https://portal.facturaelectronica.sat.gob.mx/" target="_blank" rel="noreferrer" className="text-primary font-bold underline">portal.facturaelectronica.sat.gob.mx</a> con tu RFC y Contraseña CIEC o e.firma.</p>
+                                    <p>2. En el menú principal superior da clic en <strong>"Generación de CFDI"</strong> (o "Emisión de Factura 4.0").</p>
+                                </div>
+                                <div className="p-2.5 bg-slate-50 rounded-lg border text-[11px] space-y-1">
+                                    <div><strong>Régimen del Emisor:</strong> 626 - Régimen Simplificado de Confianza</div>
+                                    <div><strong>Tipo de Comprobante:</strong> I - Ingreso</div>
+                                    <div><strong>Moneda:</strong> MXN - Peso Mexicano</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PASO 1.2: Activar casilla obligatoria "¿Es factura global?" */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_2'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.2
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Activar la casilla obligatoria "¿Es una factura global?"
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_2'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_2')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_2'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_2'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-slate-700 mb-3">
+                                ⚠️ <strong>Muy importante:</strong> En el encabezado verás la pregunta <em>"¿Es una factura global?"</em>. Marca la casilla como <strong>SÍ</strong>. Al activarla se desplegarán estos 3 campos de periodicidad:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Periodicidad:</div>
+                                        <div className="font-bold text-[#202A49]">05 (Mensual)</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('05', 'cfdi_per')}>
+                                        {copiedField === 'cfdi_per' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        05
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Mes de la venta:</div>
+                                        <div className="font-bold text-[#202A49]">{String(selectedMonthIdx + 1).padStart(2, '0')} ({monthLabel})</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard(String(selectedMonthIdx + 1).padStart(2, '0'), 'cfdi_mes')}>
+                                        {copiedField === 'cfdi_mes' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {String(selectedMonthIdx + 1).padStart(2, '0')}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Año fiscal:</div>
+                                        <div className="font-bold text-[#202A49]">{selectedYear}</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard(String(selectedYear), 'cfdi_ano')}>
+                                        {copiedField === 'cfdi_ano' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {selectedYear}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PASO 1.3: Datos del Cliente (Público en General) */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_3'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.3
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Capturar los Datos del Cliente (Público en General)
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_3'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_3')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_3'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_3'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-slate-700 mb-3">
+                                En la sección <strong>"Cliente / Receptor"</strong>, copia y pega estos datos oficiales del SAT:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">RFC Receptor:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('XAXX010101000', 'cfdi_rfc')}>
+                                        XAXX010101000
+                                        {copiedField === 'cfdi_rfc' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Nombre / Razón Social:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-bold" onClick={() => copyToClipboard('PUBLICO EN GENERAL', 'cfdi_nombre')}>
+                                        PUBLICO EN GENERAL
+                                        {copiedField === 'cfdi_nombre' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Régimen Fiscal Receptor:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('616', 'cfdi_regimen')}>
+                                        616 (Sin obligaciones)
+                                        {copiedField === 'cfdi_regimen' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Uso de CFDI:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('S01', 'cfdi_uso')}>
+                                        S01 (Sin efectos)
+                                        {copiedField === 'cfdi_uso' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="mt-2 text-[11px] text-muted-foreground">
+                                💡 <strong>Código Postal del Cliente:</strong> Escribe tu mismo código postal fiscal (el de tu negocio o domicilio registrado en el SAT).
+                            </div>
+                        </div>
+
+                        {/* PASO 1.4: Agregar el Concepto e Impuestos */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_4'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.4
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Agregar el Concepto e Impuesto (Desglose exacto)
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_4'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_4')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_4'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_4'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <p className="text-xs text-slate-700 mb-3">
+                                Haz clic en el botón azul <strong>"+ Agregar"</strong> concepto en el SAT y completa estos campos:
+                            </p>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs mb-3">
+                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Clave Producto / Servicio:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('01010101', 'cfdi_clave')}>
+                                        01010101 (No existe en catálogo)
+                                        {copiedField === 'cfdi_clave' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Clave de Unidad:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('ACT', 'cfdi_act')}>
+                                        ACT (Actividad)
+                                        {copiedField === 'cfdi_act' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground">Cantidad:</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('1', 'cfdi_cant')}>
+                                        1
+                                        {copiedField === 'cfdi_cant' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1 md:col-span-2">
+                                    <div className="text-[11px] text-muted-foreground">Descripción:</div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="w-full justify-between h-8 text-xs font-medium" 
+                                        onClick={() => copyToClipboard(`Venta global al publico en general del mes de ${monthName} ${selectedYear}`, 'cfdi_desc')}
+                                    >
+                                        <span className="truncate">Venta global al publico en general del mes de {monthName} {selectedYear}</span>
+                                        {copiedField === 'cfdi_desc' ? <Check className="h-3 w-3 text-emerald-600 shrink-0 ml-1" /> : <Copy className="h-3 w-3 shrink-0 ml-1" />}
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                    <div className="text-[11px] text-muted-foreground font-semibold text-emerald-800">Valor Unitario (Base sin IVA):</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold border-emerald-300 text-emerald-900 bg-white" onClick={() => copyToClipboard(baseGravableSinIVA.toFixed(2), 'cfdi_base')}>
+                                        ${baseGravableSinIVA.toFixed(2)}
+                                        {copiedField === 'cfdi_base' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Pestaña de Impuestos del SAT */}
+                            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-xs text-blue-950 space-y-2">
+                                <div className="font-bold flex items-center gap-1.5">
+                                    <ShieldCheck className="h-4 w-4 text-blue-700" />
+                                    En la sección "Impuestos" dentro del concepto:
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                                    <div><strong>Objeto de Impuesto:</strong> 02 (Sí objeto de impuesto)</div>
+                                    <div><strong>Impuesto:</strong> 002 (IVA)</div>
+                                    <div><strong>Tipo Factor:</strong> Tasa</div>
+                                    <div className="flex items-center justify-between">
+                                        <span><strong>Tasa:</strong> 0.160000</span>
+                                        <Button variant="ghost" size="sm" className="h-6 text-[10px] px-1.5" onClick={() => copyToClipboard('0.160000', 'cfdi_tasa')}>
+                                            {copiedField === 'cfdi_tasa' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between font-bold text-xs">
+                                    <span>🎯 Total de la Factura que debe arrojar el SAT:</span>
+                                    <span className="text-sm text-primary">${montoADeclararBruto.toFixed(2)} MXN</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PASO 1.5: Forma y Método de Pago */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_5'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.5
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Forma y Método de Pago
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_5'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_5')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_5'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_5'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Forma de Pago:</div>
+                                        <div className="font-bold text-[#202A49]">01 (Efectivo)</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('01', 'cfdi_fp')}>
+                                        {copiedField === 'cfdi_fp' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        01
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Método de Pago:</div>
+                                        <div className="font-bold text-[#202A49]">PUE (Pago en una exhibición)</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('PUE', 'cfdi_mp')}>
+                                        {copiedField === 'cfdi_mp' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        PUE
+                                    </Button>
+                                </div>
+
+                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                    <div>
+                                        <div className="text-[11px] text-muted-foreground">Moneda:</div>
+                                        <div className="font-bold text-[#202A49]">MXN (Peso Mexicano)</div>
+                                    </div>
+                                    <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('MXN', 'cfdi_mon')}>
+                                        {copiedField === 'cfdi_mon' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        MXN
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PASO 1.6: Sellar y Descargar */}
+                        <div className={cn(
+                            "rounded-xl border p-4 transition-all",
+                            facturaStepsDone['step_1_6'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                        )}>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
+                                <div className="flex items-center gap-2.5">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
+                                        1.6
+                                    </span>
+                                    <span className="font-bold text-sm text-[#202A49]">
+                                        Sellar Factura y Descargar Archivos (XML y PDF)
+                                    </span>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_6'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    onClick={() => toggleStep('step_1_6')}
+                                >
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_6'] ? "text-emerald-600" : "text-slate-400")} />
+                                    {facturaStepsDone['step_1_6'] ? "Completado" : "Marcar completado"}
+                                </Button>
+                            </div>
+                            <div className="space-y-2 text-xs text-slate-700">
+                                <p>1. Da clic en el botón <strong>"Sellar Factura"</strong> en la esquina inferior derecha del SAT.</p>
+                                <p>2. Ingresa tu <strong>e.firma</strong> (archivo .cer, .key y contraseña de clave privada) o tu Contraseña CIEC según lo solicite el portal.</p>
+                                <p>3. Da clic en <strong>"Confirmar y Firmar"</strong>.</p>
+                                <p>4. 📥 <strong>Descarga tu PDF y XML</strong> y guárdalos en tu carpeta de contabilidad.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Banner de Felicitación / Siguiente Paso */}
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-600 to-[#202A49] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                        <div className="space-y-0.5">
+                            <div className="text-sm font-bold flex items-center gap-1.5">
+                                <Sparkles className="h-4 w-4 text-amber-300" />
+                                ¿Ya sellaste y descargaste tu Factura Global en el SAT?
+                            </div>
+                            <div className="text-xs text-emerald-100">
+                                Tu ingreso ya quedó formalmente reportado. Ahora pasa al <strong>Paso 2</strong> abajo para presentar la declaración y generar tu línea de captura de <strong>${granTotalAPagarSAT.toLocaleString('es-MX')}</strong>.
+                            </div>
+                        </div>
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="bg-white text-[#202A49] font-bold hover:bg-slate-100 shrink-0 gap-1.5 text-xs shadow"
+                            onClick={() => {
+                                const el = document.getElementById('bloque-paso-2');
+                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                        >
+                            Ir al Paso 2 (Declaración)
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+
+                    {/* Blindaje Antierrores y Preguntas Frecuentes */}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs">
+                        <div className="font-bold text-[#202A49] flex items-center gap-1.5 text-xs">
+                            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                            Blindaje Antierrores: Preguntas Rápidas
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-muted-foreground">
+                            <div className="bg-white p-2.5 rounded-lg border">
+                                <strong className="text-slate-800">¿Qué pasa si me equivoco en una cantidad?</strong>
+                                <p className="mt-1 text-[11px]">No pasa nada: en el mismo portal del SAT vas a "Consultar facturas emitidas", seleccionas la factura, das clic en <em>Cancelar</em> con motivo "02 - Emitida con errores sin relación", y generas una nueva de inmediato.</p>
+                            </div>
+                            <div className="bg-white p-2.5 rounded-lg border">
+                                <strong className="text-slate-800">¿Por qué el valor unitario es ${baseGravableSinIVA.toFixed(2)} y el total $ {montoADeclararBruto.toFixed(2)}?</strong>
+                                <p className="mt-1 text-[11px]">Porque el SAT exige capturar el precio sin IVA (${baseGravableSinIVA.toFixed(2)}). El sistema del SAT le suma automáticamente el 16% de IVA (${ivaTrasladado.toFixed(2)}) resultando exactamente en los ${montoADeclararBruto.toFixed(2)} que elegiste.</p>
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* BLOQUE 5: PASO 2 - PRESENTAR DECLARACIÓN MENSUAL */}
+            <Card id="bloque-paso-2" className="border-primary/30 shadow-md">
                 <CardHeader className="bg-primary/5 pb-3 border-b">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div>
-                            <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                                <Copy className="h-5 w-5 text-primary" />
-                                4. Guía Rápida para Copiar y Pegar en el Portal del SAT
-                            </CardTitle>
-                            <CardDescription className="text-xs">
-                                Abre <span className="font-semibold text-primary">sat.gob.mx</span> en otra pestaña y simplemente copia estos datos exactos en cada casilla correspondiente
+                            <div className="flex items-center gap-2">
+                                <Badge className="bg-primary text-white font-bold text-xs">PASO 2 (2 MINUTOS)</Badge>
+                                <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
+                                    <Copy className="h-5 w-5 text-primary" />
+                                    Presentar Declaración Mensual RESICO en el SAT
+                                </CardTitle>
+                            </div>
+                            <CardDescription className="text-xs mt-1">
+                                Abre el portal de declaraciones y verás que el SAT ya precargó en automático tu factura timbrada en el Paso 1:
                             </CardDescription>
                         </div>
                         <Button 
@@ -827,7 +1363,7 @@ export default function ControlFiscalResicoPage() {
                             onClick={() => window.open('https://www.sat.gob.mx/declaracion/74744/presenta-tus-declaraciones-provisionales-o-definitivas-de-personas-fisicas', '_blank')}
                         >
                             <ExternalLink className="h-4 w-4" />
-                            Ir a Declaraciones SAT
+                            Abrir Declaraciones SAT
                         </Button>
                     </div>
                 </CardHeader>
@@ -938,12 +1474,15 @@ export default function ControlFiscalResicoPage() {
                 </CardContent>
             </Card>
 
-            {/* BLOQUE 5: REGISTRO DE ACUSE Y CONTROL DE PAGO */}
+            {/* BLOQUE 6: PASO 3 - REGISTRO DE ACUSE Y CONTROL DE PAGO */}
             <Card className="border-slate-200 shadow-sm">
                 <CardHeader className="pb-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-[#202A49] font-bold text-xs">PASO 3 FINAL</Badge>
+                    </div>
                     <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
                         <Save className="h-5 w-5 text-primary" />
-                        5. Registro y Control de Pago ({monthLabel} {selectedYear})
+                        Registro de Línea de Captura y Control de Pago ({monthLabel} {selectedYear})
                     </CardTitle>
                     <CardDescription className="text-xs">
                         Una vez pagada la línea de captura en tu banca móvil (BBVA, Banorte, Santander, etc.), archiva aquí tus datos para tener tu expediente fiscal completo

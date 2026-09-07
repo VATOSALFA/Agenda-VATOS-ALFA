@@ -356,6 +356,10 @@ export class BluetoothPrinter {
             receipt += `Descuento:     -$${data.discount.toFixed(2)}\n`;
         }
 
+        if (data.propina && data.propina > 0) {
+            receipt += `Propina:       +$${data.propina.toFixed(2)}\n`;
+        }
+
         receipt += BOLD_ON + `TOTAL:          $${data.total.toFixed(2)}` + BOLD_OFF + "\n";
 
         if (data.cashPaid !== undefined && data.change !== undefined) {

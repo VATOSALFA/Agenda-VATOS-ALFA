@@ -1,10 +1,10 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Sistema Universal de Propinas en Caja y Control Fiscal RESICO",
+  "summary": "Optimización Inteligente de Horarios Web (Lógica de Recepción)",
   "notes": [
-    "Sistema Universal de Propinas: botones rápidos ($20, $30, $50, $100) y monto libre para todos los métodos de pago.",
-    "Pago Combinado con Propina: soporte completo para pagos divididos (ej. transferencia + tarjeta) cuadrando el total exacto sin errores.",
-    "Desglose de propina en tickets impresos Bluetooth y detalle de venta acreditado directamente al barbero.",
-    "Módulo de Control Fiscal RESICO: guía paso a paso para Factura Global CFDI 4.0 en el SAT y opción de monto personalizado."
+    "Algoritmo de Recepción Inteligente: optimización de horarios web para eliminar tiempos muertos de 15 minutos entre citas.",
+    "Encaje Dinámico Continuo: si un servicio previo concluye en horario fraccionado (ej. 15:15), el siguiente horario disponible se ancla de inmediato sin dejar huecos huérfanos.",
+    "Disponibilidad Completa Todo el Día: clientes pueden reservar libremente en mañana, tarde y noche sin interferir con el cupo de otros cortes."
   ]
 }
+

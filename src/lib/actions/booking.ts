@@ -36,43 +36,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const profData = profDoc.data();
         if (!profData) return { error: 'Datos del profesional no disponibles.' };
 
-        // 1.01 Determine Minimum Service Duration for Gap Filtering
-        let minServiceDuration = 30; // default fallback
-        try {
-            const profServices = Array.isArray(profData.services) ? profData.services : [];
-            if (profServices.length > 0) {
-                // Fetch details of services performed by this professional
-                const servicesRefs = profServices.map((id: string) => db.collection('servicios').doc(id));
-                const servicesDocs = await db.getAll(...servicesRefs);
-                const durations = servicesDocs
-                    .filter(doc => doc.exists)
-                    .map(doc => {
-                        const data = doc.data();
-                        if (!data) return 0;
-                        const customDur = data.durationPorProfesional?.[professionalId];
-                        return customDur !== undefined ? Number(customDur) : (data.duration || 0);
-                    })
-                    .filter(dur => typeof dur === 'number' && dur > 0);
-                if (durations.length > 0) {
-                    minServiceDuration = Math.min(...durations);
-                }
-            } else {
-                // Fallback: fetch all active services
-                const servicesSnap = await db.collection('servicios').get();
-                const durations = servicesSnap.docs
-                    .map(doc => {
-                        const data = doc.data();
-                        const customDur = data.durationPorProfesional?.[professionalId];
-                        return customDur !== undefined ? Number(customDur) : (data.duration || 0);
-                    })
-                    .filter(dur => typeof dur === 'number' && dur > 0);
-                if (durations.length > 0) {
-                    minServiceDuration = Math.min(...durations);
-                }
-            }
-        } catch (servicesError) {
-            console.warn("Could not determine minimum service duration, using default 30 mins.", servicesError);
-        }
 
         // Safe Date Parsing
         let dayName = '';
@@ -250,9 +213,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             }
         });
 
-        // 3. Generate Available Slots
-        const startObj = set(parsedDate, { hours: finalStart.h, minutes: finalStart.m, seconds: 0, milliseconds: 0 });
-        const endObj = set(parsedDate, { hours: finalEnd.h, minutes: finalEnd.m, seconds: 0, milliseconds: 0 });
+        // 3. Generate Available Slots with Receptionist Intelligence (No Dead Gaps)
+        // Minimum standalone viable gap in barbershop (no standalone haircut/service is < 30m)
+        const MIN_VIABLE_GAP = 30;
 
         // Fetch settings
         let minReservationBuffer = 60; // Minutes
@@ -274,11 +237,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             console.warn("Could not load setting, using defaults.", settingsError);
         }
 
-        const availableSlots: string[] = [];
-        let current = startObj;
-
-        // Timezone Logic
-        // We need to compare against "Now" in Mexico City time to block past slots + buffer
+        // Timezone Logic (compare against Now in Mexico City time)
         const timeZone = 'America/Mexico_City';
         const nowRaw = new Date();
         const mexicoDateStr = new Intl.DateTimeFormat('en-CA', { // YYYY-MM-DD
@@ -303,8 +262,15 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             currentMinutes = nowH * 60 + nowM;
         }
 
-        // Merge overlapping or adjacent busy intervals to analyze free gaps accurately
-        const sortedBusy = [...busyIntervals].sort((a, b) => a.start - b.start);
+        // Merge overlapping or adjacent busy intervals clamped to shift bounds
+        const sortedBusy = [...busyIntervals]
+            .map(b => ({
+                start: Math.max(startTimeLimit, b.start),
+                end: Math.min(endTimeLimit, b.end)
+            }))
+            .filter(b => b.start < b.end)
+            .sort((a, b) => a.start - b.start);
+
         const mergedBusy: { start: number, end: number }[] = [];
         sortedBusy.forEach(interval => {
             if (mergedBusy.length === 0) {
@@ -319,68 +285,84 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             }
         });
 
-        const allBusyBlocks = [
-            { start: -Infinity, end: startTimeLimit },
-            ...mergedBusy,
-            { start: endTimeLimit, end: Infinity }
-        ];
+        // Identify free windows across the workday
+        const freeWindows: { start: number, end: number }[] = [];
+        let cursor = startTimeLimit;
 
-        // Loop generation
-        // Limit iterations to prevent infinite loops (e.g. if start > end)
-        let iterations = 0;
-        const MAX_ITERATIONS = 200; // 24 hours / 15 mins = 96 slots max typically
-
-        while (addMinutes(current, durationMinutes) <= endObj && iterations < MAX_ITERATIONS) {
-            iterations++;
-
-            const currentH = current.getHours();
-            const currentM = current.getMinutes();
-            const slotStart = currentH * 60 + currentM;
-            const slotEnd = slotStart + durationMinutes;
-
-            // Check Buffer for Today
-            if (isQueryDateToday && slotStart < (currentMinutes + minReservationBuffer)) {
-                current = addMinutes(current, GRID_INTERVAL);
-                continue;
+        for (const busy of mergedBusy) {
+            if (busy.start > cursor) {
+                freeWindows.push({ start: cursor, end: busy.start });
             }
+            cursor = Math.max(cursor, busy.end);
+        }
+        if (cursor < endTimeLimit) {
+            freeWindows.push({ start: cursor, end: endTimeLimit });
+        }
 
-            // Check Overlaps
-            const isBusy = busyIntervals.some(busy => {
-                // Returns true if overlap exists
-                // Overlap condition: Not (EndA <= StartB OR StartA >= EndB)
-                // Simplified: StartA < EndB AND EndA > StartB
-                return (slotStart < busy.end && slotEnd > busy.start);
-            });
+        const availableSlotsSet = new Set<string>();
+        const gridStep = Math.max(30, GRID_INTERVAL || 30);
 
-            if (!isBusy) {
-                // Smart Gap Filtering:
-                // Find closest busy blocks ending before slotStart and starting after slotEnd
-                let prevBlockEnd = startTimeLimit;
-                let nextBlockStart = endTimeLimit;
+        for (const window of freeWindows) {
+            const wStart = window.start;
+            const wEnd = window.end;
+            const wLength = wEnd - wStart;
 
-                allBusyBlocks.forEach(block => {
-                    if (block.end <= slotStart) {
-                        prevBlockEnd = Math.max(prevBlockEnd, block.end);
-                    }
-                    if (block.start >= slotEnd) {
-                        nextBlockStart = Math.min(nextBlockStart, block.start);
-                    }
-                });
+            if (wLength < durationMinutes) continue;
 
-                const gapBefore = slotStart - prevBlockEnd;
-                const gapAfter = nextBlockStart - slotEnd;
+            const candidateStarts = new Set<number>();
 
-                const hasDeadGapBefore = gapBefore > 0 && gapBefore < minServiceDuration;
-                const hasDeadGapAfter = gapAfter > 0 && gapAfter < minServiceDuration;
+            // 1. Dynamic forward anchor (encaje continuo: si terminó a las 15:15, habilitar 15:15 de inmediato)
+            candidateStarts.add(wStart);
 
-                if (!hasDeadGapBefore && !hasDeadGapAfter) {
-                    availableSlots.push(format(current, 'HH:mm'));
+            // 2. Dynamic backward anchor (encaje inverso: si una cita inicia a las 16:15, encajar justo antes)
+            if (wEnd % 30 !== 0) {
+                const backwardAnchor = wEnd - durationMinutes;
+                if (backwardAnchor >= wStart) {
+                    candidateStarts.add(backwardAnchor);
                 }
             }
 
-            current = addMinutes(current, GRID_INTERVAL);
+            // 3. Candidatos en cuadrícula estándar de 30 min (10:00, 10:30, 11:00... 19:00, 19:30)
+            const firstGrid = Math.ceil(wStart / gridStep) * gridStep;
+            for (let t = firstGrid; t + durationMinutes <= wEnd; t += gridStep) {
+                candidateStarts.add(t);
+            }
+
+            const sortedCandidates = Array.from(candidateStarts).sort((a, b) => a - b);
+
+            for (const slotStart of sortedCandidates) {
+                const slotEnd = slotStart + durationMinutes;
+
+                // Buffer de anticipación mínima para reservas del mismo día
+                if (isQueryDateToday && slotStart < (currentMinutes + minReservationBuffer)) {
+                    continue;
+                }
+
+                const gapBefore = slotStart - wStart;
+                const gapAfter = wEnd - slotEnd;
+
+                if (wLength < 2 * MIN_VIABLE_GAP) {
+                    // En ventanas estrechas donde sólo cabe una cita, se permite si queda pegada al inicio o al final
+                    if (gapBefore === 0 || gapAfter === 0) {
+                        const h = Math.floor(slotStart / 60);
+                        const m = slotStart % 60;
+                        availableSlotsSet.add(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                    }
+                } else {
+                    // En ventanas normales/amplias, se descartan los huecos huérfanos (< 30 min)
+                    const hasDeadGapBefore = gapBefore > 0 && gapBefore < MIN_VIABLE_GAP;
+                    const hasDeadGapAfter = gapAfter > 0 && gapAfter < MIN_VIABLE_GAP;
+
+                    if (!hasDeadGapBefore && !hasDeadGapAfter) {
+                        const h = Math.floor(slotStart / 60);
+                        const m = slotStart % 60;
+                        availableSlotsSet.add(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+                    }
+                }
+            }
         }
 
+        const availableSlots = Array.from(availableSlotsSet).sort();
         return { slots: availableSlots };
 
     } catch (error: any) {

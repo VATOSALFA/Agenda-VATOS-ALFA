@@ -102,30 +102,47 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
     if (!selectedBarberId || !selectedDate || !professionals) return [];
 
     const professional = professionals.find(p => p.id === selectedBarberId);
-    if (!professional || !professional.schedule) return [];
+    if (!professional) return [];
 
     const dayOfWeek = format(selectedDate, 'eeee', { locale: es })
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, ""); // remove accents
 
-    const schedule = professional.schedule[dayOfWeek as keyof typeof professional.schedule];
+    const schedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
 
-    if (!schedule || !schedule.enabled) return [];
+    let startHour = 8;
+    let startMinute = 0;
+    let endHour = 21;
+    let endMinute = 0;
 
-    const [startHour, startMinute] = schedule.start.split(':').map(Number);
-    const [endHour, endMinute] = schedule.end.split(':').map(Number);
+    if (schedule && schedule.enabled && schedule.start && schedule.end) {
+      [startHour, startMinute] = schedule.start.split(':').map(Number);
+      [endHour, endMinute] = schedule.end.split(':').map(Number);
+    } else if (!schedule || !schedule.enabled) {
+      // Si el barbero no tiene horario habilitado este día, permitir rango estándar para poder bloquearlo
+      startHour = 8;
+      startMinute = 0;
+      endHour = 21;
+      endMinute = 0;
+    }
 
-    const slots = [];
+    const slots: string[] = [];
     let currentTime = set(selectedDate, { hours: startHour, minutes: startMinute, seconds: 0, milliseconds: 0 });
     const endTime = set(selectedDate, { hours: endHour, minutes: endMinute, seconds: 0, milliseconds: 0 });
 
     while (currentTime <= endTime) {
       slots.push(format(currentTime, 'HH:mm'));
-      currentTime.setMinutes(currentTime.getMinutes() + 30);
+      currentTime.setMinutes(currentTime.getMinutes() + 15);
     }
+
+    if (initialData?.hora_inicio && !slots.includes(initialData.hora_inicio)) {
+      slots.push(initialData.hora_inicio);
+      slots.sort();
+    }
+
     return slots;
-  }, [selectedBarberId, selectedDate, professionals]);
+  }, [selectedBarberId, selectedDate, professionals, initialData]);
 
 
   async function onSubmit(data: BlockFormData) {

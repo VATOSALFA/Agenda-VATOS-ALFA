@@ -1,10 +1,11 @@
 {
   "title": "Nueva Actualización Disponible",
-  "summary": "Optimización Inteligente de Horarios Web (Lógica de Recepción)",
+  "summary": "Ventanita Flotante Persistente para Avisos de Recepción",
   "notes": [
-    "Algoritmo de Recepción Inteligente: optimización de horarios web para eliminar tiempos muertos de 15 minutos entre citas.",
-    "Encaje Dinámico Continuo: si un servicio previo concluye en horario fraccionado (ej. 15:15), el siguiente horario disponible se ancla de inmediato sin dejar huecos huérfanos.",
-    "Disponibilidad Completa Todo el Día: clientes pueden reservar libremente en mañana, tarde y noche sin interferir con el cupo de otros cortes."
+    "Ventanita Flotante de Avisos: alerta interactiva en la esquina inferior derecha con las citas que requieren atención o etiquetado.",
+    "Modo Minimizable Persistente: se puede minimizar a una píldora compacta para no estorbar la agenda, pero no desaparece hasta que la cita sea atendida (Confirmar o No asistió).",
+    "Acciones Rápidas Directas: botones de 'Confirmar' o 'No Asistió' integrados para resolver el aviso con un solo toque sin abrir menús adicionales."
   ]
 }
+
 

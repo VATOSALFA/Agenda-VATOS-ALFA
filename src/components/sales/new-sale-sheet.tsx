@@ -698,6 +698,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [paymentMethod, watchedPropina, watchedCard, watchedCash, watchedTransfer]);
 
+    useEffect(() => {
+        if (paymentMethod === 'efectivo' && watchedPropina > 0) {
+            form.setValue('propina', 0, { shouldValidate: true });
+        }
+    }, [paymentMethod, watchedPropina, form]);
+
     const cartBarberoNames = useMemo(() => {
         const ids = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
         return ids.map(id => professionals?.find(p => p.id === id)?.name).filter(Boolean) as string[];
@@ -1838,7 +1844,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                     <Form {...form}>
                         {step === 1 && (
-                            <div className="flex-grow grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 py-4 overflow-y-auto md:overflow-hidden">
+                            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-6 px-4 md:px-6 py-4 overflow-y-auto md:overflow-hidden">
                                 <div className="col-span-1 md:col-span-2 flex flex-col gap-4 md:min-h-0">
                                     <div className="flex-shrink-0">
                                         {selectedClient ? (
@@ -2011,9 +2017,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         )}
 
                         {step === 2 && (
-                            <div className="h-full flex flex-col overflow-hidden">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-4 flex-grow overflow-y-auto">
-                                    <div className="space-y-4">
+                            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4 md:px-6 py-3 flex-1 min-h-0 overflow-y-auto">
+                                    <div className="space-y-3 min-h-0">
 
                                         {selectedClient ? (
                                             <Card>
@@ -2116,25 +2122,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <FormLabel className="flex items-center"><CreditCard className="mr-2 h-4 w-4" /> Método de Pago</FormLabel>
                                                     <FormControl>
                                                         <RadioGroup
-                                                            onValueChange={field.onChange}
+                                                            onValueChange={(val) => {
+                                                                field.onChange(val);
+                                                                if (val === 'efectivo') {
+                                                                    form.setValue('propina', 0, { shouldValidate: true });
+                                                                }
+                                                            }}
                                                             defaultValue={field.value}
                                                             className="flex flex-wrap gap-2"
                                                         >
                                                             <FormItem>
                                                                 <FormControl><RadioGroupItem value="efectivo" id="efectivo" className="sr-only" /></FormControl>
-                                                                <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
+                                                                <FormLabel htmlFor="efectivo" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer", field.value === 'efectivo' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Efectivo</FormLabel>
                                                             </FormItem>
                                                             <FormItem>
                                                                 <FormControl><RadioGroupItem value="tarjeta" id="tarjeta" className="sr-only" /></FormControl>
-                                                                <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
+                                                                <FormLabel htmlFor="tarjeta" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer", field.value === 'tarjeta' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Tarjeta</FormLabel>
                                                             </FormItem>
                                                             <FormItem>
                                                                 <FormControl><RadioGroupItem value="transferencia" id="transferencia" className="sr-only" /></FormControl>
-                                                                <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
+                                                                <FormLabel htmlFor="transferencia" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer", field.value === 'transferencia' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Transferencia</FormLabel>
                                                             </FormItem>
                                                             <FormItem>
                                                                 <FormControl><RadioGroupItem value="combinado" id="combinado" className="sr-only" /></FormControl>
-                                                                <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
+                                                                <FormLabel htmlFor="combinado" className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3 cursor-pointer", field.value === 'combinado' && 'bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground')}>Pago Combinado</FormLabel>
                                                             </FormItem>
                                                         </RadioGroup>
                                                     </FormControl>
@@ -2143,70 +2154,69 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
-                                        <Card className="p-4 bg-primary/5 border-primary/20">
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <FormLabel className="flex items-center gap-1.5 text-sm font-semibold text-primary">
-                                                        <Sparkles className="h-4 w-4 text-primary" /> Propina (Opcional)
-                                                    </FormLabel>
-                                                    {cartBarberoNames.length > 0 && (
-                                                        <span className="text-xs text-primary bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded-full font-medium">
-                                                            {cartBarberoNames.length === 1 ? `Para ${cartBarberoNames[0]}` : `Para: ${cartBarberoNames.join(', ')}`}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                        {paymentMethod && paymentMethod !== 'efectivo' && (
+                                            <Card className="p-3 bg-primary/5 border-primary/20">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between">
+                                                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                                                            <Sparkles className="h-3.5 w-3.5 text-primary" /> Propina (Opcional)
+                                                        </FormLabel>
+                                                        {cartBarberoNames.length > 0 && (
+                                                            <span className="text-[11px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-medium">
+                                                                {cartBarberoNames.length === 1 ? `Para ${cartBarberoNames[0]}` : `Para: ${cartBarberoNames.join(', ')}`}
+                                                            </span>
+                                                        )}
+                                                    </div>
 
-                                                <div className="grid grid-cols-5 gap-1.5">
-                                                    {[0, 20, 30, 50, 100].map((amount) => {
-                                                        const isSelected = watchedPropina === amount;
-                                                        return (
-                                                            <Button
-                                                                key={amount}
-                                                                type="button"
-                                                                variant={isSelected ? "default" : "outline"}
-                                                                size="sm"
-                                                                className={cn(
-                                                                    "h-8 text-xs font-semibold px-1 transition-all",
-                                                                    isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
-                                                                )}
-                                                                onClick={() => {
-                                                                    form.setValue('propina', amount, { shouldValidate: true });
-                                                                }}
-                                                            >
-                                                                {amount === 0 ? 'Sin propina' : `$${amount}`}
-                                                            </Button>
-                                                        );
-                                                    })}
-                                                </div>
+                                                    <div className="grid grid-cols-5 gap-1.5">
+                                                        {[0, 20, 30, 50, 100].map((amount) => {
+                                                            const isSelected = watchedPropina === amount;
+                                                            return (
+                                                                <Button
+                                                                    key={amount}
+                                                                    type="button"
+                                                                    variant={isSelected ? "default" : "outline"}
+                                                                    size="sm"
+                                                                    className={cn(
+                                                                        "h-7 text-xs font-semibold px-1 transition-all",
+                                                                        isSelected && "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm"
+                                                                    )}
+                                                                    onClick={() => {
+                                                                        form.setValue('propina', amount, { shouldValidate: true });
+                                                                    }}
+                                                                >
+                                                                    {amount === 0 ? 'Sin propina' : `$${amount}`}
+                                                                </Button>
+                                                            );
+                                                        })}
+                                                    </div>
 
-                                                <FormField
-                                                    control={form.control}
-                                                    name="propina"
-                                                    render={({ field }) => (
-                                                        <FormItem>
-                                                            <FormControl>
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">$</span>
-                                                                    <Input
-                                                                        type="number"
-                                                                        placeholder="Otro monto..."
-                                                                        className="pl-7 h-9 text-sm"
-                                                                        min="0"
-                                                                        step="1"
-                                                                        value={field.value ?? ''}
-                                                                        onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
-                                                                    />
-                                                                </div>
-                                                            </FormControl>
-                                                            <FormMessage />
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                                <p className="text-[11px] text-muted-foreground">
-                                                    Se acredita directamente al barbero y se desglosa en su comisión y ticket.
-                                                </p>
-                                            </div>
-                                        </Card>
+                                                    <FormField
+                                                        control={form.control}
+                                                        name="propina"
+                                                        render={({ field }) => (
+                                                            <FormItem className="space-y-0">
+                                                                <FormControl>
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-medium">$</span>
+                                                                        <Input
+                                                                            type="number"
+                                                                            placeholder="Otro monto..."
+                                                                            className="pl-6 h-8 text-xs"
+                                                                            min="0"
+                                                                            step="1"
+                                                                            value={field.value ?? ''}
+                                                                            onChange={(e) => field.onChange(e.target.value === '' ? '' : Number(e.target.value))}
+                                                                        />
+                                                                    </div>
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </Card>
+                                        )}
 
                                         {(paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0)) && (
                                             <Card className="p-4 bg-muted/50">
@@ -2449,7 +2459,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     </div>
                                     <ResumenCarrito cart={cart} subtotal={subtotal} totalDiscount={totalDiscount} total={total} anticipoPagado={anticipoPagado} onOpenAddItem={() => setIsAddItemDialogOpen(true)} updateQuantity={updateQuantity} updateItemProfessional={updateItemProfessional} updateItemDiscount={updateItemDiscount} removeFromCart={removeFromCart} serviceSellers={serviceSellers} productSellers={productSellers} propina={watchedPropina} />
                                 </div>
-                                <SheetFooter className="p-6 bg-background border-t mt-auto">
+                                <SheetFooter className="p-4 md:p-6 bg-background border-t mt-auto shrink-0 flex justify-end gap-3">
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Volver</Button>
                                     <Button type="submit" disabled={isSubmitting || isCombinedPaymentInvalid || (total > 0 && !paymentMethod) || paymentMethod === 'tarjeta' || (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (paymentMethod === 'efectivo' && amountPaid < totalConPropina)} onClick={(e) => {
                                         if (paymentMethod === 'efectivo' && amountPaid < totalConPropina) {

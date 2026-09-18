@@ -1,5 +1,5 @@
 
-import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, Gift } from 'lucide-react';
+import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, Gift, MessageSquare } from 'lucide-react';
 
 
 export interface Permission {
@@ -100,6 +100,15 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_nomina', label: 'Ver Nómina' },
         ]
     },
+    {
+        title: 'Comunicaciones y WhatsApp',
+        icon: MessageSquare,
+        permissions: [
+            { key: 'ver_conversaciones', label: 'Ver Chatbot y Mensajería WhatsApp' },
+            { key: 'atender_chats', label: 'Atender Chats (Tomar Control / Pausar Bot)' },
+            { key: 'configurar_asistente_ia', label: 'Configurar Asistente IA WhatsApp' },
+        ],
+    },
 
 ];
 
@@ -135,13 +144,14 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
             'ver_finanzas',
             'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'ver_ajustes',
-            'ver_promociones'
+            'ver_promociones',
+            'ver_conversaciones', 'atender_chats'
         ],
     },
     {
         title: 'Recepcionista',
         description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
-        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas', 'ver_promociones'],
+        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas', 'ver_promociones', 'ver_conversaciones', 'atender_chats'],
     },
     {
         title: 'Recepcionista (Sin edición)',

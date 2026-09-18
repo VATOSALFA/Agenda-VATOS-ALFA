@@ -470,3 +470,37 @@ export interface ProfessionalCommissionSummary {
   totalCommission: number;
   details: CommissionRowData[];
 }
+
+export interface Conversation {
+  id: string; // Phone number or simulator id (e.g. 5214421234567)
+  cliente_id?: string;
+  cliente_nombre?: string;
+  cliente_telefono?: string;
+  ultimo_mensaje?: string;
+  fecha_ultimo_mensaje?: any;
+  mensajes_no_leidos?: number;
+  modo_atencion: 'bot_activo' | 'humano_al_mando' | 'requiere_atencion';
+  canal: 'whatsapp' | 'simulador';
+  created_at?: any;
+  updated_at?: any;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversation_id: string;
+  de: 'cliente' | 'bot' | 'recepcion';
+  texto: string;
+  timestamp: any;
+  tipo?: 'texto' | 'audio' | 'accion' | 'sistema';
+  estado?: 'enviado' | 'entregado' | 'leido';
+  metadata?: {
+    tool_called?: string;
+    tool_args?: any;
+    tool_result?: any;
+    action_type?: string;
+    reservation_id?: string;
+    staffName?: string;
+    [key: string]: any;
+  };
+}
+

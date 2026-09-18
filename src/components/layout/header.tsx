@@ -35,6 +35,7 @@ import {
   ShieldCheck,
   LayoutDashboard,
   X,
+  MessageSquare,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -175,6 +176,7 @@ export default function Header() {
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
     { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
     { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+    { href: '/conversations', label: 'Mensajes', icon: MessageSquare, permission: 'ver_conversaciones' },
   ], [enableBarberDashboard]);
 
   // Get website URL from settings or fallback to current origin

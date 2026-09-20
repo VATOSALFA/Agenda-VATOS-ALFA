@@ -213,11 +213,18 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     const ingresosManualesTotal = useMemo(() => roundMoney(ingresos.reduce((sum, i) => sum + i.monto, 0)), [ingresos]);
 
     const totalVentasFacturadas = useMemo(() => roundMoney(salesWithClientData.reduce((sum, sale) => {
+        if ((sale as any).absorbed_in_sale_id) return sum;
+        const depositDate = sale.deposit_paid_at?.toDate?.() || (sale.deposit_paid_at instanceof Date ? sale.deposit_paid_at : null);
+        const fromDate = dateRange?.from ? startOfDay(dateRange.from) : null;
+        const depositPaidBeforeRange = (depositDate && fromDate && depositDate < fromDate && (sale.anticipoPagado || sale.monto_anticipo))
+            ? Number(sale.anticipoPagado || sale.monto_anticipo || 0)
+            : 0;
+
         const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
             ? sale.monto_pagado_real
-            : (sale.total || 0);
+            : Math.max(0, (sale.total || 0) - depositPaidBeforeRange);
         return sum + amount;
-    }, 0)), [salesWithClientData]);
+    }, 0)), [salesWithClientData, dateRange]);
 
     const totalEgresos = useMemo(() => roundMoney(egresos.reduce((sum, egreso) => sum + egreso.monto, 0)), [egresos]);
 

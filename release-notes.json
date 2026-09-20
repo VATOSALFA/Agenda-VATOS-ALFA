@@ -1,8 +1,9 @@
 {
   "title": "Actualización del sistema",
-  "summary": "Mejoras en la asignación de profesionales y visualización de citas.",
+  "summary": "Corrección en cuadre de caja, comisiones con anticipos y tickets de venta.",
   "notes": [
-    "Sincronización precisa del profesional asignado en reservas y correo matutino.",
-    "Visualización de fecha y hora exacta en el historial de reservas del cliente."
+    "Reconocimiento de comisiones para barberos en servicios completados con anticipo previo.",
+    "Cuadre preciso de caja separando el flujo del anticipo y la liquidación del día.",
+    "Corrección visual en tickets y comprobantes de venta."
   ]
 }

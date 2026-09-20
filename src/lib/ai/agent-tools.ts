@@ -1,4 +1,6 @@
 import { getDb } from '@/lib/firebase-server';
+import { getClientReservations, getClientReservation, validateAgentBooking, assertLiveAgentMutation } from './agent-reservations';
+import { hasPendingDeposit, isUpcomingReservation } from './agent-utils';
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { getAvailableSlots, createPublicReservation } from '@/lib/actions/booking';
@@ -168,7 +170,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
       fecha: z
         .string()
         .optional()
-        .describe('Fecha en formato AAAA-MM-DD. AÑO ACTUAL OBLIGATORIO: 2026. Si el cliente pregunta por "mañana", pasa obligatoriamente "2026-09-20" (domingo). Si pregunta por "hoy", pasa "2026-09-19" (sábado). ESTÁ TERMINANTEMENTE PROHIBIDO usar 2024 o mayo. Si no se especifica día o pide lo más próximo, déjalo vacío para buscar los próximos días.'),
+        .describe('Fecha en formato AAAA-MM-DD según el calendario actual del contexto. También acepta hoy, mañana y pasado mañana. Si no se especifica día, busca los próximos días.'),
       profesionalId: z.string().optional().describe('ID opcional del barbero'),
       barberoNombre: z
         .string()
@@ -182,7 +184,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
         .array(z.string())
         .optional()
         .describe('Lista opcional de nombres de los servicios si son varios. Si un servicio se repite (ej. 2 cortes de cabello o corte para dos personas), INCLÚYELO REPETIDO en la lista (ej: ["Corte de cabello", "Corte de cabello", "Arreglo de ceja"]) o indica la cantidad (ej: ["2 cortes de cabello", "arreglo de ceja"])'),
-      duracionMinutos: z.number().optional().describe('Duración manual forzada en minutos (opcional). Si se omite, el sistema calcula automáticamente la duración exacta de cada barbero según el servicio o las notas personalizadas del cliente.'),
+      duracionMinutos: z.number().int().positive().max(720).optional().describe('Duración manual forzada en minutos (opcional). Si se omite, el sistema calcula automáticamente la duración exacta de cada barbero según el servicio o las notas personalizadas del cliente.'),
       clienteTelefono: z.string().optional().describe('Teléfono del cliente (opcional para detectar notas del cliente y duraciones especiales personalizadas)'),
       clienteNombre: z.string().optional().describe('Nombre del cliente'),
       diasABuscar: z
@@ -197,7 +199,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
           diaSemana: z.string(),
           barberoId: z.string(),
           barberoNombre: z.string(),
-          duracionMinutos: z.number().optional(),
+          duracionMinutos: z.number().int().positive().max(720).optional(),
           horarios: z.array(z.string()),
         })
       ),
@@ -209,7 +211,6 @@ export const consultarDisponibilidadTool = ai.defineTool(
   },
   async ({ fecha, profesionalId, barberoNombre, servicioNombre, serviciosNombres, duracionMinutos, diasABuscar, clienteTelefono, clienteNombre }) => {
     try {
-      console.log('--- Tool called: consultar_disponibilidad with args:', { fecha, profesionalId, barberoNombre, servicioNombre, serviciosNombres, duracionMinutos, diasABuscar, clienteTelefono, clienteNombre });
       const db = getDb();
 
       // Cargar posibles notas del expediente del cliente (desde contexto o búsqueda rápida)
@@ -255,15 +256,17 @@ export const consultarDisponibilidadTool = ai.defineTool(
         targetBarbers = barbers.filter((b) => b.id === profesionalId);
       } else if (barberoNombre) {
         const matched = barbers.filter((b) => matchBarberName(barberoNombre, b));
-        if (matched.length > 0) {
-          targetBarbers = matched;
-        }
+        targetBarbers = matched;
       }
 
       // Filtrar sólo barberos habilitados para realizar los servicios solicitados
       targetBarbers = targetBarbers.filter((b) => isBarberCapableOfServices(selectedServices, b.id));
 
-      const datesToCheck = resolveTargetDates({ fechaInput: fecha, diasABuscar });
+      const config = (await db.collection('settings').doc('sofia').get()).data() || {};
+      const todayIso = getMexicoDateInfo().todayIso;
+      const latest = Date.parse(`${todayIso}T12:00:00Z`) + (config.maxDaysInFuture ?? 14) * 86400000;
+      const datesToCheck = resolveTargetDates({ fechaInput: fecha, diasABuscar }).filter(date => Date.parse(`${date}T12:00:00Z`) <= latest);
+      const earliest = Date.now() + (config.minReservationBuffer ?? 30) * 60000;
 
       const results: Array<{
         fecha: string;
@@ -287,9 +290,9 @@ export const consultarDisponibilidadTool = ai.defineTool(
             }
 
             // Calcular la duración específica para ESTE barbero
-            const barberDuration = duracionMinutos && duracionMinutos > 0
-              ? duracionMinutos
-              : (customClientDuration || getBarberServiceDuration(selectedServices, b.id, 30));
+            const baseDuration = selectedServices.reduce((total, service) => total +
+              (customClientDuration && /corte/i.test(service.name || service.nombre || '') ? customClientDuration : getBarberServiceDuration([service], b.id, 30)), 0);
+            const barberDuration = Math.max(baseDuration, duracionMinutos || 0);
 
             const res = await getAvailableSlots({
               date: curDate,
@@ -297,6 +300,9 @@ export const consultarDisponibilidadTool = ai.defineTool(
               durationMinutes: barberDuration,
             });
 
+            if (res && 'slots' in res && Array.isArray(res.slots)) {
+              res.slots = res.slots.filter(time => Date.parse(`${curDate}T${time}:00-06:00`) >= earliest);
+            }
             if (res && 'slots' in res && Array.isArray((res as any).slots) && (res as any).slots.length > 0) {
               results.push({
                 fecha: curDate,
@@ -390,7 +396,10 @@ export async function resolveProducts(
       }
     }
 
+    if (!match) throw new Error(`No se encontró el producto ${query}. Confirma el nombre antes de continuar.`);
     if (match) {
+      const requestedQuantity = (resolved.find(item => item.id === match.id)?.cantidad || 0) + 1;
+      if (match.stock < requestedQuantity) throw new Error(`No hay existencias suficientes de ${match.nombre}.`);
       const existing = resolved.find((r) => r.id === match.id);
       if (existing) {
         existing.cantidad += 1;
@@ -412,9 +421,9 @@ export const crearCitaTool = ai.defineTool(
   {
     name: 'crear_cita',
     description:
-      'Crea y confirma una cita en la agenda de la barbería en tiempo real. ¡ATENCIÓN!: ESTÁ ESTRICTAMENTE PROHIBIDO LLAMAR A ESTA HERRAMIENTA cuando el cliente apenas está eligiendo o confirmando el horario (ej: "me queda bien el de las 7:30", "a las 5:00") y todavía NO se le ha preguntado si desea agregar algún producto o servicio extra. Primero debes preguntarle: "¿Sería únicamente tu corte de cabello o te gustaría agregar algún otro servicio o producto para peinar?". SOLO ejecuta esta herramienta cuando el cliente responda a esa pregunta confirmando que sería todo (ej: "solo corte", "sería todo", "así está bien") o indicando qué producto o servicio desea agregar.',
+      'Registra una cita con los servicios, profesional, fecha y hora explícitamente aceptados por el cliente. No usar ante una consulta de información. Devuelve si queda pendiente de anticipo.',
     inputSchema: z.object({
-      fecha: z.string().describe('Fecha de la cita AAAA-MM-DD en el año actual 2026 (ejemplo: 2026-09-20 para mañana domingo). ESTÁ PROHIBIDO usar 2024 o fechas del pasado.'),
+      fecha: z.string().describe('Fecha de la cita AAAA-MM-DD según el calendario actual de la conversación. No usar fechas pasadas ni cambiar la fecha solicitada.'),
       hora: z.string().describe('Hora de inicio (ejemplo 17:00 o 5:00 PM)'),
       profesionalId: z.string().optional().describe('ID del barbero'),
       barberoNombre: z.string().optional().describe('Nombre del barbero (ej. Beatriz, Bety, Lalo, Eduardo, Ivon, Lupita, Alfredo)'),
@@ -426,7 +435,7 @@ export const crearCitaTool = ai.defineTool(
       nombreCliente: z.string().describe('Nombre del cliente. Si ya conoces al cliente en la conversación, USA SU NOMBRE DIRECTAMENTE SIN PEDÍRSELO. Solo pídelo si no se tiene nombre registrado o si agenda para otra persona.'),
       telefonoCliente: z.string().describe('Teléfono del cliente. USA EL TELÉFONO DE LA CONVERSACIÓN DIRECTAMENTE SIN PEDÍRSELO. Solo pídelo si agenda para otra persona.'),
       notas: z.string().optional().describe('Notas o peticiones especiales'),
-      duracionMinutos: z.number().optional().describe('Duración total en minutos calculada para la cita (incluyendo duraciones personalizadas de notas de cliente o cabello difícil si aplica)'),
+      duracionMinutos: z.number().int().positive().max(720).optional().describe('Duración total en minutos calculada para la cita (incluyendo duraciones personalizadas de notas de cliente o cabello difícil si aplica)'),
     }),
     outputSchema: z.object({
       exito: z.boolean(),
@@ -442,15 +451,10 @@ export const crearCitaTool = ai.defineTool(
   },
   async ({ fecha, hora, profesionalId, barberoNombre, servicioIds, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, notas, duracionMinutos }) => {
     try {
-      console.log('--- Tool called: crear_cita with args:', { fecha, hora, barberoNombre, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, duracionMinutos });
       const db = getDb();
-      const dateInfo = getMexicoDateInfo();
-      let targetFecha = (fecha || '').trim();
-      if (!targetFecha || targetFecha < dateInfo.todayIso) {
-        console.warn(`[crearCitaTool] Fecha en el pasado o inválida recibida (${targetFecha}), corrigiendo a ${dateInfo.tomorrowIso}`);
-        targetFecha = dateInfo.tomorrowIso;
-      }
+      const targetFecha = (fecha || '').trim();
       const normalizedTime = normalizeTimeTo24h(hora);
+      await validateAgentBooking(targetFecha, normalizedTime, true);
       const time12h = formatTime12h(normalizedTime);
 
       // Resolver barbero
@@ -466,19 +470,19 @@ export const crearCitaTool = ai.defineTool(
 
       if (barberoNombre) {
         const found = barbers.find((b) => matchBarberName(barberoNombre, b));
+        if (!found) throw new Error('No se encontró el barbero solicitado. Confirma el nombre antes de agendar.');
         if (found) {
           finalProfId = found.id;
           finalBarberName = found.publicName;
         }
       }
 
-      if (!finalProfId) {
-        if (barbers.length > 0) {
-          finalProfId = barbers[0].id;
-          finalBarberName = barbers[0].publicName;
-        }
-      }
+      if (!finalProfId) throw new Error('Confirma el profesional con el cliente antes de crear la cita.');
 
+      if (!finalProfId || !barbers.some(b => b.id === finalProfId)) throw new Error('El profesional no está disponible.');
+      finalBarberName = barbers.find(b => b.id === finalProfId)!.publicName;
+
+      if (!servicioIds?.length && !serviciosNombres?.length && !servicioNombre) throw new Error('Confirma los servicios antes de crear la cita.');
       // Resolver servicios con soporte para múltiples servicios
       const servsSnap = await db.collection('servicios').where('active', '==', true).get();
       const allServices = servsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -493,6 +497,7 @@ export const crearCitaTool = ai.defineTool(
       const finalServIds = resolved.ids;
       const finalServName = resolved.displayTitle || resolved.names.join(' + ');
       const selectedServices = resolved.services;
+      if (!isBarberCapableOfServices(selectedServices, finalProfId)) throw new Error('El profesional no realiza todos los servicios seleccionados.');
 
       // Resolver notas del cliente para duraciones personalizadas
       const currentCtx = chatContextStorage.getStore();
@@ -515,7 +520,17 @@ export const crearCitaTool = ai.defineTool(
       if (resolvedClientNotes && finalBarberName) {
         customClientDuration = parseClientCustomDuration(resolvedClientNotes, finalBarberName);
       }
-      const finalDuration = duracionMinutos && duracionMinutos > 0 ? duracionMinutos : (customClientDuration || undefined);
+      const baseDuration = selectedServices.reduce((total, service) => total +
+        (customClientDuration && /corte/i.test(service.name || service.nombre || '') ? customClientDuration : getBarberServiceDuration([service], finalProfId!, 30)), 0);
+      const finalDuration = Math.max(baseDuration, duracionMinutos || 0);
+
+      // El motor compartido aplica duration al primer corte, no al bloque completo.
+      const overrideIndex = selectedServices.findIndex(service => selectedServices.length === 1 || /corte/i.test(service.name || service.nombre || ''));
+      const normalTotal = getBarberServiceDuration(selectedServices, finalProfId!, 30);
+      const bookingDuration = overrideIndex >= 0
+        ? finalDuration - (normalTotal - getBarberServiceDuration([selectedServices[overrideIndex]], finalProfId!, 30))
+        : undefined;
+      if (overrideIndex < 0 && finalDuration !== normalTotal) throw new Error('La duración especial de esta combinación requiere revisión de recepción.');
 
       // Resolver productos físicos opcionales
       const resolvedProducts = await resolveProducts(db, productosNombres, productoNombre);
@@ -545,8 +560,8 @@ export const crearCitaTool = ai.defineTool(
         professionalId: finalProfId!,
         date: targetFecha,
         time: normalizedTime,
-        duration: finalDuration,
-        customDuration: finalDuration,
+        duration: bookingDuration,
+        customDuration: bookingDuration,
         notes: extraNotes,
         origin: 'chatbot',
         canal_reserva: 'chatbot',
@@ -577,7 +592,7 @@ export const crearCitaTool = ai.defineTool(
 
         return {
           exito: false,
-          mensaje: `No fue posible registrar a las ${time12h} porque la duración acumulada de los servicios seleccionados (${finalServName}) excede el horario de cierre del barbero o interfiere con otra cita.${alternativeSlotsText} Por favor explícaselo con amabilidad al cliente (mencionando que por la suma de servicios se requiere iniciar más temprano antes del cierre) y ofrécele de inmediato las opciones de horarios viables donde sí caben ambos servicios.`,
+          mensaje: `No fue posible registrar la cita: ${res.error}.${alternativeSlotsText} Explica el motivo real y confirma otra opción con el cliente.`,
         };
       }
 
@@ -610,6 +625,9 @@ export const crearCitaTool = ai.defineTool(
           );
         }
 
+        if (!linkPago) {
+          return { exito: true, citaId: reservationId, requiereAnticipo: true, montoTotal: anticipoCalc.montoTotal, montoAnticipo: anticipoCalc.montoAnticipo, saldoPendiente: anticipoCalc.saldoPendiente, linkPago: '', mensaje: 'La cita quedó registrada pendiente de pago, pero no se pudo generar el enlace. No crees otra cita: solicita recepción para completar el anticipo.' };
+        }
         const productosTexto = resolvedProducts.length > 0
           ? ` y te aparté ${resolvedProducts.map((p) => `${p.nombre} por $${p.precio} MXN`).join(', ')}`
           : '';
@@ -658,7 +676,7 @@ export const agregarProductoACitaTool = ai.defineTool(
       telefonoCliente: z.string().optional().describe('Teléfono del cliente para localizar su cita activa'),
       productoNombre: z.string().describe('Nombre del producto a agregar (ej: Cera para peinar, After shave, Polvo textura)'),
       productosNombres: z.array(z.string()).optional().describe('Lista opcional si son varios productos'),
-      cantidad: z.number().optional().describe('Cantidad de piezas (por defecto 1)'),
+      cantidad: z.number().int().min(1).max(100).optional().describe('Cantidad de piezas (por defecto 1)'),
     }),
     outputSchema: z.object({
       exito: z.boolean(),
@@ -677,47 +695,8 @@ export const agregarProductoACitaTool = ai.defineTool(
   async ({ citaId, telefonoCliente, productoNombre, productosNombres, cantidad = 1 }) => {
     try {
       const db = getDb();
-      let resDoc: any = null;
-      let targetCitaId = citaId;
-
-      if (targetCitaId) {
-        const snap = await db.collection('reservas').doc(targetCitaId).get();
-        if (snap.exists) {
-          resDoc = snap;
-        }
-      }
-
-      if (!resDoc && telefonoCliente) {
-        const rawDigits = telefonoCliente.replace(/\D/g, '');
-        const last10 = rawDigits.slice(-10);
-        const snap = await db.collection('reservas').get();
-        const activeDocs = snap.docs.filter((d) => {
-          const data = d.data();
-          const phone = (data.cliente_telefono || '').replace(/\D/g, '');
-          const isSamePhone = phone.includes(last10) || last10.includes(phone);
-          const st = (data.estado || '').toLowerCase();
-          const isActive = !st.includes('cancelad') && !st.includes('completad');
-          return isSamePhone && isActive;
-        });
-
-        if (activeDocs.length > 0) {
-          activeDocs.sort((a, b) => {
-            const dateA = `${a.data().fecha || ''} ${a.data().hora_inicio || ''}`;
-            const dateB = `${b.data().fecha || ''} ${b.data().hora_inicio || ''}`;
-            return dateB.localeCompare(dateA);
-          });
-          resDoc = activeDocs[0];
-          targetCitaId = resDoc.id;
-        }
-      }
-
-      if (!resDoc) {
-        return {
-          exito: false,
-          mensaje: 'No se encontró ninguna cita activa para agregar el producto. ¿Deseas que agendemos una cita nueva?',
-        };
-      }
-
+      const resDoc = await getClientReservation(citaId, telefonoCliente);
+      const targetCitaId = resDoc.id;
       const resData = resDoc.data();
       const resolvedProducts = await resolveProducts(db, productosNombres, productoNombre);
 
@@ -734,6 +713,8 @@ export const agregarProductoACitaTool = ai.defineTool(
 
       for (const prod of resolvedProducts) {
         const qty = cantidad > 1 ? cantidad : (prod.cantidad || 1);
+        const productSnapshot = await db.collection('productos').doc(prod.id).get();
+        if (Number(productSnapshot.data()?.stock || 0) < qty) throw new Error(`No hay existencias suficientes de ${prod.nombre}.`);
         const itemTotal = prod.precio * qty;
         addedTotal += itemTotal;
         addedNames.push(`${prod.nombre} (x${qty})`);
@@ -756,12 +737,15 @@ export const agregarProductoACitaTool = ai.defineTool(
       let saldoPendiente = Math.max(0, newTotal - montoAnticipo);
       let linkPago = resData.link_pago_anticipo || '';
 
-      const yaPagado = resData.pago_estado === 'approved' || resData.pago_estado === 'accredited' || resData.anticipo_pagado === true;
+      const yaPagado = ['approved', 'accredited', 'paid', 'deposit_paid', 'pagado'].includes(cleanSearchStr(resData.pago_estado || '')) || resData.anticipo_pagado === true;
 
       if (!yaPagado) {
-        if (newTotal >= 190) {
+        const productsTotal = currentItems.filter(item => item.tipo === 'producto').reduce((sum, item) => sum + Number(item.precio || 0) * Number(item.cantidad || 1), 0);
+        const services = currentItems.filter(item => item.tipo !== 'producto').map(item => ({ ...item, price: Number(item.precio || 0) }));
+        const calculation = await calcularAnticipoParaServicios(services, productsTotal);
+        montoAnticipo = Math.min(newTotal, Math.max(montoAnticipo, calculation.montoAnticipo));
+        if (montoAnticipo > 0) {
           requiereAnticipo = true;
-          montoAnticipo = Math.round((newTotal * 0.5) * 100) / 100;
           saldoPendiente = Math.round((newTotal - montoAnticipo) * 100) / 100;
 
           const time12h = formatTime12h(resData.hora_inicio || '');
@@ -773,12 +757,12 @@ export const agregarProductoACitaTool = ai.defineTool(
             clientPhone: resData.cliente_telefono || '',
           });
 
-          if (pref?.initPoint) {
-            linkPago = pref.initPoint;
-          }
+          if (!pref?.initPoint) throw new Error('No se pudo generar el enlace de anticipo actualizado. El producto no fue agregado; solicita apoyo de recepción.');
+          linkPago = pref.initPoint;
         }
       } else {
-        saldoPendiente = Math.max(0, newTotal - montoAnticipo);
+        const paidAmount = Number(resData.monto_pagado || resData.monto_pagado_real || (typeof resData.anticipo_pagado === 'number' ? resData.anticipo_pagado : 0) || montoAnticipo);
+        saldoPendiente = Math.max(0, newTotal - paidAmount);
       }
 
       const updateData: any = {
@@ -813,7 +797,7 @@ export const agregarProductoACitaTool = ai.defineTool(
         saldoPendiente,
         linkPago,
         mensaje: `¡Producto agregado con éxito a tu cita! Se agregaron: ${addedNames.join(', ')}.`,
-        detalles: `Se agregaron ${addedNames.join(', ')} a tu cita del ${resData.fecha} a las ${time12h}. Total actualizado: $${newTotal} MXN.${requiereAnticipo ? ` Al superar $190 MXN se requiere un anticipo de $${montoAnticipo} MXN.\n\nEnlace de pago seguro de Mercado Pago:\n${linkPago}\n\nPídele al cliente en su propia línea que realice su anticipo y comparta su comprobante por este chat. IMPORTANTE: Escribe tu respuesta en texto completamente limpio, SIN asteriscos y SIN paréntesis alrededor de los precios o fechas.` : ` Saldo pendiente a liquidar en sucursal: $${saldoPendiente} MXN.`}`,
+        detalles: `Se agregaron ${addedNames.join(', ')} a tu cita del ${resData.fecha} a las ${time12h}. Total actualizado: $${newTotal} MXN.${requiereAnticipo ? ` Según la configuración vigente se requiere un anticipo de $${montoAnticipo} MXN.\n\nEnlace de pago seguro de Mercado Pago:\n${linkPago}\n\nPídele al cliente en su propia línea que realice su anticipo y comparta su comprobante por este chat. IMPORTANTE: Escribe tu respuesta en texto completamente limpio, SIN asteriscos y SIN paréntesis alrededor de los precios o fechas.` : ` Saldo pendiente a liquidar en sucursal: $${saldoPendiente} MXN.`}`,
       };
     } catch (e: any) {
       console.error('Error in agregar_producto_a_cita:', e);
@@ -846,23 +830,7 @@ export const consultarCitasClienteTool = ai.defineTool(
   async ({ telefono }) => {
     try {
       const db = getDb();
-      const cleanPhone = telefono.replace(/\D/g, '').slice(-10);
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-
-      // 1. Obtener posibles IDs de cliente asociados al teléfono
-      const clientDocs = await db.collection('clientes').where('telefono', '==', telefono).get();
-      const clientIds = new Set<string>(clientDocs.docs.map((d) => d.id));
-
-      if (cleanPhone) {
-        const altDocs = await db.collection('clientes').where('telefono', '==', cleanPhone).get();
-        altDocs.docs.forEach((d) => clientIds.add(d.id));
-      }
-
-      // 2. Traer reservas futuras
-      const snap = await db
-        .collection('reservas')
-        .where('fecha', '>=', todayStr)
-        .get();
+      const reservations = await getClientReservations(telefono);
 
       // Mapear nombres de barberos
       const profsSnap = await db.collection('profesionales').get();
@@ -871,14 +839,7 @@ export const consultarCitasClienteTool = ai.defineTool(
         barberMap.set(d.id, d.data().publicName || d.data().name || 'Barbero');
       });
 
-      const filtered = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() } as any))
-        .filter((r) => {
-          const isOurClient = clientIds.has(r.cliente_id);
-          const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-          const matchesPhone = cleanPhone && (rPhone.includes(cleanPhone) || r.cliente_telefono === telefono);
-          return (isOurClient || matchesPhone) && r.estado !== 'cancelada' && r.estado !== 'Cancelado';
-        })
+      const filtered = reservations.map(d => ({ ...d.data(), id: d.id } as any))
         .map((r) => ({
           id: r.id,
           fecha: r.fecha,
@@ -913,46 +874,20 @@ export const cancelarCitaTool = ai.defineTool(
   async ({ citaId, telefono, motivo }) => {
     try {
       const db = getDb();
-      let targetId = citaId;
-
-      if (!targetId && telefono) {
-        const cleanPhone = telefono.replace(/\D/g, '').slice(-10);
-        const todayStr = format(new Date(), 'yyyy-MM-dd');
-        const snap = await db.collection('reservas').where('fecha', '>=', todayStr).get();
-        const clientDocs = await db.collection('clientes').where('telefono', '==', telefono).get();
-        const clientIds = new Set<string>(clientDocs.docs.map((d) => d.id));
-        if (cleanPhone) {
-          const altDocs = await db.collection('clientes').where('telefono', '==', cleanPhone).get();
-          altDocs.docs.forEach((d) => clientIds.add(d.id));
-        }
-
-        const match = snap.docs.find((d) => {
-          const r = d.data();
-          const isOurClient = clientIds.has(r.cliente_id);
-          const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-          return (isOurClient || (cleanPhone && rPhone.includes(cleanPhone))) && r.estado !== 'cancelada' && r.estado !== 'Cancelado';
-        });
-
-        if (match) targetId = match.id;
-      }
-
-      if (!targetId) {
-        return { exito: false, mensaje: 'No se encontró ninguna cita activa para cancelar.' };
-      }
-
-      const ref = db.collection('reservas').doc(targetId);
-      const doc = await ref.get();
-      if (!doc.exists) {
-        return { exito: false, mensaje: 'La cita no existe o ya fue cancelada.' };
-      }
-
-      await ref.update({
+      const doc = await getClientReservation(citaId, telefono);
+      const ref = doc.ref;
+      await db.runTransaction(async transaction => {
+        const fresh = await transaction.get(ref);
+        const data = fresh.data();
+        if (!data || !isUpcomingReservation(data) || data.cliente_id !== doc.data().cliente_id || data.cliente_telefono !== doc.data().cliente_telefono || data.fecha !== doc.data().fecha || data.hora_inicio !== doc.data().hora_inicio) throw new Error('La cita cambió. Consulta nuevamente antes de cancelar.');
+        transaction.update(ref, {
         estado: 'Cancelado',
         cancelada_por_cliente: true,
         etiqueta_recordatorio: 'cancelada',
         motivo_cancelacion: motivo || 'Cancelada por cliente via Asistente Virtual Sofía',
         cancelada_en: new Date(),
         updated_at: new Date(),
+      });
       });
 
       return { exito: true, mensaje: 'Tu cita ha sido cancelada correctamente en la agenda.' };
@@ -985,62 +920,24 @@ export const confirmarCitaClienteTool = ai.defineTool(
   async ({ telefono, citaId }) => {
     try {
       const db = getDb();
-      let targetId = citaId;
-      let targetData: any = null;
-
-      const cleanPhone = (telefono || '').replace(/\D/g, '').slice(-10);
-      const todayStr = format(new Date(), 'yyyy-MM-dd');
-
-      if (!targetId) {
-        const clientDocs = await db.collection('clientes').where('telefono', '==', telefono).get();
-        const clientIds = new Set<string>(clientDocs.docs.map((d) => d.id));
-        if (cleanPhone) {
-          const altDocs = await db.collection('clientes').where('telefono', '==', cleanPhone).get();
-          altDocs.docs.forEach((d) => clientIds.add(d.id));
-        }
-
-        const snap = await db.collection('reservas').where('fecha', '>=', todayStr).get();
-        const activeRes = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() } as any))
-          .filter((r) => {
-            const isOurClient = clientIds.has(r.cliente_id);
-            const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-            const matchesPhone = cleanPhone && (rPhone.includes(cleanPhone) || r.cliente_telefono === telefono);
-            return (isOurClient || matchesPhone) && r.estado !== 'cancelada' && r.estado !== 'Cancelado';
-          })
-          .sort((a, b) => {
-            const dateA = a.fecha ? new Date(`${a.fecha}T${a.hora_inicio || '00:00'}:00`).getTime() : 0;
-            const dateB = b.fecha ? new Date(`${b.fecha}T${b.hora_inicio || '00:00'}:00`).getTime() : 0;
-            return dateA - dateB;
-          });
-
-        if (activeRes.length > 0) {
-          targetId = activeRes[0].id;
-          targetData = activeRes[0];
-        }
-      } else {
-        const doc = await db.collection('reservas').doc(targetId).get();
-        if (doc.exists) {
-          targetData = { id: doc.id, ...doc.data() };
-        }
-      }
-
-      if (!targetId || !targetData) {
-        return {
-          exito: false,
-          mensaje: 'No se encontró ninguna cita activa o próxima para confirmar.',
-        };
-      }
-
+      const reservation = await getClientReservation(citaId, telefono);
+      const targetId = reservation.id;
+      const targetData = reservation.data();
+      if (hasPendingDeposit(targetData)) return { exito: false, mensaje: 'La cita sigue pendiente de validar el anticipo. Confirmar asistencia no confirma el pago. Recepción puede revisar el comprobante.' };
       const now = new Date();
-      await db.collection('reservas').doc(targetId).update({
-        estado: 'confirmada',
+      await db.runTransaction(async transaction => {
+        const fresh = await transaction.get(reservation.ref);
+        const current = fresh.data();
+        if (!current || !isUpcomingReservation(current) || hasPendingDeposit(current) || current.fecha !== targetData.fecha || current.hora_inicio !== targetData.hora_inicio || current.cliente_telefono !== targetData.cliente_telefono || current.cliente_id !== targetData.cliente_id) throw new Error('La cita cambió o tiene un anticipo pendiente. Consulta sus datos nuevamente.');
+        transaction.update(reservation.ref, {
+        estado: current.estado || 'Reservado',
         confirmada_por_cliente: true,
         confirmada_en: now,
         etiqueta_recordatorio: 'confirmada',
         whatsappConfirmationSent: true,
         updated_at: now,
-        notas: (targetData.notas ? targetData.notas + ' | ' : '') + 'Confirmada por cliente vía WhatsApp',
+        notas: (current.notas ? current.notas + ' | ' : '') + 'Confirmada por cliente vía WhatsApp',
+      });
       });
 
       let barberName = targetData.professionalNames || targetData.barbero_nombre || '';
@@ -1168,6 +1065,7 @@ export const anotarListaEsperaTool = ai.defineTool(
   },
   async ({ nombreCliente, telefonoCliente, fecha, horarioPreferido, barberoNombre, servicioNombre, notas }) => {
     try {
+      assertLiveAgentMutation();
       const db = getDb();
       const docRef = await db.collection('lista_espera').add({
         nombre: nombreCliente,
@@ -1212,21 +1110,47 @@ export const reagendarCitaTool = ai.defineTool(
   async ({ citaId, nuevaFecha, nuevaHora, profesionalId }) => {
     try {
       const db = getDb();
-      const ref = db.collection('reservas').doc(citaId);
-      const snap = await ref.get();
-      if (!snap.exists) {
-        return { exito: false, mensaje: 'No se encontró la cita a reagendar.' };
-      }
-      const data = snap.data()!;
-      const finalProf = profesionalId || data.profesionalId || data.barbero_id;
-
-      await ref.update({
-        fecha: nuevaFecha,
-        hora_inicio: nuevaHora,
-        profesionalId: finalProf,
-        etiqueta_recordatorio: 'reagendada',
-        updated_at: new Date(),
-        notas: (data.notas || '') + ` | Reagendada a ${nuevaFecha} ${nuevaHora} por Asistente Virtual Sofía`,
+      await validateAgentBooking(nuevaFecha, nuevaHora);
+      const reservation = await getClientReservation(citaId);
+      const ref = reservation.ref;
+      const data = reservation.data();
+      const originalProf = data.barbero_id || data.profesionalId;
+      const finalProf = profesionalId || originalProf;
+      const items: any[] = data.items || [];
+      if (items.some(item => item.barbero_id && item.barbero_id !== originalProf)) throw new Error('Esta cita incluye varios profesionales. Recepción debe coordinar el cambio.');
+      if (finalProf !== originalProf) throw new Error('Para cambiar de profesional en una cita existente, solicita apoyo de recepción para recalcular duración y servicios.');
+      const minutes = (time: string) => Number(time.split(':')[0]) * 60 + Number(time.split(':')[1]);
+      const duration = minutes(data.hora_fin || '') - minutes(data.hora_inicio || '');
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error('No se pudo determinar la duración de la cita. Solicita apoyo de recepción.');
+      if (data.fecha === nuevaFecha && data.hora_inicio === nuevaHora) return { exito: true, mensaje: 'La cita ya está registrada en ese horario.' };
+      const slots = await getAvailableSlots({ date: nuevaFecha, professionalId: finalProf, durationMinutes: duration });
+      if (!('slots' in slots) || !slots.slots?.includes(nuevaHora)) throw new Error('Ese horario no está disponible para la duración completa de la cita. Consulta otro horario.');
+      const end = minutes(nuevaHora) + duration;
+      const endTime = `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`;
+      await db.runTransaction(async transaction => {
+        const fresh = await transaction.get(ref);
+        const current = fresh.data();
+        const sameDay = await transaction.get(db.collection('reservas').where('fecha', '==', nuevaFecha));
+        if (!current || !isUpcomingReservation(current) || current.fecha !== data.fecha || current.hora_inicio !== data.hora_inicio || current.hora_fin !== data.hora_fin || current.barbero_id !== data.barbero_id || current.cliente_id !== data.cliente_id || current.cliente_telefono !== data.cliente_telefono) throw new Error('La cita cambió durante la operación. Consulta sus datos nuevamente.');
+        const conflict = sameDay.docs.some(doc => {
+          const other = doc.data();
+          if (doc.id === citaId || /cancelad|no asiste/i.test(other.estado || '')) return false;
+          const sameBarber = other.barbero_id === finalProf || other.profesionalId === finalProf || other.items?.some((item: any) => item.barbero_id === finalProf);
+          return sameBarber && nuevaHora < other.hora_fin && endTime > other.hora_inicio;
+        });
+        if (conflict) throw new Error('El horario acaba de ocuparse. Consulta otra opción.');
+        transaction.update(ref, {
+          fecha: nuevaFecha,
+          hora_inicio: nuevaHora,
+          hora_fin: endTime,
+          barbero_id: finalProf,
+          profesionalId: finalProf,
+          confirmada_por_cliente: false,
+          whatsappConfirmationSent: false,
+          etiqueta_recordatorio: 'reagendada',
+          updated_at: new Date(),
+          notas: (current.notas || '') + ` | Reagendada a ${nuevaFecha} ${nuevaHora} por Asistente Virtual Sofía`,
+        });
       });
 
       return {
@@ -1303,9 +1227,13 @@ export const solicitarRecepcionTool = ai.defineTool(
   async ({ conversationId, motivo }) => {
     try {
       const db = getDb();
-      await db.collection('conversaciones').doc(conversationId).set(
+      const context = chatContextStorage.getStore();
+      const trustedId = context?.conversationId;
+      if (context) context.humanHandoffRequested = true;
+      if (!trustedId) throw new Error('Falta el contexto de la conversación.');
+      await db.collection('conversaciones').doc(trustedId).set(
         {
-          modo_atencion: 'requiere_atencion',
+          modo_atencion: 'humano_al_mando',
           motivo_atencion_humana: motivo,
           updated_at: new Date(),
         },

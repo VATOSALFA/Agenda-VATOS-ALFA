@@ -1,7 +1,10 @@
+import { chatContextStorage } from './agent-context';
 import { getDb } from '@/lib/firebase-server';
 import { format } from 'date-fns';
-import { getAvailableSlots, createPublicReservation } from '@/lib/actions/booking';
+import { getAvailableSlots } from '@/lib/actions/booking';
 import { matchBarberName, formatTime12h, getBarberServiceDuration } from '@/lib/ai/agent-utils';
+import { cancelarCitaTool, confirmarCitaClienteTool, consultarCitasClienteTool } from './agent-tools';
+import { getMexicoDateInfo } from './agent-utils';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
 
 // ==========================================
@@ -122,18 +125,15 @@ export async function executeFallbackLogic({
   }) || activeServices[0];
 
   // Detector de fecha mencionada
-  const today = new Date();
-  let targetDate = format(today, 'yyyy-MM-dd');
+  const dateInfo = getMexicoDateInfo();
+  let targetDate = dateInfo.todayIso;
   let dateLabel = 'hoy';
-
-  if (/mañana/i.test(text)) {
-    const tomorrow = new Date(Date.now() + 86400000);
-    targetDate = format(tomorrow, 'yyyy-MM-dd');
-    dateLabel = 'mañana';
-  } else if (/pasado mañana/i.test(text)) {
-    const dayAfter = new Date(Date.now() + 86400000 * 2);
-    targetDate = format(dayAfter, 'yyyy-MM-dd');
+  if (/pasado ma[ñn]ana/i.test(text)) {
+    targetDate = dateInfo.dayAfterTomorrowIso;
     dateLabel = 'pasado mañana';
+  } else if (/ma[ñn]ana/i.test(text)) {
+    targetDate = dateInfo.tomorrowIso;
+    dateLabel = 'mañana';
   }
 
   // Detector de hora mencionada (ej: 5:00, 5pm, a las 4, 16:30, etc.)
@@ -181,7 +181,7 @@ export async function executeFallbackLogic({
   // CASO 0.9: Envío de comprobante de pago o confirmación de transferencia
   const isVoucher = /(comprobante|transferencia|ya transferi|ya transferí|ya deposite|ya deposité|ya pague|ya pagué|captura|ticket)/i.test(text);
   if (isVoucher) {
-    return '¡Muchas gracias por compartir tu comprobante de anticipo! 📄 He registrado la información en tu reserva y nuestro equipo de recepción validará los fondos en la cuenta bancaria para dejar tu espacio 100% confirmado. ¡Nos vemos pronto en VATOS ALFA!';
+    return '¡Muchas gracias por compartir tu comprobante de anticipo! 📄 Tu mensaje quedó guardado en este chat. La confirmación del anticipo depende de la validación del pago; compartir una captura no confirma automáticamente la reserva. ¡Nos vemos pronto en VATOS ALFA!';
   }
 
   // CASO 0.95: Agendar a nombre de otra persona
@@ -191,45 +191,19 @@ export async function executeFallbackLogic({
   }
 
   // CASO 1: Confirmar asistencia a cita (Recordatorio de cita)
-  const isConfirming = /(confirmar|confirmo|si confirmo|sí confirmo|asisto|ahí estaré|ahi estare|^1$|^si$|^sí$)/i.test(text);
+  const isConfirming = /^(confirmar|confirmo|si confirmo|sí confirmo|confirmo mi cita|confirmo la cita|asisto|ahí estaré|ahi estare|1)[.! ]*$/i.test(text);
   if (isConfirming) {
-    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const snap = await db.collection('reservas').where('fecha', '>=', todayStr).get();
-
-    const nextCita = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() } as any))
-      .filter((r) => {
-        const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-        return rPhone.includes(cleanPhone) && r.estado !== 'cancelada' && r.estado !== 'Cancelado';
-      })
-      .sort((a, b) => {
-        const dateA = a.fecha ? new Date(`${a.fecha}T${a.hora_inicio || '00:00'}:00`).getTime() : 0;
-        const dateB = b.fecha ? new Date(`${b.fecha}T${b.hora_inicio || '00:00'}:00`).getTime() : 0;
-        return dateA - dateB;
-      })[0];
-
-    if (nextCita) {
-      const now = new Date();
-      await db.collection('reservas').doc(nextCita.id).update({
-        estado: 'confirmada',
-        confirmada_por_cliente: true,
-        confirmada_en: now,
-        etiqueta_recordatorio: 'confirmada',
-        whatsappConfirmationSent: true,
-        updated_at: now,
-        notas: (nextCita.notas ? nextCita.notas + ' | ' : '') + 'Confirmada por cliente vía WhatsApp',
-      });
-
-      return `¡Excelente! Tu cita para el *${nextCita.fecha}* a las *${formatTime12h(nextCita.hora_inicio)}* con ${nextCita.professionalNames || nextCita.barbero_nombre || 'tu barbero'} para ${nextCita.servicio} ha quedado 100% confirmada. ¡Te esperamos en VATOS ALFA! 💈`;
-    }
+    const result = await confirmarCitaClienteTool({ telefono: clientPhone });
+    return result.mensaje;
   }
 
   // CASO 1.5: Solicitar recepción humana
   if (isAskingHuman) {
+    const context = chatContextStorage.getStore();
+    if (context) context.humanHandoffRequested = true;
     await db.collection('conversaciones').doc(conversationId).set(
       {
-        modo_atencion: 'requiere_atencion',
+        modo_atencion: 'humano_al_mando',
         motivo_atencion_humana: userMessage,
         updated_at: new Date(),
       },
@@ -239,100 +213,23 @@ export async function executeFallbackLogic({
   }
 
   // CASO 2: Cancelar cita
-  if (isCancelling) {
-    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const snap = await db.collection('reservas').where('fecha', '>=', todayStr).get();
-
-    const nextCita = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() } as any))
-      .find((r) => {
-        const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-        return rPhone.includes(cleanPhone) && r.estado !== 'cancelada';
-      });
-
-    if (!nextCita) {
-      return 'No encontré ninguna cita activa registrada con tu número de teléfono. Si requieres apoyo de recepción, avísame con confianza.';
-    }
-
-    await db.collection('reservas').doc(nextCita.id).update({
-      estado: 'cancelada',
-      motivo_cancelacion: 'Cancelada por cliente en conversación',
-      cancelada_en: new Date(),
-    });
-
-    return `Listo, no te preocupes. Tu cita del ${nextCita.fecha} a las ${formatTime12h(nextCita.hora_inicio)} quedó cancelada. Cuando gustes volver a agendar estamos a tus órdenes.`;
+  if (isCancelling && !/[?¿]/.test(text) && !/(no|como|cómo|puedo|politica|política)/.test(text)) {
+    const result = await cancelarCitaTool({ telefono: clientPhone });
+    return result.mensaje;
   }
 
-  // CASO 3: Consultar mis citas
+  // Las mismas herramientas validan identidad y citas activas en ambos motores.
   if (isAskingMyCitas) {
-    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const snap = await db.collection('reservas').where('fecha', '>=', todayStr).get();
-
-    const clientCitas = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() } as any))
-      .filter((r) => {
-        const rPhone = (r.customer?.telefono || r.customerPhone || '').replace(/\D/g, '');
-        return rPhone.includes(cleanPhone) && r.estado !== 'cancelada';
-      });
-
-    if (clientCitas.length === 0) {
-      return 'Revisé en el sistema y no tienes citas próximas registradas con tu número. ¿Te gustaría que te agendemos un espacio para hoy o mañana?';
-    }
-
-    const nextOne = clientCitas[0];
-    return `Tienes una cita programada para el *${nextOne.fecha}* a las *${formatTime12h(nextOne.hora_inicio)}* para ${nextOne.servicio} con ${nextOne.professionalNames || 'tu barbero'}. ¿Deseas hacer algún cambio o todo en orden?`;
+    const appointments = await consultarCitasClienteTool({ telefono: clientPhone });
+    if (!appointments.length) return 'No encontré citas próximas con este teléfono. ¿Quieres que recepción te ayude a revisarlo?';
+    return appointments.map(cita => `${cita.fecha} a las ${formatTime12h(cita.hora)} con ${cita.barbero}: ${cita.servicio}, estado ${cita.estado}.`).join('\n');
   }
 
-  // CASO 4: Confirmar una hora específica para agendar (ej: "a las 5:15 con Lalo")
-  if (requestedTime) {
-    const barberToUse = matchedBarber || activeBarbers[0];
-    const serviceToUse = matchedService || activeServices[0];
-
-    // Verificar si el horario está disponible con ese barbero
-    if (barberToUse) {
-      const customDur = effectiveNotes ? parseClientCustomDuration(effectiveNotes, barberToUse.publicName || barberToUse.name) : null;
-      const barberDuration = customDur || getBarberServiceDuration([serviceToUse], barberToUse.id, 30);
-      const slotsCheck = await getAvailableSlots({
-        date: targetDate,
-        professionalId: barberToUse.id,
-        durationMinutes: barberDuration,
-      });
-
-      const slots = (slotsCheck as any).slots || [];
-      const isAvailable = slots.includes(requestedTime);
-
-      if (isAvailable) {
-        // Si ya tenemos un nombre de cliente real (no el dummy de prueba)
-        const isPlaceholderName = !clientName || /prueba|cliente/i.test(clientName);
-
-        if (!isPlaceholderName && clientName.trim().length > 3) {
-          // Crear la cita de una vez
-          await createPublicReservation({
-            client: {
-              name: clientName,
-              phone: clientPhone,
-            },
-            serviceIds: [serviceToUse.id],
-            professionalId: barberToUse.id,
-            date: targetDate,
-            time: requestedTime,
-            duration: customDur || undefined,
-            customDuration: customDur || undefined,
-            notes: 'Agendado por Asistente Virtual (Chat)',
-          });
-
-          return `¡Listo, ${clientName}! Tu cita para ${dateLabel} a las *${formatTime12h(requestedTime)}* con *${barberToUse.publicName}* para *${serviceToUse.name}* ha quedado confirmada en la agenda. 💈✂️ ¡Te esperamos en VATOS ALFA!`;
-        } else {
-          return `¡Perfecto! El horario de las *${formatTime12h(requestedTime)}* para ${dateLabel} con *${barberToUse.publicName}* está disponible. ¿Me confirmas tu nombre completo para dejártela registrada en el sistema?`;
-        }
-      } else {
-        // Ofrecer alternativas cercanas
-        const nearbySlots = slots.slice(0, 3).map((s: string) => formatTime12h(s)).join(', ');
-        return `Fíjate que justo a las ${formatTime12h(requestedTime)} ${barberToUse.publicName} ya tiene una cita ocupada, pero tengo disponible a las ${nearbySlots}. ¿Te acomoda alguno de estos?`;
-      }
-    }
+  if (/reagendar|cambiar.*(hora|dia|día)|^2$|^3$/.test(text) || requestedTime) {
+    const context = chatContextStorage.getStore();
+    if (context) context.humanHandoffRequested = true;
+    await db.collection('conversaciones').doc(conversationId).set({ modo_atencion: 'humano_al_mando', motivo_atencion_humana: 'Motor de IA no disponible; solicitud de agendamiento o modificación pendiente.', updated_at: new Date() }, { merge: true });
+    return 'En este momento necesito apoyo de recepción para completar tu solicitud con precisión. Tu mensaje quedó registrado y el equipo continuará por aquí; todavía no he creado ni cambiado tu cita.';
   }
 
   // CASO 5: Pregunta por servicios, barbero u horarios combinados (ej: "quiero corte con Beatriz", "el horario más próximo")
@@ -359,7 +256,7 @@ export async function executeFallbackLogic({
     }
 
     for (const d of daysToCheck) {
-      const checkDate = format(new Date(Date.now() + 86400000 * d.offset), 'yyyy-MM-dd');
+      const checkDate = format(new Date(new Date(dateInfo.todayIso + 'T12:00:00').getTime() + 86400000 * d.offset), 'yyyy-MM-dd');
       for (const barber of barbersToSearch) {
         const targetService = activeServices.find((s) =>
           isBeard ? /barba/i.test(s.name) : /corte/i.test(s.name)

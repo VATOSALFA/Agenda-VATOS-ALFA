@@ -73,7 +73,18 @@ export async function calcularAnticipoParaServicios(
     }
   }
 
-  finalUpfront = Math.round(finalUpfront * 100) / 100;
+  // Las preferencias de Sofía pueden exigir más anticipo, pero no eliminar
+  // el mínimo obligatorio que también valida el motor compartido de reservas.
+  const sofia = (await db.collection('settings').doc('sofia').get()).data();
+  if (sofia?.requireDeposit === true) {
+    const threshold = Number(sofia.depositMinAmount ?? 190);
+    const percent = Number(sofia.depositPercentage ?? 50);
+    if (Number.isFinite(threshold) && threshold >= 0 && Number.isFinite(percent) && percent > 0 && percent <= 100 && total >= threshold) {
+      finalUpfront = Math.max(finalUpfront, total * percent / 100);
+    }
+  }
+
+  finalUpfront = Math.min(total, Math.max(0, Math.round(finalUpfront * 100) / 100));
   const requiereAnticipo = finalUpfront > 0;
   const saldoPendiente = Math.max(0, total - finalUpfront);
   const porcentaje = total > 0 ? Math.round((finalUpfront / total) * 100) : 0;

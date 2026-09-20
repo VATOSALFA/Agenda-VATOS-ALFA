@@ -262,6 +262,12 @@ export interface Sale {
   tipo_venta?: string;
   monto_pagado_real?: number;
   anticipoPagado?: number;
+  monto_anticipo?: number;
+  metodo_pago_anticipo?: string;
+  deposit_paid_at?: any;
+  absorbed_in_sale_id?: string;
+  deposit_sale_id?: string;
+  final_sale_id?: string;
   propina?: number;
   propina_detalles?: { barbero_id: string; monto: number }[];
 }

@@ -79,13 +79,22 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
             .filter(s => isAfterCut(s.fecha_hora_venta))
             .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
             .reduce((sum, sale) => {
+                // Skip deposit sale records that were already absorbed into a final sale in the same shift
+                if ((sale as any).absorbed_in_sale_id) return sum;
+
+                // If this sale had a deposit paid in cash BEFORE this cut, don't count that prior deposit again in this shift
+                const priorDepositPaidBeforeCut = (sale.deposit_paid_at && !isAfterCut(sale.deposit_paid_at) && (sale.anticipoPagado || sale.monto_anticipo))
+                    ? Number(sale.anticipoPagado || sale.monto_anticipo || 0)
+                    : 0;
+
                 if (sale.metodo_pago === 'efectivo') {
                     const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
                         ? sale.monto_pagado_real
-                        : (sale.total || 0);
+                        : Math.max(0, (sale.total || 0) - priorDepositPaidBeforeCut);
                     return sum + amount;
                 }
-                return sum + (sale.detalle_pago_combinado?.efectivo || 0);
+                const combCash = sale.detalle_pago_combinado?.efectivo || 0;
+                return sum + Math.max(0, combCash - priorDepositPaidBeforeCut);
             }, 0);
 
         const ingresosCash = liveIngresos

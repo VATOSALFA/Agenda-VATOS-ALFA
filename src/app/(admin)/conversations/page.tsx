@@ -102,6 +102,7 @@ import {
   Smile,
   Mic,
   MicOff,
+  Camera,
 } from 'lucide-react';
 
 // Modals & Actions
@@ -2438,7 +2439,7 @@ export default function ConversationsDashboardPage() {
                       </button>
                     </div>
 
-                    {/* Quick Replies Dropdown & Attachment */}
+                    {/* Quick Replies Dropdown & Options */}
                     <div className="flex items-center gap-1.5">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -2447,7 +2448,7 @@ export default function ConversationsDashboardPage() {
                             size="sm"
                             className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground border-border/60"
                           >
-                            <Bookmark className="w-3 h-3 text-primary" />
+                            <Bookmark className="w-3 h-3 text-muted-foreground" />
                             <span>Respuestas Rápidas</span>
                           </Button>
                         </DropdownMenuTrigger>
@@ -2473,68 +2474,7 @@ export default function ConversationsDashboardPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
 
-                      {/* Emoji Picker Popover */}
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground border-border/60"
-                            title="Insertar emojis en el mensaje"
-                          >
-                            <Smile className="w-3.5 h-3.5 text-amber-500" />
-                            <span className="hidden sm:inline">Emojis</span>
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="end" className="w-72 p-2.5 shadow-xl rounded-xl z-50">
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between pb-1 border-b text-xs">
-                              <span className="font-semibold text-foreground">Emojis</span>
-                              <span className="text-[10px] text-muted-foreground">Click para insertar</span>
-                            </div>
-                            {EMOJI_CATEGORIES.map((cat) => (
-                              <div key={cat.name} className="space-y-1">
-                                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                                  {cat.name}
-                                </span>
-                                <div className="grid grid-cols-6 gap-1">
-                                  {cat.emojis.map((emoji, idx) => (
-                                    <button
-                                      key={idx}
-                                      type="button"
-                                      className="w-8 h-8 flex items-center justify-center text-lg rounded-lg hover:bg-muted active:scale-95 transition-all cursor-pointer"
-                                      onClick={() => handleInsertEmoji(emoji)}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-
-                      {/* Voice Recording Button */}
-                      <Button
-                        type="button"
-                        variant={isRecordingAudio ? 'destructive' : 'ghost'}
-                        size="sm"
-                        className={`h-7 px-2 text-[11px] gap-1.5 border border-transparent hover:border-border/60 ${
-                          isRecordingAudio ? 'bg-rose-600 text-white animate-pulse' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                        onClick={startVoiceRecording}
-                        disabled={(sendRole === 'recepcion' && !canReply) || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio}
-                        title="Grabar nota de voz con el micrófono"
-                      >
-                        <Mic className={`w-3.5 h-3.5 ${isRecordingAudio ? 'text-white animate-bounce' : 'text-rose-500'}`} />
-                        <span className="hidden sm:inline">
-                          {isRecordingAudio ? 'Grabando...' : 'Grabar Voz'}
-                        </span>
-                      </Button>
-
-                      {/* Hidden File Input for Device Files */}
+                      {/* Hidden File Input for Device Photos */}
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -2547,41 +2487,8 @@ export default function ConversationsDashboardPage() {
                         }}
                       />
 
-                      {/* Attach image button from device */}
-                      <Button
-                        type="button"
-                        variant={attachedImageUrl || isUploadingImage ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-7 px-2 text-[11px] gap-1.5 text-muted-foreground hover:text-foreground border border-transparent hover:border-border/60"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploadingImage || isRecordingAudio}
-                        title="Adjuntar imagen del dispositivo (o pegar con Ctrl+V / arrastrar)"
-                      >
-                        {isUploadingImage ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
-                        ) : (
-                          <ImageIcon className="w-3.5 h-3.5 text-primary" />
-                        )}
-                        <span className="hidden sm:inline">
-                          {isUploadingImage ? 'Subiendo...' : 'Adjuntar Imagen'}
-                        </span>
-                      </Button>
-
-                      {/* Toggle URL input optionally */}
-                      <Button
-                        type="button"
-                        variant={showImageInput ? 'secondary' : 'ghost'}
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowImageInput(!showImageInput)}
-                        disabled={isRecordingAudio}
-                        title="Ingresar enlace URL de imagen"
-                      >
-                        <Paperclip className="w-3 h-3 text-muted-foreground" />
-                      </Button>
-
                       {sendRole === 'recepcion' && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none ml-1">
                           <input
                             type="checkbox"
                             checked={pauseBotOnSend}
@@ -2741,6 +2648,95 @@ export default function ConversationsDashboardPage() {
                           rows={1}
                           className="min-h-[38px] max-h-[180px] resize-none overflow-y-auto border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-2 text-sm bg-transparent shadow-none leading-relaxed transition-[height] duration-75"
                         />
+
+                        {/* 4 Tool Icons: Clip, Cámara, Micrófono, Emojis */}
+                        <div className="flex items-center gap-0.5 mb-0.5 shrink-0">
+                          {/* 1. Clip - Adjuntar */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                            onClick={() => setShowImageInput(!showImageInput)}
+                            disabled={isRecordingAudio}
+                            title="Adjuntar enlace o archivo"
+                          >
+                            <Paperclip className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                          </Button>
+
+                          {/* 2. Cámara - Foto */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isUploadingImage || isRecordingAudio}
+                            title="Tomar o adjuntar foto"
+                          >
+                            {isUploadingImage ? (
+                              <RefreshCw className="w-4 h-4 animate-spin text-gray-500 dark:text-gray-400" />
+                            ) : (
+                              <Camera className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            )}
+                          </Button>
+
+                          {/* 3. Micrófono - Grabar Voz */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                            onClick={startVoiceRecording}
+                            disabled={(sendRole === 'recepcion' && !canReply) || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio}
+                            title="Grabar nota de voz"
+                          >
+                            <Mic className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                          </Button>
+
+                          {/* 4. Emoji - Emojis */}
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
+                                title="Insertar emojis"
+                              >
+                                <Smile className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-72 p-2.5 shadow-xl rounded-xl z-50 mb-2">
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between pb-1 border-b text-xs">
+                                  <span className="font-semibold text-foreground">Emojis</span>
+                                  <span className="text-[10px] text-muted-foreground">Click para insertar</span>
+                                </div>
+                                {EMOJI_CATEGORIES.map((cat) => (
+                                  <div key={cat.name} className="space-y-1">
+                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                                      {cat.name}
+                                    </span>
+                                    <div className="grid grid-cols-6 gap-1">
+                                      {cat.emojis.map((emoji, idx) => (
+                                        <button
+                                          key={idx}
+                                          type="button"
+                                          className="w-8 h-8 flex items-center justify-center text-lg rounded-lg hover:bg-muted active:scale-95 transition-all cursor-pointer"
+                                          onClick={() => handleInsertEmoji(emoji)}
+                                        >
+                                          {emoji}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
                         <Button
                           type="submit"
                           size="icon"

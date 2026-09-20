@@ -1466,6 +1466,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 let saleDocRef = doc(collection(db, "ventas")); // Default new
                 let isUpdate = false;
                 let existingSaleData: any = {};
+                let isDepositLiquidation = false;
+                let depositSaleRef: any = null;
+                let depositSaleData: any = null;
+
+                const checkDepositSale = (ref: any, sData: any) => {
+                    const isDep = Boolean(
+                        sData?.tipo_venta === 'anticipo' ||
+                        ref.id?.startsWith('deposit_') ||
+                        sData?.pago_estado === 'deposit_paid'
+                    );
+                    if (isDep) {
+                        isDepositLiquidation = true;
+                        depositSaleRef = ref;
+                        depositSaleData = sData;
+                        return true;
+                    }
+                    return false;
+                };
 
                 if (preFoundSaleId) {
                     // PRIORITIZE the sale found via Query
@@ -1473,10 +1491,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     // Read inside transaction
                     const saleCheck = await transaction.get(foundRef);
                     if (saleCheck.exists()) {
-                        saleDocRef = foundRef;
                         const sData = saleCheck.data();
-                        isUpdate = true;
-                        existingSaleData = sData;
+                        if (checkDepositSale(foundRef, sData)) {
+                            // Keep saleDocRef as new doc so deposit record on previous date is preserved
+                        } else {
+                            saleDocRef = foundRef;
+                            isUpdate = true;
+                            existingSaleData = sData;
+                        }
                     }
                 } else if (reservationId) {
                     // Fallback: Try direct lookup (best case: ID matches)
@@ -1485,7 +1507,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                     if (possibleSaleDoc.exists()) {
                         const sData = possibleSaleDoc.data();
-                        if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
+                        if (checkDepositSale(possibleSaleRef, sData)) {
+                            // Keep saleDocRef as new doc
+                        } else if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
                             saleDocRef = possibleSaleRef;
                             isUpdate = true;
                             existingSaleData = sData;
@@ -1503,7 +1527,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 const linkedSaleDoc = await transaction.get(linkedSaleRef);
                                 if (linkedSaleDoc.exists()) {
                                     const sData = linkedSaleDoc.data();
-                                    if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
+                                    if (checkDepositSale(linkedSaleRef, sData)) {
+                                        // Keep saleDocRef as new doc
+                                    } else if (sData.pago_estado === 'deposit_paid' || sData.pago_estado === 'Pago Parcial') {
                                         saleDocRef = linkedSaleRef;
                                         isUpdate = true;
                                         existingSaleData = sData;
@@ -1514,7 +1540,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }
 
-                if (isUpdate) {
+                if (isDepositLiquidation) {
+                    console.log("Preserving deposit sale:", depositSaleRef.id, "and creating liquidation sale:", saleDocRef.id);
+                } else if (isUpdate) {
                     // Log for debugging
                     console.log("Updating existing sale:", saleDocRef.id);
                 }
@@ -1622,8 +1650,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
-                    anticipoPagado: anticipoPagado || 0,
-                    monto_pagado_real: (isUpdate ? (existingSaleData.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid + propinaToSave,
+                    anticipoPagado: anticipoPagado || (depositSaleData ? Number(depositSaleData.monto_pagado_real || depositSaleData.monto_anticipo || depositSaleData.anticipoPagado || 0) : 0),
+                    monto_pagado_real: isDepositLiquidation
+                        ? (amountBeingPaid + propinaToSave)
+                        : ((isUpdate ? (existingSaleData.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid + propinaToSave),
                     saldo_pendiente: 0,
                     status: 'completed'
                 };
@@ -1659,10 +1689,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 } else {
                     saleDataToSave.propina_metodo = data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo');
+                    if (isDepositLiquidation) {
+                        const paidNow = amountBeingPaid + propinaToSave;
+                        saleDataToSave.detalle_pago_combinado = {
+                            efectivo: data.metodo_pago === 'efectivo' ? paidNow : 0,
+                            tarjeta: data.metodo_pago === 'tarjeta' ? paidNow : 0,
+                            transferencia: data.metodo_pago === 'transferencia' ? paidNow : 0,
+                            pagos_en_linea: (data.metodo_pago === 'mercadopago' || data.metodo_pago === 'pagos_en_linea') ? paidNow : 0
+                        };
+                    }
                 }
 
-                if (isUpdate) {
-                    // Merge with existing payments if updating
+                if (isDepositLiquidation && depositSaleRef) {
+                    transaction.update(depositSaleRef, {
+                        saldo_pendiente: 0,
+                        status: 'completed',
+                        absorbed_in_sale_id: saleDocRef.id
+                    });
+                    if (reservationId) {
+                        saleDataToSave.reservationId = reservationId;
+                    }
+                    saleDataToSave.deposit_sale_id = depositSaleRef.id;
+                    transaction.set(saleDocRef, removeUndefinedFields(saleDataToSave));
+                } else if (isUpdate) {
+                    // Merge with existing payments if updating normal draft/partial sale
 
                     // 1. Extract previous payments
                     let prevEfectivo = 0;
@@ -1759,7 +1809,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     transaction.update(reservationRef, {
                         pago_estado: 'Pagado',
                         estado: 'Asiste',
-                        monto_pagado: saleDataToSave.monto_pagado_real,
+                        monto_pagado: grandTotal,
                         saldo_pendiente: 0,
                         items: reservationItems,
                         precio: subtotal - totalDiscount,

@@ -169,7 +169,9 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl p-0" hideCloseButton>
                 <DialogHeader className="p-4 border-b flex-row items-center justify-between">
-                    <DialogTitle>Comprobante de pago ID: {sale.id.slice(0, 8)}</DialogTitle>
+                    <DialogTitle>
+                        Comprobante de pago ID: {sale.id.startsWith('deposit_') ? (sale.reservationId ? sale.reservationId.slice(0, 8) : sale.id.replace('deposit_', '').slice(0, 8)) : sale.id.slice(0, 8)}
+                    </DialogTitle>
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="icon" onClick={handleSendEmail} disabled={isSendingEmail || isPrinting}>
                             <Mail className={`h-4 w-4 ${isSendingEmail ? 'animate-pulse text-primary' : ''}`} />
@@ -252,39 +254,51 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 )}
-                                {sale.propina && sale.propina > 0 && (
+                                {Boolean(sale.propina && sale.propina > 0) && (
                                     <TableRow className="text-primary font-medium bg-primary/5">
                                          <TableCell colSpan={2} className="text-right">
                                              Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''} {(sale as any).propina_metodo ? `• ${(sale as any).propina_metodo.charAt(0).toUpperCase() + (sale as any).propina_metodo.slice(1)}` : ''}
                                          </TableCell>
-                                         <TableCell className="text-right">+${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         <TableCell className="text-right">+${(sale.propina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 )}
                                 <TableRow className="font-bold text-lg border-t-2">
                                     {/* Logic to detailed breakdown if it's a partial payment */}
-                                    {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)) ? (
-                                        <>
-                                            <TableCell colSpan={2} className="text-right pt-2">Valor Total del Servicio</TableCell>
-                                            <TableCell className="text-right pt-2">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </>
+                                    {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) ? (
+                                         <>
+                                             <TableCell colSpan={2} className="text-right pt-2">Valor Total del Servicio</TableCell>
+                                             <TableCell className="text-right pt-2">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </>
                                     ) : (
-                                        <>
-                                            <TableCell colSpan={2} className="text-right">{sale.propina && sale.propina > 0 ? "Total Pagado" : "Total"}</TableCell>
-                                            <TableCell className="text-right">${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </>
+                                         <>
+                                             <TableCell colSpan={2} className="text-right">{sale.propina && sale.propina > 0 ? "Total Pagado" : "Total"}</TableCell>
+                                             <TableCell className="text-right">${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </>
                                     )}
                                 </TableRow>
-                                {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)) && (
-                                    <>
-                                        <TableRow className="text-orange-600 font-medium">
-                                            <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>
-                                            <TableCell className="text-right">-${(sale.monto_pagado_real || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </TableRow>
-                                        <TableRow className="text-muted-foreground">
-                                            <TableCell colSpan={2} className="text-right">Saldo Pendiente</TableCell>
-                                            <TableCell className="text-right">${(sale.total - (sale.monto_pagado_real || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </TableRow>
-                                    </>
+                                {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) && (
+                                     <>
+                                         <TableRow className="text-orange-600 font-medium">
+                                             <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>
+                                             <TableCell className="text-right">-${(sale.monto_pagado_real || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </TableRow>
+                                         <TableRow className="text-muted-foreground">
+                                             <TableCell colSpan={2} className="text-right">Saldo Pendiente</TableCell>
+                                             <TableCell className="text-right">${(sale.total - (sale.monto_pagado_real || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </TableRow>
+                                     </>
+                                )}
+                                {sale.pago_estado === 'Pagado' && sale.anticipoPagado && sale.anticipoPagado > 0 && (
+                                     <>
+                                         <TableRow className="text-orange-600 font-medium">
+                                             <TableCell colSpan={2} className="text-right">Anticipo Pagado Previamente</TableCell>
+                                             <TableCell className="text-right">-${sale.anticipoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </TableRow>
+                                         <TableRow className="text-emerald-700 dark:text-emerald-400 font-bold">
+                                             <TableCell colSpan={2} className="text-right">Liquidación Pagada en esta Venta</TableCell>
+                                             <TableCell className="text-right">${(sale.total - sale.anticipoPagado + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                         </TableRow>
+                                     </>
                                 )}
                             </TableFooter>
                         </Table>

@@ -6,6 +6,9 @@ export interface ChatExecutionContext {
   clientName?: string;
   clientNotes?: string;
   clientId?: string;
+  humanHandoffRequested?: boolean;
+  simulation?: boolean;
+  mutationAttempted?: boolean;
 }
 
 export const chatContextStorage = new AsyncLocalStorage<ChatExecutionContext>();

@@ -108,8 +108,8 @@ import {
 import { NewConversationModal } from '@/components/admin/conversations/new-conversation-modal';
 import { NewReservationForm } from '@/components/reservations/new-reservation-form';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
+import { processAgentMessage } from '@/lib/actions/ai-agent';
 import {
-  processAgentMessage,
   sendStaffMessage,
   toggleConversationMode,
   markConversationAsRead,
@@ -119,7 +119,7 @@ import {
   sendInternalStaffNote,
   confirmReservationByStaff,
   deleteConversation,
-} from '@/lib/actions/ai-agent';
+} from '@/lib/actions/conversation-actions';
 import type { Conversation, ChatMessage, Client } from '@/lib/types';
 
 const AVAILABLE_TAGS = [

@@ -1,5 +1,8 @@
 {
   "title": "Actualización del sistema",
-  "summary": "Nueva actualización disponible.",
-  "notes": []
+  "summary": "Optimización y mejoras en la arquitectura del sistema.",
+  "notes": [
+    "Refactorización modular del asistente virtual Sofía para mayor rapidez y estabilidad.",
+    "Mejoras de rendimiento y optimización en el panel de conversaciones y agenda."
+  ]
 }

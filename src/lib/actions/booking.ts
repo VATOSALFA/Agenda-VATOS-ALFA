@@ -5,6 +5,7 @@ import { addMinutes, format, set, parse, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
+import { parseClientCustomDuration } from '@/lib/client-notes-helper';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -51,10 +52,11 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             .where('fecha', '==', date)
             .get();
 
-        let effectiveScheduleStart = '';
-        let effectiveScheduleEnd = '';
-        let isSpecialJourney = false;
-        const syntheticBreaks: { start: string, end: string }[] = [];
+        // 1.06 Check for Blocks and Enabled Schedules ('bloqueos_horario')
+        const blocksSnapshot = await db.collection('bloqueos_horario')
+            .where('fecha', '==', date)
+            .where('barbero_id', '==', professionalId)
+            .get();
 
         // Helper specifically for safe parsing
         const parseTimeSafe = (timeStr: any) => {
@@ -66,6 +68,29 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             if (isNaN(h) || isNaN(m)) return null;
             return { h, m };
         };
+
+        const availableBlocks: { start: string, end: string, startM: number, endM: number }[] = [];
+        const blockingBlocks: { start: string, end: string, startM: number, endM: number }[] = [];
+
+        blocksSnapshot.forEach(doc => {
+            const data = doc.data();
+            const s = parseTimeSafe(data.hora_inicio);
+            const e = parseTimeSafe(data.hora_fin);
+            if (s && e) {
+                const startM = s.h * 60 + s.m;
+                const endM = e.h * 60 + e.m;
+                if (data.type === 'available') {
+                    availableBlocks.push({ start: data.hora_inicio, end: data.hora_fin, startM, endM });
+                } else {
+                    blockingBlocks.push({ start: data.hora_inicio, end: data.hora_fin, startM, endM });
+                }
+            }
+        });
+
+        let effectiveScheduleStart = '';
+        let effectiveScheduleEnd = '';
+        let isSpecialJourney = false;
+        const syntheticBreaks: { start: string, end: string }[] = [];
 
         if (!specialDaysSnap.empty) {
             const journeys = specialDaysSnap.docs.map(d => d.data());
@@ -85,10 +110,27 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         } else {
             const scheduleDay = profData.schedule?.[dayName];
             if (!scheduleDay || !scheduleDay.enabled) {
-                return { slots: [] }; // Day is closed and no special journey
+                if (availableBlocks.length > 0) {
+                    availableBlocks.sort((a, b) => a.startM - b.startM);
+                    effectiveScheduleStart = availableBlocks[0].start;
+                    effectiveScheduleEnd = availableBlocks.reduce((latest, b) => b.end > latest ? b.end : latest, availableBlocks[0].end);
+                    isSpecialJourney = true;
+                    for (let i = 0; i < availableBlocks.length - 1; i++) {
+                        if (availableBlocks[i].endM < availableBlocks[i+1].startM) {
+                            syntheticBreaks.push({ start: availableBlocks[i].end, end: availableBlocks[i+1].start });
+                        }
+                    }
+                } else {
+                    return { slots: [] }; // Day is closed and no special journey or enabled block
+                }
+            } else {
+                effectiveScheduleStart = scheduleDay.start;
+                effectiveScheduleEnd = scheduleDay.end;
+                availableBlocks.forEach(ab => {
+                    if (ab.start < effectiveScheduleStart) effectiveScheduleStart = ab.start;
+                    if (ab.end > effectiveScheduleEnd) effectiveScheduleEnd = ab.end;
+                });
             }
-            effectiveScheduleStart = scheduleDay.start;
-            effectiveScheduleEnd = scheduleDay.end;
         }
 
         // 1.0 Fetch Local Schedule to enforce bounds
@@ -147,10 +189,15 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
                     const s = parseTimeSafe(brk.start);
                     const e = parseTimeSafe(brk.end);
                     if (s && e) {
-                        busyIntervals.push({
-                            start: s.h * 60 + s.m,
-                            end: e.h * 60 + e.m
-                        });
+                        const brkStartM = s.h * 60 + s.m;
+                        const brkEndM = e.h * 60 + e.m;
+                        const isOverridden = availableBlocks.some(ab => ab.startM <= brkStartM && ab.endM >= brkEndM);
+                        if (!isOverridden) {
+                            busyIntervals.push({
+                                start: brkStartM,
+                                end: brkEndM
+                            });
+                        }
                     }
                 });
             }
@@ -195,20 +242,13 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             }
         });
 
-        // 3. Get Busy Slots (Blocks)
-        const blocksSnapshot = await db.collection('bloqueos_horario')
-            .where('fecha', '==', date)
-            .where('barbero_id', '==', professionalId)
-            .get();
-
-        blocksSnapshot.forEach(doc => {
-            const data = doc.data();
-            const s = parseTimeSafe(data.hora_inicio);
-            const e = parseTimeSafe(data.hora_fin);
-            if (s && e) {
+        // 3. Get Busy Slots (Blocking Blocks - Excluding 'available' overrides)
+        blockingBlocks.forEach(blk => {
+            const isOverridden = availableBlocks.some(ab => ab.startM <= blk.startM && ab.endM >= blk.endM);
+            if (!isOverridden) {
                 busyIntervals.push({
-                    start: s.h * 60 + s.m,
-                    end: e.h * 60 + e.m
+                    start: blk.startM,
+                    end: blk.endM
                 });
             }
         });
@@ -314,12 +354,10 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             // 1. Dynamic forward anchor (encaje continuo: si terminó a las 15:15, habilitar 15:15 de inmediato)
             candidateStarts.add(wStart);
 
-            // 2. Dynamic backward anchor (encaje inverso: si una cita inicia a las 16:15, encajar justo antes)
-            if (wEnd % 30 !== 0) {
-                const backwardAnchor = wEnd - durationMinutes;
-                if (backwardAnchor >= wStart) {
-                    candidateStarts.add(backwardAnchor);
-                }
+            // 2. Dynamic backward anchor (encaje inverso: permitir cita pegada al final de la jornada o ventana)
+            const backwardAnchor = wEnd - durationMinutes;
+            if (backwardAnchor >= wStart) {
+                candidateStarts.add(backwardAnchor);
             }
 
             // 3. Candidatos en cuadrícula estándar de 30 min (10:00, 10:30, 11:00... 19:00, 19:30)
@@ -510,14 +548,14 @@ export async function createPublicReservation(data: any) {
             }
 
             const newClientData: any = {
-                nombre: data.client.name,
-                apellido: data.client.lastName,
+                nombre: data.client.name || 'Cliente',
+                apellido: data.client.lastName || '',
                 telefono: data.client.phone,
                 correo: data.client.email || '',
                 fecha_nacimiento: data.client.birthday || null,
                 notas: data.client.notes || '',
                 creado_en: FieldValue.serverTimestamp(),
-                origen: 'web_publica',
+                origen: data.origin || 'web_publica',
             };
 
             if (nextClientNumber !== undefined) {
@@ -528,18 +566,63 @@ export async function createPublicReservation(data: any) {
             clientId = newClientRef.id;
         }
 
-        // 2. Fetch Services Details
-        const servicesRefs = data.serviceIds.map((id: string) => db.collection('servicios').doc(id));
+        // 2. Fetch Services Details (Preserving duplicate instances for quantities/multiple people)
+        const uniqueServiceIds = Array.from(new Set(data.serviceIds as string[]));
+        const servicesRefs = uniqueServiceIds.map((id: string) => db.collection('servicios').doc(id));
         const servicesDocs = await db.getAll(...servicesRefs);
 
-        const validServices = servicesDocs.filter((doc) => doc.exists).map((doc) => ({ id: doc.id, ...doc.data() }));
+        const serviceDocMap = new Map(
+            servicesDocs.filter((doc) => doc.exists).map((doc) => [doc.id, { id: doc.id, ...doc.data() }])
+        );
+
+        // Preserve all instances requested by the client
+        const validServices = (data.serviceIds as string[])
+            .map((id: string) => serviceDocMap.get(id))
+            .filter(Boolean);
 
         if (validServices.length === 0) return { error: 'Servicios no encontrados' };
 
-        const totalDuration = validServices.reduce((sum: number, s: any) => {
-            const customDur = s.durationPorProfesional?.[data.professionalId];
-            return sum + (customDur !== undefined ? Number(customDur) : (s.duration || 0));
-        }, 0);
+        // 1. Get Professional Schedule
+        const profDoc = await db.collection('profesionales').doc(data.professionalId).get();
+        if (!profDoc.exists) return { error: 'Profesional no encontrado' };
+        const profData = profDoc.data();
+
+        // Check if there is a custom duration from data or from client notes
+        let clientCustomDur: number | null = null;
+        if (data.duration && Number(data.duration) > 0) {
+            clientCustomDur = Number(data.duration);
+        } else if (data.customDuration && Number(data.customDuration) > 0) {
+            clientCustomDur = Number(data.customDuration);
+        } else if (existingDoc) {
+            const cNotes = existingDoc.data().notas || existingDoc.data().nota || '';
+            clientCustomDur = parseClientCustomDuration(cNotes, profData?.publicName || profData?.name);
+            if (clientCustomDur) {
+                console.log(`[Booking] Aplicando duración personalizada desde notas del cliente (${existingDoc.id}): ${clientCustomDur} min`);
+            }
+        }
+
+        let totalDuration = 0;
+        if (clientCustomDur && clientCustomDur > 0) {
+            if (validServices.length === 1) {
+                totalDuration = clientCustomDur;
+            } else {
+                let firstOverridden = false;
+                totalDuration = validServices.reduce((sum: number, s: any) => {
+                    if (!firstOverridden && (s.name?.toLowerCase().includes('corte') || validServices.length === 1)) {
+                        firstOverridden = true;
+                        return sum + clientCustomDur!;
+                    }
+                    const customDur = s.durationPorProfesional?.[data.professionalId];
+                    return sum + (customDur !== undefined ? Number(customDur) : (s.duration || 0));
+                }, 0);
+            }
+        } else {
+            totalDuration = validServices.reduce((sum: number, s: any) => {
+                const customDur = s.durationPorProfesional?.[data.professionalId];
+                return sum + (customDur !== undefined ? Number(customDur) : (s.duration || 0));
+            }, 0);
+        }
+
         const totalPrice = validServices.reduce((sum: number, s: any) => sum + (s.price || 0), 0);
         const serviceNames = validServices.map((s: any) => s.name).join(', ');
 
@@ -549,12 +632,6 @@ export async function createPublicReservation(data: any) {
         const endTime = addMinutes(startTime, totalDuration);
         const endTimeStr = format(endTime, 'HH:mm');
         const startTimeStr = data.time;
-
-        // VALIDATION: AVAILABILITY
-        // 1. Get Professional Schedule
-        const profDoc = await db.collection('profesionales').doc(data.professionalId).get();
-        if (!profDoc.exists) return { error: 'Profesional no encontrado' };
-        const profData = profDoc.data();
 
         const dayName = format(parse(data.date, 'yyyy-MM-dd', new Date()), 'eeee', { locale: es }).toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -580,6 +657,30 @@ export async function createPublicReservation(data: any) {
             .where('fecha', '==', data.date)
             .get();
 
+        // 1.06 Check for Blocks and Enabled Schedules ('bloqueos_horario')
+        const blocksSnapshot = await db.collection('bloqueos_horario')
+            .where('fecha', '==', data.date)
+            .where('barbero_id', '==', data.professionalId)
+            .get();
+
+        const availableBlocks: { start: string, end: string }[] = [];
+        const blockingBlocks: { start: string, end: string }[] = [];
+
+        blocksSnapshot.forEach(doc => {
+            const bData = doc.data();
+            if (bData.type === 'available') {
+                if (bData.hora_inicio && bData.hora_fin) {
+                    availableBlocks.push({ start: bData.hora_inicio, end: bData.hora_fin });
+                }
+            } else {
+                if (bData.hora_inicio && bData.hora_fin) {
+                    blockingBlocks.push({ start: bData.hora_inicio, end: bData.hora_fin });
+                }
+            }
+        });
+
+        const isCoveredByAvailable = availableBlocks.some(ab => ab.start <= startTimeStr && ab.end >= endTimeStr);
+
         let profEffectiveStart = '';
         let profEffectiveEnd = '';
         let isSpecialJourney = false;
@@ -598,6 +699,10 @@ export async function createPublicReservation(data: any) {
                     profBreaks.push({ start: journeys[i].hora_fin, end: journeys[i+1].hora_inicio });
                 }
             }
+        } else if (isCoveredByAvailable) {
+            isSpecialJourney = true;
+            profEffectiveStart = startTimeStr;
+            profEffectiveEnd = endTimeStr;
         } else {
             const scheduleDay = profData?.schedule?.[dayName];
             if (!scheduleDay || !scheduleDay.enabled) return { error: 'El profesional no trabaja este día.' };
@@ -608,16 +713,23 @@ export async function createPublicReservation(data: any) {
 
         // 1.2 Validate against local shop's hours
         let localData = null;
-        if (data.locationId && data.locationId !== 'default') {
-            const localDoc = await db.collection('locales').doc(data.locationId).get();
+        let resolvedLocationId = (data.locationId && data.locationId !== 'default') ? data.locationId : null;
+
+        if (resolvedLocationId) {
+            const localDoc = await db.collection('locales').doc(resolvedLocationId).get();
             if (localDoc.exists) localData = localDoc.data();
         } else if (profData && profData.local_id) {
-            const localDoc = await db.collection('locales').doc(profData.local_id).get();
+            resolvedLocationId = profData.local_id;
+            const localDoc = await db.collection('locales').doc(resolvedLocationId).get();
             if (localDoc.exists) localData = localDoc.data();
         }
+        
         if (!localData) {
             const locsSnap = await db.collection('locales').limit(1).get();
-            if (!locsSnap.empty) localData = locsSnap.docs[0].data();
+            if (!locsSnap.empty) {
+                localData = locsSnap.docs[0].data();
+                resolvedLocationId = locsSnap.docs[0].id;
+            }
         }
 
         const localScheduleDay = localData?.schedule?.[dayName];
@@ -639,12 +751,12 @@ export async function createPublicReservation(data: any) {
         }
 
         // Check working hours against unified bounds
-        if (startTimeStr < combinedStart || endTimeStr > combinedEnd) {
+        if (!isCoveredByAvailable && (startTimeStr < combinedStart || endTimeStr > combinedEnd)) {
             return { error: 'La hora seleccionada está fuera del horario laboral habilitado.' };
         }
 
         // Check Breaks
-        if (profBreaks && Array.isArray(profBreaks)) {
+        if (!isCoveredByAvailable && profBreaks && Array.isArray(profBreaks)) {
             const isBreak = profBreaks.some((brk: any) => {
                 return startTimeStr < brk.end && endTimeStr > brk.start;
             });
@@ -669,52 +781,148 @@ export async function createPublicReservation(data: any) {
 
         if (hasReservationConflict) return { error: 'Ya existe una reserva en este horario.' };
 
-        // Check Blocks
-        const blocksSnapshot = await db.collection('bloqueos_horario')
-            .where('fecha', '==', data.date)
-            .where('barbero_id', '==', data.professionalId)
-            .get();
-
-        const hasBlockConflict = blocksSnapshot.docs.some(doc => {
-            const block = doc.data();
-            return startTimeStr < block.hora_fin && endTimeStr > block.hora_inicio;
+        // Check Blocks (excluding enabled available slots)
+        const hasBlockConflict = blockingBlocks.some(blk => {
+            if (isCoveredByAvailable) return false;
+            return startTimeStr < blk.end && endTimeStr > blk.start;
         });
 
         if (hasBlockConflict) return { error: 'El profesional tiene un bloqueo en este horario.' };
 
 
-        const items = validServices.map((s: any) => {
+        let firstOverridden = false;
+        const items: any[] = validServices.map((s: any) => {
             const customDur = s.durationPorProfesional?.[data.professionalId];
+            let itemDur = customDur !== undefined ? Number(customDur) : (s.duration || 0);
+            if (clientCustomDur && !firstOverridden && (s.name?.toLowerCase().includes('corte') || validServices.length === 1)) {
+                itemDur = clientCustomDur;
+                firstOverridden = true;
+            }
             return {
                 id: s.id,
                 nombre: s.name,
                 servicio: s.name,
                 precio: s.price,
-                duracion: customDur !== undefined ? Number(customDur) : (s.duration || 0),
-                barbero_id: data.professionalId
+                duracion: itemDur,
+                barbero_id: data.professionalId,
+                tipo: 'servicio'
             };
         });
 
-        // 3. Create Reservation
+        // Add optional physical products (e.g. from Sofía / upsell)
+        let productsTotal = 0;
+        if (Array.isArray(data.productItems) && data.productItems.length > 0) {
+            data.productItems.forEach((p: any) => {
+                const prodPrice = Number(p.precio || p.price || 0);
+                const prodQty = Number(p.cantidad || p.quantity || 1);
+                productsTotal += prodPrice * prodQty;
+                items.push({
+                    id: p.id || `prod_${Date.now()}`,
+                    nombre: p.nombre || p.name || 'Producto',
+                    precio: prodPrice,
+                    cantidad: prodQty,
+                    tipo: 'producto',
+                    barbero_id: data.professionalId
+                });
+            });
+        }
+
+        const grandTotal = data.totalAmount ? Number(data.totalAmount) : (totalPrice + productsTotal);
+
+        // --- VALIDACIÓN DE ANTICIPO (REGLA GLOBAL Y POR SERVICIO) ---
+        let globalMinThreshold = 190;
+        let globalDefaultPercent = 50;
+        let globalActive = true;
+
+        try {
+            const cfgDoc = await db.collection('configuracion').doc('servicios').get();
+            if (cfgDoc.exists) {
+                const cfg = cfgDoc.data()!;
+                if (typeof cfg.anticipo_monto_minimo_activo === 'boolean') {
+                    globalActive = cfg.anticipo_monto_minimo_activo;
+                }
+                if (Number(cfg.anticipo_monto_minimo) > 0) {
+                    globalMinThreshold = Number(cfg.anticipo_monto_minimo);
+                }
+                if (Number(cfg.anticipo_porcentaje_defecto) > 0) {
+                    globalDefaultPercent = Number(cfg.anticipo_porcentaje_defecto);
+                }
+            }
+        } catch (e) {
+            console.error("Error reading configuracion/servicios in createPublicReservation:", e);
+        }
+
+        // 1. Sumar anticipos configurados a nivel de servicio individual
+        let calculatedDeposit = 0;
+        validServices.forEach((s: any) => {
+            const pType = s.payment_type || 'no-payment';
+            if (pType === 'online-deposit') {
+                const amountType = s.payment_amount_type || '%';
+                const amountVal = Number(s.payment_amount_value);
+                if (amountType === '$' && amountVal > 0) {
+                    calculatedDeposit += amountVal;
+                } else if (amountType === '%' && amountVal > 0) {
+                    calculatedDeposit += (Number(s.price || 0) * (amountVal / 100));
+                } else {
+                    calculatedDeposit += (Number(s.price || 0) * 0.5);
+                }
+            } else if (pType === 'full-payment') {
+                calculatedDeposit += Number(s.price || 0);
+            }
+        });
+
+        // 2. Regla global: si el total de servicios supera el umbral configurado (ej. >= $190)
+        if (globalActive && totalPrice >= globalMinThreshold) {
+            const thresholdDeposit = totalPrice * (globalDefaultPercent / 100);
+            if (calculatedDeposit < thresholdDeposit) {
+                calculatedDeposit = thresholdDeposit;
+            }
+        }
+
+        calculatedDeposit = Math.round(calculatedDeposit * 100) / 100;
+        const requiresDeposit = calculatedDeposit > 0;
+
+        // 3. Si la reserva proviene de la web pública (flujo directo sin pasarela) y requiere anticipo:
+        // No permitir creación gratuita sin haber pasado por Mercado Pago.
+        const originChannel = data.canal_reserva || data.origin || 'web_publica';
+        const isPaid = data.paymentStatus === 'deposit_paid' || data.paymentStatus === 'paid';
+
+        if (originChannel === 'web_publica' && requiresDeposit && !isPaid) {
+            return {
+                error: `Esta reserva suma $${grandTotal} MXN y requiere un anticipo del ${globalDefaultPercent}% ($${calculatedDeposit} MXN). Por favor realiza el pago en línea para confirmar tu cita.`,
+                requiresPayment: true,
+                depositAmount: calculatedDeposit
+            };
+        }
+
+        const finalAmountDue = data.amountDue !== undefined && Number(data.amountDue) >= calculatedDeposit 
+            ? Number(data.amountDue) 
+            : (requiresDeposit ? calculatedDeposit : (Number(data.amountDue) || 0));
+
+        const finalRequiresDeposit = requiresDeposit || finalAmountDue > 0;
+
+        // 4. Create Reservation
         const reservationData = {
             cliente_id: clientId,
+            cliente_telefono: data.client.phone || '',
+            cliente_nombre: `${data.client.name || ''} ${data.client.lastName || ''}`.trim(),
             barbero_id: data.professionalId, // Main professional
             fecha: data.date,
             hora_inicio: data.time,
             hora_fin: endTimeStr,
-            estado: 'Pendiente', // Starts as pending
+            estado: data.status || (finalRequiresDeposit && !isPaid ? 'Pendiente de pago' : 'Reservado'),
             servicio: serviceNames, // Legacy field: concatenated names
-            local_id: data.locationId || 'default',
+            local_id: resolvedLocationId || 'default',
             items: items,
-            total: totalPrice,
-            origen: 'web_publica',
-            canal_reserva: 'web_publica',
+            total: grandTotal,
+            origen: originChannel,
+            canal_reserva: originChannel,
             createdAt: FieldValue.serverTimestamp(),
             // Financials for Upfront Payment
-            pago_estado: data.paymentStatus || 'pendiente', // 'pending_payment', 'pending', 'paid'
-            anticipo_esperado: data.amountDue || 0,
-            saldo_pendiente: data.totalAmount && data.amountDue ? (data.totalAmount - data.amountDue) : (data.totalAmount || totalPrice),
-            requiere_pago_anticipado: (data.amountDue || 0) > 0
+            pago_estado: data.paymentStatus || (finalRequiresDeposit && !isPaid ? 'pending_payment' : 'pendiente'),
+            anticipo_esperado: finalAmountDue,
+            saldo_pendiente: Math.max(0, grandTotal - finalAmountDue),
+            requiere_pago_anticipado: finalRequiresDeposit
         };
 
         const resRef = await db.collection('reservas').add(reservationData);
@@ -739,6 +947,38 @@ export async function createPublicReservation(data: any) {
         console.error("Error creating reservation:", error);
         return { error: error.message };
     }
+}
+
+// --- PUBLIC SERVICIOS CONFIG (SERVER ACTION) ---
+export async function getPublicServiciosConfig() {
+    try {
+        const db = getDb();
+        if (!db) {
+            return {
+                anticipo_monto_minimo_activo: true,
+                anticipo_monto_minimo: 190,
+                anticipo_porcentaje_defecto: 50,
+            };
+        }
+
+        const snap = await db.collection('configuracion').doc('servicios').get();
+        if (snap.exists) {
+            const data = snap.data() || {};
+            return {
+                anticipo_monto_minimo_activo: data.anticipo_monto_minimo_activo !== false,
+                anticipo_monto_minimo: Number(data.anticipo_monto_minimo) > 0 ? Number(data.anticipo_monto_minimo) : 190,
+                anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
+            };
+        }
+    } catch (e) {
+        console.error("Error reading public servicios config:", e);
+    }
+
+    return {
+        anticipo_monto_minimo_activo: true,
+        anticipo_monto_minimo: 190,
+        anticipo_porcentaje_defecto: 50,
+    };
 }
 
 // --- MANUAL EMAIL TRIGGER (FOR ADMIN PANEL) ---

@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2 } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -1362,6 +1362,10 @@ export default function AgendaView() {
                           <span className="text-sm">Reserva desde la web pública</span>
                         </div>
                         <div className="flex items-center gap-2">
+                          <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                          <span className="text-sm">Reserva agendada por Sofía (WhatsApp)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
                           <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                           <span className="text-sm">Profesional fijo (no reasignable)</span>
                         </div>
@@ -1703,27 +1707,52 @@ export default function AgendaView() {
                                   </div>
                                 ) : (
                                   <>
-                                    <div className="flex-grow overflow-hidden pr-1">
+                                    <div className={cn(
+                                      "flex-grow overflow-hidden min-w-0 pr-1",
+                                      ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') && ((event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid'))
+                                        ? "pr-28"
+                                        : ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') || (event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid')
+                                          ? "pr-20"
+                                          : "pr-14"
+                                    )}>
                                       <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
                                     </div>
 
-                                    {(event.type === 'appointment') && (
-                                      <div className="absolute top-0 right-0 h-full flex">
+                                    {event.type === 'appointment' && (
+                                      <div className="absolute top-0 right-0 h-full flex items-center shrink-0 pointer-events-none gap-1">
+                                        {/* Origin & Confirmation Icons */}
+                                        <div className="flex items-center gap-1 h-full px-1.5 shrink-0">
+                                          {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
+                                            <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
+                                          )}
+                                          {(event.canal_reserva === 'chatbot' || event.origen === 'chatbot') && (
+                                            <Bot className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                          )}
+                                          {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica') || event.canal_reserva === 'chatbot' || event.origen === 'chatbot'))) && (
+                                            <Lock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                          )}
+                                          {(event as any).confirmada_por_cliente && (
+                                            <span title="Cita confirmada por el cliente vía WhatsApp" className="shrink-0 flex items-center">
+                                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                                            </span>
+                                          )}
+                                        </div>
+
                                         {/* Product Indicator (Blue) - Left of A */}
                                         {event.items?.some((i: SaleItem) => i.tipo === 'producto') && (
-                                          <div className="h-full px-1 flex items-center justify-center bg-blue-600">
-                                            <span className="text-white font-bold text-[10px]">P</span>
+                                          <div className="h-full px-2 flex items-center justify-center bg-blue-600 shrink-0 rounded-l-sm">
+                                            <span className="text-white font-bold text-[10px] leading-none">P</span>
                                           </div>
                                         )}
 
                                         {/* Payment Status Indicator (A/$) - Right */}
                                         {(event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') && (
                                           <div className={cn(
-                                            "h-full px-1 flex items-center justify-center min-w-[20px]",
+                                            "h-full px-2 flex items-center justify-center min-w-[20px] shrink-0",
                                             event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500'
                                           )}>
                                             {event.pago_estado === 'deposit_paid' ? (
-                                              <span className="text-black font-bold text-[10px]">A</span>
+                                              <span className="text-black font-bold text-[10px] leading-none">A</span>
                                             ) : (
                                               <DollarSign className="h-3 w-3 text-black font-bold" />
                                             )}
@@ -1731,19 +1760,6 @@ export default function AgendaView() {
                                         )}
                                       </div>
                                     )}
-
-                                    <div className={cn("absolute top-0 h-full flex items-center gap-0.5", (event.type === 'appointment' && (event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid')) ? "right-12" : "right-1")}>
-                                      {event.type === 'appointment' && (
-                                        <div className="flex items-center gap-0.5 h-full px-1">
-                                          {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
-                                            <Globe className="w-3.5 h-3.5 text-primary" />
-                                          )}
-                                          {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')))) && (
-                                            <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
                                   </>
                                 )}
                               </div>
@@ -1753,7 +1769,15 @@ export default function AgendaView() {
                                 <div className="space-y-2">
                                   <div className="flex justify-between items-start">
                                     <p className="font-bold text-base text-foreground">{formatClientName(event.customer?.nombre, event.customer?.apellido)}</p>
-                                    {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
+                                    <div className="flex flex-wrap gap-1">
+                                      {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
+                                      {(event.canal_reserva === 'chatbot' || event.origen === 'chatbot') && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Bot className="w-3 h-3 mr-1" /> Bot</Badge>}
+                                      {(event as any).confirmada_por_cliente && (
+                                        <Badge variant="outline" className="text-[10px] h-5 px-1 border-emerald-500/50 bg-emerald-500/10 text-emerald-600 font-semibold">
+                                          <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Confirmada
+                                        </Badge>
+                                      )}
+                                    </div>
                                   </div>
                                   <p className="text-sm text-muted-foreground">{event.items ? event.items.map(i => i.nombre || i.servicio).join(', ') : event.servicio}</p>
                                   <div className="flex items-center gap-2 text-sm text-muted-foreground">

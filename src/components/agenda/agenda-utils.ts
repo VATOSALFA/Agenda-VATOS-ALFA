@@ -11,8 +11,9 @@ export const getStatusColor = (status: string | undefined) => {
             return 'bg-orange-300/80 border-orange-500 text-orange-900';
         case 'Pendiente': // Legacy
         case 'pending_payment':
-            return 'bg-red-300/80 border-red-500 text-red-900';
         case 'Pendiente de Pago': // New standard
+        case 'Pendiente de pago':
+        case 'pendiente de pago':
             return 'bg-red-300/80 border-red-500 text-red-900';
         case 'deposit_paid':
             return 'bg-orange-300/80 border-orange-500 text-orange-900';

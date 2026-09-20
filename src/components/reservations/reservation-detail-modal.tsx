@@ -32,6 +32,8 @@ import {
   XCircle,
   DollarSign,
   Send,
+  Bot,
+  Globe,
 } from 'lucide-react';
 import { RegisterDepositModal } from './register-deposit-modal';
 import type { Reservation, Sale, Local, Profesional } from '@/lib/types';
@@ -408,17 +410,34 @@ export function ReservationDetailModal({
                   )}
                 </div>
               </div>
-              <Badge variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'} className={cn(
-                reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' :
-                  reservation.pago_estado === 'deposit_paid' ? 'bg-orange-100 text-orange-800' :
-                    reservation.estado === 'Cancelado' ? 'bg-gray-100 text-gray-800' :
-                      'bg-yellow-100 text-yellow-800'
-              )}>
-                {reservation.estado === 'Cancelado' ? 'Reserva Cancelada' :
-                  reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' :
-                    reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
-                      reservation.pago_estado}
-              </Badge>
+              <div className="flex flex-col items-end gap-1.5">
+                <Badge variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'} className={cn(
+                  reservation.pago_estado === 'Pagado' ? 'bg-green-100 text-green-800' :
+                    reservation.pago_estado === 'deposit_paid' ? 'bg-orange-100 text-orange-800' :
+                      reservation.estado === 'Cancelado' ? 'bg-gray-100 text-gray-800' :
+                        'bg-yellow-100 text-yellow-800'
+                )}>
+                  {reservation.estado === 'Cancelado' ? 'Reserva Cancelada' :
+                    reservation.pago_estado === 'pending_payment' ? 'Pendiente de Pago' :
+                      reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
+                        reservation.pago_estado}
+                </Badge>
+                {(reservation.canal_reserva === 'chatbot' || reservation.origen === 'chatbot') && (
+                  <Badge variant="outline" className="border-blue-500/50 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 text-[11px] gap-1 font-semibold">
+                    <Bot className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Agendada por Sofía (WhatsApp)
+                  </Badge>
+                )}
+                {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica')) && (
+                  <Badge variant="outline" className="border-indigo-500/50 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300 text-[11px] gap-1 font-semibold">
+                    <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" /> Web Pública
+                  </Badge>
+                )}
+                {reservation.confirmada_por_cliente && (
+                  <Badge variant="outline" className="border-emerald-500/50 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 text-[11px] gap-1 font-semibold">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Confirmada por WhatsApp
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-sm">

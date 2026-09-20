@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
             // CASE A: Reservation Exists (Update)
             if (reservaDoc.exists) {
                 const data = reservaDoc.data();
-                const total = Number(data.totalAmount || data.precio || 0);
+                const total = Number(data.totalAmount || data.precio || data.total || 0);
                 const paid = Number(transaction_amount || 0);
 
                 const newPaymentStatus = determinePaymentStatus(total, paid);
@@ -94,10 +94,48 @@ export async function POST(req: NextRequest) {
                     deposit_payment_id: String(paymentInfo.id),
                     deposit_paid_at: new Date(),
                     monto_pagado: paid,
+                    monto_anticipo: paid,
+                    anticipo_pagado: paid,
+                    anticipoPagado: paid,
                     // Si ya se pagó completo, el sistema es inteligente y pone 'Asiste'
-                    estado: newPaymentStatus === 'Pagado' ? 'Asiste' : (data.estado === 'Pendiente' ? 'Confirmado' : data.estado)
+                    estado: newPaymentStatus === 'Pagado' ? 'Asiste' : 'Confirmado'
                 });
-                console.log(`[Next.js] Reservation ${external_reference} updated.`);
+
+                // Registrar también en colección 'ventas' para contabilidad si aún no existe
+                const saleRef = db.collection('ventas').doc(external_reference);
+                const saleDoc = await t.get(saleRef);
+                if (!saleDoc.exists) {
+                    const realTotal = total || paid;
+                    const saldoPendiente = Math.max(0, realTotal - paid);
+                    t.set(saleRef, {
+                        id: external_reference,
+                        fecha_hora_venta: new Date(),
+                        total: realTotal,
+                        subtotal: realTotal,
+                        descuento: { valor: 0, tipo: 'fixed', monto: 0 },
+                        metodo_pago: 'mercadopago',
+                        monto_pagado_real: paid,
+                        saldo_pendiente: saldoPendiente,
+                        items: data.items || [{ nombre: data.servicio || 'Servicio', precio: realTotal }],
+                        cliente_id: data.cliente_id || 'unknown',
+                        client: {
+                            id: data.cliente_id,
+                            nombre: data.cliente_nombre,
+                            telefono: data.cliente_telefono,
+                        },
+                        local_id: data.local_id || 'default',
+                        estado: 'completed',
+                        pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : 'Pago Parcial',
+                        tipo: 'anticipo',
+                        origen: data.origen || data.canal_reserva || 'chatbot',
+                        anticipoPagado: paid,
+                        mercado_pago_id: String(paymentInfo.id),
+                        mercado_pago_status: 'approved',
+                        reservationId: external_reference,
+                    });
+                }
+
+                console.log(`[Next.js] Reservation ${external_reference} updated with advance payment.`);
                 return;
             }
 
@@ -261,6 +299,43 @@ export async function POST(req: NextRequest) {
                 console.log(`[Next.js] Venta ${external_reference} updated.`);
             }
         });
+
+        // Si la reserva provino del chatbot, notificar automáticamente en el chat del cliente
+        try {
+            const resDoc = await db.collection('reservas').doc(external_reference).get();
+            if (resDoc.exists) {
+                const resData = resDoc.data()!;
+                if ((resData.canal_reserva === 'chatbot' || resData.origen === 'chatbot') && resData.cliente_telefono) {
+                    const cleanPhone = resData.cliente_telefono.replace(/\D/g, '').slice(-10);
+                    const convsSnap = await db.collection('conversaciones').get();
+                    const targetConv = convsSnap.docs.find(d => {
+                        const p = (d.data().cliente_telefono || d.data().telefono || '').replace(/\D/g, '');
+                        return p.includes(cleanPhone) || d.id.includes(cleanPhone);
+                    });
+
+                    if (targetConv) {
+                        const paid = Number(transaction_amount || 0);
+                        const timeStr = resData.hora_inicio ? ` a las ${resData.hora_inicio}` : '';
+                        const msgRef = targetConv.ref.collection('mensajes').doc();
+                        const notifText = `💳 ¡Anticipo de $${paid} MXN recibido con éxito vía Mercado Pago! Tu cita para el ${resData.fecha}${timeStr} ha quedado 100% confirmada. ¡Te esperamos en VATOS ALFA!`;
+                        await msgRef.set({
+                            id: msgRef.id,
+                            conversation_id: targetConv.id,
+                            de: 'sistema',
+                            texto: notifText,
+                            timestamp: new Date(),
+                            tipo: 'sistema',
+                        });
+                        await targetConv.ref.update({
+                            ultimo_mensaje: notifText,
+                            fecha_ultimo_mensaje: new Date(),
+                        });
+                    }
+                }
+            }
+        } catch (chatNotifErr) {
+            console.error('[Next.js] Error sending chat notification for advance payment:', chatNotifErr);
+        }
 
         return NextResponse.json({ status: "OK" });
 

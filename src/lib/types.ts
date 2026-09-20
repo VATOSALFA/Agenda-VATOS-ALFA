@@ -102,6 +102,9 @@ export interface Reservation {
   professional_lock?: boolean;
   whatsappConfirmationSent?: boolean;
   whatsappReminderSent?: boolean;
+  confirmada_por_cliente?: boolean;
+  confirmada_en?: any;
+  etiqueta_recordatorio?: 'confirmada' | 'reagendada' | 'cancelada';
 }
 
 export interface TimeBlock {
@@ -481,6 +484,8 @@ export interface Conversation {
   mensajes_no_leidos?: number;
   modo_atencion: 'bot_activo' | 'humano_al_mando' | 'requiere_atencion';
   canal: 'whatsapp' | 'simulador';
+  etiquetas?: string[];
+  notas_internas?: string;
   created_at?: any;
   updated_at?: any;
 }
@@ -491,8 +496,9 @@ export interface ChatMessage {
   de: 'cliente' | 'bot' | 'recepcion';
   texto: string;
   timestamp: any;
-  tipo?: 'texto' | 'audio' | 'accion' | 'sistema';
+  tipo?: 'texto' | 'audio' | 'imagen' | 'accion' | 'sistema' | 'nota_interna';
   estado?: 'enviado' | 'entregado' | 'leido';
+  mediaUrl?: string;
   metadata?: {
     tool_called?: string;
     tool_args?: any;

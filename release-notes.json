@@ -1,12 +1,5 @@
 {
-  "title": "Nueva Actualización: Asistente Virtual & Centro de Mensajes",
-  "summary": "Arquitectura completa de IA para WhatsApp, Centro de Mensajes en tiempo real y Simulador de Pruebas.",
-  "notes": [
-    "Centro de Mensajes Integrado (/conversations): nuevo panel con la estética de la agenda para supervisar chats, clientes y citas en tiempo real.",
-    "Control Humano Inmediato (Pausar Bot): interruptor para que la recepción tome el control del chat en cualquier momento.",
-    "Simulador de Pruebas (Sandbox): herramienta interactiva para probar el comportamiento de la IA y su encaje de citas sin tocar WhatsApp.",
-    "Ficha del Cliente en Chat: visualiza el historial de visitas, citas próximas y atajos para crear citas directas.",
-    "Exportación de Contactos (.vcf): descarga en un clic todos los clientes de la agenda en formato vCard para sincronizarlos en WhatsApp y teléfonos.",
-    "Matriz de Roles y Permisos: permisos configurables en /settings/users para 'Ver conversaciones', 'Atender chats' y 'Configurar asistente IA'."
-  ]
+  "title": "Actualización del sistema",
+  "summary": "Nueva actualización disponible.",
+  "notes": []
 }

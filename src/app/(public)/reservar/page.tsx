@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { createPublicReservation, getAvailableSlots } from '@/lib/actions/booking';
+import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig } from '@/lib/actions/booking';
 import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -79,8 +79,26 @@ export default function BookingPage() {
     const { data: locales = [] } = useFirestoreQuery<any>('locales');
     const { data: categories = [] } = useFirestoreQuery<any>('categorias_servicios');
     const { data: promotions = [] } = useFirestoreQuery<any>('promociones');
+
+    // Configuración de Anticipos (Carga desde Server Action con valores de respaldo $190 / 50%)
+    const [serviciosConfigState, setServiciosConfigState] = useState<any>({
+        anticipo_monto_minimo_activo: true,
+        anticipo_monto_minimo: 190,
+        anticipo_porcentaje_defecto: 50
+    });
+
+    useEffect(() => {
+        getPublicServiciosConfig().then((cfg) => {
+            if (cfg) {
+                setServiciosConfigState(cfg);
+            }
+        }).catch((err) => {
+            console.error("Error al obtener configuración pública de servicios:", err);
+        });
+    }, []);
+
     const { data: configServiciosDocs = [] } = useFirestoreQuery<any>('configuracion', 'servicios-config', where('__name__', '==', 'servicios'));
-    const serviciosConfig = configServiciosDocs[0] || {};
+    const serviciosConfig = configServiciosDocs[0] || serviciosConfigState;
 
     // Filter active promotions (active and not expired)
     const activePromotions = useMemo(() => {
@@ -276,12 +294,16 @@ export default function BookingPage() {
 
         // Regla Global: Anticipo automático si el monto total de servicios alcanza o supera el umbral configurado
         let thresholdApplied = false;
+        const isThresholdActive = serviciosConfig?.anticipo_monto_minimo_activo !== false;
+        const minThreshold = Number(serviciosConfig?.anticipo_monto_minimo) > 0 ? Number(serviciosConfig.anticipo_monto_minimo) : 190;
+        const defaultPercent = Number(serviciosConfig?.anticipo_porcentaje_defecto) > 0 ? Number(serviciosConfig.anticipo_porcentaje_defecto) : 50;
+
         if (
-            serviciosConfig?.anticipo_monto_minimo_activo &&
-            Number(serviciosConfig.anticipo_monto_minimo) > 0 &&
-            total >= Number(serviciosConfig.anticipo_monto_minimo)
+            isThresholdActive &&
+            minThreshold > 0 &&
+            total >= minThreshold
         ) {
-            const pct = (Number(serviciosConfig.anticipo_porcentaje_defecto) || 50) / 100;
+            const pct = defaultPercent / 100;
             const requiredMinDeposit = total * pct;
             if (upfront < requiredMinDeposit) {
                 upfront = requiredMinDeposit;
@@ -674,7 +696,7 @@ export default function BookingPage() {
                     const pType = item.service.payment_type || 'no-payment';
                     let itemUpfront = (pType === 'online-deposit' ? itemPrice * 0.5 : (pType === 'full-payment' ? itemPrice : 0));
                     if (isThresholdDepositApplied && itemUpfront === 0) {
-                        const pct = (Number(serviciosConfig.anticipo_porcentaje_defecto) || 50) / 100;
+                        const pct = (Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100;
                         itemUpfront = itemPrice * pct;
                     }
 

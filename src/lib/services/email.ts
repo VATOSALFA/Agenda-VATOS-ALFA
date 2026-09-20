@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { db } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
 
-const resendApiKey = process.env.RESEND_API_KEY || 're_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv';
+const resendApiKey = process.env.RESEND_API_KEY || '';
 
 if (!resendApiKey) {
     console.warn('Resend API Key is not configured.');

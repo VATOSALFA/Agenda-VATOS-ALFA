@@ -1,8 +1,8 @@
 {
   "title": "Actualización del sistema",
-  "summary": "Optimización y mejoras en la arquitectura del sistema.",
+  "summary": "Mejoras en la asignación de profesionales y visualización de citas.",
   "notes": [
-    "Refactorización modular del asistente virtual Sofía para mayor rapidez y estabilidad.",
-    "Mejoras de rendimiento y optimización en el panel de conversaciones y agenda."
+    "Sincronización precisa del profesional asignado en reservas y correo matutino.",
+    "Visualización de fecha y hora exacta en el historial de reservas del cliente."
   ]
 }

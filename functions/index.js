@@ -878,7 +878,7 @@ async function runAutomatedChecks() {
   const senderEmail = 'contacto@vatosalfa.com';
   const logoUrl = empresaConfig.logo_url || 'https://vatosalfa.com/logo.png';
 
-  let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+  let apiKey = process.env.RESEND_API_KEY || "";
   try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
   const resend = new Resend(apiKey);
 
@@ -1253,7 +1253,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
         const whatsappLink = localPhone ? `https://wa.me/${localPhone.replace(/\D/g, '')}` : '#';
 
         // API Key
-        let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+        let apiKey = process.env.RESEND_API_KEY || "";
         try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
         const resend = new Resend(apiKey);
 
@@ -1469,7 +1469,7 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
       `<div style="margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.4em; font-weight: 700; color: #333;">${i.nombre || i.servicio || 'Servicio'}</div>`
     ).join('');
 
-    let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+    let apiKey = process.env.RESEND_API_KEY || "";
     try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
     const resend = new Resend(apiKey);
 
@@ -1739,16 +1739,25 @@ async function runDailySummary(dateStr) {
 
       const proIdsInRes = new Set();
 
-      // 1. Check root level (legacy or simple structure)
-      if (d.barbero_id) proIdsInRes.add(d.barbero_id);
-      if (d.professional_id) proIdsInRes.add(d.professional_id);
-
-      // 2. Check items array (structure shown in user screenshot)
-      if (Array.isArray(d.items)) {
+      // 1. Check items array first (source of truth for multi-service or reassigned bookings)
+      let foundInItems = false;
+      if (Array.isArray(d.items) && d.items.length > 0) {
         d.items.forEach(item => {
-          if (item.barbero_id) proIdsInRes.add(item.barbero_id);
-          if (item.professional_id) proIdsInRes.add(item.professional_id);
+          if (item.barbero_id) {
+            proIdsInRes.add(item.barbero_id);
+            foundInItems = true;
+          }
+          if (item.professional_id) {
+            proIdsInRes.add(item.professional_id);
+            foundInItems = true;
+          }
         });
+      }
+
+      // 2. Only check root level if items didn't specify a professional (legacy reservations)
+      if (!foundInItems) {
+        if (d.barbero_id) proIdsInRes.add(d.barbero_id);
+        if (d.professional_id) proIdsInRes.add(d.professional_id);
       }
 
       proIdsInRes.forEach(proId => {
@@ -1772,7 +1781,7 @@ async function runDailySummary(dateStr) {
     const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://agenda-vatos-alfa.vercel.app/logo-vatos-alfa.png';
     const senderEmail = 'contacto@vatosalfa.com';
 
-    let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv";
+    let apiKey = process.env.RESEND_API_KEY || "";
     try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
     const resend = new Resend(apiKey);
 
@@ -2121,7 +2130,7 @@ exports.sendSaleReceipt = onCall(
       `;
 
       // 5. Send Email
-      let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv"; // Fallback
+      let apiKey = process.env.RESEND_API_KEY || ""; // Fallback
       try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
       const resend = new Resend(apiKey);
 
@@ -2253,7 +2262,7 @@ exports.sendCommissionReport = onCall(
       `;
 
       // 4. Send Email
-      let apiKey = "re_CLqHQSKU_2Eahc3mv5koXcZQdgSnjZDAv"; // Fallback
+      let apiKey = process.env.RESEND_API_KEY || ""; // Fallback
       try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
       const resend = new Resend(apiKey);
 

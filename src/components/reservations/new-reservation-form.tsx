@@ -873,8 +873,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       const hora_inicio = `${globalStartHour}:${globalStartMin}`;
       const hora_fin = `${globalEndHour}:${globalEndMin}`;
 
+      const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
+
       const dataToSave: Partial<Reservation> & { hora_inicio?: string, hora_fin?: string } = {
         cliente_id: data.cliente_id,
+        barbero_id: primaryBarberoId,
         items: itemsToSave,
         servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
         fecha: formattedDate,

@@ -31,9 +31,12 @@ interface ClientDetailModalProps {
 interface Reservation {
   id: string;
   fecha: string;
+  hora_inicio?: string;
+  hora_fin?: string;
   servicio: string;
   barbero_id: string;
   estado: string;
+  items?: { barbero_id?: string; [key: string]: any }[];
 }
 
 interface Sale {
@@ -101,14 +104,20 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
     sorted.sort((a, b) => {
       if (key === 'fecha') {
-        const dateA = a.fecha ? new Date(a.fecha).getTime() : 0;
-        const dateB = b.fecha ? new Date(b.fecha).getTime() : 0;
+        const timeA = a.hora_inicio ? a.hora_inicio.slice(0, 5) : '00:00';
+        const timeB = b.hora_inicio ? b.hora_inicio.slice(0, 5) : '00:00';
+        const dateStrA = `${a.fecha || ''}T${timeA}:00`;
+        const dateStrB = `${b.fecha || ''}T${timeB}:00`;
+        const dateA = new Date(dateStrA).getTime() || (a.fecha ? new Date(a.fecha).getTime() : 0);
+        const dateB = new Date(dateStrB).getTime() || (b.fecha ? new Date(b.fecha).getTime() : 0);
         return (dateA - dateB) * dir;
       }
       if (key === 'servicio') return (a.servicio || '').localeCompare(b.servicio || '') * dir;
       if (key === 'profesional') {
-        const nameA = professionalMap.get(a.barbero_id) || '';
-        const nameB = professionalMap.get(b.barbero_id) || '';
+        const profA = a.items?.find((i: any) => i.barbero_id)?.barbero_id || a.barbero_id;
+        const profB = b.items?.find((i: any) => i.barbero_id)?.barbero_id || b.barbero_id;
+        const nameA = professionalMap.get(profA) || '';
+        const nameB = professionalMap.get(profB) || '';
         return nameA.localeCompare(nameB) * dir;
       }
       if (key === 'estado') return (a.estado || '').localeCompare(b.estado || '') * dir;
@@ -141,12 +150,12 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   }, [sales, salesSortConfig, professionalMap]);
 
 
-  const formatDate = (date: any, includeTime = false) => {
+  const formatDate = (date: any, includeTime = false, timeStr?: string) => {
     if (!date) return 'N/A';
     let dateObj: Date;
     if (date.seconds) { // Firestore Timestamp
       dateObj = new Date(date.seconds * 1000);
-    } else if (typeof date === 'string') { // ISO String
+    } else if (typeof date === 'string') { // ISO String or YYYY-MM-DD
       dateObj = parseISO(date);
     } else {
       return 'Fecha inválida';
@@ -154,7 +163,16 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
     if (isNaN(dateObj.getTime())) return 'Fecha inválida';
 
-    return format(dateObj, includeTime ? 'PPP p' : 'PPP', { locale: es });
+    const formattedDateOnly = format(dateObj, 'PPP', { locale: es });
+
+    if (includeTime) {
+      if (timeStr) {
+        return `${formattedDateOnly} ${timeStr.slice(0, 5)}`;
+      }
+      return format(dateObj, 'PPP p', { locale: es });
+    }
+
+    return formattedDateOnly;
   };
 
   const validSales = useMemo(() => {
@@ -283,9 +301,12 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                           <TableBody>
                             {sortedReservations.map(res => (
                               <TableRow key={res.id}>
-                                <TableCell>{formatDate(res.fecha, true)}</TableCell>
+                                <TableCell>{formatDate(res.fecha, true, res.hora_inicio)}</TableCell>
                                 <TableCell>{res.servicio}</TableCell>
-                                <TableCell>{professionalMap.get(res.barbero_id) || res.barbero_id}</TableCell>
+                                <TableCell>{(() => {
+                                  const profId = res.items?.find((i: any) => i.barbero_id)?.barbero_id || res.barbero_id;
+                                  return professionalMap.get(profId) || profId || 'Sin asignar';
+                                })()}</TableCell>
                                 <TableCell><Badge>{res.estado}</Badge></TableCell>
                               </TableRow>
                             ))}

@@ -193,6 +193,8 @@ export const consultarDisponibilidadTool = ai.defineTool(
         .describe('Número de días a consultar a partir de la fecha inicial (por defecto 4 para encontrar lo más próximo)'),
     }),
     outputSchema: z.object({
+      diaMasProximo: z.string().optional().describe('El día más cercano que tiene al menos un horario disponible'),
+      opcionesMasProximas: z.array(z.string()).optional().describe('Las 2 o 3 opciones más tempranas del día más próximo'),
       disponibilidadPorFecha: z.array(
         z.object({
           fecha: z.string(),
@@ -298,6 +300,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
               date: curDate,
               professionalId: b.id,
               durationMinutes: barberDuration,
+              minReservationBufferMinutes: config.minReservationBuffer ?? 30,
             });
 
             if (res && 'slots' in res && Array.isArray(res.slots)) {
@@ -320,19 +323,66 @@ export const consultarDisponibilidadTool = ai.defineTool(
       }
 
       let resumenTexto = '';
+      let diaMasProximo: string | undefined;
+      let opcionesMasProximas: string[] = [];
+
       if (results.length === 0) {
         const srvTxt = evaluatedServiceName ? ` para ${evaluatedServiceName}` : '';
         resumenTexto = `No hay horarios disponibles${srvTxt} en las fechas consultadas (${datesToCheck.join(', ')}).`;
       } else {
-        resumenTexto = results
-          .map((r) => {
-            const sample12h = r.horarios.slice(0, 5).map((h) => formatTime12h(h)).join(', ');
-            return `${r.diaSemana} con ${r.barberoNombre} (${evaluatedServiceName || 'Servicio'} - ${r.duracionMinutos} min): opciones disponibles como ${sample12h} (total ${r.horarios.length} espacios libres)`;
-          })
-          .join('\n');
+        // Encontrar las fechas que tienen al menos un espacio libre
+        const diasConDisponibilidad = Array.from(new Set(results.map((r) => r.fecha)));
+        const primerDiaFecha = diasConDisponibilidad[0];
+        const resultadosPrimerDia = results.filter((r) => r.fecha === primerDiaFecha);
+
+        // Reunir y ordenar cronológicamente los slots del primer día
+        const slotsPrimerDia: Array<{ hora: string; hora12: string; barberoNombre: string }> = [];
+        for (const r of resultadosPrimerDia) {
+          for (const h of r.horarios) {
+            slotsPrimerDia.push({
+              hora: h,
+              hora12: formatTime12h(h),
+              barberoNombre: r.barberoNombre,
+            });
+          }
+        }
+        slotsPrimerDia.sort((a, b) => a.hora.localeCompare(b.hora));
+
+        // Agrupar barberos por hora para opciones claras y limpias (ej. 10:00 AM con Lupita o Alfredo)
+        const horasMap = new Map<string, string[]>();
+        for (const s of slotsPrimerDia) {
+          if (!horasMap.has(s.hora12)) {
+            horasMap.set(s.hora12, []);
+          }
+          if (!horasMap.get(s.hora12)!.includes(s.barberoNombre)) {
+            horasMap.get(s.hora12)!.push(s.barberoNombre);
+          }
+        }
+
+        const primerasHoras = Array.from(horasMap.entries()).slice(0, 3);
+        opcionesMasProximas = primerasHoras.map(([hora12, barberos]) => {
+          return `${hora12} con ${barberos.join(' o ')}`;
+        });
+
+        const diaSemanaLabel = resultadosPrimerDia[0].diaSemana;
+        diaMasProximo = `${diaSemanaLabel} (${primerDiaFecha})`;
+
+        resumenTexto = `HORARIO MÁS PRÓXIMO DISPONIBLE:\n` +
+          `- Día más cercano con citas: ${diaSemanaLabel} (${primerDiaFecha})\n` +
+          `- Opciones más próximas: ${opcionesMasProximas.join(', ')}\n\n` +
+          `INSTRUCCIÓN OBLIGATORIA PARA SOFÍA: Ofrece únicamente estas 2 o 3 opciones del ${diaSemanaLabel}. NUNCA envíes listas largas ni menciones los otros días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}). Responde de forma muy concisa, humana y conversacional (máximo 2 a 3 oraciones).\n\n` +
+          `Referencia adicional (solo por si el cliente pide otra fecha):\n` +
+          results
+            .map((r) => {
+              const sample12h = r.horarios.slice(0, 3).map((h) => formatTime12h(h)).join(', ');
+              return `${r.diaSemana} con ${r.barberoNombre}: ${sample12h}`;
+            })
+            .join('\n');
       }
 
       return {
+        diaMasProximo,
+        opcionesMasProximas,
         disponibilidadPorFecha: results,
         resumenTexto,
         serviciosConsultados: evaluatedServiceName,

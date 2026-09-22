@@ -202,17 +202,17 @@ export function sanitizeBotMessage(rawText: string): string {
   if (!rawText) return '';
   let text = rawText;
 
-  // 1. Eliminar asteriscos dobles y simples usados para negritas o itálicas
-  text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
-  text = text.replace(/\*([^*]+)\*/g, '$1');
+  // 1. Normalizar viñetas (guiones, asteriscos o viñetas al inicio de línea) a viñeta limpia '• '
+  text = text.replace(/^[\t ]*[-*•][\t ]+/gm, '• ');
 
-  // 2. Eliminar paréntesis que encierran precios o montos (ej: "($159.50 MXN)" -> "$159.50 MXN", "($319 MXN)" -> "$319 MXN")
+  // 2. Eliminar asteriscos dobles y simples usados para negritas o itálicas (sin cruzar saltos de línea)
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, '$1');
+  text = text.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1');
+  text = text.replace(/\*/g, '');
+
+  // 3. Eliminar paréntesis que encierran precios o montos (ej: "($159.50 MXN)" -> "$159.50 MXN", "($319 MXN)" -> "$319 MXN")
   text = text.replace(/\(\s*(\$\d+(?:\.\d{1,2})?(?:\s*MXN)?)\s*\)/gi, '$1');
   text = text.replace(/\(\s*(\d+%\s*(?:de\s*)?anticipo)\s*\)/gi, '$1');
-
-  // 3. Limpiar viñetas con asteriscos a viñeta limpia y remover asteriscos residuales
-  text = text.replace(/^\s*\*\s+/gm, '• ');
-  text = text.replace(/\*/g, '');
 
   // 4. Asegurar que los links de Mercado Pago y vatosalfa estén en su propia línea limpia
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$2');

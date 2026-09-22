@@ -785,67 +785,153 @@ export default function Header() {
       {/* Mobile Bottom Navigation Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#151b2e] border-t border-[#314177]/30 backdrop-blur-md z-50 flex items-center justify-around px-2 pb-safe">
         {/* Tab 1: Agenda */}
-        <Link
-          href="/agenda"
-          className={cn(
-            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            pathname.startsWith('/agenda') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
-          )}
-        >
-          <Calendar className="h-5 w-5 mb-0.5" />
-          <span className="text-[10px] font-semibold">Agenda</span>
-        </Link>
+        {canSee('ver_agenda') && (
+          <Link
+            href="/agenda"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+              pathname.startsWith('/agenda') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+            )}
+          >
+            <Calendar className="h-5 w-5 mb-0.5" />
+            <span className="text-[10px] font-semibold">Agenda</span>
+          </Link>
+        )}
 
-        {/* Tab 2: Ventas Facturadas (fallback to Clientes) */}
-        <Link
-          href={canSee('ver_ventas_facturadas') ? '/sales/invoiced' : '/clients'}
-          className={cn(
-            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            ((canSee('ver_ventas_facturadas') && pathname === '/sales/invoiced') || (!canSee('ver_ventas_facturadas') && pathname === '/clients')) ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
-          )}
-        >
-          {canSee('ver_ventas_facturadas') ? <CreditCard className="h-5 w-5 mb-0.5" /> : <Users className="h-5 w-5 mb-0.5" />}
-          <span className="text-[10px] font-semibold">
-            {canSee('ver_ventas_facturadas') ? 'Facturadas' : 'Clientes'}
-          </span>
-        </Link>
+        {/* Tab 2: Dynamic section based strictly on granted permissions */}
+        {(() => {
+          if (canSee('ver_ventas_facturadas')) {
+            return (
+              <Link
+                href="/sales/invoiced"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/invoiced' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <CreditCard className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Facturadas</span>
+              </Link>
+            );
+          }
+          if (canSee('ver_clientes')) {
+            return (
+              <Link
+                href="/clients"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/clients' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <Users className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Clientes</span>
+              </Link>
+            );
+          }
+          if (canSee('ver_promociones')) {
+            return (
+              <Link
+                href="/promociones"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/promociones') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <Gift className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Promos</span>
+              </Link>
+            );
+          }
+          if (canSee('ver_inventario') || canSee('ver_productos')) {
+            return (
+              <Link
+                href="/products"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/products') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <Archive className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Inventario</span>
+              </Link>
+            );
+          }
+          if (canSee('ver_conversaciones')) {
+            return (
+              <Link
+                href="/conversations"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/conversations') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <MessageSquare className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Mensajes</span>
+              </Link>
+            );
+          }
+          return null;
+        })()}
 
         {/* Tab 3: Center Floating Button - Nuevo */}
-        <div className="flex items-center justify-center flex-1 h-full relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#202a49] to-[#3c4f90] text-white shadow-[0_0_12px_rgba(49,65,119,0.5)] border border-white/10 active:scale-95 duration-200 -translate-y-4">
-                <Plus className="h-6 w-6" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" side="top" className="w-56 mb-2">
-              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
-                <Calendar className="mr-2 h-4 w-4" />
-                <span>Crear nueva reserva</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
-                <Lock className="mr-2 h-4 w-4" />
-                <span>Bloquear horario</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
-                <Tag className="mr-2 h-4 w-4" />
-                <span>Registrar nueva venta</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {(canSee('crear_reservas') || canSee('bloquear_horarios') || canSee('registrar_ventas')) && (
+          <div className="flex items-center justify-center flex-1 h-full relative">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#202a49] to-[#3c4f90] text-white shadow-[0_0_12px_rgba(49,65,119,0.5)] border border-white/10 active:scale-95 duration-200 -translate-y-4">
+                  <Plus className="h-6 w-6" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center" side="top" className="w-56 mb-2">
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
+                  <Calendar className="mr-2 h-4 w-4" />
+                  <span>Crear nueva reserva</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
+                  <Lock className="mr-2 h-4 w-4" />
+                  <span>Bloquear horario</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
+                  <Tag className="mr-2 h-4 w-4" />
+                  <span>Registrar nueva venta</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         {/* Tab 4: Caja / Mi Performance */}
-        <Link
-          href={canSee('ver_caja') ? '/sales/cash-box' : '/sales/my-performance'}
-          className={cn(
-            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            (pathname === '/sales/cash-box' || pathname === '/sales/my-performance') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
-          )}
-        >
-          {canSee('ver_caja') ? <Wallet className="h-5 w-5 mb-0.5" /> : <LineChart className="h-5 w-5 mb-0.5" />}
-          <span className="text-[10px] font-semibold">{canSee('ver_caja') ? 'Caja' : 'Mi Perf.'}</span>
-        </Link>
+        {(() => {
+          if (canSee('ver_caja')) {
+            return (
+              <Link
+                href="/sales/cash-box"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/cash-box' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <Wallet className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Caja</span>
+              </Link>
+            );
+          }
+          if (canSee(['ver_mis_ventas', 'ver_mis_comisiones', 'ver_mis_propinas'])) {
+            return (
+              <Link
+                href="/sales/my-performance"
+                className={cn(
+                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/my-performance' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                )}
+              >
+                <LineChart className="h-5 w-5 mb-0.5" />
+                <span className="text-[10px] font-semibold">Mi Perf.</span>
+              </Link>
+            );
+          }
+          return null;
+        })()}
 
         {/* Tab 5: Más (Menu) */}
         <button

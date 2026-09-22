@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -237,6 +238,26 @@ const FiltersSidebar = ({
 
 export default function ClientsPage() {
   const { user, db } = useAuth();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const canSeeClientes = useMemo(() => {
+    if (!user) return false;
+    if (user.role === 'Administrador general') return true;
+    return user.permissions?.includes('ver_clientes') ?? false;
+  }, [user]);
+
+  useEffect(() => {
+    if (user && !canSeeClientes) {
+      toast({
+        variant: 'destructive',
+        title: 'Acceso no autorizado',
+        description: 'No tienes permisos para ver la sección de clientes.'
+      });
+      router.replace('/agenda');
+    }
+  }, [user, canSeeClientes, router, toast]);
+
   const { enableMarketing } = useFeatures();
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
@@ -258,7 +279,6 @@ export default function ClientsPage() {
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const { toast } = useToast();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [localFilter, setLocalFilter] = useState('todos');
@@ -923,6 +943,16 @@ export default function ClientsPage() {
   };
 
   const isLocalAdmin = user?.role !== 'Administrador general';
+
+  if (user && !canSeeClientes) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh] space-y-3">
+        <AlertTriangle className="h-12 w-12 text-destructive" />
+        <h2 className="text-xl font-bold">Acceso no autorizado</h2>
+        <p className="text-muted-foreground max-w-md">No tienes permiso para ver la base de clientes. Redirigiendo a tu agenda...</p>
+      </div>
+    );
+  }
 
   return (
     <>

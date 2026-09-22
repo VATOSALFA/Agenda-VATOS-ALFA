@@ -97,8 +97,7 @@ export default function BookingPage() {
         });
     }, []);
 
-    const { data: configServiciosDocs = [] } = useFirestoreQuery<any>('configuracion', 'servicios-config', where('__name__', '==', 'servicios'));
-    const serviciosConfig = configServiciosDocs[0] || serviciosConfigState;
+    const serviciosConfig = serviciosConfigState;
 
     // Filter active promotions (active and not expired)
     const activePromotions = useMemo(() => {

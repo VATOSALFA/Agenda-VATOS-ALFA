@@ -4,7 +4,6 @@ import { getMexicoDateInfo, normalizeClientPhone, reservationMatchesPhone, isUpc
 
 export function assertLiveAgentMutation() {
   const context = chatContextStorage.getStore();
-  if (context?.simulation) throw new Error('Modo simulador: no se modificó la agenda real ni se generaron cobros. Para realizar la operación usa una conversación real.');
   if (context) context.mutationAttempted = true;
 }
 

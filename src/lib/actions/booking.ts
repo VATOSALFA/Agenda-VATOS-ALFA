@@ -11,9 +11,10 @@ interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
     professionalId: string;
     durationMinutes: number;
+    minReservationBufferMinutes?: number;
 }
 
-export async function getAvailableSlots({ date, professionalId, durationMinutes }: GetAvailabilityParams) {
+export async function getAvailableSlots({ date, professionalId, durationMinutes, minReservationBufferMinutes }: GetAvailabilityParams) {
     // 0. Strict Input Validation
     if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return { error: 'Formato de fecha inválido. Se requiere AAAA-MM-DD.' };
@@ -258,7 +259,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
         const MIN_VIABLE_GAP = 30;
 
         // Fetch settings
-        let minReservationBuffer = 60; // Minutes
+        let minReservationBuffer = minReservationBufferMinutes !== undefined ? minReservationBufferMinutes : 60; // Minutes
         let GRID_INTERVAL = 30; // Minutes
 
         try {
@@ -266,7 +267,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes 
             if (settingsSnap.exists) {
                 const data = settingsSnap.data();
                 if (data) {
-                    if (data.minReservationTime !== undefined) minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                    if (minReservationBufferMinutes === undefined && data.minReservationTime !== undefined) {
+                        minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                    }
                     if (data.slotInterval) {
                         const parsedInterval = Number(data.slotInterval);
                         if (!isNaN(parsedInterval) && parsedInterval > 0) GRID_INTERVAL = parsedInterval;

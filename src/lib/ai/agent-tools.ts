@@ -699,6 +699,35 @@ export const crearCitaTool = ai.defineTool(
         ? ` y te aparté ${resolvedProducts.map((p) => `${p.nombre} por $${p.precio} MXN`).join(', ')}`
         : '';
 
+      let templateConfirmacion = '';
+      try {
+        const whatsappCfgDoc = await db.collection('configuracion').doc('whatsapp').get();
+        if (whatsappCfgDoc.exists) {
+          templateConfirmacion = whatsappCfgDoc.data()?.whatsappMessageTemplate || '';
+        }
+      } catch (_) {}
+
+      if (!templateConfirmacion) {
+        templateConfirmacion = '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\nAgradecemos tu puntualidad y asistencia.\nEn caso de llegar después y tener clientes en espera, la cita podrá reprogramarse según disponibilidad.\n\n¡Te esperamos 💈!\n\nvatosalfa.com';
+      }
+
+      let friendlyFecha = targetFecha;
+      try {
+        const [y, m, d] = targetFecha.split('-').map(Number);
+        const dObj = new Date(y, m - 1, d);
+        friendlyFecha = format(dObj, "EEEE, d 'de' MMMM, yyyy", { locale: es });
+        friendlyFecha = friendlyFecha.charAt(0).toUpperCase() + friendlyFecha.slice(1);
+      } catch (_) {}
+
+      const serviciosConfirmados = finalServName + (productosTexto ? ` (+ ${resolvedProducts.map((p) => p.nombre).join(', ')})` : '');
+      const mensajeConfirmacionFormateado = templateConfirmacion
+        .replace(/{nombre}/g, firstName || 'Cliente')
+        .replace(/{servicios}/g, serviciosConfirmados)
+        .replace(/{fecha}/g, friendlyFecha)
+        .replace(/{hora}/g, time12h)
+        .replace(/{profesional}/g, finalBarberName)
+        .replace(/{ubicacion}/g, 'VATOS ALFA Barber Shop (Av. Cerro Sombrerete 1001)');
+
       return {
         exito: true,
         citaId: reservationId,
@@ -707,7 +736,8 @@ export const crearCitaTool = ai.defineTool(
         montoAnticipo: 0,
         saldoPendiente: anticipoCalc.montoTotal,
         mensaje: '¡Cita confirmada y registrada en la agenda con éxito!',
-        detalles: `Cita confirmada para ${targetFecha} a las ${time12h} con ${finalBarberName} para ${finalServName}${productosTexto}. Total: $${anticipoCalc.montoTotal} MXN a liquidar al terminar en sucursal.`,
+        plantillaConfirmacion: mensajeConfirmacionFormateado,
+        detalles: `Cita confirmada para ${friendlyFecha} a las ${time12h} con ${finalBarberName} para ${finalServName}${productosTexto}. Total: $${anticipoCalc.montoTotal} MXN a liquidar al terminar en sucursal.\n\nPLANTILLA OFICIAL DE CONFIRMACIÓN (Envía este formato al cliente):\n${mensajeConfirmacionFormateado}`,
       };
     } catch (e: any) {
       console.error('Error in crear_cita:', e);

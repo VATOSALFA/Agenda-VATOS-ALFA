@@ -58,7 +58,7 @@ export interface SofiaSettings {
 }
 
 const defaultSofiaSettings: SofiaSettings = {
-  assistantName: 'Sofía',
+  assistantName: 'Janet',
   assistantRole: 'Recepcionista Humana de Barbería',
   tone: 'calido_profesional',
   customInstructions: 'Ofrece siempre una experiencia de bienvenida cálida. Recuerda a los clientes que contamos con cajones de estacionamiento al frente y que si traen niños atendemos desde los 3 años.',
@@ -161,7 +161,7 @@ export default function SofiaSettingsPage() {
           setSettings({ ...defaultSofiaSettings, ...snap.data() });
         }
       } catch (err) {
-        console.error('Error al cargar configuración de Sofía:', err);
+        console.error('Error al cargar configuración del Asistente:', err);
       } finally {
         setIsLoading(false);
       }
@@ -180,10 +180,10 @@ export default function SofiaSettingsPage() {
 
       toast({
         title: '✅ Configuración Guardada',
-        description: 'Los cambios para el Asistente Sofía se aplicaron correctamente.',
+        description: `Los cambios para el Asistente ${settings.assistantName || 'Janet'} se aplicaron correctamente.`,
       });
     } catch (error: any) {
-      console.error('Error al guardar configuración de Sofía:', error);
+      console.error('Error al guardar configuración del asistente:', error);
       toast({
         title: 'Error al guardar',
         description: error.message || 'No se pudo guardar la configuración.',
@@ -202,7 +202,7 @@ export default function SofiaSettingsPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-muted-foreground">
         <RefreshCw className="w-7 h-7 animate-spin text-primary" />
-        <span className="text-sm font-medium">Cargando configuración de Sofía...</span>
+        <span className="text-sm font-medium">Cargando configuración del Asistente...</span>
       </div>
     );
   }
@@ -215,7 +215,7 @@ export default function SofiaSettingsPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
               <Bot className="w-6 h-6 text-primary" />
-              Asistente Sofía (IA)
+              Asistente {settings.assistantName || 'Janet'} (IA)
             </h1>
             <Badge
               variant={settings.botActive ? 'default' : 'secondary'}
@@ -275,7 +275,7 @@ export default function SofiaSettingsPage() {
               <Input
                 value={settings.assistantName}
                 onChange={(e) => handleChange('assistantName', e.target.value)}
-                placeholder="Ej. Sofía"
+                placeholder="Ej. Janet"
                 className="text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
@@ -363,12 +363,12 @@ export default function SofiaSettingsPage() {
             <Textarea
               value={settings.customInstructions}
               onChange={(e) => handleChange('customInstructions', e.target.value)}
-              placeholder="Escribe reglas adicionales que Sofía debe obedecer siempre (ej: 'Mencionar que en días de calor regalamos agua fría', 'No ofrecer a Lalo antes de las 11 AM')..."
+              placeholder={`Escribe reglas adicionales que ${settings.assistantName || 'Janet'} debe obedecer siempre (ej: 'Mencionar que en días de calor regalamos agua fría', 'No ofrecer a Lalo antes de las 11 AM')...`}
               rows={3}
               className="text-xs leading-relaxed"
             />
             <p className="text-[11px] text-muted-foreground">
-              Sofía integrará estas instrucciones directamente a su memoria en cada respuesta por WhatsApp.
+              {settings.assistantName || 'Janet'} integrará estas instrucciones directamente a su memoria en cada respuesta por WhatsApp.
             </p>
           </div>
         </CollapsibleCard>
@@ -413,7 +413,7 @@ export default function SofiaSettingsPage() {
                 className="text-sm"
               />
               <p className="text-[11px] text-muted-foreground">
-                Hasta cuántos días hacia adelante Sofía puede consultar y ofrecer horarios disponibles.
+                Hasta cuántos días hacia adelante {settings.assistantName || 'Janet'} puede consultar y ofrecer horarios disponibles.
               </p>
             </div>
           </div>
@@ -424,7 +424,7 @@ export default function SofiaSettingsPage() {
                 Creación Automática de Citas en la Agenda
               </span>
               <p className="text-[11px] text-muted-foreground">
-                Cuando el cliente confirme el horario y su nombre por WhatsApp, Sofía apartará la cita inmediatamente en tu calendario de reservas.
+                Cuando el cliente confirme el horario y su nombre por WhatsApp, {settings.assistantName || 'Janet'} apartará la cita inmediatamente en tu calendario de reservas.
               </p>
             </div>
             <Switch
@@ -453,7 +453,7 @@ export default function SofiaSettingsPage() {
                 Solicitar Anticipo del 50% por WhatsApp
               </span>
               <p className="text-[11px] text-muted-foreground">
-                Sofía indicará al cliente que se requiere el 50% de anticipo para apartar su cita en servicios de ${settings.depositMinAmount} MXN o más, generando el enlace seguro de Mercado Pago (tarjeta o transferencia SPEI).
+                {settings.assistantName || 'Janet'} indicará al cliente que se requiere el 50% de anticipo para apartar su cita en servicios de ${settings.depositMinAmount} MXN o más, generando el enlace seguro de Mercado Pago (tarjeta o transferencia SPEI).
               </p>
             </div>
             <Switch
@@ -511,7 +511,7 @@ export default function SofiaSettingsPage() {
               className="text-xs"
             />
             <p className="text-[11px] text-muted-foreground">
-              Mensaje final que Sofía añade tras compartir los datos de transferencia.
+              Mensaje final que {settings.assistantName || 'Janet'} añade tras compartir los datos de transferencia.
             </p>
           </div>
         </CollapsibleCard>
@@ -522,7 +522,7 @@ export default function SofiaSettingsPage() {
         <CollapsibleCard
           icon={ShieldAlert}
           title="4. Modo de Operación y Traspaso a Humano"
-          description="Control de activación del bot y palabras que silencian a Sofía para dar paso a la recepcionista."
+          description={`Control de activación del bot y palabras que silencian a ${settings.assistantName || 'Janet'} para dar paso a la recepcionista.`}
         >
           <div className="p-3.5 rounded-xl bg-background border border-border/70 flex items-center justify-between gap-4">
             <div className="space-y-0.5">
@@ -530,7 +530,7 @@ export default function SofiaSettingsPage() {
                 Bot Activo Globalmente
               </span>
               <p className="text-[11px] text-muted-foreground">
-                Si está desactivado, Sofía no responderá automáticamente y todas las conversaciones se marcarán directamente como "Humano al mando".
+                Si está desactivado, {settings.assistantName || 'Janet'} no responderá automáticamente y todas las conversaciones se marcarán directamente como "Humano al mando".
               </p>
             </div>
             <Switch
@@ -548,7 +548,7 @@ export default function SofiaSettingsPage() {
                 {
                   id: '24_7',
                   title: 'Atención 24/7 (Siempre activa)',
-                  desc: 'Sofía responde dudas y agenda citas a cualquier hora del día o de la noche.',
+                  desc: `${settings.assistantName || 'Janet'} responde dudas y agenda citas a cualquier hora del día o de la noche.`,
                 },
                 {
                   id: 'horario_comercial',
@@ -663,7 +663,7 @@ export default function SofiaSettingsPage() {
         <div className="sticky bottom-4 z-10 flex items-center justify-between p-4 rounded-2xl bg-card/95 backdrop-blur border border-border shadow-lg">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Los cambios se aplican en tiempo real al Asistente Sofía en WhatsApp.
+            Los cambios se aplican en tiempo real al Asistente {settings.assistantName || 'Janet'} en WhatsApp.
           </div>
 
           <Button

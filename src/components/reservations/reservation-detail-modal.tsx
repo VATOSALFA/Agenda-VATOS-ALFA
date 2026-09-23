@@ -424,7 +424,7 @@ export function ReservationDetailModal({
                 </Badge>
                 {(reservation.canal_reserva === 'chatbot' || reservation.origen === 'chatbot') && (
                   <Badge variant="outline" className="border-blue-500/50 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 text-[11px] gap-1 font-semibold">
-                    <Bot className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Agendada por Sofía (WhatsApp)
+                    <Bot className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" /> Agendada por Janet (WhatsApp)
                   </Badge>
                 )}
                 {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica')) && (

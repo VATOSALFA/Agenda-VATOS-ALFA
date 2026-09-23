@@ -370,7 +370,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
         resumenTexto = `HORARIO MÁS PRÓXIMO DISPONIBLE:\n` +
           `- Día más cercano con citas: ${diaSemanaLabel} (${primerDiaFecha})\n` +
           `- Opciones más próximas: ${opcionesMasProximas.join(', ')}\n\n` +
-          `INSTRUCCIÓN OBLIGATORIA PARA SOFÍA: Ofrece únicamente estas 2 o 3 opciones del ${diaSemanaLabel}. NUNCA envíes listas largas ni menciones los otros días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}). Responde de forma muy concisa, humana y conversacional (máximo 2 a 3 oraciones).\n\n` +
+          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Ofrece únicamente estas 2 o 3 opciones del ${diaSemanaLabel}. NUNCA envíes listas largas ni menciones los otros días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}). Responde de forma muy concisa, humana y conversacional (máximo 2 a 3 oraciones).\n\n` +
           `Referencia adicional (solo por si el cliente pide otra fecha):\n` +
           results
             .map((r) => {
@@ -597,7 +597,7 @@ export const crearCitaTool = ai.defineTool(
       const extraNotes = [
         notas ? notas : '',
         productsSummary ? `Productos apartados: ${productsSummary}` : '',
-        anticipoCalc.requiereAnticipo ? `Requiere anticipo: $${anticipoCalc.montoAnticipo}` : 'Agendado por Asistente Virtual Sofía',
+        anticipoCalc.requiereAnticipo ? `Requiere anticipo: $${anticipoCalc.montoAnticipo}` : 'Agendado por Asistente Virtual Janet',
       ].filter(Boolean).join(' | ');
 
       const res = await createPublicReservation({
@@ -934,7 +934,7 @@ export const cancelarCitaTool = ai.defineTool(
         estado: 'Cancelado',
         cancelada_por_cliente: true,
         etiqueta_recordatorio: 'cancelada',
-        motivo_cancelacion: motivo || 'Cancelada por cliente via Asistente Virtual Sofía',
+        motivo_cancelacion: motivo || 'Cancelada por cliente via Asistente Virtual Janet',
         cancelada_en: new Date(),
         updated_at: new Date(),
       });
@@ -1199,7 +1199,7 @@ export const reagendarCitaTool = ai.defineTool(
           whatsappConfirmationSent: false,
           etiqueta_recordatorio: 'reagendada',
           updated_at: new Date(),
-          notas: (current.notas || '') + ` | Reagendada a ${nuevaFecha} ${nuevaHora} por Asistente Virtual Sofía`,
+          notas: (current.notas || '') + ` | Reagendada a ${nuevaFecha} ${nuevaHora} por Asistente Virtual Janet`,
         });
       });
 

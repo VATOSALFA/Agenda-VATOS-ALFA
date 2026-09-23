@@ -68,7 +68,7 @@ export async function processAgentMessage({
     }
 
     const botActive = sofiaConfig ? sofiaConfig.botActive !== false : true;
-    const assistantName = sofiaConfig?.assistantName || 'Sofía';
+    const assistantName = sofiaConfig?.assistantName || 'Janet';
     const assistantRole = sofiaConfig?.assistantRole || 'Recepcionista Humana de Barbería';
     const tone = sofiaConfig?.tone || 'calido_profesional';
     const customInstructions = sofiaConfig?.customInstructions || '';
@@ -246,7 +246,7 @@ export async function processAgentMessage({
         .filter(d => d.id !== msgRef.id && d.data().tipo !== 'nota_interna')
         .map((d) => {
           const m = d.data();
-          const sender = m.de === 'cliente' ? 'Cliente' : 'Sofía (Recepcionista)';
+          const sender = m.de === 'cliente' ? 'Cliente' : `${assistantName} (Recepcionista)`;
           return `${sender}: ${m.texto}`;
         })
         .join('\n');
@@ -352,7 +352,7 @@ ${imageUrl ? 'El cliente adjuntó una imagen que quedó guardada en el chat. No 
         async () => {
           return await ai.generate({
             system: systemPrompt,
-            prompt: `${dateGuidance}\n\nHistorial de la conversación:\n${recentHistory || '(Inicio de conversación)'}\n\nCliente acaba de escribir: "${userMessage}"\n\n${greetingGuidance}\n${identificationGuidance}\n\nResponde como Sofía (recepcionista humana):`,
+            prompt: `${dateGuidance}\n\nHistorial de la conversación:\n${recentHistory || '(Inicio de conversación)'}\n\nCliente acaba de escribir: "${userMessage}"\n\n${greetingGuidance}\n${identificationGuidance}\n\nResponde como ${assistantName} (recepcionista humana):`,
             tools: availableTools,
           });
         }

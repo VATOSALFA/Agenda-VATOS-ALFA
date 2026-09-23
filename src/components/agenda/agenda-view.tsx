@@ -1363,7 +1363,7 @@ export default function AgendaView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                          <span className="text-sm">Reserva agendada por Sofía (WhatsApp)</span>
+                          <span className="text-sm">Reserva agendada por Janet (WhatsApp)</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />

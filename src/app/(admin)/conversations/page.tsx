@@ -663,6 +663,20 @@ export default function ConversationsDashboardPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [assistantName, setAssistantName] = useState<string>('Janet');
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(doc(db, 'settings', 'sofia'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data?.assistantName) {
+          setAssistantName(data.assistantName);
+        }
+      }
+    });
+    return () => unsub();
+  }, [db]);
 
   // Cleanup audio tracks and timer on unmount
   useEffect(() => {
@@ -1497,10 +1511,10 @@ export default function ConversationsDashboardPage() {
 
       if (res.success) {
         toast({
-          title: checked ? '👤 Recepción al mando' : '💈 Sofía Activa',
+          title: checked ? '👤 Recepción al mando' : `💈 ${assistantName} Activa`,
           description: checked
-            ? 'Sofía ha sido pausada. Ahora tú tienes el control de las respuestas.'
-            : 'Sofía responderá automáticamente las dudas y citas del cliente.',
+            ? `${assistantName} ha sido pausada. Ahora tú tienes el control de las respuestas.`
+            : `${assistantName} responderá automáticamente las dudas y citas del cliente.`,
         });
       }
     } catch (err: any) {
@@ -1669,7 +1683,7 @@ export default function ConversationsDashboardPage() {
               <h1 className="text-base md:text-lg font-bold tracking-tight truncate">Mensajes</h1>
               <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                Sofía AI
+                {assistantName} AI
               </span>
             </div>
           </div>
@@ -1811,7 +1825,7 @@ export default function ConversationsDashboardPage() {
                 }`}
               >
                 <Bot className="w-3 h-3" />
-                Sofía Activa
+                {assistantName} Activa
               </button>
 
               <button
@@ -1952,7 +1966,7 @@ export default function ConversationsDashboardPage() {
                           )}
                           {!isAttention && !isHuman && (
                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/10 gap-1">
-                              <Bot className="w-2.5 h-2.5" /> Sofía activa
+                              <Bot className="w-2.5 h-2.5" /> {assistantName} activa
                             </Badge>
                           )}
 
@@ -2054,7 +2068,7 @@ export default function ConversationsDashboardPage() {
                           </span>
                         ) : (
                           <span className="text-blue-500 font-medium flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Sofía activa
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> {assistantName} activa
                           </span>
                         )}
                       </p>
@@ -2140,7 +2154,7 @@ export default function ConversationsDashboardPage() {
                       <span className="text-[11px] md:text-xs font-semibold">
                         {activeConversation.modo_atencion === 'humano_al_mando'
                           ? 'Humano'
-                          : 'Sofía'}
+                          : assistantName}
                       </span>
                       <span className="text-[9px] text-muted-foreground hidden sm:inline">
                         {activeConversation.modo_atencion === 'humano_al_mando'
@@ -2204,7 +2218,7 @@ export default function ConversationsDashboardPage() {
                     className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white"
                     onClick={() => handleToggleMode(true)}
                   >
-                    Atender ahora (Pausar a Sofía)
+                    Atender ahora (Pausar a {assistantName})
                   </Button>
                 </div>
               )}
@@ -2296,7 +2310,7 @@ export default function ConversationsDashboardPage() {
                             {isBot && (
                               <>
                                 <Bot className="w-3 h-3 text-blue-500" />
-                                <span className="text-blue-500 font-medium">Sofía</span>
+                                <span className="text-blue-500 font-medium">{assistantName}</span>
                               </>
                             )}
                             {isStaff && (
@@ -2358,12 +2372,12 @@ export default function ConversationsDashboardPage() {
                       );
                     })}
 
-                    {/* Typing bubble when Sofía is analyzing schedule and responding */}
+                    {/* Typing bubble when assistant is analyzing schedule and responding */}
                     {isProcessingAI && (
                       <div className="flex flex-col items-start animate-in fade-in duration-300">
                         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-1 px-1">
                           <Bot className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
-                          <span className="text-blue-500 font-medium">Sofía está consultando la agenda...</span>
+                          <span className="text-blue-500 font-medium">{assistantName} está consultando la agenda...</span>
                         </div>
                         <div className="bg-primary/10 border border-primary/20 text-foreground rounded-2xl rounded-tl-sm px-4 py-3 text-sm flex items-center gap-1.5 shadow-sm">
                           <span className="w-2 h-2 rounded-full bg-primary/70 animate-bounce [animation-delay:-0.3s]" />
@@ -2495,7 +2509,7 @@ export default function ConversationsDashboardPage() {
                             onChange={(e) => setPauseBotOnSend(e.target.checked)}
                             className="rounded border-muted-foreground/30 accent-primary w-3 h-3"
                           />
-                          <span className="hidden sm:inline">Pausar a Sofía</span>
+                          <span className="hidden sm:inline">Pausar a {assistantName}</span>
                         </label>
                       )}
                     </div>
@@ -2772,7 +2786,7 @@ export default function ConversationsDashboardPage() {
                         ) : isProcessingAI ? (
                           <span className="text-primary font-medium flex items-center gap-1">
                             <Sparkles className="w-3 h-3 animate-spin" />
-                            Sofía está consultando la agenda...
+                            {assistantName} está consultando la agenda...
                           </span>
                         ) : isUploadingImage ? (
                           <span className="text-primary font-medium flex items-center gap-1">
@@ -2786,7 +2800,7 @@ export default function ConversationsDashboardPage() {
                         ) : sendRole === 'cliente' ? (
                           <span className="text-emerald-500 font-medium">Modo simulación de cliente activo</span>
                         ) : (
-                          <span>{pauseBotOnSend ? 'Se pausará a Sofía al enviar.' : 'Respuesta manual de recepción.'}</span>
+                          <span>{pauseBotOnSend ? `Se pausará a ${assistantName} al enviar.` : 'Respuesta manual de recepción.'}</span>
                         )}
                       </span>
                       <span className="hidden sm:inline">Enter para enviar • Shift+Enter nueva línea • Pega (Ctrl+V) o arrastra imágenes</span>
@@ -2802,7 +2816,7 @@ export default function ConversationsDashboardPage() {
               </div>
               <h3 className="text-base font-semibold text-foreground">Selecciona una conversación</h3>
               <p className="text-xs max-w-sm">
-                Elige un chat de la lista izquierda para responder, pausar a Sofía o revisar el expediente de citas del cliente.
+                Elige un chat de la lista izquierda para responder, pausar a {assistantName} o revisar el expediente de citas del cliente.
               </p>
             </div>
           )}

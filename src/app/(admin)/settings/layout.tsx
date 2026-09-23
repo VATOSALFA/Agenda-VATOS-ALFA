@@ -15,7 +15,7 @@ const sidebarNavItems = [
   { title: "Funcionalidades Avanzadas", href: "/settings/features" },
   { title: "Locales", href: "/settings/locales" },
   { title: "Sitio Web", href: "/settings/sitio-web" },
-  { title: "Asistente Sofía", href: "/settings/sofia" },
+  { title: "Asistente Janet", href: "/settings/sofia" },
 
   { title: "Pagos", href: "/settings/pagos" },
 

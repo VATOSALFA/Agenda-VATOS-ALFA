@@ -24,10 +24,22 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
         return new Date(0); // If no cut ever, start from beginning
     }, [lastCut]);
 
-    // In VATOS ALFA, each cash cut (corte de caja) physically delivers all cash above fondo_base
-    // (monto_entregado = totalContado - fondoBase) and leaves exactly fondo_base in the cash drawer.
-    // Therefore, cash accumulated in the drawer for the new shift starts at $0. We must NOT carry over
-    // the previous cut's total_sistema (which caused previous shift's cash to be counted again as phantom deficit).
+    const baseCash = useMemo(() => {
+        if (!lastCut) return 0;
+
+        // Use total_sistema as the base for the next period to maintain continuity
+        // and ignore manual counts/inputs from the modal ("No impact").
+        // This effectively treats the cash cut as a snapshot/audit rather than a reset.
+        if (lastCut.total_sistema !== undefined) {
+            return lastCut.total_sistema;
+        }
+
+        // Fallback for legacy data
+        if (lastCut.monto_entregado < 0 && lastCut.total_calculado !== undefined) {
+            return lastCut.total_calculado;
+        }
+        return lastCut.fondo_base || 0;
+    }, [lastCut]);
 
     // 2. Fetch Live Data (Transactions SINCE last cut)
     // We use a safe query (StartOfDay) to ensure we fetch all relevant docs even if timestamp index is slightly off slightly,
@@ -99,8 +111,8 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
             })
             .reduce((sum, e) => sum + e.monto, 0);
 
-        return roundMoney(salesCash + ingresosCash - egresosCash);
-    }, [liveSales, liveIngresos, liveEgresos, liveStartDate]);
+        return roundMoney(baseCash + salesCash + ingresosCash - egresosCash);
+    }, [baseCash, liveSales, liveIngresos, liveEgresos, liveStartDate]);
 
     return {
         liveCashInBox,

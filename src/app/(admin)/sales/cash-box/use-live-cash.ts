@@ -21,7 +21,9 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
 
     const liveStartDate = useMemo(() => {
         if (lastCut) return lastCut.fecha_corte.toDate();
-        return new Date(0); // If no cut ever, start from beginning
+        // Si nunca han hecho un corte, asumimos que el turno empezó hoy. 
+        // Esto evita que Firebase descargue todo el historial histórico desde 1970.
+        return startOfDay(new Date());
     }, [lastCut]);
 
     const baseCash = useMemo(() => {

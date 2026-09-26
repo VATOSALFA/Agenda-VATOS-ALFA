@@ -24,6 +24,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { where } from 'firebase/firestore';
 import Image from 'next/image';
 import { getServiceLocalImage } from '@/lib/service-images';
+import dynamic from 'next/dynamic';
+
+const LazyLegalModals = dynamic(() => import('./LegalModals').then(mod => mod.LegalModals), { ssr: false });
 
 
 // Helper Interfaces
@@ -877,7 +880,26 @@ export default function BookingPage() {
 
     const formatPrice = (price: any) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
 
-    if (loadingServices || loadingProfessionals || loadingSettings) return <div className="h-screen flex items-center justify-center"><CustomLoader size={50} /></div>;
+    if (loadingServices || loadingProfessionals || loadingSettings) return (
+        <div className="min-h-screen bg-white md:bg-gray-100 flex items-center justify-center p-0 md:p-6 pb-24 md:pb-6 animate-pulse">
+            <div className="w-full max-w-2xl bg-white md:rounded-2xl md:shadow-2xl overflow-hidden flex flex-col h-screen md:h-[85vh]">
+                <div className="bg-zinc-900 h-24 sm:h-32 w-full flex items-center justify-center">
+                    <div className="h-10 w-48 bg-zinc-700 rounded-md"></div>
+                </div>
+                <div className="p-4 flex gap-4 overflow-hidden border-b border-gray-100">
+                    <div className="h-8 w-24 bg-gray-200 rounded-full"></div>
+                    <div className="h-8 w-24 bg-gray-200 rounded-full"></div>
+                    <div className="h-8 w-24 bg-gray-200 rounded-full"></div>
+                </div>
+                <div className="p-6 flex-1 flex flex-col gap-6">
+                    <div className="h-6 w-1/3 bg-gray-200 rounded-md mb-2"></div>
+                    <div className="h-24 w-full bg-gray-100 rounded-xl"></div>
+                    <div className="h-24 w-full bg-gray-100 rounded-xl"></div>
+                    <div className="h-24 w-full bg-gray-100 rounded-xl"></div>
+                </div>
+            </div>
+        </div>
+    );
 
     if (websiteSettings.onlineReservations === false) {
         return (
@@ -886,7 +908,7 @@ export default function BookingPage() {
                     <div className="flex justify-center mb-6">
                         {/* Optional Logo */}
                         {empresaData?.[0]?.logo_url && (
-                            <img src={empresaData[0].logo_url} alt="Logo" className="h-20 w-auto object-contain" />
+                            <img src={empresaData[0].logo_url} alt="Logo" className="h-20 w-auto object-contain" loading="lazy" />
                         )}
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight">Reservas no disponibles</h1>
@@ -940,7 +962,7 @@ export default function BookingPage() {
                                             <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                                                 <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
                                                     {pro.avatarUrl ? (
-                                                        <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="h-full w-full object-cover" />
+                                                        <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="h-full w-full object-cover" loading="lazy" />
                                                     ) : (
                                                         <User className="h-full w-full p-2 text-primary" />
                                                     )}
@@ -1476,7 +1498,11 @@ export default function BookingPage() {
                                         </h3>
 
                                         {loadingSlots ? (
-                                            <div className="flex-1 flex justify-center py-10"><CustomLoader size={30} /></div>
+                                            <div className="grid grid-cols-3 gap-3 p-1 w-full animate-pulse">
+                                                {[...Array(9)].map((_, i) => (
+                                                    <div key={i} className="h-10 w-full bg-slate-100 rounded-md border border-slate-200"></div>
+                                                ))}
+                                            </div>
                                         ) : noCapablePros ? (
                                             <div className="text-center p-8 border border-dashed rounded-lg bg-yellow-50 border-yellow-200">
                                                 <Users className="h-10 w-10 text-yellow-500 mx-auto mb-2" />
@@ -1902,37 +1928,13 @@ export default function BookingPage() {
 
 
                     {/* Generic Terms/Privacy Modals */}
-                    <Dialog open={privacyModalOpen} onOpenChange={setPrivacyModalOpen}>
-                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold">Aviso de Privacidad</DialogTitle>
-                            </DialogHeader>
-                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
-                                <div className="text-sm text-slate-700 whitespace-pre-line">
-                                    {websiteSettings.privacyText || 'Sin contenido de privacidad.'}
-                                </div>
-                            </div>
-                            <DialogFooter className="mt-4">
-                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Cerrar</VatosButton>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
-
-                    <Dialog open={termsModalOpen} onOpenChange={setTermsModalOpen}>
-                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold">Términos y Condiciones</DialogTitle>
-                            </DialogHeader>
-                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
-                                <div className="text-sm text-slate-700 whitespace-pre-line">
-                                    {websiteSettings.termsText || 'Sin términos y condiciones definidos.'}
-                                </div>
-                            </div>
-                            <DialogFooter className="mt-4">
-                                <VatosButton onClick={() => setTermsModalOpen(false)}>Cerrar</VatosButton>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                    <LazyLegalModals 
+                        privacyModalOpen={privacyModalOpen} 
+                        setPrivacyModalOpen={setPrivacyModalOpen}
+                        termsModalOpen={termsModalOpen}
+                        setTermsModalOpen={setTermsModalOpen}
+                        websiteSettings={websiteSettings}
+                    />
 
                     {websiteSettings.privacyPolicyEnabled && (
                         <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-muted-foreground">

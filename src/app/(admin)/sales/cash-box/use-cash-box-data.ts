@@ -19,12 +19,13 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     // 1. Build Query Constraints
     const salesQueryConstraints = useMemo(() => {
         const constraints: QueryConstraint[] = [];
-        if (dateRange?.from) {
-            constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(dateRange.from))));
-        }
-        if (dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
-        }
+        // Candado de seguridad: Si se borra la fecha por accidente, asume "Hoy".
+        const fromDate = dateRange?.from || new Date();
+        const toDate = dateRange?.to || new Date();
+        
+        constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(fromDate))));
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(toDate))));
+        
         if (localId !== 'todos') {
             constraints.push(where('local_id', '==', localId));
         }
@@ -32,12 +33,13 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     }, [dateRange, localId]);
 
     const egresosQueryConstraints = useMemo(() => {
-        if (!dateRange?.from) return [];
         const constraints: QueryConstraint[] = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(dateRange.from))));
-        if (dateRange.to) {
-            constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
-        }
+        const fromDate = dateRange?.from || new Date();
+        const toDate = dateRange?.to || new Date();
+        
+        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(fromDate))));
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(toDate))));
+        
         if (localId !== 'todos') {
             constraints.push(where('local_id', '==', localId));
         }
@@ -45,12 +47,13 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     }, [dateRange, localId]);
 
     const ingresosQueryConstraints = useMemo(() => {
-        if (!dateRange?.from) return [];
         const constraints: QueryConstraint[] = [];
-        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(dateRange.from))));
-        if (dateRange.to) {
-            constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
-        }
+        const fromDate = dateRange?.from || new Date();
+        const toDate = dateRange?.to || new Date();
+        
+        constraints.push(where('fecha', '>=', Timestamp.fromDate(startOfDay(fromDate))));
+        constraints.push(where('fecha', '<=', Timestamp.fromDate(endOfDay(toDate))));
+        
         if (localId !== 'todos') {
             constraints.push(where('local_id', '==', localId));
         }

@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { QuickConsultModal } from './quick-consult-modal';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   DropdownMenu,
@@ -42,14 +42,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { NewReservationForm } from '../reservations/new-reservation-form';
-import { BlockScheduleForm } from '../reservations/block-schedule-form';
-import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
+
+
+
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
 import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp, collection, query, getDocs, documentId } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
+
 import { Label } from '../ui/label';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -58,11 +58,20 @@ import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservat
 
 import { useAgendaEvents } from './use-agenda-events';
 import { getStatusColor, formatClientName } from './agenda-utils';
+import dynamic from 'next/dynamic';
+
+const QuickConsultModal = dynamic(() => import('./quick-consult-modal').then(mod => mod.QuickConsultModal), { ssr: false });
+const NewReservationForm = dynamic(() => import('../reservations/new-reservation-form').then(mod => mod.NewReservationForm), { ssr: false });
+const BlockScheduleForm = dynamic(() => import('../reservations/block-schedule-form').then(mod => mod.BlockScheduleForm), { ssr: false });
+const ReservationDetailModal = dynamic(() => import('../reservations/reservation-detail-modal').then(mod => mod.ReservationDetailModal), { ssr: false });
+const CancelReservationModal = dynamic(() => import('../reservations/cancel-reservation-modal').then(mod => mod.CancelReservationModal), { ssr: false });
+const EnableScheduleModal = dynamic(() => import('../reservations/enable-schedule-modal').then(mod => mod.EnableScheduleModal), { ssr: false });
+const ClientDetailModal = dynamic(() => import('../clients/client-detail-modal').then(mod => mod.ClientDetailModal), { ssr: false });
 import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 
-import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
-import { ClientDetailModal } from '../clients/client-detail-modal';
+
+
 import { DndContext, closestCenter, PointerSensor, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -170,7 +179,33 @@ export default function AgendaView() {
   const { selectedLocalId, setSelectedLocalId } = useLocal();
   const { user, db } = useAuth();
 
-  const [hoveredSlot, setHoveredSlot] = useState<{ barberId: string, time: string } | null>(null);
+  const hoveredSlotRef = useRef<{ barberId: string, time: string } | null>(null);
+  const hoverPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const hoverPopoverTextRefs = useRef<Record<string, HTMLSpanElement | null>>({});
+
+  const updateHoveredSlot = (newSlot: { barberId: string, time: string } | null) => {
+    // Hide old popover
+    if (hoveredSlotRef.current && hoverPopoverRefs.current[hoveredSlotRef.current.barberId]) {
+      const oldEl = hoverPopoverRefs.current[hoveredSlotRef.current.barberId];
+      if (oldEl) oldEl.style.opacity = '0';
+    }
+
+    hoveredSlotRef.current = newSlot;
+
+    // Show new popover
+    if (newSlot && hoverPopoverRefs.current[newSlot.barberId]) {
+      const el = hoverPopoverRefs.current[newSlot.barberId];
+      const textEl = hoverPopoverTextRefs.current[newSlot.barberId];
+      if (el) {
+        const pos = calculatePopoverPosition(newSlot.time);
+        el.style.top = pos.top as string;
+        el.style.opacity = '1';
+      }
+      if (textEl) {
+        textEl.textContent = newSlot.time;
+      }
+    }
+  };
   const [popoverState, setPopoverState] = useState<{ barberId: string, time: string } | null>(null);
 
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -511,7 +546,7 @@ export default function AgendaView() {
 
     const totalSlots = (endHour - startHour) * (60 / 15);
     if (slotIndex < 0 || slotIndex >= totalSlots) {
-      setHoveredSlot(null);
+      updateHoveredSlot(null);
       // Start closing timer if invalid slot
       if (popoverState && !popoverTimeoutRef.current) {
         popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
@@ -565,7 +600,7 @@ export default function AgendaView() {
       }
 
       if (isInvalidSlot) {
-        setHoveredSlot(null);
+        updateHoveredSlot(null);
         if (popoverState && !popoverTimeoutRef.current) {
           popoverTimeoutRef.current = setTimeout(() => setPopoverState(null), 400);
         }
@@ -573,7 +608,7 @@ export default function AgendaView() {
       }
     }
 
-    setHoveredSlot({ barberId, time });
+    updateHoveredSlot({ barberId, time });
 
     // Handle popover auto-close with delay
     if (popoverState) {
@@ -596,7 +631,7 @@ export default function AgendaView() {
   }
 
   const handleMouseLeave = () => {
-    setHoveredSlot(null);
+    updateHoveredSlot(null);
     // When leaving grid, start timer instead of immediate close
     if (popoverState && !popoverTimeoutRef.current) {
       popoverTimeoutRef.current = setTimeout(() => {
@@ -608,8 +643,8 @@ export default function AgendaView() {
 
   const handleClickSlot = (e: MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (hoveredSlot) {
-      setPopoverState(hoveredSlot)
+    if (hoveredSlotRef.current) {
+      setPopoverState(hoveredSlotRef.current)
     } else {
       setPopoverState(null)
     }
@@ -1143,11 +1178,11 @@ export default function AgendaView() {
     return profesional.avatarUrl;
   };
 
-  if (isLoading || !isClientMounted) {
+  if (!isClientMounted) {
     return (
       <div className="flex h-[calc(100vh-4rem)] w-full flex-col items-center justify-center gap-4 bg-muted/40">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium animate-pulse">Cargando agenda...</p>
+        <p className="text-muted-foreground font-medium animate-pulse">Iniciando...</p>
       </div>
     );
   }
@@ -1459,7 +1494,16 @@ export default function AgendaView() {
               </DndContext>
             </div>
 
-            <div className="grid gap-2 pb-8" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+            <div className="relative">
+              {isLoading && (
+                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-[1px] flex items-center justify-center pointer-events-none transition-all duration-300">
+                  <div className="flex items-center gap-2 bg-background p-3 rounded-full shadow-lg border animate-in zoom-in-95">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span className="text-sm font-medium">Actualizando...</span>
+                  </div>
+                </div>
+              )}
+              <div className="grid gap-2 pb-8" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
               {/* Time Column */}
               <div className="flex-shrink-0 sticky left-0 z-40 bg-background border-r shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                 <div className="flex flex-col bg-background">
@@ -1597,17 +1641,16 @@ export default function AgendaView() {
                       })}
 
                       {/* Hover Popover */}
-                      {hoveredSlot?.barberId === barber.id && (
-                        <div
-                          className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
-                          style={{ ...calculatePopoverPosition(hoveredSlot.time) }}
-                        >
-                          <p className="text-xs font-bold text-primary flex items-center">
-                            <Plus className="w-3 h-3 mr-1" />
-                            {hoveredSlot.time}
-                          </p>
-                        </div>
-                      )}
+                      <div
+                        ref={(el: HTMLDivElement | null) => { hoverPopoverRefs.current[barber.id] = el; }}
+                        className="absolute w-full p-2 rounded-lg bg-primary/10 border border-primary/50 pointer-events-none transition-all duration-75 z-20"
+                        style={{ opacity: 0 }}
+                      >
+                        <p className="text-xs font-bold text-primary flex items-center">
+                          <Plus className="w-3 h-3 mr-1" />
+                          <span ref={(el: HTMLSpanElement | null) => { hoverPopoverTextRefs.current[barber.id] = el; }}></span>
+                        </p>
+                      </div>
 
                       {/* Click Popover */}
                       {popoverState?.barberId === barber.id && (
@@ -1813,6 +1856,7 @@ export default function AgendaView() {
                   </div>
                 )
               })}
+            </div>
             </div>
           </div>
         </div>

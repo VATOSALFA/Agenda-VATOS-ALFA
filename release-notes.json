@@ -1,9 +1,10 @@
 {
-  "title": "Actualización del sistema",
-  "summary": "Corrección en cuadre de caja, comisiones con anticipos y tickets de venta.",
+  "title": "Optimización de Rendimiento y Nueva Sección App Móvil",
+  "summary": "Navegación ultra rápida con caché inteligente, optimizaciones en agenda/caja y gestión de App Móvil.",
   "notes": [
-    "Reconocimiento de comisiones para barberos en servicios completados con anticipo previo.",
-    "Cuadre preciso de caja separando el flujo del anticipo y la liquidación del día.",
-    "Corrección visual en tickets y comprobantes de venta."
+    "Carga instantánea de secciones administrativas gracias al nuevo sistema de caché en Firestore.",
+    "Eliminación de retrasos y micro-tirones al navegar la agenda y cambio de fechas sin parpadeos.",
+    "Candados de seguridad en caja de ventas para evitar descargas masivas accidentales.",
+    "Nueva sección en Configuración para gestionar Avisos, Promociones y Membresías VIP de la App Móvil."
   ]
 }

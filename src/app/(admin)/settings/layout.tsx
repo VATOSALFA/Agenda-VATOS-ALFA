@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { useAuth } from "@/contexts/firebase-auth-context";
@@ -22,8 +22,9 @@ const sidebarNavItems = [
   { title: "Emails", href: "/settings/emails" },
   { title: "Clientes", href: "/settings/clients-settings" },
   { title: "Usuarios", href: "/settings/users" },
-  { title: "Códigos de autorización", href: "/settings/auth-codes" },
+  { title: "CÃ³digos de autorizaciÃ³n", href: "/settings/auth-codes" },
   { title: "Promociones", href: "/settings/promotions" },
+  { title: "App Móvil", href: "/settings/mobile-app" },
 ];
 
 
@@ -54,7 +55,7 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
       {isGeneralAdmin && (
         <aside className="w-full md:w-1/5 md:border-r p-4 md:p-6">
           <h2 className="mb-4 text-lg font-semibold tracking-tight">
-            CONFIGURACIÓN
+            CONFIGURACIÃ“N
           </h2>
           <SidebarNav items={sidebarNavItems} />
         </aside>
@@ -65,4 +66,5 @@ export default function SettingsLayout({ children }: SettingsLayoutProps) {
     </div>
   );
 }
+
 

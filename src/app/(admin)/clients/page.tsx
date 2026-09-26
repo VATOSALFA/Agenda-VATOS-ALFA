@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -236,6 +236,72 @@ const FiltersSidebar = ({
   );
 }
 
+const ClientSearchBar = React.memo(function ClientSearchBar({
+  onSearch,
+}: {
+  onSearch: (term: string) => void;
+}) {
+  const [localValue, setLocalValue] = useState('');
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalValue(val);
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = setTimeout(() => {
+      onSearch(val);
+    }, 250);
+  };
+
+  const handleClear = () => {
+    setLocalValue('');
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    onSearch('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      onSearch(localValue);
+    }
+  };
+
+  return (
+    <div className="relative flex-1">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        placeholder="Busca por nombre, apellido, email, teléfono o número de cliente"
+        className="pl-10 pr-10 h-10"
+        value={localValue}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        name="client_search_query"
+      />
+      {localValue && (
+        <button
+          type="button"
+          onClick={handleClear}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded-sm focus:outline-none"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+});
+
 export default function ClientsPage() {
   const { user, db } = useAuth();
   const router = useRouter();
@@ -260,7 +326,9 @@ export default function ClientsPage() {
 
   const { enableMarketing } = useFeatures();
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300); // 300ms debounce
+  const handleSearchChange = useCallback((term: string) => {
+    setSearchTerm(term);
+  }, []);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
@@ -665,9 +733,9 @@ export default function ClientsPage() {
     }
 
 
-    if (debouncedSearchTerm) {
+    if (searchTerm) {
       const normalizeText = (text: string) => text ? text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() : '';
-      const searchTerms = normalizeText(debouncedSearchTerm).split(' ').filter(Boolean);
+      const searchTerms = normalizeText(searchTerm).split(' ').filter(Boolean);
 
       filtered = filtered.filter(client => {
         const clientDataString = normalizeText([
@@ -683,11 +751,11 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, debouncedSearchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap]);
+  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm]);
+  }, [searchTerm]);
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;
@@ -766,9 +834,9 @@ export default function ClientsPage() {
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
-      Boolean(debouncedSearchTerm)
+      Boolean(searchTerm)
     );
-  }, [activeFilters, debouncedSearchTerm]);
+  }, [activeFilters, searchTerm]);
 
   const totalPages = Math.ceil(sortedClients.length / itemsPerPage);
   const paginatedClients = sortedClients.slice(
@@ -996,15 +1064,7 @@ export default function ClientsPage() {
 
           <main className="lg:col-span-3 space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Busca por nombre, apellido, email, teléfono o número de cliente"
-                  className="pl-10 h-10"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <ClientSearchBar onSearch={handleSearchChange} />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

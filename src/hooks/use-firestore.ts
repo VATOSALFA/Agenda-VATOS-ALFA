@@ -54,7 +54,6 @@ export function useFirestoreQuery<T>(
     setError(null);
 
     let unsubscribe = () => { };
-    let isMounted = true;
 
     try {
       // Standard query handling
@@ -73,6 +72,7 @@ export function useFirestoreQuery<T>(
       // onSnapshot opens a persistent WebChannel stream (Listen/channel) that stays open indefinitely and times out when Lighthouse runs,
       // triggering net::ERR_TIMED_OUT browser console errors in Lighthouse audits.
       if (!user) {
+        let isMounted = true;
         getDocs(q)
           .then((querySnapshot) => {
             if (!isMounted) return;
@@ -101,22 +101,7 @@ export function useFirestoreQuery<T>(
         };
       }
 
-      // First, attempt to load from local cache instantly for zero-latency UI
-      import('firebase/firestore').then(({ getDocsFromCache }) => {
-          getDocsFromCache(q).then((cacheSnap) => {
-              if (isMounted && !cacheSnap.empty) {
-                  const items = cacheSnap.docs.map((doc) => ({
-                      id: doc.id,
-                      ...doc.data(),
-                  })) as T[];
-                  setData(items);
-                  setLoading(false);
-              }
-          }).catch(() => { /* ignore cache errors */ });
-      });
-
       unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-        if (!isMounted) return;
         const items = querySnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -124,7 +109,6 @@ export function useFirestoreQuery<T>(
         setData(items);
         setLoading(false);
       }, (err: FirestoreError) => {
-        if (!isMounted) return;
         console.error(`Error listening to collection ${collectionName}:`, err);
 
         const permissionError = new FirestorePermissionError({
@@ -148,10 +132,7 @@ export function useFirestoreQuery<T>(
       setLoading(false);
     }
 
-    return () => {
-        isMounted = false;
-        unsubscribe();
-    };
+    return () => unsubscribe();
 
     // Added db to dependency array.
   }, [collectionName, constraintsKey, manualKey, db, user, (useKeyForDeps ? depsKey : undefined)]);

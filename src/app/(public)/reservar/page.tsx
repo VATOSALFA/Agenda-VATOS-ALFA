@@ -24,9 +24,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { where } from 'firebase/firestore';
 import Image from 'next/image';
 import { getServiceLocalImage } from '@/lib/service-images';
-import dynamic from 'next/dynamic';
-
-const LazyLegalModals = dynamic(() => import('./LegalModals').then(mod => mod.LegalModals), { ssr: false });
+import { LegalModals } from './LegalModals';
 
 
 // Helper Interfaces
@@ -1928,7 +1926,7 @@ export default function BookingPage() {
 
 
                     {/* Generic Terms/Privacy Modals */}
-                    <LazyLegalModals 
+                    <LegalModals 
                         privacyModalOpen={privacyModalOpen} 
                         setPrivacyModalOpen={setPrivacyModalOpen}
                         termsModalOpen={termsModalOpen}

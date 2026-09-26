@@ -58,15 +58,13 @@ import type { Profesional, Client, Service as ServiceType, ScheduleDay, Reservat
 
 import { useAgendaEvents } from './use-agenda-events';
 import { getStatusColor, formatClientName } from './agenda-utils';
-import dynamic from 'next/dynamic';
-
-const QuickConsultModal = dynamic(() => import('./quick-consult-modal').then(mod => mod.QuickConsultModal), { ssr: false });
-const NewReservationForm = dynamic(() => import('../reservations/new-reservation-form').then(mod => mod.NewReservationForm), { ssr: false });
-const BlockScheduleForm = dynamic(() => import('../reservations/block-schedule-form').then(mod => mod.BlockScheduleForm), { ssr: false });
-const ReservationDetailModal = dynamic(() => import('../reservations/reservation-detail-modal').then(mod => mod.ReservationDetailModal), { ssr: false });
-const CancelReservationModal = dynamic(() => import('../reservations/cancel-reservation-modal').then(mod => mod.CancelReservationModal), { ssr: false });
-const EnableScheduleModal = dynamic(() => import('../reservations/enable-schedule-modal').then(mod => mod.EnableScheduleModal), { ssr: false });
-const ClientDetailModal = dynamic(() => import('../clients/client-detail-modal').then(mod => mod.ClientDetailModal), { ssr: false });
+import { QuickConsultModal } from './quick-consult-modal';
+import { NewReservationForm } from '../reservations/new-reservation-form';
+import { BlockScheduleForm } from '../reservations/block-schedule-form';
+import { ReservationDetailModal } from '../reservations/reservation-detail-modal';
+import { CancelReservationModal } from '../reservations/cancel-reservation-modal';
+import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
+import { ClientDetailModal } from '../clients/client-detail-modal';
 import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 

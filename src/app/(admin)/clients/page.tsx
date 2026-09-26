@@ -1368,7 +1368,7 @@ export default function ClientsPage() {
       {selectedClient && (
         <>
           <ClientDetailModal
-            client={selectedClient}
+            client={clients.find(c => c.id === selectedClient.id) || selectedClient}
             isOpen={isDetailModalOpen}
             onOpenChange={setIsDetailModalOpen}
             onNewReservation={() => {

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, type LucideIcon } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { Client, Profesional } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { where } from 'firebase/firestore';
@@ -236,8 +237,14 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-6xl max-h-[85dvh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center gap-2">
-            <User className="h-6 w-6 text-primary" /> Ficha de Cliente: {client.nombre} {client.apellido}
+          <DialogTitle className="text-2xl flex items-center gap-3">
+            <Avatar className="h-9 w-9 border border-primary/20">
+              <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
+              <AvatarFallback className="text-sm font-bold bg-primary/10 text-primary">
+                {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <span>Ficha de Cliente: {client.nombre} {client.apellido}</span>
           </DialogTitle>
           <DialogDescription>
             Información detallada, historial y acciones para este cliente.
@@ -247,7 +254,19 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
         <div className="grid md:grid-cols-4 gap-6 flex-grow overflow-hidden py-4">
           {/* Client Info and Actions */}
           <div className="md:col-span-1 space-y-6 bg-card/50 p-6 rounded-lg overflow-y-auto">
-            <h3 className="text-xl font-bold text-primary">{client.nombre} {client.apellido}</h3>
+            <div className="flex flex-col items-center text-center gap-3 pb-4 border-b border-border/60">
+              <Avatar className="h-24 w-24 border-2 border-primary/20 shadow-md">
+                <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
+                <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
+                  {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h3 className="text-xl font-bold text-primary leading-tight">{client.nombre} {client.apellido}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Cliente #{client.numero_cliente || 'N/A'}</p>
+              </div>
+            </div>
+
             <InfoRow icon={User} label="Número de cliente" value={client.numero_cliente || 'N/A'} />
             <InfoRow icon={Phone} label="Teléfono" value={canViewPhone ? client.telefono : '****-****'} />
             <InfoRow icon={Mail} label="Correo Electrónico" value={client.correo} />

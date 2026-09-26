@@ -19,6 +19,8 @@ export interface Client {
   numero_cliente?: string;
   reviewRequestSent?: boolean;
   puntos?: number;
+  fotoUrl?: string;
+  avatarUrl?: string;
 }
 
 export interface Local {

@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { NewClientForm } from "@/components/clients/new-client-form";
@@ -1211,7 +1212,17 @@ export default function ClientsPage() {
                       return (
                         <TableRow key={client.id}>
                           <TableCell>{client.numero_cliente || 'N/A'}</TableCell>
-                          <TableCell className="font-medium">{client.nombre}</TableCell>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="h-7 w-7 border border-primary/20 shrink-0">
+                                <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
+                                <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                                  {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span>{client.nombre}</span>
+                            </div>
+                          </TableCell>
                           <TableCell>{client.apellido}</TableCell>
                           <TableCell>{client.correo}</TableCell>
                           <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>

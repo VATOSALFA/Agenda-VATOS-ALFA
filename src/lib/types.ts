@@ -21,6 +21,10 @@ export interface Client {
   puntos?: number;
   fotoUrl?: string;
   avatarUrl?: string;
+  cortes_acumulados?: number;
+  corte_gratis_disponible?: boolean;
+  nivel?: string;
+  appVinculada?: boolean;
 }
 
 export interface Local {

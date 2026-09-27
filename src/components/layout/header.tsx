@@ -36,6 +36,7 @@ import {
   LayoutDashboard,
   X,
   MessageSquare,
+  QrCode,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -647,6 +648,17 @@ export default function Header() {
 
           </nav>
           <div className="ml-auto flex items-center space-x-1.5 flex-shrink-0">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => dispatchCustomEvent('open-qr-scanner')}
+              className="hidden sm:flex items-center gap-1.5 bg-[#C5A880]/15 hover:bg-[#C5A880]/25 text-[#C5A880] border border-[#C5A880]/40 shadow-sm transition-all text-xs font-semibold"
+              title="Escanear Pase Alfa o Cupón de Cliente"
+            >
+              <QrCode className="h-4 w-4" />
+              <span>Escanear QR</span>
+            </Button>
+
             <div className="hidden md:block">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -655,6 +667,10 @@ export default function Header() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')}>
+                    <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
+                    <span className="font-semibold text-[#C5A880]">Escanear QR de cliente</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
                     <Calendar className="mr-2 h-4 w-4" />
                     <span>Crear nueva reserva</span>
@@ -883,6 +899,10 @@ export default function Header() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" side="top" className="w-56 mb-2">
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')}>
+                  <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
+                  <span className="font-semibold text-[#C5A880]">Escanear QR cliente</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>

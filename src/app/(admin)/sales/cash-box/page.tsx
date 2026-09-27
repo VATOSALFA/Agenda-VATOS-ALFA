@@ -73,7 +73,8 @@ import {
     Settings,
     ArrowUpDown,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    QrCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -952,6 +953,14 @@ export default function CashBoxPage() {
                 <div className="flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0">
                     <h2 className="text-3xl font-bold tracking-tight">Caja</h2>
                     <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="default"
+                            className="bg-[#202A49] hover:bg-[#161E35] text-white border border-[#C5A880]/40 shadow-sm font-semibold"
+                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                        >
+                            <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
+                            Escanear QR Cliente
+                        </Button>
                         <Button variant="outline" onClick={() => setIsCommissionModalOpen(true)}><Percent className="mr-2 h-4 w-4" />Pago de Comisiones</Button>
                         <Button variant="outline" onClick={() => setIsClosingModalOpen(true)}><LogOut className="mr-2 h-4 w-4" />Realizar corte de caja</Button>
                         <Button variant="outline" onClick={() => { setEditingIngreso(null); setIsIngresoModalOpen(true); }}>Agregar Ingreso</Button>

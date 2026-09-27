@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { NewReservationForm } from '@/components/reservations/new-reservation-form';
 import { BlockScheduleForm } from '@/components/reservations/block-schedule-form';
 import { NewSaleSheet } from '@/components/sales/new-sale-sheet';
+import { QRScannerModal } from '@/components/qr/qr-scanner-modal';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useLocal } from '@/contexts/local-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -22,6 +23,8 @@ export default function AppInitializer() {
 
   const [isSaleSheetOpen, setIsSaleSheetOpen] = useState(false);
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
+
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
 
   const [saleTrigger, setSaleTrigger] = useState(0);
   const [queryKey, setQueryKey] = useState(0);
@@ -58,15 +61,20 @@ export default function AppInitializer() {
       setIsSaleSheetOpen(true);
       setSaleTrigger(prev => prev + 1);
     };
+    const handleOpenQrScanner = () => {
+      setIsQrScannerOpen(true);
+    };
 
     document.addEventListener('new-reservation', handleNewReservation);
     document.addEventListener('new-block', handleNewBlock);
     document.addEventListener('new-sale', handleNewSale);
+    document.addEventListener('open-qr-scanner', handleOpenQrScanner);
 
     return () => {
       document.removeEventListener('new-reservation', handleNewReservation);
       document.removeEventListener('new-block', handleNewBlock);
       document.removeEventListener('new-sale', handleNewSale);
+      document.removeEventListener('open-qr-scanner', handleOpenQrScanner);
     };
   }, []);
 
@@ -94,6 +102,11 @@ export default function AppInitializer() {
         initialData={saleInitialData}
         onSaleComplete={onDataRefresh}
         forceMaximize={saleTrigger}
+      />
+
+      <QRScannerModal
+        isOpen={isQrScannerOpen}
+        onOpenChange={setIsQrScannerOpen}
       />
     </>
   );

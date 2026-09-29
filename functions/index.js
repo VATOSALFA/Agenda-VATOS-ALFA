@@ -28,9 +28,24 @@ setGlobalOptions({ region: "us-central1" });
 
 console.log('Functions starting up (Gen 2 - Final V13). Version: ' + new Date().toISOString());
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK with service account if available
 if (admin.apps.length === 0) {
-  admin.initializeApp();
+  let cert = null;
+  try {
+    const serviceAccount = require("./backend-credentials.json");
+    if (serviceAccount && serviceAccount.private_key) {
+      cert = admin.credential.cert(serviceAccount);
+      console.log("Firebase Admin initialized with service account credentials.");
+    }
+  } catch (e) {
+    console.warn("Could not load backend-credentials.json, defaulting to standard credentials:", e.message);
+  }
+
+  if (cert) {
+    admin.initializeApp({ credential: cert });
+  } else {
+    admin.initializeApp();
+  }
 }
 
 // --- CONFIGURACIÓN MERCADO PAGO ---
@@ -2327,6 +2342,213 @@ exports.resendReservationConfirmation = onCall(
     } catch (error) {
       console.error("Error resending reservation confirmation:", error);
       throw new HttpsError('internal', error.message);
+    }
+  }
+);
+
+/**
+ * HTTP Endpoint: Send Branded Vatos Alfa Email Verification via Resend
+ * Supports both direct HTTP POST (from mobile app fetch) and Firebase callable format
+ */
+exports.sendVatosAlfaEmailVerification = onRequest(
+  {
+    cors: true,
+    invoker: 'public',
+    secrets: [resendApiKey],
+  },
+  async (request, response) => {
+    if (request.method === 'OPTIONS') {
+      response.status(204).send('');
+      return;
+    }
+
+    try {
+      const rawData = request.body || {};
+      const payload = rawData.data || rawData;
+
+      // SOPORTE PARA SUBIDA DE FOTO DE PERFIL (EVITA INCOMPATIBILIDAD CON BLOBS EN REACT NATIVE)
+      if (payload.action === 'uploadProfilePhoto') {
+        const targetUid = payload.uid;
+        const base64Data = payload.base64;
+        if (!targetUid || !base64Data) {
+          return response.status(400).json({ error: { message: 'Faltan parámetros requeridos (uid o base64).' } });
+        }
+
+        console.log(`[uploadProfilePhoto] Subiendo foto para UID: ${targetUid}`);
+        const rawBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+        const buffer = Buffer.from(rawBase64, 'base64');
+        const bucket = admin.storage().bucket('agenda-1ae08.firebasestorage.app');
+        const fileName = `clientes_fotos/${targetUid}_${Date.now()}.jpg`;
+        const token = uuidv4();
+        const file = bucket.file(fileName);
+
+        await file.save(buffer, {
+          metadata: {
+            contentType: 'image/jpeg',
+            metadata: {
+              firebaseStorageDownloadTokens: token,
+            },
+          },
+        });
+
+        const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(fileName)}?alt=media&token=${token}`;
+        console.log(`[uploadProfilePhoto] Foto guardada con éxito: ${downloadUrl}`);
+
+        // Actualizar Firestore clientes
+        try {
+          await admin.firestore().collection('clientes').doc(targetUid).set({
+            fotoUrl: downloadUrl,
+            avatarUrl: downloadUrl,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        } catch (dbErr) {
+          console.warn(`[uploadProfilePhoto] Error actualizando doc de cliente: ${dbErr.message}`);
+        }
+
+        // Actualizar Firebase Auth photoURL si existe
+        try {
+          await admin.auth().updateUser(targetUid, { photoURL: downloadUrl });
+        } catch (authErr) {
+          console.warn(`[uploadProfilePhoto] Error actualizando auth photoURL: ${authErr.message}`);
+        }
+
+        return response.status(200).json({
+          data: { success: true, photoUrl: downloadUrl },
+          success: true,
+          photoUrl: downloadUrl,
+        });
+      }
+
+      // SOPORTE PARA ELIMINACIÓN DEFINITIVA DE CUENTA Y DATOS
+      if (payload.action === 'delete') {
+        const targetUid = payload.uid;
+        const targetEmail = payload.email ? String(payload.email).trim().toLowerCase() : null;
+        console.log(`[deleteAccount] Solicitando eliminación para UID: ${targetUid}, Email: ${targetEmail}`);
+
+        if (targetUid) {
+          try {
+            await admin.auth().deleteUser(targetUid);
+            console.log(`[deleteAccount] Auth UID ${targetUid} eliminado con éxito.`);
+          } catch (e) {
+            console.warn(`[deleteAccount] Error borrando Auth UID: ${e.message}`);
+          }
+          try {
+            await admin.firestore().collection('clientes').doc(targetUid).delete();
+          } catch (_) {}
+        } else if (targetEmail) {
+          try {
+            const userRec = await admin.auth().getUserByEmail(targetEmail);
+            await admin.auth().deleteUser(userRec.uid);
+            try {
+              await admin.firestore().collection('clientes').doc(userRec.uid).delete();
+            } catch (_) {}
+            console.log(`[deleteAccount] Auth Email ${targetEmail} eliminado con éxito.`);
+          } catch (e) {
+            console.warn(`[deleteAccount] Error borrando Auth Email: ${e.message}`);
+          }
+        }
+
+        if (targetEmail) {
+          try {
+            const snap = await admin.firestore().collection('clientes').where('email', '==', targetEmail).get();
+            for (const d of snap.docs) {
+              await d.ref.delete();
+            }
+          } catch (_) {}
+          try {
+            const snap2 = await admin.firestore().collection('clientes').where('correo', '==', targetEmail).get();
+            for (const d of snap2.docs) {
+              await d.ref.delete();
+            }
+          } catch (_) {}
+        }
+
+        return response.status(200).json({ data: { success: true }, success: true, message: 'Cuenta y datos eliminados correctamente' });
+      }
+
+      const email = payload.email ? String(payload.email).trim().toLowerCase() : null;
+      const name = payload.name ? String(payload.name).trim() : 'Caballero';
+
+      if (!email) {
+        response.status(400).json({ error: { message: 'El correo electrónico es requerido.' } });
+        return;
+      }
+
+      console.log(`[sendVatosAlfaEmailVerification] Solicitando enlace para: ${email}`);
+      // 1. Generar enlace oficial y seguro de verificación de Firebase Auth
+      const link = await admin.auth().generateEmailVerificationLink(email);
+      console.log(`[sendVatosAlfaEmailVerification] Enlace generado con éxito.`);
+
+      // 2. Preparar el HTML con la línea de diseño oficial de Vatos Alfa (sin dorado, logo real, sin tarjeta de beneficios)
+      const clientName = name || 'Caballero';
+      const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verifica tu correo | Vatos Alfa Barber Shop</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #0F172A; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 560px; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35); border: 1px solid #E2E8F0;" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td style="background-color: #202A49; padding: 36px 24px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+              <img src="https://vatosalfa.com/logo-header-blanco.png" alt="Vatos Alfa Barber Shop" width="230" style="width: 230px; max-width: 85%; height: auto; display: block; margin: 0 auto; border: 0;" />
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 32px 32px 32px; text-align: center;">
+              <h2 style="font-size: 22px; font-weight: 700; color: #202A49; margin: 0 0 12px 0;">¡Bienvenido, ${clientName}!</h2>
+              <p style="font-size: 14px; line-height: 24px; color: #475569; margin: 0 0 32px 0;">
+                Gracias por registrarte en la aplicación oficial de <strong>Vatos Alfa Barber Shop</strong>.<br>
+                Para proteger la seguridad de tu cuenta y activar tu acceso a reservaciones y servicios, por favor confirma tu correo electrónico:
+              </p>
+              <div style="margin: 32px 0 36px 0;">
+                <a href="${link}" target="_blank" style="display: inline-block; background-color: #202A49; color: #FFFFFF !important; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; text-decoration: none; padding: 16px 36px; border-radius: 10px; box-shadow: 0 6px 16px rgba(32, 42, 73, 0.3);">
+                  Confirmar y Activar mi Cuenta &rarr;
+                </a>
+              </div>
+              <p style="font-size: 12px; color: #94A3B8; line-height: 18px; margin: 24px 0 0 0;">
+                Si no solicitaste registrarte en Vatos Alfa, puedes ignorar este correo de forma segura. El enlace es seguro y expirará en 24 horas.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F8FAFC; padding: 24px 20px; text-align: center; border-top: 1px solid #E2E8F0;">
+              <p style="font-size: 11px; color: #64748B; line-height: 18px; margin: 0;">
+                <strong>Vatos Alfa Barber Shop</strong><br>
+                Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro, Qro.<br>
+                WhatsApp Oficial: <a href="https://wa.me/524428727279" style="color: #202A49; text-decoration: underline; font-weight: 600;">442 872 7279</a><br><br>
+                &copy; 2026 Vatos Alfa. Todos los derechos reservados.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+      // 3. Enviar mediante Resend desde contacto@vatosalfa.com
+      let apiKey = process.env.RESEND_API_KEY || "";
+      try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+      const resend = new Resend(apiKey);
+
+      await resend.emails.send({
+        from: 'Vatos Alfa <contacto@vatosalfa.com>',
+        to: [email],
+        subject: '✂️ Confirma tu correo para activar tu cuenta Vatos Alfa',
+        html: htmlContent
+      });
+
+      console.log(`[sendVatosAlfaEmailVerification] Correo enviado exitosamente a ${email}`);
+      response.status(200).json({ data: { success: true }, success: true });
+    } catch (error) {
+      console.error("Error sending custom verification email:", error);
+      response.status(500).json({ error: { message: error.message || 'Error interno al enviar correo.' } });
     }
   }
 );

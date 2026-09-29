@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig } from '@/lib/actions/booking';
+import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig, checkClientBookingEligibility } from '@/lib/actions/booking';
 import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -142,6 +142,41 @@ export default function BookingPage() {
         birthday: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [historyRequiresDeposit, setHistoryRequiresDeposit] = useState(false);
+    const [historyPenaltyPercent, setHistoryPenaltyPercent] = useState(50);
+
+    // Verificación silenciosa de historial de cliente (Escudo Antifraude No-Shows)
+    useEffect(() => {
+        let active = true;
+        const phone = clientDetails.phone?.trim();
+        const email = clientDetails.email?.trim();
+
+        if (phone && phone.length === 10) {
+            checkClientBookingEligibility(phone).then((res) => {
+                if (active) {
+                    setHistoryRequiresDeposit(res.requiresDepositDueToHistory);
+                    if (res.penalizacion_anticipo_porcentaje) {
+                        setHistoryPenaltyPercent(res.penalizacion_anticipo_porcentaje);
+                    }
+                }
+            }).catch(() => {});
+        } else if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            checkClientBookingEligibility(email).then((res) => {
+                if (active) {
+                    setHistoryRequiresDeposit(res.requiresDepositDueToHistory);
+                    if (res.penalizacion_anticipo_porcentaje) {
+                        setHistoryPenaltyPercent(res.penalizacion_anticipo_porcentaje);
+                    }
+                }
+            }).catch(() => {});
+        } else {
+            setHistoryRequiresDeposit(false);
+        }
+
+        return () => {
+            active = false;
+        };
+    }, [clientDetails.phone, clientDetails.email]);
 
     // --- INITIALIZATION ---
     useEffect(() => {
@@ -292,7 +327,16 @@ export default function BookingPage() {
             return sum;
         }, 0);
 
-        // Regla Global: Anticipo automático si el monto total de servicios alcanza o supera el umbral configurado
+        // Regla 1: Escudo Antifraude por Inasistencias / Cancelaciones (Máxima Prioridad)
+        if (historyRequiresDeposit && total > 0) {
+            const pct = (Number(historyPenaltyPercent) || 50) / 100;
+            const requiredHistoryDeposit = total * pct;
+            if (upfront < requiredHistoryDeposit) {
+                upfront = requiredHistoryDeposit;
+            }
+        }
+
+        // Regla 3: Anticipo global automático si el monto total de servicios alcanza o supera el umbral configurado
         let thresholdApplied = false;
         const isThresholdActive = serviciosConfig?.anticipo_monto_minimo_activo !== false;
         const minThreshold = Number(serviciosConfig?.anticipo_monto_minimo) > 0 ? Number(serviciosConfig.anticipo_monto_minimo) : 190;
@@ -341,7 +385,7 @@ export default function BookingPage() {
             upfrontTotal: upfront + productUpfront,
             isThresholdDepositApplied: thresholdApplied
         };
-    }, [cart, productCart, serviciosConfig]);
+    }, [cart, productCart, serviciosConfig, historyRequiresDeposit, historyPenaltyPercent]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- SORTED SERVICES ---
@@ -695,8 +739,10 @@ export default function BookingPage() {
                     const itemPrice = Number(item.service.price || 0);
                     const pType = item.service.payment_type || 'no-payment';
                     let itemUpfront = (pType === 'online-deposit' ? itemPrice * 0.5 : (pType === 'full-payment' ? itemPrice : 0));
-                    if (isThresholdDepositApplied && itemUpfront === 0) {
-                        const pct = (Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100;
+                    if ((isThresholdDepositApplied || historyRequiresDeposit) && itemUpfront === 0) {
+                        const pct = historyRequiresDeposit 
+                            ? ((Number(historyPenaltyPercent) || 50) / 100) 
+                            : ((Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100);
                         itemUpfront = itemPrice * pct;
                     }
 

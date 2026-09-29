@@ -514,7 +514,7 @@ export default function AgendaView() {
     }
 
     if (selectedProfessionalFilter === 'todos') {
-      return professionalsOfLocal.sort((a, b) => (a.order || 0) - (b.order || 0));
+      return professionalsOfLocal.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     }
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
   }, [professionals, selectedProfessionalFilter, selectedLocalId, user]);
@@ -1702,8 +1702,8 @@ export default function AgendaView() {
                           }
                           return false;
                         })
-                        .map((event: AgendaEvent) => (
-                          <Tooltip key={event.id + ((event as any).target_barber_id ? '-' + (event as any).target_barber_id : '')}>
+                        .map((event: AgendaEvent, evIdx: number) => (
+                          <Tooltip key={`${event.id}-${(event as any).target_barber_id || ''}-${evIdx}`}>
                             <TooltipTrigger asChild>
                               <div
                                 onClick={(e) => {

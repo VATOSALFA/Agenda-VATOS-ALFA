@@ -213,8 +213,9 @@ export default function ProfesionalesPage() {
 
       setLocalProfessionals(prev => {
         // If it's the first load (empty prev), just sort by order and return
+        // Use nullish coalescing (??) because order can be 0, and 0 || 99 results in 99, pushing position 0 to the bottom
         if (prev.length === 0) {
-          return [...validData].sort((a, b) => (a.order || 99) - (b.order || 99));
+          return [...validData].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
         }
 
         // Check if the list composition has changed (added or removed items)
@@ -232,7 +233,7 @@ export default function ProfesionalesPage() {
           });
         } else {
           // If items were added or removed, we must resort and reset using server data
-          return [...validData].sort((a, b) => (a.order || 99) - (b.order || 99));
+          return [...validData].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
         }
       });
     }
@@ -306,15 +307,20 @@ export default function ProfesionalesPage() {
       newOrder[oldIndex] = newOrder[newIndex];
       newOrder[newIndex] = temp;
 
+      const updatedOrder = newOrder.map((prof, index) => ({
+        ...prof,
+        order: index,
+      }));
+
       // Optimistically update local state
-      setLocalProfessionals(newOrder);
+      setLocalProfessionals(updatedOrder);
 
       // Update Firestore
       if (!db) return;
       try {
         const batch = writeBatch(db);
         // Persist the new order for all items (simplest way to ensure consistency)
-        newOrder.forEach((prof, index) => {
+        updatedOrder.forEach((prof, index) => {
           const profRef = doc(db, 'profesionales', prof.id);
           batch.update(profRef, { order: index });
         });

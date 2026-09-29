@@ -1,10 +1,8 @@
 {
-  "title": "Optimización de Rendimiento y Nueva Sección App Móvil",
-  "summary": "Navegación ultra rápida con caché inteligente, optimizaciones en agenda/caja y gestión de App Móvil.",
-  "notes": [
-    "Carga instantánea de secciones administrativas gracias al nuevo sistema de caché en Firestore.",
-    "Eliminación de retrasos y micro-tirones al navegar la agenda y cambio de fechas sin parpadeos.",
-    "Candados de seguridad en caja de ventas para evitar descargas masivas accidentales.",
-    "Nueva sección en Configuración para gestionar Avisos, Promociones y Membresías VIP de la App Móvil."
-  ]
+  "silent": true,
+  "showModal": false,
+  "version": "1790449256561",
+  "title": "",
+  "summary": "",
+  "notes": []
 }

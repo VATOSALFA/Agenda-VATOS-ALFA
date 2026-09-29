@@ -6,6 +6,7 @@ import { es } from 'date-fns/locale';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
+import { evaluateDepositRequirement, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -581,7 +582,7 @@ export async function createPublicReservation(data: any) {
         // Preserve all instances requested by the client
         const validServices = (data.serviceIds as string[])
             .map((id: string) => serviceDocMap.get(id))
-            .filter(Boolean);
+            .filter((s): s is NonNullable<typeof s> => Boolean(s));
 
         if (validServices.length === 0) return { error: 'Servicios no encontrados' };
 
@@ -832,58 +833,39 @@ export async function createPublicReservation(data: any) {
 
         const grandTotal = data.totalAmount ? Number(data.totalAmount) : (totalPrice + productsTotal);
 
-        // --- VALIDACIÓN DE ANTICIPO (REGLA GLOBAL Y POR SERVICIO) ---
-        let globalMinThreshold = 190;
-        let globalDefaultPercent = 50;
-        let globalActive = true;
-
+        // --- VALIDACIÓN DE ANTICIPO (MOTOR UNIFICADO DE REGLAS DE RESERVAS) ---
+        let bookingRules: ReglasReservasConfig = { ...DEFAULT_BOOKING_RULES };
         try {
-            const cfgDoc = await db.collection('configuracion').doc('servicios').get();
-            if (cfgDoc.exists) {
-                const cfg = cfgDoc.data()!;
-                if (typeof cfg.anticipo_monto_minimo_activo === 'boolean') {
-                    globalActive = cfg.anticipo_monto_minimo_activo;
-                }
-                if (Number(cfg.anticipo_monto_minimo) > 0) {
-                    globalMinThreshold = Number(cfg.anticipo_monto_minimo);
-                }
-                if (Number(cfg.anticipo_porcentaje_defecto) > 0) {
-                    globalDefaultPercent = Number(cfg.anticipo_porcentaje_defecto);
+            const rulesDoc = await db.collection('configuracion').doc('reglas_reservas').get();
+            if (rulesDoc.exists) {
+                bookingRules = { ...bookingRules, ...(rulesDoc.data() as any) };
+            } else {
+                const cfgDoc = await db.collection('configuracion').doc('servicios').get();
+                if (cfgDoc.exists) {
+                    bookingRules = { ...bookingRules, ...(cfgDoc.data() as any) };
                 }
             }
         } catch (e) {
-            console.error("Error reading configuracion/servicios in createPublicReservation:", e);
+            console.error("Error reading booking rules in createPublicReservation:", e);
         }
 
-        // 1. Sumar anticipos configurados a nivel de servicio individual
-        let calculatedDeposit = 0;
-        validServices.forEach((s: any) => {
-            const pType = s.payment_type || 'no-payment';
-            if (pType === 'online-deposit') {
-                const amountType = s.payment_amount_type || '%';
-                const amountVal = Number(s.payment_amount_value);
-                if (amountType === '$' && amountVal > 0) {
-                    calculatedDeposit += amountVal;
-                } else if (amountType === '%' && amountVal > 0) {
-                    calculatedDeposit += (Number(s.price || 0) * (amountVal / 100));
-                } else {
-                    calculatedDeposit += (Number(s.price || 0) * 0.5);
-                }
-            } else if (pType === 'full-payment') {
-                calculatedDeposit += Number(s.price || 0);
-            }
+        // Historial de inasistencias y cancelaciones del cliente
+        const clientHistory = existingDoc ? {
+            citas_canceladas: Number(existingDoc.data()?.citas_canceladas) || 0,
+            citas_no_asistidas: Number(existingDoc.data()?.citas_no_asistidas) || 0,
+        } : null;
+
+        // Evaluación jerárquica: Prioridad 1 (Cliente) -> Prioridad 2 (Servicio) -> Prioridad 3 (Global)
+        const evalResult = evaluateDepositRequirement({
+            totalPrice,
+            services: validServices as any,
+            clientHistory,
+            rules: bookingRules,
         });
 
-        // 2. Regla global: si el total de servicios supera el umbral configurado (ej. >= $190)
-        if (globalActive && totalPrice >= globalMinThreshold) {
-            const thresholdDeposit = totalPrice * (globalDefaultPercent / 100);
-            if (calculatedDeposit < thresholdDeposit) {
-                calculatedDeposit = thresholdDeposit;
-            }
-        }
-
-        calculatedDeposit = Math.round(calculatedDeposit * 100) / 100;
-        const requiresDeposit = calculatedDeposit > 0;
+        const calculatedDeposit = evalResult.depositAmount;
+        const requiresDeposit = evalResult.requiresDeposit;
+        const depositPercentage = evalResult.depositPercentage;
 
         // 3. Si la reserva proviene de la web pública (flujo directo sin pasarela) y requiere anticipo:
         // No permitir creación gratuita sin haber pasado por Mercado Pago.
@@ -892,7 +874,7 @@ export async function createPublicReservation(data: any) {
 
         if (originChannel === 'web_publica' && requiresDeposit && !isPaid) {
             return {
-                error: `Esta reserva suma $${grandTotal} MXN y requiere un anticipo del ${globalDefaultPercent}% ($${calculatedDeposit} MXN). Por favor realiza el pago en línea para confirmar tu cita.`,
+                error: `Esta reserva suma $${grandTotal} MXN y requiere un anticipo del ${depositPercentage}% ($${calculatedDeposit} MXN). Por favor realiza el pago en línea para confirmar tu cita.`,
                 requiresPayment: true,
                 depositAmount: calculatedDeposit
             };
@@ -961,9 +943,33 @@ export async function getPublicServiciosConfig() {
                 anticipo_monto_minimo_activo: true,
                 anticipo_monto_minimo: 190,
                 anticipo_porcentaje_defecto: 50,
+                penalizacion_inasistencias_activa: true,
+                max_inasistencias_permitidas: 2,
+                penalizacion_anticipo_porcentaje: 50,
+                tiempo_minimo_anticipacion_minutos: 30,
+                dias_maximos_futuro: 14,
+                tolerancia_puntualidad_minutos: 10,
             };
         }
 
+        // 1. Intentar leer configuracion/reglas_reservas
+        const reglasSnap = await db.collection('configuracion').doc('reglas_reservas').get();
+        if (reglasSnap.exists) {
+            const data = reglasSnap.data() || {};
+            return {
+                anticipo_monto_minimo_activo: data.anticipo_monto_minimo_activo !== false,
+                anticipo_monto_minimo: Number(data.anticipo_monto_minimo) > 0 ? Number(data.anticipo_monto_minimo) : 190,
+                anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
+                penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
+                max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
+                penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
+                tiempo_minimo_anticipacion_minutos: Number(data.tiempo_minimo_anticipacion_minutos) || 30,
+                dias_maximos_futuro: Number(data.dias_maximos_futuro) || 14,
+                tolerancia_puntualidad_minutos: Number(data.tolerancia_puntualidad_minutos) || 10,
+            };
+        }
+
+        // 2. Respaldo a configuracion/servicios
         const snap = await db.collection('configuracion').doc('servicios').get();
         if (snap.exists) {
             const data = snap.data() || {};
@@ -971,6 +977,12 @@ export async function getPublicServiciosConfig() {
                 anticipo_monto_minimo_activo: data.anticipo_monto_minimo_activo !== false,
                 anticipo_monto_minimo: Number(data.anticipo_monto_minimo) > 0 ? Number(data.anticipo_monto_minimo) : 190,
                 anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
+                penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
+                max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
+                penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
+                tiempo_minimo_anticipacion_minutos: 30,
+                dias_maximos_futuro: 14,
+                tolerancia_puntualidad_minutos: 10,
             };
         }
     } catch (e) {
@@ -981,7 +993,86 @@ export async function getPublicServiciosConfig() {
         anticipo_monto_minimo_activo: true,
         anticipo_monto_minimo: 190,
         anticipo_porcentaje_defecto: 50,
+        penalizacion_inasistencias_activa: true,
+        max_inasistencias_permitidas: 2,
+        penalizacion_anticipo_porcentaje: 50,
+        tiempo_minimo_anticipacion_minutos: 30,
+        dias_maximos_futuro: 14,
+        tolerancia_puntualidad_minutos: 10,
     };
+}
+
+// --- CLIENT BOOKING ELIGIBILITY CHECK (SERVER ACTION) ---
+export async function checkClientBookingEligibility(identifier: string): Promise<{
+    requiresDepositDueToHistory: boolean;
+    citas_canceladas: number;
+    citas_no_asistidas: number;
+    totalFaltas: number;
+    penalizacion_anticipo_porcentaje: number;
+}> {
+    const defaultRes = {
+        requiresDepositDueToHistory: false,
+        citas_canceladas: 0,
+        citas_no_asistidas: 0,
+        totalFaltas: 0,
+        penalizacion_anticipo_porcentaje: 50,
+    };
+
+    if (!identifier || typeof identifier !== 'string' || identifier.trim().length < 4) {
+        return defaultRes;
+    }
+
+    try {
+        const db = getDb();
+        if (!db) return defaultRes;
+
+        const config = await getPublicServiciosConfig();
+        if (!config.penalizacion_inasistencias_activa) {
+            return defaultRes;
+        }
+
+        const clean = identifier.trim();
+        const clientsRef = db.collection('clientes');
+        let clientDoc: any = null;
+
+        // 1. Búsqueda por teléfono
+        const phoneSnap = await clientsRef.where('telefono', '==', clean).limit(1).get();
+        if (!phoneSnap.empty) {
+            clientDoc = phoneSnap.docs[0];
+        } else if (clean.includes('@')) {
+            // 2. Búsqueda por correo (estándar y legacy)
+            const emailSnap = await clientsRef.where('correo', '==', clean).limit(1).get();
+            if (!emailSnap.empty) {
+                clientDoc = emailSnap.docs[0];
+            } else {
+                const legacySnap = await clientsRef.where('email', '==', clean).limit(1).get();
+                if (!legacySnap.empty) clientDoc = legacySnap.docs[0];
+            }
+        }
+
+        if (!clientDoc) {
+            return defaultRes;
+        }
+
+        const data = clientDoc.data() || {};
+        const canceladas = Number(data.citas_canceladas) || 0;
+        const noAsistidas = Number(data.citas_no_asistidas) || 0;
+        const totalFaltas = canceladas + noAsistidas;
+        const maxPermitidas = Number(config.max_inasistencias_permitidas) || 2;
+
+        const requiresDeposit = totalFaltas >= maxPermitidas;
+
+        return {
+            requiresDepositDueToHistory: requiresDeposit,
+            citas_canceladas: canceladas,
+            citas_no_asistidas: noAsistidas,
+            totalFaltas,
+            penalizacion_anticipo_porcentaje: Number(config.penalizacion_anticipo_porcentaje) || 50,
+        };
+    } catch (err) {
+        console.error("Error in checkClientBookingEligibility:", err);
+        return defaultRes;
+    }
 }
 
 // --- MANUAL EMAIL TRIGGER (FOR ADMIN PANEL) ---

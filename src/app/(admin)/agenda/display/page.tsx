@@ -193,7 +193,7 @@ export default function AgendaDisplayPage() {
     const filteredProfessionals = useMemo(() => {
         return professionals
             .filter(p => !p.deleted && p.local_id === effectiveLocalId)
-            .sort((a, b) => (a.order || 0) - (b.order || 0));
+            .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     }, [professionals, effectiveLocalId]);
 
     const { eventsWithLayout } = useAgendaEvents(reservations, timeBlocks, clients, filteredProfessionals);

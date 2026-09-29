@@ -301,7 +301,7 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
         if (!services) return { regularServices: [], packageServices: [] };
 
         // Sort first
-        const sorted = [...services].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        const sorted = [...services].sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999));
 
         // Filter by search term
         const filtered = sorted.filter((s: ServiceType) => s?.name?.toLowerCase().includes(addItemSearchTerm.toLowerCase()));
@@ -581,7 +581,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (!services) return { regularServices: [], packageServices: [] };
 
         // Sort first
-        const sorted = [...services].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        const sorted = [...services].sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999));
 
         // Filter by search term
         const filtered = sorted.filter((s: ServiceType) => s?.name?.toLowerCase().includes(searchTerm.toLowerCase()));

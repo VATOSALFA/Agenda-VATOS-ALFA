@@ -28,8 +28,7 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     match /configuracion/{docId} {
-      allow get: if docId in ['servicios', 'agenda'] || isAuthenticated();
-      allow list: if isAuthenticated();
+      allow read: if docId in ['servicios', 'agenda', 'pase_alfa', 'app_movil', 'reglas_reservas'] || isAuthenticated();
       allow write: if isAuthenticated();
     }
     match /locales/{document=**} {

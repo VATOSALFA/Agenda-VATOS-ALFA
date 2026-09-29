@@ -108,6 +108,30 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isUpdatingStamp, setIsUpdatingStamp] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [targetStamps, setTargetStamps] = useState<number>(10);
+  const [rewardName, setRewardName] = useState<string>('Corte de Cortesía');
+
+  useEffect(() => {
+    if (!db) return;
+    async function loadPaseAlfaConfig() {
+      try {
+        const snap = await getDoc(doc(db, 'configuracion', 'pase_alfa'));
+        if (snap.exists()) {
+          const d = snap.data();
+          if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
+          if (d.recompensa) setRewardName(d.recompensa);
+        } else {
+          const snapApp = await getDoc(doc(db, 'configuracion', 'app_movil'));
+          if (snapApp.exists()) {
+            const d = snapApp.data().pase_alfa || snapApp.data();
+            if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
+            if (d.recompensa) setRewardName(d.recompensa);
+          }
+        }
+      } catch (_) {}
+    }
+    loadPaseAlfaConfig();
+  }, []);
 
   const scannerRef = useRef<any>(null);
   const scannerContainerId = 'vatos-qr-reader-element';
@@ -414,7 +438,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
     try {
       const currentStamps = Number(scannedClient.cortes_acumulados || 0);
       const newStamps = currentStamps + 1;
-      const isFreeEligible = newStamps >= 10;
+      const isFreeEligible = newStamps >= targetStamps;
 
       await updateDoc(doc(db, 'clientes', scannedClient.id), {
         cortes_acumulados: increment(1),
@@ -433,8 +457,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       toast({
         title: '¡Sello de Visita Registrado!',
         description: isFreeEligible
-          ? `¡Felicidades! ${scannedClient.nombre} completó sus 10 visitas y tiene un Corte Gratis.`
-          : `Sello añadido con éxito. Ahora tiene ${newStamps} de 10 visitas.`,
+          ? `¡Felicidades! ${scannedClient.nombre} completó sus ${targetStamps} visitas y tiene su ${rewardName}.`
+          : `Sello añadido con éxito. Ahora tiene ${newStamps} de ${targetStamps} visitas.`,
       });
     } catch (err: any) {
       console.error('Error sumando sello:', err);
@@ -549,7 +573,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   };
 
   const clientStamps = Number(scannedClient?.cortes_acumulados || 0);
-  const totalSlots = 10;
+  const totalSlots = targetStamps;
   const freeCutAvailable = Boolean(scannedClient?.corte_gratis_disponible || clientStamps >= totalSlots);
 
   return (
@@ -697,8 +721,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                         <div className="flex items-center gap-2">
                           <Sparkles className="h-5 w-5 text-amber-400 animate-bounce" />
                           <div>
-                            <p className="text-xs font-bold text-emerald-300">¡10.° Corte Totalmente Gratis Disponible!</p>
-                            <p className="text-[10px] text-gray-300">El cliente completó sus 10 visitas en la app.</p>
+                            <p className="text-xs font-bold text-emerald-300">¡{rewardName} Disponible!</p>
+                            <p className="text-[10px] text-gray-300">El cliente completó sus {targetStamps} visitas en la app.</p>
                           </div>
                         </div>
                         <Button

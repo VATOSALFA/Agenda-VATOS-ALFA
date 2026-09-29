@@ -321,19 +321,19 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     });
 
     // 2. Sort categories by order
-    const sortedCategories = [...serviceCategories].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const sortedCategories = [...serviceCategories].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
     // 3. Build the result array
     const result = sortedCategories.map(cat => ({
       name: cat.name,
-      items: (groups[cat.id] || []).sort((a, b) => (a.order || 0) - (b.order || 0))
+      items: (groups[cat.id] || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
     })).filter(group => group.items.length > 0);
 
     // 4. Add uncategorized if any
     if (uncategorized.length > 0) {
       result.push({
         name: 'Otros',
-        items: uncategorized.sort((a, b) => (a.order || 0) - (b.order || 0))
+        items: uncategorized.sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
       });
     }
 

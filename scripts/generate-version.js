@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 
 try {
-  const buildId = Date.now().toString();
   const publicDir = path.join(__dirname, '..', 'public');
   const rootDir = path.join(__dirname, '..');
   
@@ -30,16 +29,31 @@ try {
     }
   }
 
+  let buildId = Date.now().toString();
+  const versionFilePath = path.join(publicDir, 'version.json');
+
+  // Si se solicita lanzamiento silencioso o preservar versión para no mostrar modal
+  if (releaseData.silent || releaseData.showModal === false || releaseData.preserveVersion) {
+    if (fs.existsSync(versionFilePath)) {
+      try {
+        const oldVersionData = JSON.parse(fs.readFileSync(versionFilePath, 'utf8'));
+        if (oldVersionData.version) {
+          buildId = oldVersionData.version;
+          console.log(`[Version Generator] Silent release active. Preserving version ${buildId}`);
+        }
+      } catch (_) {}
+    }
+  }
+
   const versionPayload = {
-    version: buildId,
+    version: releaseData.version || buildId,
     timestamp: new Date().toISOString(),
     ...releaseData
   };
   
-  const versionFilePath = path.join(publicDir, 'version.json');
   fs.writeFileSync(versionFilePath, JSON.stringify(versionPayload, null, 2));
 
-  console.log(`[Version Generator] Generated public/version.json with version ${buildId}`);
+  console.log(`[Version Generator] Generated public/version.json with version ${versionPayload.version} (silent: ${Boolean(releaseData.silent || releaseData.showModal === false)})`);
 } catch (error) {
   console.error('[Version Generator] Failed to generate version:', error);
   process.exit(1);

@@ -30,6 +30,9 @@ export function PwaUpdateBanner() {
                 const res = await fetch(`/version.json?t=${Date.now()}`);
                 if (!res.ok) return;
                 const data: UpdateInfo = await res.json();
+                if ((data as any).silent || (data as any).showModal === false) {
+                    return;
+                }
                 const serverVersion = data.version;
                 const localVersion = process.env.NEXT_PUBLIC_BUILD_VERSION;
 

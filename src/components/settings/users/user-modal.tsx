@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Sparkles, Eye, EyeOff, CircleHelp } from 'lucide-react';
+import { Loader2, Sparkles, Eye, EyeOff, CircleHelp, Mail } from 'lucide-react';
 import type { User, Local, Role, Profesional } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase-client';
@@ -33,7 +33,7 @@ import { updateProfile } from 'firebase/auth';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { useDebounce } from 'use-debounce';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { inviteUser } from '@/lib/actions/users';
+import { inviteUser, resendUserInvitation } from '@/lib/actions/users';
 
 
 const userSchema = (isEditMode: boolean, isGeneralAdmin: boolean) => z.object({
@@ -67,6 +67,31 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
   const [isUploading, setIsUploading] = useState(false);
   const isEditMode = !!user;
   const { toast } = useToast();
+  const [isResendingInvite, setIsResendingInvite] = useState(false);
+
+  const handleResendInvite = async () => {
+    if (!user?.email) return;
+    setIsResendingInvite(true);
+    try {
+      const result = await resendUserInvitation(user.email, user.name);
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      toast({
+        title: "Invitación reenviada con éxito",
+        description: `Se ha enviado un correo a ${user.email} con las instrucciones para configurar su acceso e iniciar sesión.`,
+      });
+    } catch (error: any) {
+      console.error("Error al reenviar invitación:", error);
+      toast({
+        variant: "destructive",
+        title: "Error al reenviar invitación",
+        description: error.message || "No se pudo reenviar el correo de invitación.",
+      });
+    } finally {
+      setIsResendingInvite(false);
+    }
+  };
 
 
   const [showPassword, setShowPassword] = useState(false);
@@ -486,12 +511,33 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 )}
               </div>
             </div>
-            <DialogFooter className="border-t pt-6">
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting || isUploading}>
-                {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar
-              </Button>
+            <DialogFooter className="border-t pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+              {isEditMode && user ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isResendingInvite || isSubmitting}
+                  onClick={handleResendInvite}
+                  className="text-foreground hover:bg-muted border-border w-full sm:w-auto flex items-center justify-center gap-2 font-medium text-xs sm:text-sm h-9"
+                  title={`Reenviar invitación por correo a ${user.email}`}
+                >
+                  {isResendingInvite ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Mail className="h-4 w-4 text-primary" />
+                  )}
+                  Reenviar Correo de Invitación
+                </Button>
+              ) : (
+                <div />
+              )}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button type="submit" disabled={isSubmitting || isUploading}>
+                  {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Guardar
+                </Button>
+              </div>
             </DialogFooter>
           </form>
         </Form>

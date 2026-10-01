@@ -120,7 +120,12 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
           <AvatarImage src={prof.avatarUrl} alt={prof.name} />
           <AvatarFallback>{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
         </Avatar>
-        <span className="font-medium truncate">{prof.name}</span>
+        <div className="flex flex-col min-w-0">
+          <span className="font-medium truncate">{prof.name}</span>
+          {prof.publicName && prof.publicName !== prof.name && (
+            <span className="text-xs text-muted-foreground truncate">Público: {prof.publicName}</span>
+          )}
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:justify-end">
         <Popover>

@@ -179,7 +179,7 @@ export function OverdueNotificationsPopover({
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                           <Clock className="h-3 w-3 text-muted-foreground" />
                           <span className="font-semibold text-foreground">{res.hora_inicio} - {res.hora_fin}</span>
-                          {prof && <span className="ml-1 text-[11px]">({prof.name})</span>}
+                          {prof && <span className="ml-1 text-[11px]">({prof.publicName || prof.name})</span>}
                         </p>
                       </div>
 
@@ -304,7 +304,7 @@ export function OverdueNotificationsPopover({
                         <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
                           <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                           <span className="font-semibold text-foreground">{res.hora_inicio} - {res.hora_fin}</span>
-                          {prof && <span className="text-[11px] font-medium text-primary truncate">({prof.name})</span>}
+                          {prof && <span className="text-[11px] font-medium text-primary truncate">({prof.publicName || prof.name})</span>}
                         </p>
                       </div>
 

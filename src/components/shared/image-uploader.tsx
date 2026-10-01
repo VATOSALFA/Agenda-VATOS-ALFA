@@ -19,7 +19,8 @@ interface ImageUploaderProps {
   onRemove?: () => void;
   className?: string;
   onUploadStateChange?: (isUploading: boolean) => void;
-  onUploadEnd?: (url: string) => void; 
+  onUploadEnd?: (url: string) => void;
+  multiple?: boolean;
 }
 
 export function ImageUploader({ 
@@ -29,23 +30,27 @@ export function ImageUploader({
   onRemove,
   className,
   onUploadStateChange,
-  onUploadEnd
+  onUploadEnd,
+  multiple = false,
 }: ImageUploaderProps) {
   
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadCount, setUploadCount] = useState(0);
   const { toast } = useToast();
 
-  const handleUpload = useCallback(async (file: File) => {
+  const handleUploadFiles = useCallback(async (files: File[]) => {
+    if (!files || files.length === 0) return;
     if (!storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'El servicio de almacenamiento no está disponible.' });
         return;
     }
     
     setIsUploading(true);
+    setUploadCount(files.length);
     if(onUploadStateChange) onUploadStateChange(true);
 
     try {
-        if (currentImageUrl) {
+        if (!multiple && currentImageUrl) {
             try {
                 const oldImageRef = ref(storage, currentImageUrl);
                 await deleteObject(oldImageRef).catch(error => {
@@ -59,27 +64,36 @@ export function ImageUploader({
             }
         }
 
-        const storageRef = ref(storage, `${folder}/${Date.now()}-${file.name}`);
-        const uploadTask = await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(uploadTask.ref);
+        const filesToUpload = multiple ? files : [files[0]];
+        for (const file of filesToUpload) {
+            const storageRef = ref(storage, `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${file.name}`);
+            const uploadTask = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(uploadTask.ref);
 
-        if (onUpload) {
-            onUpload(downloadURL);
-        }
-        if (onUploadEnd) {
-            onUploadEnd(downloadURL);
+            if (onUpload) {
+                onUpload(downloadURL);
+            }
+            if (onUploadEnd) {
+                onUploadEnd(downloadURL);
+            }
         }
 
-        toast({ title: '¡Éxito!', description: 'La imagen ha sido subida correctamente.' });
+        toast({ 
+            title: '¡Éxito!', 
+            description: filesToUpload.length > 1 
+                ? `${filesToUpload.length} fotografías subidas correctamente.` 
+                : 'La fotografía ha sido subida correctamente.' 
+        });
         
     } catch (error: any) {
         console.error("Error al subir imagen:", error);
-        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code}` });
+        toast({ variant: 'destructive', title: 'Error de subida', description: `Hubo un problema al subir la imagen: ${error.code || error.message}` });
     } finally {
         setIsUploading(false);
+        setUploadCount(0);
         if(onUploadStateChange) onUploadStateChange(false);
     }
-  }, [folder, currentImageUrl, onUpload, onUploadEnd, onUploadStateChange, toast]);
+  }, [folder, currentImageUrl, onUpload, onUploadEnd, onUploadStateChange, multiple, toast]);
 
   const handleRemove = async () => {
     if (!currentImageUrl || !storage) return;
@@ -102,22 +116,28 @@ export function ImageUploader({
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar la imagen.' });
       }
     } finally {
-        setIsUploading(false);
-        if(onUploadStateChange) onUploadStateChange(false);
+      setIsUploading(false);
+      if(onUploadStateChange) onUploadStateChange(false);
     }
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => handleUpload(acceptedFiles[0]),
+    onDrop: (acceptedFiles) => {
+      if (acceptedFiles && acceptedFiles.length > 0) {
+        handleUploadFiles(acceptedFiles);
+      }
+    },
     accept: { 'image/*': ['.jpeg', '.png', '.jpg', '.gif', '.webp'] },
-    multiple: false
+    multiple: Boolean(multiple)
   });
 
   if (isUploading) {
     return (
-        <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40', className)}>
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="mt-4 text-sm text-muted-foreground">Procesando...</p>
+        <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 bg-muted/10', className)}>
+            <Loader2 className="h-7 w-7 animate-spin text-primary" />
+            <p className="mt-3 text-xs font-medium text-muted-foreground">
+                {uploadCount > 1 ? `Subiendo ${uploadCount} fotografías...` : 'Subiendo imagen...'}
+            </p>
         </div>
     );
   }
@@ -125,21 +145,22 @@ export function ImageUploader({
   if (currentImageUrl) {
     return (
         <div 
-          className={cn('relative w-40 h-40 rounded-lg overflow-hidden group cursor-pointer', className)}
+          className={cn('relative w-40 h-40 rounded-lg overflow-hidden group cursor-pointer border border-border/80 bg-muted/20', className)}
           {...getRootProps()}
         >
             <input {...getInputProps()} />
-            <Image src={currentImageUrl} alt="Imagen subida" layout="fill" objectFit="cover" />
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+            <img src={currentImageUrl} alt="Imagen subida" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 p-2">
                 <div className="bg-white/10 p-2 rounded-full backdrop-blur-sm border border-white/20">
-                    <UploadCloud className="w-6 h-6 text-white" />
+                    <UploadCloud className="w-5 h-5 text-white" />
                 </div>
-                <p className="text-[10px] text-white font-bold uppercase tracking-widest text-shadow">Cambiar Imagen</p>
+                <p className="text-[11px] text-white font-medium text-center">Arrastra otra foto o haz clic para cambiar</p>
                 
                 <Button 
                     variant="destructive" 
                     size="icon" 
-                    className="absolute top-2 right-2 h-7 w-7"
+                    type="button"
+                    className="absolute top-2 right-2 h-7 w-7 shadow-sm"
                     onClick={(e) => {
                         e.stopPropagation();
                         handleRemove();
@@ -155,13 +176,20 @@ export function ImageUploader({
   return (
     <div
       {...getRootProps()}
-      className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 cursor-pointer hover:border-primary transition-colors', className, {
-        'border-primary bg-primary/5': isDragActive,
+      className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 cursor-pointer hover:border-primary transition-colors bg-muted/5', className, {
+        'border-primary bg-primary/10 scale-[0.99]': isDragActive,
       })}
     >
       <input {...getInputProps()} />
-      <UploadCloud className="h-8 w-8 text-muted-foreground" />
-      <p className="mt-2 text-sm text-muted-foreground text-center">Arrastra o haz clic para subir</p>
+      <UploadCloud className={cn("h-7 w-7 mb-2 text-muted-foreground transition-transform", isDragActive && "scale-110 text-primary")} />
+      <p className="text-xs sm:text-sm font-medium text-foreground">
+        {isDragActive 
+          ? "Suelta tu fotografía aquí" 
+          : "Arrastra tu fotografía aquí o haz clic para importar"}
+      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {multiple ? "Formatos compatibles: JPG, PNG, WEBP (puedes subir una o varias a la vez)" : "Formatos compatibles: JPG, PNG, WEBP"}
+      </p>
     </div>
   );
 }

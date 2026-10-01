@@ -942,7 +942,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 '1': client.nombre,
                 '2': dataToSave.servicio!,
                 '3': fullDateStr,
-                '4': professional.name,
+                '4': professional.publicName || professional.name,
               },
             }),
           }).catch(waError => {
@@ -1281,7 +1281,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                   {rowProfessionals.length > 0 ? (
                                     rowProfessionals.map((barber) => (
                                       <SelectItem key={barber.id} value={barber.id}>
-                                        {barber.name}
+                                        {barber.publicName || barber.name}
                                       </SelectItem>
                                     ))
                                   ) : (

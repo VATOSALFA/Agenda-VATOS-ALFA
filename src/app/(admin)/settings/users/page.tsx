@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save, Clock } from "lucide-react";
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save, Clock, Mail, Loader2 } from "lucide-react";
 
 
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { User, Local, Role } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { UserModal } from '@/components/settings/users/user-modal';
+import { resendUserInvitation } from '@/lib/actions/users';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -177,6 +178,31 @@ export default function UsersPage() {
         setIsModalOpen(true);
     }
 
+    const [resendingUserId, setResendingUserId] = useState<string | null>(null);
+
+    const handleResendInviteFromTable = async (user: User) => {
+        setResendingUserId(user.id);
+        try {
+            const result = await resendUserInvitation(user.email, user.name);
+            if (!result.success) {
+                throw new Error(result.error);
+            }
+            toast({
+                title: "Invitación reenviada con éxito",
+                description: `Se envió un correo a ${user.email} con las instrucciones para configurar su contraseña y acceder.`,
+            });
+        } catch (error: any) {
+            console.error("Error al reenviar invitación:", error);
+            toast({
+                variant: "destructive",
+                title: "Error al reenviar",
+                description: error.message || "No se pudo reenviar el correo de invitación.",
+            });
+        } finally {
+            setResendingUserId(null);
+        }
+    };
+
     const openEditModal = (user: User) => {
         setEditingUser(user);
         setIsModalOpen(true);
@@ -321,11 +347,25 @@ export default function UsersPage() {
                                     <TableCell>{user.role}</TableCell>
                                     <TableCell>{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)}>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                disabled={resendingUserId === user.id}
+                                                onClick={() => handleResendInviteFromTable(user)}
+                                                title={`Reenviar correo de invitación a ${user.email}`}
+                                            >
+                                                {resendingUserId === user.id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                                ) : (
+                                                    <Mail className="h-4 w-4" />
+                                                )}
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)} title="Editar usuario">
                                                 <Pencil className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)} title="Eliminar usuario">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>

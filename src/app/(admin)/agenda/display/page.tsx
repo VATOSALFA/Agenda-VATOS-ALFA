@@ -286,12 +286,12 @@ export default function AgendaDisplayPage() {
                 {filteredProfessionals.map(barber => (
                     <div key={barber.id} className="py-4 flex flex-col items-center justify-center">
                         <Avatar className="h-[80px] w-[80px] rounded-xl ring-2 ring-primary/20">
-                            <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.name} />
+                            <AvatarImage src={getProfessionalAvatar(barber)} alt={barber.publicName || barber.name} />
                             <AvatarFallback className="rounded-xl bg-primary/10 text-primary text-lg font-bold">
-                                {barber.name ? barber.name.substring(0, 2) : '??'}
+                                {(barber.publicName || barber.name || '??').substring(0, 2)}
                             </AvatarFallback>
                         </Avatar>
-                        <p className="font-semibold text-lg text-center mt-2 text-gray-900">{barber.name}</p>
+                        <p className="font-semibold text-lg text-center mt-2 text-gray-900">{barber.publicName || barber.name}</p>
                     </div>
                 ))}
             </div>

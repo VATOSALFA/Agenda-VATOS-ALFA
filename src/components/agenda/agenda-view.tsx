@@ -101,10 +101,10 @@ function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl:
     >
       <div className="flex flex-col items-center justify-center group w-full h-full">
         <Avatar className="h-[60px] w-[60px] rounded-lg group-hover:ring-2 group-hover:ring-primary transition-all pointer-events-none">
-          <AvatarImage src={avatarUrl} alt={barber.name} />
-          <AvatarFallback className="rounded-lg">{barber.name ? barber.name.substring(0, 2) : '??'}</AvatarFallback>
+          <AvatarImage src={avatarUrl} alt={barber.publicName || barber.name} />
+          <AvatarFallback className="rounded-lg">{(barber.publicName || barber.name || '??').substring(0, 2)}</AvatarFallback>
         </Avatar>
-        <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.name}</p>
+        <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.publicName || barber.name}</p>
       </div>
     </div>
   );
@@ -250,7 +250,7 @@ export default function AgendaView() {
 
     setEnableScheduleInitialData({
       barbero_id: barberId,
-      barberName: barber?.name,
+      barberName: barber?.publicName || barber?.name,
       fecha: date,
       hora_inicio: time,
       local_id: selectedLocalId
@@ -1215,7 +1215,7 @@ export default function AgendaView() {
                     <SelectContent>
                       <SelectItem value="todos">Todos</SelectItem>
                       {professionals.filter(p => p.active !== false && !p.deleted).map(prof => (
-                        <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                        <SelectItem key={prof.id} value={prof.id}>{prof.publicName || prof.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1231,7 +1231,7 @@ export default function AgendaView() {
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
                     {professionals.filter(p => p.active !== false && !p.deleted).map(prof => (
-                      <SelectItem key={prof.id} value={prof.id}>{prof.name}</SelectItem>
+                      <SelectItem key={prof.id} value={prof.id}>{prof.publicName || prof.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

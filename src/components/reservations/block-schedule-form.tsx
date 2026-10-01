@@ -253,7 +253,7 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                       <SelectContent>
                         {professionals.map(professional => (
                           <SelectItem key={professional.id} value={professional.id}>
-                            {professional.name}
+                            {professional.publicName || professional.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -309,7 +309,7 @@ export function QuickConsultModal({
                   time: formatMins(alignedStart),
                   mins: alignedStart,
                   barberId: prof.id,
-                  barberName: prof.name,
+                  barberName: prof.publicName || prof.name,
                   barberPhoto: prof.avatarUrl,
                   gapMinutes: gapEnd - alignedStart,
                 });
@@ -320,7 +320,7 @@ export function QuickConsultModal({
                     time: formatMins(nextStart),
                     mins: nextStart,
                     barberId: prof.id,
-                    barberName: prof.name,
+                    barberName: prof.publicName || prof.name,
                     barberPhoto: prof.avatarUrl,
                     gapMinutes: gapEnd - nextStart,
                   });

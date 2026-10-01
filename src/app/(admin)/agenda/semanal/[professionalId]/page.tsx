@@ -288,11 +288,11 @@ export default function WeeklyAgendaPage() {
 
             <div className="flex items-center gap-3 w-full md:w-auto bg-white p-2 rounded-lg border md:border-0 md:bg-transparent md:p-0 shadow-sm md:shadow-none">
               <Avatar className="h-10 w-10 md:h-12 md:w-12 rounded-lg border md:border-2 border-white shadow-sm">
-                <AvatarImage src={professional.avatarUrl} alt={professional.name} />
-                <AvatarFallback className="rounded-lg bg-primary/10 text-primary uppercase">{professional.name?.substring(0, 2)}</AvatarFallback>
+                <AvatarImage src={professional.avatarUrl} alt={professional.publicName || professional.name} />
+                <AvatarFallback className="rounded-lg bg-primary/10 text-primary uppercase">{(professional.publicName || professional.name)?.substring(0, 2)}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <h2 className="text-base md:text-lg font-bold text-[#202A49] capitalize leading-none mb-1">{professional.name}</h2>
+                <h2 className="text-base md:text-lg font-bold text-[#202A49] capitalize leading-none mb-1">{professional.publicName || professional.name}</h2>
                 <p className="text-xs text-muted-foreground capitalize">
                   {selectedWeekFormatted}
                 </p>

@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { db, storage } from '@/lib/firebase-client';
-import { collection, addDoc, updateDoc, doc, deleteDoc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '@/lib/firebase-client';
+import { doc, setDoc, getDoc, collection, getDocs, Timestamp } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import PromotionsManager from '../promotions/promotions-manager';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,6 +32,12 @@ import {
     Crown,
     ChevronsRight,
     X,
+    ChevronDown,
+    ChevronUp,
+    Camera,
+    Image as ImageIcon,
+    ExternalLink,
+    HelpCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -46,33 +51,104 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { ImageUploader } from '@/components/shared/image-uploader';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
-interface AppAviso {
-    id: string;
-    titulo: string;
-    descripcion: string;
-    imagenUrl: string | null;
-    fechaExpiracion: Timestamp | null;
-    activo: boolean;
-}
-
-interface AppPromocion {
-    id: string;
-    titulo: string;
-    descripcion: string;
-    imagenUrl: string | null;
-    codigoDescuento: string;
-    mostrarQr: boolean;
-    activo: boolean;
-}
-
-export interface PrivilegioVIP {
+interface PrivilegioVIP {
     id: string;
     titulo: string;
     activo: boolean;
     fechaLimite?: string | null; // YYYY-MM-DD
     creado_el?: any;
 }
+
+type BeneficioPaseAlfa = PrivilegioVIP;
+
+interface LookbookItem {
+    id: string;
+    titulo: string;
+    subtitulo?: string;
+    descripcion?: string;
+    tiempo?: string;
+    nivelFijacion?: string;
+    imagenUrl: string;
+    servicioNombre?: string;
+    serviceMatchId?: string;
+    activo: boolean;
+    creado_el?: any;
+    orden?: number;
+}
+
+const DEFAULT_LOOKBOOK_ITEMS: LookbookItem[] = [
+    {
+        id: 'style_fade_clasico',
+        titulo: 'Low Fade & Barba Perfilada',
+        subtitulo: 'El favorito de los caballeros',
+        descripcion: 'Desvanecido bajo y limpio con transición impecable hacia la piel. Contornos trazados con navaja libre y barba perfilada con simetría milimétrica.',
+        tiempo: '40 min',
+        nivelFijacion: 'Mate Natural',
+        imagenUrl: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=800&q=80',
+        servicioNombre: 'Corte de cabello',
+        serviceMatchId: 'corte-cabello',
+        activo: true,
+    },
+    {
+        id: 'style_pompadour',
+        titulo: 'Pompadour Ejecutivo',
+        subtitulo: 'Elegancia clásica contemporánea',
+        descripcion: 'Volumen superior estructurado con caída natural hacia atrás. Laterales rebajados a tijera y acabado impecable para oficina o eventos de gala.',
+        tiempo: '45 min',
+        nivelFijacion: 'Firmeza Media / Brillo Suave',
+        imagenUrl: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
+        servicioNombre: 'Corte de cabello',
+        serviceMatchId: 'corte-cabello',
+        activo: true,
+    },
+    {
+        id: 'style_crop_texturizado',
+        titulo: 'Texturizado Urbano (Crop)',
+        subtitulo: 'Moderno, fresco y juvenil',
+        descripcion: 'Capas superiores con textura desordenada controlada y flequillo recto o despuntado. Mid fade en laterales para máximo contraste y frescura.',
+        tiempo: '35 min',
+        nivelFijacion: 'Mate Alto',
+        imagenUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=800&q=80',
+        servicioNombre: 'Corte de cabello',
+        serviceMatchId: 'corte-cabello',
+        activo: true,
+    },
+    {
+        id: 'style_grecas_freestyle',
+        titulo: 'Líneas & Grecas Freestyle',
+        subtitulo: 'Identidad y arte urbano',
+        descripcion: 'Diseño geométrico a mano alzada tallado sobre degradado oscuro. Líneas nítidas de alta precisión que destacan en cualquier ángulo.',
+        tiempo: '25 min',
+        nivelFijacion: 'Natural',
+        imagenUrl: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?auto=format&fit=crop&w=800&q=80',
+        servicioNombre: 'Grecas',
+        serviceMatchId: 'grecas',
+        activo: true,
+    },
+    {
+        id: 'style_ritual_completo',
+        titulo: 'Ritual Barba & Toalla Caliente',
+        subtitulo: 'Experiencia sensorial clásica',
+        descripcion: 'Afeitado tradicional con toalla caliente vaporizada con aceites esenciales de eucalipto, apertura de poros, espuma tibia y navaja clásica.',
+        tiempo: '35 min',
+        nivelFijacion: 'Hidratación Profunda',
+        imagenUrl: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?auto=format&fit=crop&w=800&q=80',
+        servicioNombre: 'Arreglo de barba expres',
+        serviceMatchId: 'arreglo-barba-expres',
+        activo: true,
+    },
+];
 
 const formatDateDisplay = (dateStr?: string | null) => {
     if (!dateStr) return null;
@@ -86,11 +162,57 @@ const formatDateDisplay = (dateStr?: string | null) => {
     return dateStr;
 };
 
+const parseDateSafe = (val?: string | null): Date | undefined => {
+    if (!val) return undefined;
+    try {
+        const parts = val.split('-');
+        if (parts.length === 3) {
+            const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+            return isNaN(d.getTime()) ? undefined : d;
+        }
+    } catch (_) {}
+    return undefined;
+};
+
 const isPrivilegeExpired = (dateStr?: string | null) => {
     if (!dateStr) return false;
     const today = format(new Date(), 'yyyy-MM-dd');
     return dateStr < today;
 };
+
+function InfoTooltip({ text }: { text: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    onMouseEnter={() => setOpen(true)}
+                    onMouseLeave={() => setOpen(false)}
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setOpen((prev) => !prev);
+                    }}
+                    className="inline-flex items-center justify-center text-muted-foreground/60 hover:text-primary transition-colors p-0.5 rounded-full focus:outline-none shrink-0"
+                    aria-label="Más información"
+                >
+                    <HelpCircle className="w-3.5 h-3.5 cursor-pointer" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent
+                side="top"
+                align="start"
+                sideOffset={6}
+                className="w-72 sm:w-80 p-2.5 text-xs text-foreground bg-popover shadow-md rounded-lg border border-border/70 z-50 pointer-events-auto"
+                onMouseEnter={() => setOpen(true)}
+                onMouseLeave={() => setOpen(false)}
+            >
+                <p className="leading-relaxed font-normal">{text}</p>
+            </PopoverContent>
+        </Popover>
+    );
+}
 
 interface SafetySliderProps {
     title: string;
@@ -203,14 +325,11 @@ export default function MobileAppSettingsPage() {
     // Tab activo controlado
     const [activeTab, setActiveTab] = useState('pase_alfa');
 
-    // -- AVISOS --
-    const { data: avisos, loading: loadingAvisos } = useFirestoreQuery<AppAviso>('app_avisos');
-    const [isSavingAviso, setIsSavingAviso] = useState(false);
-    
-    // -- PROMOCIONES --
-    const { data: promociones, loading: loadingPromos } = useFirestoreQuery<AppPromocion>('app_promociones');
-    const [isSavingPromo, setIsSavingPromo] = useState(false);
-    
+    // Estados para minimizar / maximizar tarjetas (por defecto minimizadas para orden visual)
+    const [isPaseAlfaOpen, setIsPaseAlfaOpen] = useState(false);
+    const [isBeneficiosOpen, setIsBeneficiosOpen] = useState(false);
+    const [isLookbookOpen, setIsLookbookOpen] = useState(false);
+
     // -- PASE ALFA (CONFIGURACIÓN DINÁMICA DE LEALTAD) --
     const [paseAlfaForm, setPaseAlfaForm] = useState({
         activo: true,
@@ -218,23 +337,24 @@ export default function MobileAppSettingsPage() {
         subtitulo: 'Cada visita cuenta. Presenta tu código QR en recepción y disfruta tu corte de cortesía.',
         sellosRequeridos: 10,
         recompensa: '10.° Corte Totalmente Gratis',
-        puntosPorVisita: 10,
+        puntosPorVisita: 0,
         instrucciones: 'Presenta tu código QR en recepción al finalizar tu servicio para que el barbero abone tu sello de visita.',
         terminos: 'Válido en sucursales oficiales de Vatos Alfa Barbería. Aplica en cortes y servicios seleccionados.',
     });
     const [loadingPaseAlfa, setLoadingPaseAlfa] = useState(true);
     const [isSavingPaseAlfa, setIsSavingPaseAlfa] = useState(false);
 
-    // -- PRIVILEGIOS VIP / BENEFICIOS (ESTRUCTURA RICA) --
+    // -- BENEFICIOS PASE ALFA (ESTRUCTURA RICA) --
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
     const [loadingMembresia, setLoadingMembresia] = useState(true);
     const [isSavingPrivilegios, setIsSavingPrivilegios] = useState(false);
 
-    // Formulario de Nuevo Privilegio
+    // Formulario de Nuevo Beneficio
     const [newTitle, setNewTitle] = useState('');
     const [newActivo, setNewActivo] = useState(true);
     const [newHasExpiry, setNewHasExpiry] = useState(false);
     const [newFechaLimite, setNewFechaLimite] = useState('');
+    const [newDatePickerOpen, setNewDatePickerOpen] = useState(false);
 
     // Modal de Edición
     const [editingPrivilegio, setEditingPrivilegio] = useState<PrivilegioVIP | null>(null);
@@ -242,73 +362,80 @@ export default function MobileAppSettingsPage() {
     const [editActivo, setEditActivo] = useState(true);
     const [editHasExpiry, setEditHasExpiry] = useState(false);
     const [editFechaLimite, setEditFechaLimite] = useState('');
+    const [editDatePickerOpen, setEditDatePickerOpen] = useState(false);
 
     // Modal de Eliminación con Barra de Seguridad
     const [deletingPrivilegio, setDeletingPrivilegio] = useState<PrivilegioVIP | null>(null);
+
+    // -- INSPIRACIÓN ALFA (LOOKBOOK DE CORTES REALES) --
+    const [lookbookItems, setLookbookItems] = useState<LookbookItem[]>([]);
+    const [servicesList, setServicesList] = useState<{ id: string; nombre: string }[]>([]);
+    const [loadingLookbook, setLoadingLookbook] = useState(true);
+    const [isSavingLookbook, setIsSavingLookbook] = useState(false);
+    const [isUploadingLookbook, setIsUploadingLookbook] = useState(false);
+    const [newLookbookImage, setNewLookbookImage] = useState('');
+    const [newLookbookActivo, setNewLookbookActivo] = useState(true);
+
+    // Modal de Eliminación Galería Lookbook
+    const [deletingLookbookItem, setDeletingLookbookItem] = useState<LookbookItem | null>(null);
 
     useEffect(() => {
         async function fetchConfig() {
             try {
                 let rawBenefits: any[] = [];
 
-                // 1. Cargar configuracion/pase_alfa
-                const paseRef = doc(db, 'configuracion', 'pase_alfa');
-                const paseSnap = await getDoc(paseRef);
+                // 1. Cargar configuracion/pase_alfa y configuracion/app_movil en paralelo para merge seguro
+                const [paseSnap, appMovilSnap] = await Promise.all([
+                    getDoc(doc(db, 'configuracion', 'pase_alfa')),
+                    getDoc(doc(db, 'configuracion', 'app_movil')),
+                ]);
 
-                if (paseSnap.exists()) {
-                    const data = paseSnap.data();
+                const paseData = paseSnap.exists() ? paseSnap.data() : null;
+                const mData = appMovilSnap.exists() ? appMovilSnap.data() : null;
+                const appMovilPaseData = mData ? (mData.pase_alfa || mData) : null;
+
+                // Combinar inteligentemente sin sobrescribir con campos vacíos
+                const merged = {
+                    ...(appMovilPaseData || {}),
+                    ...(paseData || {}),
+                };
+
+                // Si paseData tenía campos vacíos pero appMovil los tenía llenos (ej. términos), preservarlos
+                if (appMovilPaseData) {
+                    if (!merged.terminos && appMovilPaseData.terminos) merged.terminos = appMovilPaseData.terminos;
+                    if (!merged.instrucciones && appMovilPaseData.instrucciones) merged.instrucciones = appMovilPaseData.instrucciones;
+                    if (!merged.subtitulo && appMovilPaseData.subtitulo) merged.subtitulo = appMovilPaseData.subtitulo;
+                }
+
+                if (paseData || appMovilPaseData) {
                     setPaseAlfaForm({
-                        activo: data.activo !== undefined ? Boolean(data.activo) : true,
-                        titulo: data.titulo || 'Pase Alfa Club',
-                        subtitulo: data.subtitulo || '',
-                        sellosRequeridos: Number(data.sellosRequeridos) || 10,
-                        recompensa: data.recompensa || '10.° Corte Totalmente Gratis',
-                        puntosPorVisita: Number(data.puntosPorVisita) || 10,
-                        instrucciones: data.instrucciones || '',
-                        terminos: data.terminos || '',
+                        activo: merged.activo !== undefined ? Boolean(merged.activo) : true,
+                        titulo: merged.titulo || 'Pase Alfa Club',
+                        subtitulo: merged.subtitulo || '',
+                        sellosRequeridos: Number(merged.sellosRequeridos) || 10,
+                        recompensa: merged.recompensa || '10.° Corte Totalmente Gratis',
+                        puntosPorVisita: merged.puntosPorVisita !== undefined ? Number(merged.puntosPorVisita) : 0,
+                        instrucciones: merged.instrucciones || '',
+                        terminos: merged.terminos || '',
                     });
-                    if (Array.isArray(data.beneficios_detallados) && data.beneficios_detallados.length > 0) {
-                        rawBenefits = data.beneficios_detallados;
-                    } else if (Array.isArray(data.beneficios)) {
-                        rawBenefits = data.beneficios;
+
+                    if (Array.isArray(merged.beneficios_detallados) && merged.beneficios_detallados.length > 0) {
+                        rawBenefits = merged.beneficios_detallados;
+                    } else if (Array.isArray(merged.beneficios)) {
+                        rawBenefits = merged.beneficios;
                     }
-                } else {
-                    // 2. Fallback a configuracion/app_movil
-                    const appMovilRef = doc(db, 'configuracion', 'app_movil');
-                    const appMovilSnap = await getDoc(appMovilRef);
-                    if (appMovilSnap.exists()) {
-                        const mData = appMovilSnap.data();
-                        const pData = mData.pase_alfa || mData;
-                        if (pData.sellosRequeridos || pData.titulo) {
-                            setPaseAlfaForm({
-                                activo: pData.activo !== undefined ? Boolean(pData.activo) : true,
-                                titulo: pData.titulo || 'Pase Alfa Club',
-                                subtitulo: pData.subtitulo || '',
-                                sellosRequeridos: Number(pData.sellosRequeridos) || 10,
-                                recompensa: pData.recompensa || '10.° Corte Totalmente Gratis',
-                                puntosPorVisita: Number(pData.puntosPorVisita) || 10,
-                                instrucciones: pData.instrucciones || '',
-                                terminos: pData.terminos || '',
-                            });
-                        }
-                        if (Array.isArray(pData.beneficios_detallados) && pData.beneficios_detallados.length > 0) {
-                            rawBenefits = pData.beneficios_detallados;
-                        } else if (Array.isArray(pData.beneficios)) {
-                            rawBenefits = pData.beneficios;
-                        }
-                    }
-                    
-                    // 3. Fallback a ajustes_sitio/membresia_vip
-                    if (rawBenefits.length === 0) {
-                        const docRef = doc(db, 'ajustes_sitio', 'membresia_vip');
-                        const docSnap = await getDoc(docRef);
-                        if (docSnap.exists()) {
-                            const vData = docSnap.data();
-                            if (Array.isArray(vData.beneficios_detallados) && vData.beneficios_detallados.length > 0) {
-                                rawBenefits = vData.beneficios_detallados;
-                            } else if (Array.isArray(vData.beneficios)) {
-                                rawBenefits = vData.beneficios;
-                            }
+                }
+
+                // Fallback a ajustes_sitio/membresia_vip si no hay beneficios
+                if (rawBenefits.length === 0) {
+                    const docRef = doc(db, 'ajustes_sitio', 'membresia_vip');
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        const vData = docSnap.data();
+                        if (Array.isArray(vData.beneficios_detallados) && vData.beneficios_detallados.length > 0) {
+                            rawBenefits = vData.beneficios_detallados;
+                        } else if (Array.isArray(vData.beneficios)) {
+                            rawBenefits = vData.beneficios;
                         }
                     }
                 }
@@ -334,95 +461,52 @@ export default function MobileAppSettingsPage() {
                 });
 
                 setPrivilegios(parsedPrivilegios);
+
+                // 4. Cargar servicios para el selector de Inspiración Alfa
+                try {
+                    const servSnap = await getDocs(collection(db, 'servicios'));
+                    const sList = servSnap.docs.map(d => ({
+                        id: d.id,
+                        nombre: d.data().name || d.data().nombre || d.id
+                    }));
+                    setServicesList(sList);
+                } catch (errServ) {
+                    console.warn('Error cargando servicios:', errServ);
+                }
+
+                // 5. Cargar galería de Inspiración Alfa (Lookbook)
+                let rawLookbook: LookbookItem[] = [];
+                try {
+                    const lookbookRef = doc(db, 'configuracion', 'inspiracion_alfa');
+                    const lookbookSnap = await getDoc(lookbookRef);
+                    if (lookbookSnap.exists() && Array.isArray(lookbookSnap.data().items) && lookbookSnap.data().items.length > 0) {
+                        rawLookbook = lookbookSnap.data().items;
+                    } else {
+                        // Fallback a app_movil
+                        const appMovilRef = doc(db, 'configuracion', 'app_movil');
+                        const appMovilSnap = await getDoc(appMovilRef);
+                        if (appMovilSnap.exists() && Array.isArray(appMovilSnap.data().inspiracion_alfa) && appMovilSnap.data().inspiracion_alfa.length > 0) {
+                            rawLookbook = appMovilSnap.data().inspiracion_alfa;
+                        } else {
+                            rawLookbook = DEFAULT_LOOKBOOK_ITEMS;
+                        }
+                    }
+                } catch (errLb) {
+                    console.warn('Error cargando inspiracion alfa:', errLb);
+                    rawLookbook = DEFAULT_LOOKBOOK_ITEMS;
+                }
+                setLookbookItems(rawLookbook);
             } catch (e) {
                 console.error('Error cargando configuración móvil:', e);
             } finally {
                 setLoadingPaseAlfa(false);
                 setLoadingMembresia(false);
+                setLoadingLookbook(false);
             }
         }
         fetchConfig();
     }, []);
 
-    // Avisos handlers
-    const [avisoForm, setAvisoForm] = useState({ titulo: '', descripcion: '', fechaExpiracion: '', activo: true });
-    const [avisoFile, setAvisoFile] = useState<File | null>(null);
-
-    const [promoForm, setPromoForm] = useState({ titulo: '', descripcion: '', codigoDescuento: '', mostrarQr: true, activo: true });
-    const [promoFile, setPromoFile] = useState<File | null>(null);
-
-    const handleCreateAviso = async () => {
-        if (!avisoForm.titulo) return toast({ title: 'Error', description: 'El título es obligatorio', variant: 'destructive' });
-        setIsSavingAviso(true);
-        try {
-            let imagenUrl = null;
-            if (avisoFile) {
-                const storageRef = ref(storage, "app_avisos/" + Date.now() + "_" + avisoFile.name);
-                await uploadBytes(storageRef, avisoFile);
-                imagenUrl = await getDownloadURL(storageRef);
-            }
-
-            await addDoc(collection(db, 'app_avisos'), {
-                ...avisoForm,
-                imagenUrl,
-                fechaExpiracion: avisoForm.fechaExpiracion ? Timestamp.fromDate(new Date(avisoForm.fechaExpiracion)) : null,
-                createdAt: Timestamp.now()
-            });
-
-            toast({ title: 'Éxito', description: 'Aviso creado correctamente.' });
-            setAvisoForm({ titulo: '', descripcion: '', fechaExpiracion: '', activo: true });
-            setAvisoFile(null);
-        } catch (e) {
-            toast({ title: 'Error', description: 'No se pudo crear el aviso.', variant: 'destructive' });
-        } finally {
-            setIsSavingAviso(false);
-        }
-    };
-
-    const handleToggleAviso = async (id: string, currentStatus: boolean) => {
-        await updateDoc(doc(db, 'app_avisos', id), { activo: !currentStatus });
-    };
-
-    const handleDeleteAviso = async (id: string) => {
-        if (!confirm('¿Eliminar este aviso?')) return;
-        await deleteDoc(doc(db, 'app_avisos', id));
-    };
-
-    const handleCreatePromo = async () => {
-        if (!promoForm.titulo) return toast({ title: 'Error', description: 'El título es obligatorio', variant: 'destructive' });
-        setIsSavingPromo(true);
-        try {
-            let imagenUrl = null;
-            if (promoFile) {
-                const storageRef = ref(storage, "app_promociones/" + Date.now() + "_" + promoFile.name);
-                await uploadBytes(storageRef, promoFile);
-                imagenUrl = await getDownloadURL(storageRef);
-            }
-
-            await addDoc(collection(db, 'app_promociones'), {
-                ...promoForm,
-                imagenUrl,
-                createdAt: Timestamp.now()
-            });
-
-            toast({ title: 'Éxito', description: 'Promoción creada correctamente.' });
-            setPromoForm({ titulo: '', descripcion: '', codigoDescuento: '', mostrarQr: true, activo: true });
-            setPromoFile(null);
-        } catch (e) {
-            toast({ title: 'Error', description: 'No se pudo crear la promoción.', variant: 'destructive' });
-        } finally {
-            setIsSavingPromo(false);
-        }
-    };
-
-    const handleTogglePromo = async (id: string, currentStatus: boolean) => {
-        await updateDoc(doc(db, 'app_promociones', id), { activo: !currentStatus });
-    };
-
-    const handleDeletePromo = async (id: string) => {
-        if (!confirm('¿Eliminar esta promoción?')) return;
-        await deleteDoc(doc(db, 'app_promociones', id));
-    };
 
     // --- PASE ALFA SAVE HANDLER ---
     const handleSavePaseAlfa = async () => {
@@ -450,7 +534,7 @@ export default function MobileAppSettingsPage() {
                 subtitulo: paseAlfaForm.subtitulo.trim(),
                 sellosRequeridos: sellosNum,
                 recompensa: paseAlfaForm.recompensa.trim() || `${sellosNum}.° Corte Totalmente Gratis`,
-                puntosPorVisita: Math.max(1, Number(paseAlfaForm.puntosPorVisita) || 10),
+                puntosPorVisita: Math.max(0, Number(paseAlfaForm.puntosPorVisita) || 0),
                 instrucciones: paseAlfaForm.instrucciones.trim(),
                 terminos: paseAlfaForm.terminos.trim(),
                 beneficios: activeTitles,
@@ -652,8 +736,8 @@ export default function MobileAppSettingsPage() {
 
             // 4. Registro de Auditoría
             await logAuditAction({
-                action: 'Modificar Privilegios VIP',
-                details: `Total: ${privilegios.length} privilegios configurados (${activeTitles.length} activos en app móvil)`,
+                action: 'Modificar Beneficios Pase Alfa',
+                details: `Total: ${privilegios.length} beneficios configurados (${activeTitles.length} activos en app móvil)`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
                 userRole: user?.role,
@@ -661,18 +745,143 @@ export default function MobileAppSettingsPage() {
             });
 
             toast({
-                title: '¡Privilegios VIP Guardados!',
+                title: '¡Beneficios Pase Alfa Guardados!',
                 description: `Se sincronizaron ${activeTitles.length} beneficios activos con la aplicación móvil.`,
             });
         } catch (e: any) {
-            console.error('Error guardando privilegios:', e);
+            console.error('Error guardando beneficios:', e);
             toast({
-                title: 'Error al guardar privilegios',
+                title: 'Error al guardar beneficios',
                 description: e.message || 'No se pudieron guardar los cambios en la base de datos.',
                 variant: 'destructive',
             });
         } finally {
             setIsSavingPrivilegios(false);
+        }
+    };
+
+    // --- INSPIRACIÓN ALFA (LOOKBOOK) HANDLERS ---
+    const handleAddLookbookItem = (urlOverride?: string) => {
+        const imageToSave = (urlOverride || newLookbookImage || '').trim();
+        if (!imageToSave) {
+            return toast({
+                title: 'Fotografía Requerida',
+                description: 'Por favor arrastra o haz clic para subir una fotografía.',
+                variant: 'destructive',
+            });
+        }
+
+        const newItem: LookbookItem = {
+            id: `style_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            titulo: '',
+            subtitulo: '',
+            descripcion: '',
+            tiempo: '',
+            nivelFijacion: '',
+            imagenUrl: imageToSave,
+            servicioNombre: '',
+            serviceMatchId: '',
+            activo: newLookbookActivo,
+            creado_el: new Date().toISOString(),
+            orden: lookbookItems.length,
+        };
+
+        setLookbookItems((prev) => [newItem, ...prev]);
+        setNewLookbookImage('');
+        toast({
+            title: '¡Fotografía agregada a la galería!',
+            description: 'Recuerda hacer clic en "Guardar Galería de Cortes" para sincronizar los cambios con la app móvil.',
+        });
+    };
+
+    const handleToggleLookbookItem = (id: string, activo: boolean) => {
+        setLookbookItems((prev) =>
+            prev.map((item) => (item.id === id ? { ...item, activo } : item))
+        );
+        toast({
+            title: activo ? 'Fotografía Activada' : 'Fotografía Pausada',
+            description: activo
+                ? 'La fotografía se mostrará en la app móvil al guardar.'
+                : 'La fotografía se ha pausado y se ocultará en la app.',
+        });
+    };
+
+    const handleStartDeleteLookbook = (item: LookbookItem) => {
+        setDeletingLookbookItem(item);
+    };
+
+    const handleConfirmDeleteLookbook = () => {
+        if (!deletingLookbookItem) return;
+        const targetId = deletingLookbookItem.id;
+        setLookbookItems((prev) => prev.filter((i) => i.id !== targetId));
+        setDeletingLookbookItem(null);
+        toast({
+            title: 'Fotografía Eliminada',
+            description: 'Se eliminó la fotografía de la galería. Recuerda guardar cambios para sincronizar con la app.',
+        });
+    };
+
+    const handleSaveLookbook = async () => {
+        setIsSavingLookbook(true);
+        try {
+            const cleanItems = lookbookItems.map((item, idx) => ({
+                id: item.id || `lookbook_${idx}_${Date.now()}`,
+                titulo: (item.titulo || '').trim(),
+                subtitulo: (item.subtitulo || '').trim(),
+                descripcion: (item.descripcion || '').trim(),
+                tiempo: (item.tiempo || '40 min').trim(),
+                nivelFijacion: (item.nivelFijacion || 'Mate Natural').trim(),
+                imagenUrl: (item.imagenUrl || '').trim(),
+                servicioNombre: (item.servicioNombre || '').trim(),
+                serviceMatchId: item.serviceMatchId || '',
+                activo: item.activo !== false,
+                orden: idx,
+            }));
+
+            // 1. Guardar en configuracion/inspiracion_alfa
+            await setDoc(
+                doc(db, 'configuracion', 'inspiracion_alfa'),
+                {
+                    items: cleanItems,
+                    actualizado_el: Timestamp.now(),
+                    actualizado_por: user?.email || 'admin',
+                },
+                { merge: true }
+            );
+
+            // 2. Sincronizar en configuracion/app_movil
+            await setDoc(
+                doc(db, 'configuracion', 'app_movil'),
+                {
+                    inspiracion_alfa: cleanItems,
+                    actualizado_el: Timestamp.now(),
+                },
+                { merge: true }
+            );
+
+            // 3. Auditoría
+            await logAuditAction({
+                action: 'Modificar Inspiración Alfa',
+                details: `Total: ${cleanItems.length} estilos/cortes (${cleanItems.filter((i) => i.activo).length} activos en app móvil)`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                severity: 'info',
+            });
+
+            toast({
+                title: '¡Inspiración Alfa Guardada!',
+                description: `Se sincronizaron ${cleanItems.filter((i) => i.activo).length} cortes reales en tiempo real con la app móvil.`,
+            });
+        } catch (e: any) {
+            console.error('Error guardando Inspiración Alfa:', e);
+            toast({
+                title: 'Error al guardar galería',
+                description: e.message || 'No se pudieron guardar los cambios en la base de datos.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsSavingLookbook(false);
         }
     };
 
@@ -686,226 +895,712 @@ export default function MobileAppSettingsPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="pase_alfa">Pase Alfa</TabsTrigger>
-                    <TabsTrigger value="avisos">Avisos y Comunicados</TabsTrigger>
-                    <TabsTrigger value="sugerencias">Sugerencias y Promociones</TabsTrigger>
-                    <TabsTrigger value="membresia">Privilegios VIP</TabsTrigger>
+                    <TabsTrigger value="promociones">Promociones</TabsTrigger>
                 </TabsList>
 
                 {/* PASE ALFA TAB */}
                 <TabsContent value="pase_alfa" className="mt-6 space-y-6">
-                    <Card className="border border-border/70 shadow-sm">
+                    <Card className="border border-border/70 shadow-sm transition-all">
                         <CardHeader className="pb-4">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/20 shrink-0 mt-0.5">
-                                        <Award className="h-6 w-6" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <CardTitle className="text-lg font-bold">
-                                                Control de Programa Pase Alfa
-                                            </CardTitle>
-                                            <Badge variant="outline" className="text-[10px] text-primary border-primary/30 bg-primary/5">
-                                                Sincronización en Tiempo Real
-                                            </Badge>
-                                        </div>
-                                        <CardDescription className="text-xs md:text-sm mt-0.5">
-                                            Configura los sellos necesarios, recompensa y textos del Pase Alfa que ven tus clientes en su app móvil.
-                                        </CardDescription>
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                    <Award className="h-5 w-5 text-primary shrink-0" />
+                                    <div className="flex items-center gap-1.5">
+                                        <CardTitle className="text-base font-semibold">
+                                            Programa Pase Alfa
+                                        </CardTitle>
+                                        <InfoTooltip text="Configura los sellos necesarios, recompensa y textos del Pase Alfa que ven tus clientes en su app móvil." />
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 self-end md:self-center bg-muted/40 px-3.5 py-2 rounded-xl border border-border/60">
-                                    <span className="text-xs font-semibold">
-                                        {paseAlfaForm.activo ? 'Pase Alfa Activo' : 'Pase Alfa Pausado'}
-                                    </span>
+                                <div className="flex items-center gap-3 shrink-0">
                                     <Switch
                                         checked={paseAlfaForm.activo}
                                         onCheckedChange={(checked) =>
                                             setPaseAlfaForm((prev) => ({ ...prev, activo: checked }))
                                         }
+                                        title={paseAlfaForm.activo ? "Pase Alfa Activo" : "Pase Alfa Pausado"}
+                                        aria-label="Pase Alfa Activo"
                                     />
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPaseAlfaOpen(!isPaseAlfaOpen)}
+                                        className="text-muted-foreground hover:text-foreground transition-colors p-1"
+                                        title={isPaseAlfaOpen ? "Minimizar" : "Desplegar"}
+                                        aria-label={isPaseAlfaOpen ? "Minimizar" : "Desplegar"}
+                                    >
+                                        {isPaseAlfaOpen ? (
+                                            <ChevronUp className="w-5 h-5" />
+                                        ) : (
+                                            <ChevronDown className="w-5 h-5" />
+                                        )}
+                                    </button>
                                 </div>
                             </div>
                         </CardHeader>
 
-                        {loadingPaseAlfa ? (
-                            <CardContent className="py-12 flex justify-center">
-                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            </CardContent>
-                        ) : (
-                            <CardContent className="space-y-6 pt-2">
-                                {/* PARÁMETROS BÁSICOS */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border/50 pt-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-semibold">Título del Pase</Label>
-                                        <Input
-                                            value={paseAlfaForm.titulo}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, titulo: e.target.value })}
-                                            placeholder="Ej. Pase Alfa Club"
-                                            className="font-medium"
-                                        />
-                                        <p className="text-[11px] text-muted-foreground">Nombre visible en la tarjeta y en la pestaña de lealtad.</p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-semibold">Recompensa / Premio al completar los sellos</Label>
-                                        <Input
-                                            value={paseAlfaForm.recompensa}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, recompensa: e.target.value })}
-                                            placeholder="Ej. 10.° Corte Totalmente Gratis"
-                                            className="font-medium"
-                                        />
-                                        <p className="text-[11px] text-muted-foreground">Premio que se desbloquea al llenar la tarjeta (ej. Corte Gratis).</p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-semibold">Meta de Sellos Requeridos</Label>
-                                        <div className="relative">
+                        {isPaseAlfaOpen && (
+                            loadingPaseAlfa ? (
+                                <CardContent className="py-8 flex justify-center">
+                                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                </CardContent>
+                            ) : (
+                                <CardContent className="space-y-4 pt-1 px-4 sm:px-6 pb-5">
+                                    {/* PARÁMETROS BÁSICOS */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-border/50 pt-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-medium">Título del Pase</Label>
+                                                <InfoTooltip text="Nombre visible en la tarjeta y en la pestaña de lealtad de la app móvil." />
+                                            </div>
                                             <Input
-                                                type="number"
-                                                min="1"
-                                                max="20"
-                                                value={paseAlfaForm.sellosRequeridos}
-                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, sellosRequeridos: Number(e.target.value) || 10 })}
-                                                className="font-bold text-base"
+                                                value={paseAlfaForm.titulo}
+                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, titulo: e.target.value })}
+                                                placeholder="Ej. Pase Alfa Club"
+                                                className="h-8.5 text-xs sm:text-sm font-medium"
                                             />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">sellos</span>
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground">Número de visitas o servicios requeridos para ganar la recompensa.</p>
-                                    </div>
 
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-semibold">Puntos Alfa otorgados por visita</Label>
-                                        <div className="relative">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-medium">Recompensa al completar sellos</Label>
+                                                <InfoTooltip text="Premio que se desbloquea al llenar la tarjeta (ej. 10.° Corte Totalmente Gratis)." />
+                                            </div>
                                             <Input
-                                                type="number"
-                                                min="1"
-                                                value={paseAlfaForm.puntosPorVisita}
-                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, puntosPorVisita: Number(e.target.value) || 10 })}
-                                                className="font-bold text-base"
+                                                value={paseAlfaForm.recompensa}
+                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, recompensa: e.target.value })}
+                                                placeholder="Ej. 10.° Corte Totalmente Gratis"
+                                                className="h-8.5 text-xs sm:text-sm font-medium"
                                             />
-                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">pts / visita</span>
                                         </div>
-                                        <p className="text-[11px] text-muted-foreground">Puntos de lealtad acreditados en el perfil del cliente por cada corte.</p>
-                                    </div>
-                                </div>
 
-                                {/* TEXTOS DESCRIPTIVOS */}
-                                <div className="space-y-4 border-t border-border/50 pt-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs font-semibold">Subtítulo / Lema Explicativo</Label>
-                                        <Textarea
-                                            value={paseAlfaForm.subtitulo}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, subtitulo: e.target.value })}
-                                            placeholder="Ej. Cada visita cuenta. Presenta tu código QR en recepción y disfruta tu corte de cortesía."
-                                            rows={2}
-                                        />
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-medium">Meta de Sellos Requeridos</Label>
+                                                <InfoTooltip text="Número de visitas o servicios requeridos para ganar la recompensa." />
+                                            </div>
+                                            <div className="relative">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    max="20"
+                                                    value={paseAlfaForm.sellosRequeridos}
+                                                    onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, sellosRequeridos: Number(e.target.value) || 10 })}
+                                                    className="h-8.5 text-xs sm:text-sm font-semibold pr-14"
+                                                />
+                                                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none">sellos</span>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-semibold">Instrucciones de Escaneo (Modal QR)</Label>
+                                    {/* TEXTOS DESCRIPTIVOS */}
+                                    <div className="space-y-3 border-t border-border/50 pt-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-medium">Subtítulo / Lema Explicativo</Label>
+                                                <InfoTooltip text="Lema o frase explicativa visible en la cabecera del pase en la app móvil." />
+                                            </div>
                                             <Textarea
-                                                value={paseAlfaForm.instrucciones}
-                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, instrucciones: e.target.value })}
-                                                placeholder="Ej. Presenta tu código QR en recepción al finalizar tu servicio..."
+                                                value={paseAlfaForm.subtitulo}
+                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, subtitulo: e.target.value })}
+                                                placeholder="Ej. Cada visita cuenta. Presenta tu código QR en recepción y disfruta tu corte de cortesía."
                                                 rows={2}
+                                                className="text-xs sm:text-sm min-h-[52px] py-1.5 px-3 resize-y"
                                             />
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label className="text-xs font-semibold">Términos y Condiciones del Pase</Label>
-                                            <Textarea
-                                                value={paseAlfaForm.terminos}
-                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, terminos: e.target.value })}
-                                                placeholder="Ej. Válido en sucursales oficiales de Vatos Alfa Barbería..."
-                                                rows={2}
-                                            />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-medium">Instrucciones de Escaneo (Modal QR)</Label>
+                                                    <InfoTooltip text="Instrucciones que ve el cliente al abrir su código QR en recepción para sellar su visita." />
+                                                </div>
+                                                <Textarea
+                                                    value={paseAlfaForm.instrucciones}
+                                                    onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, instrucciones: e.target.value })}
+                                                    placeholder="Ej. Presenta tu código QR en recepción al finalizar tu servicio..."
+                                                    rows={2}
+                                                    className="text-xs sm:text-sm min-h-[52px] py-1.5 px-3 resize-y"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-medium">Términos y Condiciones del Pase</Label>
+                                                    <InfoTooltip text="Reglas, restricciones y validez aplicables al Pase Alfa que ven tus clientes." />
+                                                </div>
+                                                <Textarea
+                                                    value={paseAlfaForm.terminos}
+                                                    onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, terminos: e.target.value })}
+                                                    placeholder="Ej. Válido en sucursales oficiales de Vatos Alfa Barbería..."
+                                                    rows={2}
+                                                    className="text-xs sm:text-sm min-h-[52px] py-1.5 px-3 resize-y"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
 
-                                {/* RESUMEN DE PRIVILEGIOS Y ENLACE DIRECTO */}
-                                <div className="space-y-3 border-t border-border/50 pt-4">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                        <div>
-                                            <Label className="text-sm font-bold flex items-center gap-2 text-foreground">
-                                                <Sparkles className="w-4 h-4 text-primary" />
-                                                Privilegios y Beneficios del Miembro Alfa
-                                            </Label>
-                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                Cortesías y beneficios que ven tus clientes en su app móvil.
-                                            </p>
+                                    {/* RESUMEN DE BENEFICIOS Y ENLACE DIRECTO */}
+                                    <div className="space-y-2.5 border-t border-border/50 pt-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                                                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                                                    Resumen de Beneficios Pase Alfa
+                                                </Label>
+                                                <InfoTooltip text="Cortesías y beneficios activos que ven tus clientes en su app móvil." />
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                                                <Award className="w-3.5 h-3.5" />
+                                                {privilegios.filter(p => p.activo && !isPrivilegeExpired(p.fechaLimite)).length} Beneficios Activos
+                                            </div>
                                         </div>
+
+                                        <div className="space-y-1.5 border rounded-lg p-2.5 bg-muted/20">
+                                            {privilegios.length === 0 ? (
+                                                <div className="text-center py-4 text-muted-foreground text-xs">
+                                                    <Info className="w-4 h-4 mx-auto mb-1 text-muted-foreground/60" />
+                                                    No hay beneficios configurados aún. Utiliza el panel de abajo para agregar cortesías.
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1.5">
+                                                    {privilegios.map((p, idx) => (
+                                                        <div key={p.id || idx} className="flex items-center justify-between bg-background p-2 rounded-md border border-border/60 shadow-xs">
+                                                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "text-[10px] shrink-0 font-medium py-0 px-1.5",
+                                                                        p.activo
+                                                                            ? "text-[#202A49] dark:text-slate-200 border-[#202A49]/30 dark:border-slate-700 bg-[#202A49]/10 dark:bg-slate-800"
+                                                                            : "text-muted-foreground border-border bg-muted/40"
+                                                                    )}
+                                                                >
+                                                                    {p.activo ? "Activo" : "Pausado"}
+                                                                </Badge>
+                                                                <span className={cn("text-xs font-medium truncate", !p.activo && "text-muted-foreground line-through")}>
+                                                                    {p.titulo}
+                                                                </span>
+                                                            </div>
+                                                            {p.fechaLimite && (
+                                                                <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                                                                    Vence: {p.fechaLimite}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* BOTÓN GUARDAR PASE ALFA */}
+                                    <div className="flex justify-end pt-3 border-t border-border/50">
                                         <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setActiveTab('membresia')}
-                                            className="text-xs h-8 border-primary/30 text-primary hover:bg-primary/5 shrink-0 gap-1.5"
+                                            onClick={handleSavePaseAlfa}
+                                            disabled={isSavingPaseAlfa}
+                                            className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs sm:text-sm px-5 h-9 shadow-sm flex items-center gap-2"
                                         >
-                                            <Crown className="w-3.5 h-3.5" />
-                                            Gestionar Privilegios VIP ({privilegios.length})
+                                            {isSavingPaseAlfa ? (
+                                                <>
+                                                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                    Guardando en la App...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                    Guardar Configuración del Pase Alfa
+                                                </>
+                                            )}
                                         </Button>
                                     </div>
+                                </CardContent>
+                            )
+                        )}
+                    </Card>
+                    {/* GESTOR DE BENEFICIOS PASE ALFA */}
+                    <Card className="border border-border/70 shadow-sm transition-all">
+                        <CardHeader className="pb-3 pt-4 px-4 sm:px-6">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Award className="h-4.5 w-4.5 text-primary shrink-0" />
+                                    <div className="flex items-center gap-1.5">
+                                        <CardTitle className="text-base font-semibold">
+                                            Beneficios Pase Alfa
+                                        </CardTitle>
+                                        <InfoTooltip text="Configura las cortesías y beneficios del Pase Alfa. Activa, apaga, programa vigencias o edita beneficios que disfrutan todos los usuarios en la app móvil." />
+                                    </div>
+                                </div>
 
-                                    <div className="space-y-2 border rounded-xl p-3 bg-muted/20">
-                                        {privilegios.length === 0 ? (
-                                            <div className="text-center py-6 text-muted-foreground text-xs">
-                                                <Info className="w-5 h-5 mx-auto mb-1 text-muted-foreground/60" />
-                                                No hay privilegios configurados aún. Ve a la pestaña <span className="font-semibold text-foreground">"Privilegios VIP"</span> para agregar cortesías con fechas de vigencia y controles de activación.
-                                            </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Badge variant="secondary" className="bg-[#202A49]/10 text-[#202A49] dark:bg-white/10 dark:text-slate-200 border border-[#202A49]/20 text-xs py-0.5 px-2 font-medium">
+                                        {privilegios.filter(p => p.activo && !isPrivilegeExpired(p.fechaLimite)).length} Activos en App
+                                    </Badge>
+                                    <Badge variant="outline" className="text-muted-foreground text-xs py-0.5 px-2 font-normal">
+                                        {privilegios.length} Total
+                                    </Badge>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
+                                        className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-1"
+                                        title={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
+                                        aria-label={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
+                                    >
+                                        {isBeneficiosOpen ? (
+                                            <ChevronUp className="w-4.5 h-4.5" />
                                         ) : (
-                                            <div className="space-y-2">
-                                                {privilegios.map((p, idx) => (
-                                                    <div key={p.id || idx} className="flex items-center justify-between bg-background p-2.5 rounded-lg border shadow-sm">
-                                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                                            <Badge
+                                            <ChevronDown className="w-4.5 h-4.5" />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        {isBeneficiosOpen && (
+                            <CardContent className="space-y-4 pt-1 px-4 sm:px-6 pb-5">
+                                {/* FORMULARIO AGREGAR BENEFICIO */}
+                                <div className="bg-muted/20 border border-border/70 rounded-lg p-3 sm:p-3.5 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                                                <Plus className="w-3.5 h-3.5 text-primary" />
+                                                Agregar Nuevo Beneficio
+                                            </Label>
+                                            <InfoTooltip text="Escribe una cortesía o beneficio exclusivo para los miembros del Pase Alfa." />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="new-activo-toggle" className="text-[11px] font-medium cursor-pointer text-muted-foreground">
+                                                {newActivo ? 'Activo' : 'Pausado'}
+                                            </Label>
+                                            <Switch
+                                                id="new-activo-toggle"
+                                                checked={newActivo}
+                                                onCheckedChange={setNewActivo}
+                                                className="scale-90"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <Input
+                                            value={newTitle}
+                                            onChange={(e) => setNewTitle(e.target.value)}
+                                            placeholder="Ej. Bebida de cortesía en cada corte o servicio"
+                                            className="bg-background text-xs sm:text-sm h-8.5"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddPrivilegio()}
+                                        />
+                                    </div>
+
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-0.5">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="flex items-center gap-1.5">
+                                                <Switch
+                                                    id="new-expiry-toggle"
+                                                    checked={newHasExpiry}
+                                                    onCheckedChange={setNewHasExpiry}
+                                                    className="scale-90"
+                                                />
+                                                <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-medium text-foreground/80">
+                                                    Fecha límite de vigencia
+                                                </Label>
+                                                <InfoTooltip text="Si se activa, el beneficio expirará y se ocultará automáticamente al llegar a la fecha límite." />
+                                            </div>
+
+                                            {newHasExpiry && (
+                                                <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                                                    <Popover modal={true} open={newDatePickerOpen} onOpenChange={setNewDatePickerOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                type="button"
                                                                 variant="outline"
                                                                 className={cn(
-                                                                    "text-[10px] shrink-0",
-                                                                    p.activo
-                                                                        ? "text-emerald-600 border-emerald-500/30 bg-emerald-500/10"
-                                                                        : "text-muted-foreground border-border bg-muted/40"
+                                                                    "h-7 text-xs px-2 font-normal justify-start text-left bg-background",
+                                                                    !newFechaLimite && "text-muted-foreground"
                                                                 )}
                                                             >
-                                                                {p.activo ? "Activo" : "Pausado"}
-                                                            </Badge>
-                                                            <span className={cn("text-xs font-medium truncate", !p.activo && "text-muted-foreground line-through")}>
-                                                                {p.titulo}
-                                                            </span>
-                                                        </div>
-                                                        {p.fechaLimite && (
-                                                            <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
-                                                                Vence: {p.fechaLimite}
-                                                            </span>
+                                                                <CalendarDays className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
+                                                                <span className="truncate">
+                                                                    {parseDateSafe(newFechaLimite)
+                                                                        ? format(parseDateSafe(newFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
+                                                                        : "Seleccionar fecha"}
+                                                                </span>
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0 z-[60]" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={parseDateSafe(newFechaLimite)}
+                                                                onSelect={(date) => {
+                                                                    if (date) {
+                                                                        setNewFechaLimite(format(date, 'yyyy-MM-dd'));
+                                                                        setNewDatePickerOpen(false);
+                                                                    }
+                                                                }}
+                                                                disabled={(date) => {
+                                                                    const today = new Date();
+                                                                    today.setHours(0, 0, 0, 0);
+                                                                    return date < today;
+                                                                }}
+                                                                initialFocus
+                                                                locale={es}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <Button
+                                            onClick={handleAddPrivilegio}
+                                            className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs h-8 px-3.5 shrink-0 shadow-xs flex items-center gap-1.5"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            Agregar Beneficio
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* LISTA DE BENEFICIOS */}
+                                <div className="space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <h4 className="text-xs font-semibold text-foreground">
+                                                Lista de Beneficios ({privilegios.length})
+                                            </h4>
+                                            <InfoTooltip text="Puedes activar, pausar o programar vigencias de cualquier beneficio sin eliminarlo." />
+                                        </div>
+                                    </div>
+
+                                    {loadingMembresia ? (
+                                        <div className="py-8 flex justify-center">
+                                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                        </div>
+                                    ) : privilegios.length === 0 ? (
+                                        <div className="border border-dashed border-border/80 rounded-lg p-6 text-center bg-muted/10 space-y-1.5">
+                                            <ShieldCheck className="w-7 h-7 mx-auto text-muted-foreground/60" />
+                                            <p className="text-xs font-medium text-foreground">No hay beneficios configurados</p>
+                                            <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                                                Utiliza el formulario de arriba para agregar cortesías o beneficios del Pase Alfa.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {privilegios.map((priv) => {
+                                                const expired = isPrivilegeExpired(priv.fechaLimite);
+
+                                                return (
+                                                    <div
+                                                        key={priv.id}
+                                                        className={cn(
+                                                            "flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 p-2.5 sm:p-3 rounded-lg border bg-background shadow-xs transition-all",
+                                                            !priv.activo && "opacity-60 bg-muted/20 border-border/60",
+                                                            expired && "border-red-500/30 bg-red-500/5"
                                                         )}
+                                                    >
+                                                        <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                                                            <div className="pt-0.5">
+                                                                <Switch
+                                                                    checked={priv.activo}
+                                                                    onCheckedChange={(val) => handleTogglePrivilegio(priv.id, val)}
+                                                                    title={priv.activo ? "Apagar beneficio" : "Encender beneficio"}
+                                                                    className="scale-90"
+                                                                />
+                                                            </div>
+
+                                                            <div className="space-y-1 flex-1 min-w-0">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className={cn(
+                                                                            "text-[10px] font-medium py-0 px-1.5",
+                                                                            priv.activo
+                                                                                ? "text-[#202A49] dark:text-slate-200 border-[#202A49]/30 dark:border-slate-700 bg-[#202A49]/10 dark:bg-slate-800"
+                                                                                : "text-muted-foreground border-border bg-muted/40"
+                                                                        )}
+                                                                    >
+                                                                        {priv.activo ? "Activo" : "Apagado"}
+                                                                    </Badge>
+
+                                                                    {priv.fechaLimite ? (
+                                                                        expired ? (
+                                                                            <Badge variant="destructive" className="text-[10px] flex items-center gap-1 py-0 px-1.5">
+                                                                                <Clock className="w-2.5 h-2.5" />
+                                                                                Expiró: {formatDateDisplay(priv.fechaLimite)}
+                                                                            </Badge>
+                                                                        ) : (
+                                                                            <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-400/30 bg-blue-500/5 flex items-center gap-1 py-0 px-1.5">
+                                                                                <CalendarDays className="w-2.5 h-2.5" />
+                                                                                Vence: {formatDateDisplay(priv.fechaLimite)}
+                                                                            </Badge>
+                                                                        )
+                                                                    ) : (
+                                                                        <Badge variant="outline" className="text-[10px] text-muted-foreground border-border py-0 px-1.5">
+                                                                            Permanente
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+
+                                                                <p className={cn(
+                                                                    "text-xs font-medium text-foreground leading-snug break-words",
+                                                                    !priv.activo && "text-muted-foreground"
+                                                                )}>
+                                                                    {priv.titulo}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 border-t sm:border-t-0 pt-1.5 sm:pt-0 w-full sm:w-auto justify-end">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleStartEdit(priv)}
+                                                                className="h-7 px-2 text-[11px] gap-1 border-border/80 hover:bg-muted"
+                                                            >
+                                                                <Pencil className="w-3 h-3 text-muted-foreground" />
+                                                                Editar
+                                                            </Button>
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleStartDelete(priv)}
+                                                                className="h-7 px-2 text-[11px] text-red-500 hover:text-red-700 hover:bg-red-500/10 gap-1"
+                                                            >
+                                                                <Trash2 className="w-3 h-3" />
+                                                                Eliminar
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* BOTÓN GUARDAR BENEFICIOS */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Los cambios se sincronizan en tiempo real con la app móvil al guardar.
+                                    </span>
+                                    <Button
+                                        onClick={handleSavePrivilegios}
+                                        disabled={isSavingPrivilegios}
+                                        className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs sm:text-sm px-5 h-9 shadow-sm w-full sm:w-auto flex items-center gap-2"
+                                    >
+                                        {isSavingPrivilegios ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                Guardando beneficios...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                Guardar Beneficios Pase Alfa
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        )}
+                    </Card>
+
+                    {/* GESTOR DE INSPIRACIÓN ALFA (CORTES REALES Y LOOKBOOK EN VIVO) */}
+                    <Card className="border border-border/70 shadow-sm transition-all">
+                        <CardHeader className="pb-3 pt-4 px-4 sm:px-6">
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-2 min-w-0">
+                                    <Camera className="h-4.5 w-4.5 text-primary shrink-0" />
+                                    <div className="flex items-center gap-1.5">
+                                        <CardTitle className="text-base font-semibold">
+                                            Galería de Cortes
+                                        </CardTitle>
+                                        <InfoTooltip text="Sube fotos de cortes y peinados reales realizados en tu barbería. Se mostrarán al instante en el carrusel de Inspiración Alfa de la app móvil." />
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <Badge variant="secondary" className="bg-[#202A49]/10 text-[#202A49] dark:bg-white/10 dark:text-slate-200 border border-[#202A49]/20 text-xs py-0.5 px-2 font-medium">
+                                        {lookbookItems.filter(i => i.activo).length} Visibles en App
+                                    </Badge>
+                                    <Badge variant="outline" className="text-muted-foreground text-xs py-0.5 px-2 font-normal">
+                                        {lookbookItems.length} Total
+                                    </Badge>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsLookbookOpen(!isLookbookOpen)}
+                                        className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-1"
+                                        title={isLookbookOpen ? "Minimizar" : "Desplegar"}
+                                        aria-label={isLookbookOpen ? "Minimizar" : "Desplegar"}
+                                    >
+                                        {isLookbookOpen ? (
+                                            <ChevronUp className="w-4.5 h-4.5" />
+                                        ) : (
+                                            <ChevronDown className="w-4.5 h-4.5" />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        {isLookbookOpen && (
+                            <CardContent className="space-y-4 pt-1 px-4 sm:px-6 pb-5">
+                                {/* ÁREA EXCLUSIVA PARA AGREGAR FOTOGRAFÍA (DRAG & DROP O IMPORTAR) */}
+                                <div className="bg-muted/20 border border-border/70 rounded-xl p-3 sm:p-4 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                                                <Plus className="w-3.5 h-3.5 text-primary" />
+                                                Agregar Fotografía a la Galería
+                                            </Label>
+                                            <InfoTooltip text="Arrastra y suelta imágenes o haz clic para importar fotos de cortes reales para la app móvil." />
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="new-lookbook-activo-toggle" className="text-[11px] font-medium cursor-pointer text-muted-foreground">
+                                                {newLookbookActivo ? 'Visible' : 'Oculto'}
+                                            </Label>
+                                            <Switch
+                                                id="new-lookbook-activo-toggle"
+                                                checked={newLookbookActivo}
+                                                onCheckedChange={setNewLookbookActivo}
+                                                className="scale-90"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <ImageUploader
+                                        folder="inspiracion_alfa"
+                                        currentImageUrl={newLookbookImage}
+                                        onUpload={(url) => setNewLookbookImage(url)}
+                                        onUploadEnd={(url) => {
+                                            handleAddLookbookItem(url);
+                                        }}
+                                        onRemove={() => setNewLookbookImage('')}
+                                        onUploadStateChange={setIsUploadingLookbook}
+                                        multiple={true}
+                                        className="w-full h-44 sm:h-52 border-2 border-dashed rounded-xl bg-background/50 hover:bg-background/80 transition-all cursor-pointer shadow-2xs"
+                                    />
+
+                                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5 px-0.5">
+                                        <span>Formatos: JPG, PNG, WEBP. Arrastra una o varias fotos, o haz clic para importar.</span>
+                                        {newLookbookImage && (
+                                            <Button
+                                                type="button"
+                                                onClick={() => handleAddLookbookItem()}
+                                                className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs h-7.5 px-3.5 shrink-0 shadow-xs flex items-center gap-1.5"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                                Agregar a la Galería
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                    {/* LISTA DE FOTOGRAFÍAS EN LA GALERÍA */}
+                                    <div className="space-y-2.5 pt-1">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5">
+                                                <h4 className="text-xs font-semibold text-foreground">
+                                                    Fotografías en la Galería ({lookbookItems.length})
+                                                </h4>
+                                                <InfoTooltip text="Puedes activar u ocultar cualquier fotografía en la app sin eliminarla." />
+                                            </div>
+                                        </div>
+
+                                        {loadingLookbook ? (
+                                            <div className="py-8 flex justify-center">
+                                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                            </div>
+                                        ) : lookbookItems.length === 0 ? (
+                                            <div className="border border-dashed border-border/80 rounded-lg p-6 text-center bg-muted/10 space-y-1.5">
+                                                <ImageIcon className="w-7 h-7 mx-auto text-muted-foreground/60" />
+                                                <p className="text-xs font-medium text-foreground">No hay fotos en la galería</p>
+                                                <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
+                                                    Arrastra o importa fotografías de cortes reales arriba para que tus clientes se inspiren en la app móvil.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                                                {lookbookItems.map((item) => (
+                                                    <div
+                                                        key={item.id}
+                                                        className={cn(
+                                                            "group relative rounded-xl border bg-card overflow-hidden shadow-2xs transition-all hover:shadow-md flex flex-col justify-between",
+                                                            !item.activo && "opacity-60 bg-muted/20 border-border/60"
+                                                        )}
+                                                    >
+                                                        <div className="relative aspect-square w-full bg-muted/30 overflow-hidden">
+                                                            <img
+                                                                src={item.imagenUrl}
+                                                                alt="Fotografía de la galería"
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                                loading="lazy"
+                                                            />
+                                                            <div className="absolute top-2 right-2">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "text-[10px] font-medium backdrop-blur-md shadow-xs py-0 px-1.5 leading-tight",
+                                                                        item.activo
+                                                                            ? "text-[#202A49] dark:text-slate-100 bg-white/90 dark:bg-black/80 border-[#202A49]/30 dark:border-white/20"
+                                                                            : "text-muted-foreground bg-white/80 border-border dark:bg-black/70"
+                                                                    )}
+                                                                >
+                                                                    {item.activo ? "Visible" : "Oculto"}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="p-2 flex items-center justify-between bg-background border-t border-border/60">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Switch
+                                                                    checked={item.activo}
+                                                                    onCheckedChange={(val) => handleToggleLookbookItem(item.id, val)}
+                                                                    title={item.activo ? "Visible en la app (clic para ocultar)" : "Oculto (clic para activar)"}
+                                                                    className="scale-75 origin-left"
+                                                                />
+                                                                <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                                                                    {item.activo ? 'Activo' : 'Pausado'}
+                                                                </span>
+                                                            </div>
+
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => handleStartDeleteLookbook(item)}
+                                                                className="h-6 w-6 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 rounded-md transition-colors"
+                                                                title="Eliminar de la galería"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
                                     </div>
-                                </div>
 
-                                {/* BOTÓN GUARDAR PASE ALFA */}
-                                <div className="flex justify-end pt-4 border-t border-border/50">
+                                {/* BOTÓN GUARDAR GALERÍA */}
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
+                                    <span className="text-[11px] text-muted-foreground">
+                                        Los cambios se sincronizan en tiempo real con el carrusel de la app móvil.
+                                    </span>
                                     <Button
-                                        onClick={handleSavePaseAlfa}
-                                        disabled={isSavingPaseAlfa}
-                                        className="bg-[#202A49] hover:bg-[#182038] text-white font-bold px-6 h-11 shadow-lg flex items-center gap-2"
+                                        onClick={handleSaveLookbook}
+                                        disabled={isSavingLookbook}
+                                        className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs sm:text-sm px-5 h-9 shadow-sm w-full sm:w-auto flex items-center gap-2"
                                     >
-                                        {isSavingPaseAlfa ? (
+                                        {isSavingLookbook ? (
                                             <>
-                                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                                Guardando en la App...
+                                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                Guardando Galería...
                                             </>
                                         ) : (
                                             <>
-                                                <Save className="w-4 h-4 mr-2" />
-                                                Guardar Configuración del Pase Alfa
+                                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                Guardar Galería de Cortes
                                             </>
                                         )}
                                     </Button>
@@ -914,426 +1609,33 @@ export default function MobileAppSettingsPage() {
                         )}
                     </Card>
                 </TabsContent>
-                
-                {/* AVISOS TAB */}
-                <TabsContent value="avisos" className="mt-6 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Nuevo Aviso</CardTitle>
-                            <CardDescription>Crea un comunicado para la pantalla de inicio de la app.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Título</Label>
-                                    <Input value={avisoForm.titulo} onChange={e => setAvisoForm({...avisoForm, titulo: e.target.value})} placeholder="Ej. Cerrado por festivo" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Fecha de Expiración (Opcional)</Label>
-                                    <Input type="datetime-local" value={avisoForm.fechaExpiracion} onChange={e => setAvisoForm({...avisoForm, fechaExpiracion: e.target.value})} />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Descripción</Label>
-                                <Textarea value={avisoForm.descripcion} onChange={e => setAvisoForm({...avisoForm, descripcion: e.target.value})} placeholder="Mensaje para los clientes..." />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Imagen del aviso (Opcional)</Label>
-                                <Input type="file" accept="image/*" onChange={e => setAvisoFile(e.target.files?.[0] || null)} />
-                            </div>
-                            <div className="flex items-center justify-between pt-2">
-                                <div className="flex items-center gap-2">
-                                    <Switch checked={avisoForm.activo} onCheckedChange={c => setAvisoForm({...avisoForm, activo: c})} />
-                                    <Label>Publicar inmediatamente</Label>
-                                </div>
-                                <Button onClick={handleCreateAviso} disabled={isSavingAviso} className="bg-[#202A49] hover:bg-[#182038] text-white">
-                                    {isSavingAviso ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                                    Crear Aviso
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
 
-                    <div className="space-y-4">
-                        <h4 className="font-semibold text-lg">Avisos Vigentes</h4>
-                        {loadingAvisos ? <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto" /> : (
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {avisos?.map(aviso => (
-                                    <Card key={aviso.id} className={!aviso.activo ? 'opacity-60' : ''}>
-                                        {aviso.imagenUrl && (
-                                            <div className="w-full h-32 overflow-hidden rounded-t-lg bg-muted">
-                                                <img src={aviso.imagenUrl} alt="Banner" className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
-                                        <CardContent className="p-4 relative">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h5 className="font-bold">{aviso.titulo}</h5>
-                                                <div className="flex items-center gap-2">
-                                                    <Switch checked={aviso.activo} onCheckedChange={() => handleToggleAviso(aviso.id, aviso.activo)} />
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeleteAviso(aviso.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                                                </div>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground mb-4">{aviso.descripcion}</p>
-                                            {aviso.fechaExpiracion && (
-                                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                                    Expira: {format(aviso.fechaExpiracion.toDate(), 'PPP p', { locale: es })}
-                                                </p>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
-
-                {/* SUGERENCIAS Y PROMOCIONES TAB */}
-                <TabsContent value="sugerencias" className="mt-6 space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Nueva Promoción</CardTitle>
-                            <CardDescription>Publica una oferta o descuento exclusivo en la app.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Título de la promo</Label>
-                                    <Input value={promoForm.titulo} onChange={e => setPromoForm({...promoForm, titulo: e.target.value})} placeholder="Ej. 20% en Cera Mate" />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Código Promocional</Label>
-                                    <Input value={promoForm.codigoDescuento} onChange={e => setPromoForm({...promoForm, codigoDescuento: e.target.value})} placeholder="Ej. ALFA20" />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Descripción</Label>
-                                <Textarea value={promoForm.descripcion} onChange={e => setPromoForm({...promoForm, descripcion: e.target.value})} placeholder="Términos o detalles del descuento..." />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Imagen del banner (Opcional)</Label>
-                                <Input type="file" accept="image/*" onChange={e => setPromoFile(e.target.files?.[0] || null)} />
-                            </div>
-                            <div className="flex items-center justify-between pt-2">
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2">
-                                        <Switch checked={promoForm.mostrarQr} onCheckedChange={c => setPromoForm({...promoForm, mostrarQr: c})} />
-                                        <Label>Generar QR canjeable</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Switch checked={promoForm.activo} onCheckedChange={c => setPromoForm({...promoForm, activo: c})} />
-                                        <Label>Activar ahora</Label>
-                                    </div>
-                                </div>
-                                <Button onClick={handleCreatePromo} disabled={isSavingPromo} className="bg-[#202A49] hover:bg-[#182038] text-white">
-                                    {isSavingPromo ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                                    Crear Promoción
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <div className="space-y-4">
-                        <h4 className="font-semibold text-lg">Promociones Activas</h4>
-                        {loadingPromos ? <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto" /> : (
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {promociones?.map(promo => (
-                                    <Card key={promo.id} className={!promo.activo ? 'opacity-60' : ''}>
-                                        {promo.imagenUrl && (
-                                            <div className="w-full h-32 overflow-hidden rounded-t-lg bg-muted">
-                                                <img src={promo.imagenUrl} alt="Banner" className="w-full h-full object-cover" />
-                                            </div>
-                                        )}
-                                        <CardContent className="p-4 relative">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h5 className="font-bold">{promo.titulo}</h5>
-                                                <div className="flex items-center gap-2">
-                                                    <Switch checked={promo.activo} onCheckedChange={() => handleTogglePromo(promo.id, promo.activo)} />
-                                                    <Button variant="ghost" size="icon" onClick={() => handleDeletePromo(promo.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
-                                                </div>
-                                            </div>
-                                            <p className="text-sm text-muted-foreground mb-4">{promo.descripcion}</p>
-                                            
-                                            {promo.codigoDescuento && (
-                                                <div className="flex items-center gap-2 bg-muted p-2 rounded-md w-fit">
-                                                    <Badge variant="default" className="text-sm tracking-wider">{promo.codigoDescuento}</Badge>
-                                                    {promo.mostrarQr && <Badge variant="secondary" className="text-xs">QR Activado</Badge>}
-                                                </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
-
-                {/* MEMBRESIA VIP TAB (GESTOR AVANZADO DE PRIVILEGIOS) */}
-                <TabsContent value="membresia" className="mt-6 space-y-6">
-                    <Card className="border border-border/70 shadow-sm">
-                        <CardHeader className="pb-4">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="flex items-start gap-3">
-                                    <div className="p-2.5 bg-primary/10 rounded-xl text-primary border border-primary/20 shrink-0 mt-0.5">
-                                        <Crown className="h-6 w-6" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <CardTitle className="text-lg font-bold">
-                                                Privilegios de Membresía VIP
-                                            </CardTitle>
-                                            <Badge variant="outline" className="text-[10px] text-primary border-primary/30 bg-primary/5">
-                                                Gestión Integral
-                                            </Badge>
-                                        </div>
-                                        <CardDescription className="text-xs md:text-sm mt-0.5">
-                                            Configura las cortesías y beneficios de la membresía. Activa, apaga, programa vigencias o edita privilegios para tus clientes en la app móvil.
-                                        </CardDescription>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 self-start md:self-center">
-                                    <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-xs py-1 px-2.5">
-                                        {privilegios.filter(p => p.activo && !isPrivilegeExpired(p.fechaLimite)).length} Activos en App
-                                    </Badge>
-                                    <Badge variant="outline" className="text-muted-foreground text-xs py-1 px-2.5">
-                                        {privilegios.length} Total
-                                    </Badge>
-                                </div>
-                            </div>
-                        </CardHeader>
-
-                        <CardContent className="space-y-6">
-                            {/* FORMULARIO AGREGAR PRIVILEGIO */}
-                            <div className="bg-muted/30 border border-border/70 rounded-xl p-4 md:p-5 space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-sm font-bold flex items-center gap-2 text-foreground">
-                                        <Plus className="w-4 h-4 text-primary" />
-                                        Agregar Nuevo Privilegio
-                                    </Label>
-                                    <div className="flex items-center gap-2">
-                                        <Label htmlFor="new-activo-toggle" className="text-xs font-medium cursor-pointer text-muted-foreground">
-                                            {newActivo ? 'Estado: Activo' : 'Estado: Pausado'}
-                                        </Label>
-                                        <Switch
-                                            id="new-activo-toggle"
-                                            checked={newActivo}
-                                            onCheckedChange={setNewActivo}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Input
-                                        value={newTitle}
-                                        onChange={(e) => setNewTitle(e.target.value)}
-                                        placeholder="Ej. Cortesía de cerveza en cada visita"
-                                        className="bg-background text-sm"
-                                        onKeyDown={(e) => e.key === 'Enter' && handleAddPrivilegio()}
-                                    />
-                                </div>
-
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-2">
-                                            <Switch
-                                                id="new-expiry-toggle"
-                                                checked={newHasExpiry}
-                                                onCheckedChange={setNewHasExpiry}
-                                            />
-                                            <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-medium">
-                                                Fecha límite de vigencia (opcional)
-                                            </Label>
-                                        </div>
-
-                                        {newHasExpiry && (
-                                            <div className="flex items-center gap-2 animate-in fade-in duration-200">
-                                                <Input
-                                                    type="date"
-                                                    min={format(new Date(), 'yyyy-MM-dd')}
-                                                    value={newFechaLimite}
-                                                    onChange={(e) => setNewFechaLimite(e.target.value)}
-                                                    className="w-auto h-8 text-xs bg-background py-1"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <Button
-                                        onClick={handleAddPrivilegio}
-                                        className="bg-[#202A49] hover:bg-[#182038] text-white font-semibold text-xs h-9 px-4 shrink-0 shadow-sm flex items-center gap-1.5"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Agregar Privilegio
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* LISTA DE PRIVILEGIOS */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-sm font-bold text-foreground">
-                                        Lista de Privilegios ({privilegios.length})
-                                    </h4>
-                                    <span className="text-xs text-muted-foreground">
-                                        Puedes encender o apagar cualquier privilegio sin eliminarlo.
-                                    </span>
-                                </div>
-
-                                {loadingMembresia ? (
-                                    <div className="py-12 flex justify-center">
-                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                    </div>
-                                ) : privilegios.length === 0 ? (
-                                    <div className="border border-dashed border-border/80 rounded-xl p-8 text-center bg-muted/10 space-y-2">
-                                        <ShieldCheck className="w-8 h-8 mx-auto text-muted-foreground/60" />
-                                        <p className="text-sm font-medium text-foreground">No hay privilegios configurados</p>
-                                        <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                                            Utiliza el formulario de arriba para agregar cortesías o beneficios exclusivos de la membresía VIP.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-2.5">
-                                        {privilegios.map((priv) => {
-                                            const expired = isPrivilegeExpired(priv.fechaLimite);
-
-                                            return (
-                                                <div
-                                                    key={priv.id}
-                                                    className={cn(
-                                                        "flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-background shadow-sm transition-all",
-                                                        !priv.activo && "opacity-60 bg-muted/20 border-border/60",
-                                                        expired && "border-red-500/30 bg-red-500/5"
-                                                    )}
-                                                >
-                                                    <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                                                        {/* Switch directo On/Off */}
-                                                        <div className="pt-0.5">
-                                                            <Switch
-                                                                checked={priv.activo}
-                                                                onCheckedChange={(val) => handleTogglePrivilegio(priv.id, val)}
-                                                                title={priv.activo ? "Apagar privilegio" : "Encender privilegio"}
-                                                            />
-                                                        </div>
-
-                                                        <div className="space-y-1.5 flex-1 min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className={cn(
-                                                                        "text-[10px] font-semibold py-0.5",
-                                                                        priv.activo
-                                                                            ? "text-emerald-600 border-emerald-500/30 bg-emerald-500/10"
-                                                                            : "text-muted-foreground border-border bg-muted/40"
-                                                                    )}
-                                                                >
-                                                                    {priv.activo ? "Activo" : "Apagado"}
-                                                                </Badge>
-
-                                                                {priv.fechaLimite ? (
-                                                                    expired ? (
-                                                                        <Badge variant="destructive" className="text-[10px] flex items-center gap-1 py-0.5">
-                                                                            <Clock className="w-3 h-3" />
-                                                                            Expiró: {formatDateDisplay(priv.fechaLimite)}
-                                                                        </Badge>
-                                                                    ) : (
-                                                                        <Badge variant="outline" className="text-[10px] text-blue-600 border-blue-400/30 bg-blue-500/5 flex items-center gap-1 py-0.5">
-                                                                            <CalendarDays className="w-3 h-3" />
-                                                                            Vence: {formatDateDisplay(priv.fechaLimite)}
-                                                                        </Badge>
-                                                                    )
-                                                                ) : (
-                                                                    <Badge variant="outline" className="text-[10px] text-muted-foreground border-border py-0.5">
-                                                                        Permanente
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-
-                                                            <p className={cn(
-                                                                "text-sm font-medium text-foreground leading-snug break-words",
-                                                                !priv.activo && "text-muted-foreground"
-                                                            )}>
-                                                                {priv.titulo}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Botones de acción: Editar y Eliminar */}
-                                                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 w-full sm:w-auto justify-end">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleStartEdit(priv)}
-                                                            className="h-8 px-2.5 text-xs gap-1 border-border/80 hover:bg-muted"
-                                                        >
-                                                            <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                                                            Editar
-                                                        </Button>
-
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleStartDelete(priv)}
-                                                            className="h-8 px-2.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-500/10 gap-1"
-                                                        >
-                                                            <Trash2 className="w-3.5 h-3.5" />
-                                                            Eliminar
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* BOTÓN GUARDAR PRIVILEGIOS */}
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-border/50">
-                                <span className="text-xs text-muted-foreground">
-                                    Los cambios se sincronizan en tiempo real con la app móvil al guardar.
-                                </span>
-                                <Button
-                                    onClick={handleSavePrivilegios}
-                                    disabled={isSavingPrivilegios}
-                                    className="bg-[#202A49] hover:bg-[#182038] text-white font-bold px-6 h-11 shadow-md w-full sm:w-auto flex items-center gap-2"
-                                >
-                                    {isSavingPrivilegios ? (
-                                        <>
-                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                            Guardando privilegios...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="w-4 h-4" />
-                                            Guardar Beneficios VIP
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+                {/* PROMOCIONES TAB (ESPEJO DE /settings/promotions) */}
+                <TabsContent value="promociones" className="mt-6 space-y-6">
+                    <PromotionsManager hideHeader />
                 </TabsContent>
             </Tabs>
 
-            {/* MODAL DE EDICIÓN DE PRIVILEGIO */}
+            {/* MODAL DE EDICIÓN DE BENEFICIO */}
             <Dialog open={editingPrivilegio !== null} onOpenChange={(open) => !open && setEditingPrivilegio(null)}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 text-foreground font-bold">
                             <Pencil className="w-5 h-5 text-primary" />
-                            Editar Privilegio VIP
+                            Editar Beneficio Pase Alfa
                         </DialogTitle>
                         <DialogDescription>
-                            Modifica la descripción, estado de activación o vigencia de este beneficio.
+                            Modifica la descripción, estado de activación o vigencia de este beneficio del Pase Alfa.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="space-y-4 py-3">
                         <div className="space-y-2">
-                            <Label className="text-xs font-semibold">Descripción del Privilegio</Label>
+                            <Label className="text-xs font-semibold">Descripción del Beneficio</Label>
                             <Textarea
                                 value={editTitle}
                                 onChange={(e) => setEditTitle(e.target.value)}
-                                placeholder="Ej. Cortesía de cerveza en cada visita"
+                                placeholder="Ej. Bebida de cortesía en cada corte o servicio"
                                 rows={3}
                                 className="text-sm"
                             />
@@ -1343,7 +1645,7 @@ export default function MobileAppSettingsPage() {
                             <div>
                                 <Label className="text-xs font-semibold">Estado en la App</Label>
                                 <p className="text-[11px] text-muted-foreground">
-                                    {editActivo ? 'Visible para clientes VIP' : 'Pausado temporalmente'}
+                                    {editActivo ? 'Visible para usuarios en la app' : 'Pausado temporalmente'}
                                 </p>
                             </div>
                             <Switch checked={editActivo} onCheckedChange={setEditActivo} />
@@ -1361,15 +1663,46 @@ export default function MobileAppSettingsPage() {
                             </div>
 
                             {editHasExpiry && (
-                                <div className="pt-2 border-t">
-                                    <Label className="text-xs text-muted-foreground mb-1 block">Fecha de vencimiento</Label>
-                                    <Input
-                                        type="date"
-                                        min={format(new Date(), 'yyyy-MM-dd')}
-                                        value={editFechaLimite}
-                                        onChange={(e) => setEditFechaLimite(e.target.value)}
-                                        className="bg-background text-sm"
-                                    />
+                                <div className="pt-2 border-t space-y-1.5">
+                                    <Label className="text-xs text-muted-foreground block">Fecha de vencimiento</Label>
+                                    <Popover modal={true} open={editDatePickerOpen} onOpenChange={setEditDatePickerOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className={cn(
+                                                    "w-full h-9 text-xs px-3 font-normal justify-start text-left bg-background",
+                                                    !editFechaLimite && "text-muted-foreground"
+                                                )}
+                                            >
+                                                <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span className="truncate">
+                                                    {parseDateSafe(editFechaLimite)
+                                                        ? format(parseDateSafe(editFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
+                                                        : "Seleccionar fecha"}
+                                                </span>
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0 z-[60]" align="start">
+                                            <Calendar
+                                                mode="single"
+                                                selected={parseDateSafe(editFechaLimite)}
+                                                onSelect={(date) => {
+                                                    if (date) {
+                                                        setEditFechaLimite(format(date, 'yyyy-MM-dd'));
+                                                        setEditDatePickerOpen(false);
+                                                    }
+                                                }}
+                                                disabled={(date) => {
+                                                    const today = new Date();
+                                                    today.setHours(0, 0, 0, 0);
+                                                    return date < today;
+                                                }}
+                                                initialFocus
+                                                locale={es}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             )}
                         </div>
@@ -1408,6 +1741,46 @@ export default function MobileAppSettingsPage() {
                             onConfirm={handleConfirmDelete}
                             onCancel={() => setDeletingPrivilegio(null)}
                         />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL DE ELIMINACIÓN DE FOTOGRAFÍA / GALERÍA */}
+            <Dialog open={deletingLookbookItem !== null} onOpenChange={(open) => !open && setDeletingLookbookItem(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold text-base">
+                            <Trash2 className="w-5 h-5 text-red-600" />
+                            Eliminar Fotografía de la Galería
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            ¿Estás seguro de que deseas eliminar esta fotografía? Dejará de aparecer en la galería de la app móvil.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {deletingLookbookItem && (
+                        <div className="space-y-4 py-2">
+                            <div className="flex items-center justify-center p-3 bg-muted/20 rounded-xl border border-border">
+                                <img
+                                    src={deletingLookbookItem.imagenUrl}
+                                    alt="Fotografía a eliminar"
+                                    className="w-32 h-32 object-cover rounded-lg border shadow-xs"
+                                />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-1">
+                                <Button variant="outline" size="sm" onClick={() => setDeletingLookbookItem(null)}>
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={handleConfirmDeleteLookbook}
+                                    className="bg-red-600 hover:bg-red-700 text-white font-semibold text-xs"
+                                >
+                                    Eliminar Definitivamente
+                                </Button>
+                            </div>
+                        </div>
                     )}
                 </DialogContent>
             </Dialog>

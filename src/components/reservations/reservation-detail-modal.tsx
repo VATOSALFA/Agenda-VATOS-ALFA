@@ -461,7 +461,7 @@ export function ReservationDetailModal({
                             </span>
                           )}
                         </div>
-                        {prof && <span className="text-[10px] text-muted-foreground font-medium">({prof.name})</span>}
+                        {prof && <span className="text-[10px] text-muted-foreground font-medium">({prof.publicName || prof.name})</span>}
                       </li>
                     );
                   }) : <li>{(reservation as any).servicio}</li>}

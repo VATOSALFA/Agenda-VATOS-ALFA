@@ -13,7 +13,7 @@ export function useAgendaEvents(
         if (!reservations || !timeBlocks || !clients || !professionals) return [];
 
         const clientMap = new Map(clients.map(c => [c.id, c]));
-        const professionalMap = new Map(professionals.map(p => [p.id, p.name]));
+        const professionalMap = new Map(professionals.map(p => [p.id, p.publicName || p.name]));
 
         const appointmentEvents: AgendaEvent[] = reservations
             .flatMap(res => {

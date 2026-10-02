@@ -38,6 +38,10 @@ export interface Local {
   timezone: string;
   acceptsOnline: boolean;
   delivery: boolean;
+  googleMapsReviewUrl?: string;
+  google_maps_review_url?: string;
+  secondaryPhone?: string;
+  description?: string;
 }
 
 

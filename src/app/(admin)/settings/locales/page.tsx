@@ -36,6 +36,8 @@ import {
   GripVertical,
   Info,
   Trash2,
+  MapPin,
+  ExternalLink,
 } from 'lucide-react';
 import { NewLocalModal } from '@/components/admin/locales/new-local-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -173,6 +175,18 @@ export default function LocalesPage() {
                       {local.name}
                     </div>
                     <p className="text-sm text-muted-foreground">{local.address}</p>
+                    {Boolean(local.googleMapsReviewUrl || (local as any).google_maps_review_url) && (
+                      <a
+                        href={local.googleMapsReviewUrl || (local as any).google_maps_review_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1 font-medium"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        Google Maps (Reseñas)
+                        <ExternalLink className="h-2.5 w-2.5 opacity-70" />
+                      </a>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <DropdownMenu>

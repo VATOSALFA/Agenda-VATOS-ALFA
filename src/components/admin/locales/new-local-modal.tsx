@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, UploadCloud } from 'lucide-react';
+import { Loader2, UploadCloud, MapPin } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import type { Schedule, Local } from '@/lib/types';
 import { db } from '@/firebase';
@@ -43,6 +43,7 @@ const localSchema = z.object({
   timezone: z.string().min(1, "La zona horaria es requerida."),
   phone: z.string().min(1, "El teléfono es requerido."),
   email: z.string().email("Debe ser un email válido."),
+  googleMapsReviewUrl: z.string().optional().or(z.literal('')),
   schedule: z.any(),
   acceptsOnline: z.boolean().default(true),
   delivery: z.boolean().default(false),
@@ -73,6 +74,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
       timezone: 'America/Mexico_City',
       phone: '',
       email: '',
+      googleMapsReviewUrl: '',
       schedule: {
         lunes: { enabled: true, start: '10:00', end: '21:00' },
         martes: { enabled: true, start: '10:00', end: '21:00' },
@@ -91,7 +93,10 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
 
   useEffect(() => {
     if (local) {
-      form.reset(local);
+      form.reset({
+        ...local,
+        googleMapsReviewUrl: local.googleMapsReviewUrl || (local as any).google_maps_review_url || '',
+      });
     } else {
       form.reset({
         name: '',
@@ -99,6 +104,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
         timezone: 'America/Mexico_City',
         phone: '',
         email: '',
+        googleMapsReviewUrl: '',
         schedule: {
           lunes: { enabled: true, start: '10:00', end: '21:00' },
           martes: { enabled: true, start: '10:00', end: '21:00' },
@@ -120,13 +126,20 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
     if (!db) return;
     setIsSubmitting(true);
     try {
+      const cleanMapsUrl = (data.googleMapsReviewUrl || '').trim();
+      const payload = {
+        ...data,
+        googleMapsReviewUrl: cleanMapsUrl,
+        google_maps_review_url: cleanMapsUrl,
+      };
+
       if (isEditMode && local) {
         const localRef = doc(db, 'locales', local.id);
-        await updateDoc(localRef, data as any);
+        await updateDoc(localRef, payload as any);
         toast({ title: "Local actualizado con éxito" });
       } else {
         const dataToSave = {
-          ...data,
+          ...payload,
           status: 'active',
           creado_en: Timestamp.now(),
         };
@@ -169,7 +182,25 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
                   )} />
                 </div>
                 <div className="space-y-2"><Label htmlFor="phone">Teléfono</Label><Input id="phone" {...form.register('phone')} /></div>
-                <div className="space-y-2 md:col-span-2"><Label htmlFor="email">Email</Label><Input id="email" type="email" {...form.register('email')} /></div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" type="email" {...form.register('email')} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="googleMapsReviewUrl" className="flex items-center gap-1.5 font-medium">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    Link para calificar en Google Maps
+                  </Label>
+                  <Input
+                    id="googleMapsReviewUrl"
+                    type="url"
+                    placeholder="https://g.page/r/... o https://maps.app.goo.gl/..."
+                    {...form.register('googleMapsReviewUrl')}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    La app móvil utilizará este enlace para que los clientes califiquen esta sucursal.
+                  </p>
+                </div>
               </div>
               <div className="space-y-4 pt-6 border-t">
                 <h4 className="font-semibold">Horario de atención</h4>

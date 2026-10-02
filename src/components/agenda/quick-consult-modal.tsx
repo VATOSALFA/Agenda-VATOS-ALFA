@@ -15,6 +15,7 @@ import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Zap, Clock, User, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock } from '@/lib/types';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface QuickConsultModalProps {
   isOpen: boolean;
@@ -39,6 +40,9 @@ export function QuickConsultModal({
   onSelectSlot,
   specialJourneys = [],
 }: QuickConsultModalProps) {
+  const { user } = useAuth();
+  const isStaff = Boolean(user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero')));
+
   const [selectedServiceId, setSelectedServiceId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -344,6 +348,8 @@ export function QuickConsultModal({
       onClose();
     }
   };
+
+  if (isStaff) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>

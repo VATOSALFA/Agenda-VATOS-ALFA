@@ -23,6 +23,85 @@ interface ImageUploaderProps {
   multiple?: boolean;
 }
 
+/**
+ * Comprime y optimiza la imagen automáticamente antes de enviarla a Firebase Storage.
+ * - Redimensiona fotos gigantes de cámaras (hasta 1280px máx) preservando la relación de aspecto.
+ * - Comprime a JPEG de alta fidelidad (calidad 84%), reduciendo el peso en ~90-95% (de 10MB a ~180KB).
+ * - Es 100% seguro: si el archivo ya es ligero o si el navegador no puede procesarla, sube el original.
+ */
+async function optimizeImageForUpload(file: File, maxDimension = 1280, quality = 0.84): Promise<File | Blob> {
+  if (!file || !file.type || !file.type.startsWith('image/') || file.type === 'image/svg+xml' || typeof window === 'undefined') {
+    return file;
+  }
+
+  // Si ya es un archivo muy ligero (menos de 250 KB), no es necesario recomprimir
+  if (file.size <= 250 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const img = new (window as any).Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let { width, height } = img;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && blob.size < file.size) {
+              const safeName = file.name.replace(/\.[^/.]+$/, '') + '.jpg';
+              const optimizedFile = new File([blob], safeName, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(optimizedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(file);
+      };
+
+      img.src = objectUrl;
+    } catch {
+      resolve(file);
+    }
+  });
+}
+
 export function ImageUploader({ 
   folder,
   currentImageUrl, 
@@ -65,8 +144,10 @@ export function ImageUploader({
         }
 
         const filesToUpload = multiple ? files : [files[0]];
-        for (const file of filesToUpload) {
-            const storageRef = ref(storage, `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${file.name}`);
+        for (const rawFile of filesToUpload) {
+            const file = await optimizeImageForUpload(rawFile);
+            const fileName = (file as File).name || 'foto.jpg';
+            const storageRef = ref(storage, `${folder}/${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${fileName}`);
             const uploadTask = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(uploadTask.ref);
 

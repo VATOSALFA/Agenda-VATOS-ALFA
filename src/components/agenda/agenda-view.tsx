@@ -175,7 +175,8 @@ export default function AgendaView() {
   const [slotDurationMinutes, setSlotDurationMinutes] = useState(60);
   const [selectedProfessionalFilter, setSelectedProfessionalFilter] = useState('todos');
   const { selectedLocalId, setSelectedLocalId } = useLocal();
-  const { user, db } = useAuth();
+  const { user, db, loading: authLoading } = useAuth();
+  const isStaff = Boolean(user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero')));
 
   const hoveredSlotRef = useRef<{ barberId: string, time: string } | null>(null);
   const hoverPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1304,23 +1305,27 @@ export default function AgendaView() {
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <OverdueNotificationsPopover
-                reservations={reservations}
-                professionals={professionals}
-                clients={clients}
-                onUpdateStatus={handleUpdateStatus}
-                onSelectReservation={handleOpenDetailModal}
-              />
+              {!isStaff && !authLoading && (
+                <>
+                  <OverdueNotificationsPopover
+                    reservations={reservations}
+                    professionals={professionals}
+                    clients={clients}
+                    onUpdateStatus={handleUpdateStatus}
+                    onSelectReservation={handleOpenDetailModal}
+                  />
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsQuickConsultOpen(true)}
-                className="gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10 rounded-xl"
-              >
-                <Zap className="h-4 w-4 fill-current" />
-                <span className="hidden sm:inline font-bold text-xs uppercase tracking-wider">Espacio Rápido</span>
-              </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsQuickConsultOpen(true)}
+                    className="gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10 rounded-xl"
+                  >
+                    <Zap className="h-4 w-4 fill-current" />
+                    <span className="hidden sm:inline font-bold text-xs uppercase tracking-wider">Espacio Rápido</span>
+                  </Button>
+                </>
+              )}
 
               <Popover>
                 <PopoverTrigger asChild>
@@ -1950,17 +1955,19 @@ export default function AgendaView() {
         onFormSubmit={onDataRefresh}
         initialData={enableScheduleInitialData}
       />
-      <QuickConsultModal
-        isOpen={isQuickConsultOpen}
-        onClose={() => setIsQuickConsultOpen(false)}
-        services={services || []}
-        professionals={filteredProfessionals}
-        reservations={reservations || []}
-        timeBlocks={timeBlocks || []}
-        date={date}
-        onSelectSlot={handleSelectQuickConsultSlot}
-        specialJourneys={specialJourneys || []}
-      />
+      {!isStaff && (
+        <QuickConsultModal
+          isOpen={isQuickConsultOpen}
+          onClose={() => setIsQuickConsultOpen(false)}
+          services={services || []}
+          professionals={filteredProfessionals}
+          reservations={reservations || []}
+          timeBlocks={timeBlocks || []}
+          date={date}
+          onSelectSlot={handleSelectQuickConsultSlot}
+          specialJourneys={specialJourneys || []}
+        />
+      )}
     </TooltipProvider >
   );
 }

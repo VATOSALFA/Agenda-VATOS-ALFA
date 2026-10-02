@@ -8,6 +8,7 @@ import { Bell, Clock, User, XCircle, CheckCircle2, ChevronDown, ChevronUp } from
 import type { Reservation, Profesional, Client } from '@/lib/types';
 import { formatClientName } from './agenda-utils';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface OverdueNotificationsPopoverProps {
   reservations: Reservation[];
@@ -24,6 +25,9 @@ export function OverdueNotificationsPopover({
   onUpdateStatus,
   onSelectReservation,
 }: OverdueNotificationsPopoverProps) {
+  const { user } = useAuth();
+  const isStaff = Boolean(user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero')));
+
   const [nowMinutes, setNowMinutes] = useState<number>(0);
   const [todayStr, setTodayStr] = useState<string>('');
   const [isOpen, setIsOpen] = useState(false);
@@ -31,6 +35,8 @@ export function OverdueNotificationsPopover({
 
   // Update current time in Mexico City timezone
   useEffect(() => {
+    if (isStaff) return;
+
     const updateCurrentTime = () => {
       const timeZone = 'America/Mexico_City';
       const nowRaw = new Date();
@@ -59,10 +65,10 @@ export function OverdueNotificationsPopover({
     updateCurrentTime();
     const interval = setInterval(updateCurrentTime, 20000); // Check every 20s
     return () => clearInterval(interval);
-  }, []);
+  }, [isStaff]);
 
   const overdueReservations = useMemo(() => {
-    if (!todayStr || !reservations || reservations.length === 0) return [];
+    if (isStaff || !todayStr || !reservations || reservations.length === 0) return [];
 
     const taggedStatuses = [
       'Confirmado',
@@ -94,18 +100,24 @@ export function OverdueNotificationsPopover({
       // Must be >= 10 minutes past start time
       return nowMinutes >= startMin + 10;
     });
-  }, [reservations, todayStr, nowMinutes]);
+  }, [isStaff, reservations, todayStr, nowMinutes]);
 
   const count = overdueReservations.length;
 
   // Auto-expand if a new notice arrives while minimized
   const prevCountRef = useRef(count);
   useEffect(() => {
+    if (isStaff) return;
     if (count > prevCountRef.current && count > 0) {
       setIsMinimized(false);
     }
     prevCountRef.current = count;
-  }, [count]);
+  }, [count, isStaff]);
+
+  // Si el perfil activo es 'Staff', no mostrar notificaciones de recepción
+  if (isStaff) {
+    return null;
+  }
 
   return (
     <>

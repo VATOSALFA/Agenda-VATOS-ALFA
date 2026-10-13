@@ -26,20 +26,20 @@ export const DonutChartCard = ({ title, data, total, dataLabels }: DonutChartCar
     const chartData = data.length > 0 ? data : [{ name: 'Sin datos', value: 1 }];
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-xl font-medium">{title}</CardTitle>
+        <Card className="rounded-2xl border border-border/60 shadow-sm overflow-hidden">
+            <CardHeader className="p-3 sm:p-6 pb-1 sm:pb-2">
+                <CardTitle className="text-base sm:text-xl font-semibold">{title}</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-6 items-center">
-                <div className="h-[320px] relative">
+            <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 items-center">
+                <div className="h-[200px] sm:h-[300px] relative">
                     <ResponsiveContainer width="100%" height="100%">
                         <RechartsPieChart>
                             <Pie
                                 data={chartData}
                                 cx="50%"
                                 cy="50%"
-                                innerRadius={70}
-                                outerRadius={110}
+                                innerRadius="55%"
+                                outerRadius="82%"
                                 fill="#8884d8"
                                 paddingAngle={data.length > 0 ? 2 : 0}
                                 dataKey="value"
@@ -52,32 +52,34 @@ export const DonutChartCard = ({ title, data, total, dataLabels }: DonutChartCar
                             {data.length > 0 && <Tooltip
                                 contentStyle={{
                                     backgroundColor: 'hsl(var(--background))',
-                                    border: '1px solid hsl(var(--border))'
+                                    border: '1px solid hsl(var(--border))',
+                                    borderRadius: '0.75rem',
+                                    fontSize: '12px'
                                 }}
                                 formatter={(value: number) => `$${value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                             />}
                         </RechartsPieChart>
                     </ResponsiveContainer>
                     {data.length > 0 && <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                        <span className="text-2xl font-bold">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="text-lg sm:text-2xl font-bold">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>}
                 </div>
-                <div className="text-sm">
+                <div className="text-xs sm:text-sm">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>Tipo</TableHead>
-                                <TableHead className="text-right">Monto</TableHead>
+                            <TableRow className="border-b border-border/40">
+                                <TableHead className="h-8 px-2 text-xs">Tipo</TableHead>
+                                <TableHead className="h-8 px-2 text-right text-xs">Monto</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {tableData.map((item, index) => (
-                                <TableRow key={index}>
-                                    <TableCell className="capitalize font-medium flex items-center gap-2">
-                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
-                                        {item.name}
+                                <TableRow key={index} className="border-b border-border/40">
+                                    <TableCell className="capitalize font-medium flex items-center gap-2 py-1.5 px-2">
+                                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></span>
+                                        <span className="truncate">{item.name}</span>
                                     </TableCell>
-                                    <TableCell className="text-right">${item.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    <TableCell className="text-right py-1.5 px-2 font-semibold">${item.value.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

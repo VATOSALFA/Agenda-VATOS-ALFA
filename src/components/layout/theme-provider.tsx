@@ -4,6 +4,7 @@
 import { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { initAudioUnlock } from '@/lib/notification-sound';
 
 interface ThemeColors {
     primaryColor: string;
@@ -12,6 +13,20 @@ interface ThemeColors {
     backgroundColor: string;
     foreground: string;
     cardColor: string;
+    goldColor?: string;
+    buttonNavyColor?: string;
+    accentBlueColor?: string;
+    dangerColor?: string;
+    headerDarkColor?: string;
+    agendaReservadoColor?: string;
+    agendaConfirmadoColor?: string;
+    agendaEnEsperaColor?: string;
+    agendaAsisteColor?: string;
+    agendaNoAsisteColor?: string;
+    agendaPendienteColor?: string;
+    agendaPagoCompletoColor?: string;
+    agendaAnticipoColor?: string;
+    agendaCanceladoColor?: string;
 }
 
 interface ThemeContextType {
@@ -56,6 +71,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     const { data: empresaData, loading } = useFirestoreQuery<any>('empresa', 'main');
 
     useEffect(() => {
+        initAudioUnlock();
+    }, []);
+
+    useEffect(() => {
         if (!loading && empresaData.length > 0) {
             // Find the first document that has a theme property, or default to the first one
             const companyDoc = empresaData.find((d: any) => d.theme) || empresaData[0];
@@ -69,6 +88,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
                 if (theme.backgroundColor) root.style.setProperty('--background', hexToHsl(theme.backgroundColor));
                 if (theme.foreground) root.style.setProperty('--foreground', hexToHsl(theme.foreground));
                 if (theme.cardColor) root.style.setProperty('--card', hexToHsl(theme.cardColor));
+                if (theme.goldColor) root.style.setProperty('--gold', hexToHsl(theme.goldColor));
+                if (theme.buttonNavyColor) root.style.setProperty('--button-navy', hexToHsl(theme.buttonNavyColor));
+                if (theme.accentBlueColor) root.style.setProperty('--accent-blue', hexToHsl(theme.accentBlueColor));
+                if (theme.dangerColor) root.style.setProperty('--danger-soft', hexToHsl(theme.dangerColor));
+                if (theme.headerDarkColor) root.style.setProperty('--header-dark', hexToHsl(theme.headerDarkColor));
+                if (theme.agendaReservadoColor) root.style.setProperty('--agenda-reservado', theme.agendaReservadoColor);
+                if (theme.agendaConfirmadoColor) root.style.setProperty('--agenda-confirmado', theme.agendaConfirmadoColor);
+                if (theme.agendaEnEsperaColor) root.style.setProperty('--agenda-en-espera', theme.agendaEnEsperaColor);
+                if (theme.agendaAsisteColor) root.style.setProperty('--agenda-asiste', theme.agendaAsisteColor);
+                if (theme.agendaNoAsisteColor) root.style.setProperty('--agenda-no-asiste', theme.agendaNoAsisteColor);
+                if (theme.agendaPendienteColor) root.style.setProperty('--agenda-pendiente', theme.agendaPendienteColor);
+                if (theme.agendaPagoCompletoColor) root.style.setProperty('--agenda-pago-completo', theme.agendaPagoCompletoColor);
+                if (theme.agendaAnticipoColor) root.style.setProperty('--agenda-anticipo', theme.agendaAnticipoColor);
+                if (theme.agendaCanceladoColor) root.style.setProperty('--agenda-cancelado', theme.agendaCanceladoColor);
             }
         }
     }, [empresaData, loading]);
@@ -81,6 +114,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         if (colors.backgroundColor) root.style.setProperty('--background', hexToHsl(colors.backgroundColor));
         if (colors.foreground) root.style.setProperty('--foreground', hexToHsl(colors.foreground));
         if (colors.cardColor) root.style.setProperty('--card', hexToHsl(colors.cardColor));
+        if (colors.goldColor) root.style.setProperty('--gold', hexToHsl(colors.goldColor));
+        if (colors.buttonNavyColor) root.style.setProperty('--button-navy', hexToHsl(colors.buttonNavyColor));
+        if (colors.accentBlueColor) root.style.setProperty('--accent-blue', hexToHsl(colors.accentBlueColor));
+        if (colors.dangerColor) root.style.setProperty('--danger-soft', hexToHsl(colors.dangerColor));
+        if (colors.headerDarkColor) root.style.setProperty('--header-dark', hexToHsl(colors.headerDarkColor));
+        if (colors.agendaReservadoColor) root.style.setProperty('--agenda-reservado', colors.agendaReservadoColor);
+        if (colors.agendaConfirmadoColor) root.style.setProperty('--agenda-confirmado', colors.agendaConfirmadoColor);
+        if (colors.agendaEnEsperaColor) root.style.setProperty('--agenda-en-espera', colors.agendaEnEsperaColor);
+        if (colors.agendaAsisteColor) root.style.setProperty('--agenda-asiste', colors.agendaAsisteColor);
+        if (colors.agendaNoAsisteColor) root.style.setProperty('--agenda-no-asiste', colors.agendaNoAsisteColor);
+        if (colors.agendaPendienteColor) root.style.setProperty('--agenda-pendiente', colors.agendaPendienteColor);
+        if (colors.agendaPagoCompletoColor) root.style.setProperty('--agenda-pago-completo', colors.agendaPagoCompletoColor);
+        if (colors.agendaAnticipoColor) root.style.setProperty('--agenda-anticipo', colors.agendaAnticipoColor);
+        if (colors.agendaCanceladoColor) root.style.setProperty('--agenda-cancelado', colors.agendaCanceladoColor);
     };
 
     const value = useMemo(() => ({

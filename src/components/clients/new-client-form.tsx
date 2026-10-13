@@ -226,8 +226,17 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     finally { if (type === 'nombre') setIsCheckingNombre(false); else setIsCheckingApellido(false); }
   }, []);
 
-  useEffect(() => { if (debouncedNombre) checkSpelling(debouncedNombre, 'nombre'); }, [debouncedNombre, checkSpelling]);
-  useEffect(() => { if (debouncedApellido) checkSpelling(debouncedApellido, 'apellido'); }, [debouncedApellido, checkSpelling]);
+  useEffect(() => {
+    if ((!isEditMode || form.formState.dirtyFields.nombre) && debouncedNombre) {
+      checkSpelling(debouncedNombre, 'nombre');
+    }
+  }, [debouncedNombre, checkSpelling, isEditMode, form.formState.dirtyFields.nombre]);
+
+  useEffect(() => {
+    if ((!isEditMode || form.formState.dirtyFields.apellido) && debouncedApellido) {
+      checkSpelling(debouncedApellido, 'apellido');
+    }
+  }, [debouncedApellido, checkSpelling, isEditMode, form.formState.dirtyFields.apellido]);
 
   useEffect(() => {
     if (isEditMode && client) {
@@ -400,175 +409,235 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
-          {/* Nombre y Apellido */}
-          <div className="grid grid-cols-2 gap-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
+        <div className="space-y-3 px-0.5">
+          {/* Fila 1: Nombre y Apellido */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField control={form.control} name="nombre" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Nombre <span className="text-red-500 ml-1">*</span></FormLabel>
-                <FormControl><Input placeholder="Juan" {...field} className={cn(nombreSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} /></FormControl>
-                <div className="min-h-[24px]">
-                  {isCheckingNombre && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
-                  {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
-                  <FormMessage />
-                </div>
+              <FormItem className="space-y-1">
+                <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                  <User className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Nombre <span className="text-red-500 ml-1">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input placeholder="Juan" {...field} className={cn("h-9 text-xs", nombreSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} />
+                </FormControl>
+                {(isCheckingNombre || nombreSuggestion || form.formState.errors.nombre) && (
+                  <div className="mt-1">
+                    {isCheckingNombre && <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
+                    {nombreSuggestion && <SpellingSuggestion suggestion={nombreSuggestion} onAccept={(text) => form.setValue('nombre', text)} />}
+                    <FormMessage className="text-[11px]" />
+                  </div>
+                )}
               </FormItem>
             )}
             />
             <FormField control={form.control} name="apellido" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" /> Apellido <span className="text-red-500 ml-1">*</span></FormLabel>
-                <FormControl><Input placeholder="Pérez" {...field} className={cn(apellidoSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} /></FormControl>
-                <div className="min-h-[24px]">
-                  {isCheckingApellido && <div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
-                  {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
-                  <FormMessage />
-                </div>
+              <FormItem className="space-y-1">
+                <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                  <User className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Apellido <span className="text-red-500 ml-1">*</span>
+                </FormLabel>
+                <FormControl>
+                  <Input placeholder="Pérez" {...field} className={cn("h-9 text-xs", apellidoSuggestion ? "border-red-500 focus-visible:ring-red-500" : "")} />
+                </FormControl>
+                {(isCheckingApellido || apellidoSuggestion || form.formState.errors.apellido) && (
+                  <div className="mt-1">
+                    {isCheckingApellido && <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando...</div>}
+                    {apellidoSuggestion && <SpellingSuggestion suggestion={apellidoSuggestion} onAccept={(text) => form.setValue('apellido', text)} />}
+                    <FormMessage className="text-[11px]" />
+                  </div>
+                )}
               </FormItem>
             )}
             />
           </div>
 
-          {/* Teléfono */}
-          {fieldSettings?.phone?.use && (
-            <FormField control={form.control} name="telefono" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Ej: 1234567890 (10 dígitos)"
-                    {...field}
-                    maxLength={10}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      field.onChange(val);
-                    }}
-                  />
-                </FormControl>
-                <div className="min-h-[24px] mt-1">
-                  {isCheckingDuplicates ? (<div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando duplicados...</div>) : phoneError ? (<p className="text-sm font-medium text-destructive flex items-center gap-2"><AlertCircle className="h-4 w-4" />{phoneError}</p>) : (<FormMessage />)}
-                </div>
-              </FormItem>
-            )}
-            />
-          )}
-
-          {/* Correo */}
-          {fieldSettings?.email?.use && (
-            <FormField control={form.control} name="correo" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><Mail className="mr-2 h-4 w-4" /> Correo Electrónico {fieldSettings.email.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.email.required && <OptionalLabel />}</FormLabel>
-                <FormControl><Input placeholder="juan.perez@email.com" {...field} /></FormControl>
-                <div className="min-h-[24px] mt-1">
-                  {isCheckingDuplicates ? (<div className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando duplicados...</div>) : emailError ? (<p className="text-sm font-medium text-destructive flex items-center gap-2"><AlertCircle className="h-4 w-4" />{emailError}</p>) : (<FormMessage />)}
-                </div>
-              </FormItem>
-            )}
-            />
-          )}
-
-          {/* Fecha de Nacimiento (Selectores) */}
-          {fieldSettings?.dob?.use && (
-            <FormField
-              control={form.control}
-              name="fecha_nacimiento"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}</FormLabel>
-
-                  <Popover modal={true}>
-                    <PopoverTrigger asChild>
-                      <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-left font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? format(field.value, 'dd MMMM yyyy', { locale: es }) : <span>Selecciona una fecha</span>}
-                          {field.value ? (
-                            <X className="ml-auto h-4 w-4 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); field.onChange(null); }} />
-                          ) : (
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          )}
-                        </Button>
-                      </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-4" align="start">
-                      <p className="font-semibold text-center mb-3 text-sm text-muted-foreground">Fecha de Nacimiento</p>
-                      <div className="flex gap-2">
-                        {/* DÍA */}
-                        <Select
-                          onValueChange={(val) => handleDateSelectChange('day', val)}
-                          value={field.value ? getDate(field.value).toString() : undefined}
-                        >
-                          <SelectTrigger className="w-[70px]">
-                            <SelectValue placeholder="Día" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
-                            {days.map(d => <SelectItem key={d} value={d.toString()}>{d}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-
-                        {/* MES */}
-                        <Select
-                          onValueChange={(val) => handleDateSelectChange('month', val)}
-                          value={field.value ? getMonth(field.value).toString() : undefined}
-                        >
-                          <SelectTrigger className="w-[110px]">
-                            <SelectValue placeholder="Mes" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
-                            {months.map(m => <SelectItem key={m.value} value={m.value.toString()} className="capitalize">{m.label}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-
-                        {/* AÑO */}
-                        <Select
-                          onValueChange={(val) => handleDateSelectChange('year', val)}
-                          value={field.value ? getYear(field.value).toString() : undefined}
-                        >
-                          <SelectTrigger className="w-[80px]">
-                            <SelectValue placeholder="Año" />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[200px]">
-                            {years.map(y => <SelectItem key={y} value={y.toString()}>{y}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  <div className="min-h-[24px]"><FormMessage /></div>
+          {/* Fila 2: Teléfono y Correo Electrónico */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {fieldSettings?.phone?.use && (
+              <FormField control={form.control} name="telefono" render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                    <Phone className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Ej: 1234567890 (10 dígitos)"
+                      {...field}
+                      maxLength={10}
+                      className="h-9 text-xs"
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        field.onChange(val);
+                      }}
+                    />
+                  </FormControl>
+                  {(isCheckingDuplicates || phoneError || form.formState.errors.telefono) && (
+                    <div className="mt-1">
+                      {isCheckingDuplicates ? (
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando duplicados...</div>
+                      ) : phoneError ? (
+                        <p className="text-xs font-medium text-destructive flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" />{phoneError}</p>
+                      ) : (
+                        <FormMessage className="text-[11px]" />
+                      )}
+                    </div>
+                  )}
                 </FormItem>
               )}
-            />
-          )}
-
-          {/* Notas */}
-          {fieldSettings?.notes?.use && (
-            <FormField control={form.control} name="notas" render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" /> Notas {fieldSettings.notes.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.notes.required && <OptionalLabel />}</FormLabel>
-                <FormControl><Textarea placeholder="Alergias, preferencias, etc." {...field} /></FormControl>
-                <div className="min-h-[24px]"><FormMessage /></div>
-              </FormItem>
+              />
             )}
-            />
-          )}
+
+            {fieldSettings?.email?.use && (
+              <FormField control={form.control} name="correo" render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                    <Mail className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Correo Electrónico {fieldSettings.email.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.email.required && <OptionalLabel />}
+                  </FormLabel>
+                  <FormControl>
+                    <Input placeholder="juan.perez@email.com" {...field} className="h-9 text-xs" />
+                  </FormControl>
+                  {(isCheckingDuplicates || emailError || form.formState.errors.correo) && (
+                    <div className="mt-1">
+                      {isCheckingDuplicates ? (
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Verificando duplicados...</div>
+                      ) : emailError ? (
+                        <p className="text-xs font-medium text-destructive flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" />{emailError}</p>
+                      ) : (
+                        <FormMessage className="text-[11px]" />
+                      )}
+                    </div>
+                  )}
+                </FormItem>
+              )}
+              />
+            )}
+          </div>
+
+          {/* Fila 3: Fecha de Nacimiento y Notas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {fieldSettings?.dob?.use && (
+              <FormField
+                control={form.control}
+                name="fecha_nacimiento"
+                render={({ field }) => (
+                  <FormItem className="space-y-1 flex flex-col">
+                    <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}
+                    </FormLabel>
+                    <Popover modal={true}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full h-9 pl-3 text-left font-normal text-xs rounded-lg",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? format(field.value, 'dd MMMM yyyy', { locale: es }) : <span>Selecciona una fecha</span>}
+                            {field.value ? (
+                              <X className="ml-auto h-3.5 w-3.5 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); field.onChange(null); }} />
+                            ) : (
+                              <CalendarIcon className="ml-auto h-3.5 w-3.5 opacity-50" />
+                            )}
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="start">
+                        <p className="font-semibold text-center mb-2 text-xs text-muted-foreground">Fecha de Nacimiento</p>
+                        <div className="flex gap-2">
+                          {/* DÍA */}
+                          <Select
+                            onValueChange={(val) => handleDateSelectChange('day', val)}
+                            value={field.value ? getDate(field.value).toString() : undefined}
+                          >
+                            <SelectTrigger className="w-[70px] h-8 text-xs">
+                              <SelectValue placeholder="Día" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                              {days.map(d => <SelectItem key={d} value={d.toString()} className="text-xs">{d}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+
+                          {/* MES */}
+                          <Select
+                            onValueChange={(val) => handleDateSelectChange('month', val)}
+                            value={field.value ? getMonth(field.value).toString() : undefined}
+                          >
+                            <SelectTrigger className="w-[110px] h-8 text-xs">
+                              <SelectValue placeholder="Mes" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                              {months.map(m => <SelectItem key={m.value} value={m.value.toString()} className="capitalize text-xs">{m.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+
+                          {/* AÑO */}
+                          <Select
+                            onValueChange={(val) => handleDateSelectChange('year', val)}
+                            value={field.value ? getYear(field.value).toString() : undefined}
+                          >
+                            <SelectTrigger className="w-[80px] h-8 text-xs">
+                              <SelectValue placeholder="Año" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                              {years.map(y => <SelectItem key={y} value={y.toString()} className="text-xs">{y}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    {form.formState.errors.fecha_nacimiento && <FormMessage className="text-[11px]" />}
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Notas */}
+            {fieldSettings?.notes?.use && (
+              <FormField control={form.control} name="notas" render={({ field }) => (
+                <FormItem className="space-y-1">
+                  <FormLabel className="flex items-center text-xs font-medium text-foreground">
+                    <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Notas {fieldSettings.notes.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.notes.required && <OptionalLabel />}
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea placeholder="Alergias, preferencias, etc." {...field} className="h-9 min-h-[36px] max-h-24 resize-y text-xs py-1.5 px-3 leading-snug" />
+                  </FormControl>
+                  {form.formState.errors.notas && <FormMessage className="text-[11px]" />}
+                </FormItem>
+              )}
+              />
+            )}
+          </div>
         </div>
 
-        <DialogFooter className="flex-row gap-2">
+        {/* Footer con botón ajustado al texto */}
+        <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40">
           {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 text-xs font-medium rounded-xl text-slate-400 hover:text-foreground"
+              onClick={onCancel}
+            >
               Cancelar
             </Button>
           )}
-          <Button type="submit" disabled={isSaveDisabled} className="w-full sm:w-auto">
-            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Cliente')}
+          <Button
+            type="submit"
+            variant="alfa"
+            size="sm"
+            disabled={isSaveDisabled}
+            className="h-8 px-4 text-xs font-semibold rounded-xl w-auto shrink-0"
+          >
+            {isSubmitting ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              isEditMode ? 'Guardar Cambios' : 'Guardar Cliente'
+            )}
           </Button>
-        </DialogFooter>
+        </div>
       </form>
     </Form>
   );

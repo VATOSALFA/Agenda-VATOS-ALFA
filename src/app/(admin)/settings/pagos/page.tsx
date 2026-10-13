@@ -1,28 +1,21 @@
-
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, Copy, Info } from "lucide-react";
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
-
-
-import { httpsCallable, functions } from '@/lib/firebase-client';
-import { writeBatch } from 'firebase/firestore';
+import { Loader2, CreditCard, RefreshCw, Smartphone, CheckCircle2 } from "lucide-react";
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { db, httpsCallable, functions } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface PagosSettings {
     showTips: boolean;
@@ -42,11 +35,10 @@ export default function PagosAgendaProPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
 
-
-    // Terminal Settings State
     const { user } = useAuth();
     const [cashboxSettings, setCashboxSettings] = useState<any>(null);
     const [isFetchingTerminals, setIsFetchingTerminals] = useState(false);
+    const [isSyncingStore, setIsSyncingStore] = useState(false);
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: terminals, loading: terminalsLoading } = useFirestoreQuery<any>('terminales', queryKey);
@@ -70,12 +62,10 @@ export default function PagosAgendaProPage() {
         const fetchSettings = async () => {
             setIsLoading(true);
             try {
-                // Fetch Generic Payment Settings
                 const pagosRef = doc(db, 'configuracion', 'pagos');
                 const pagosSnap = await getDoc(pagosRef);
                 const pagosData = pagosSnap.exists() ? pagosSnap.data() : {};
 
-                // Fetch Mercado Pago Credentials
                 const mpRef = doc(db, 'configuracion', 'mercadopago');
                 const mpSnap = await getDoc(mpRef);
                 const mpData = mpSnap.exists() ? mpSnap.data() : {};
@@ -85,7 +75,6 @@ export default function PagosAgendaProPage() {
                     mercadoPagoPublicKey: mpData.publicKey || '',
                     mercadoPagoAccessToken: mpData.accessToken || '',
                     mercadoPagoUserId: mpData.userId || '',
-                    // Default values if missing in pagosData
                     showTips: pagosData.showTips ?? true,
                     onlinePayments: pagosData.onlinePayments ?? true,
                     collectionLink: pagosData.collectionLink ?? true,
@@ -112,7 +101,7 @@ export default function PagosAgendaProPage() {
             if (docSnap.exists()) {
                 setCashboxSettings(docSnap.data());
             }
-        }
+        };
         fetchCashboxSettings();
     }, [user, queryKey]);
 
@@ -132,10 +121,10 @@ export default function PagosAgendaProPage() {
                 });
                 await batch.commit();
 
-                setQueryKey(prev => prev + 1); // Trigger refetch from our DB
+                setQueryKey(prev => prev + 1);
                 toast({
                     title: 'Terminales actualizadas',
-                    description: `Se encontraron y guardaron ${fetchedTerminals.length} terminales en modo PDV.`,
+                    description: `Se sincronizaron ${fetchedTerminals.length} terminales en modo PDV.`,
                 });
             } else {
                 throw new Error(result.data.error || 'Error desconocido al obtener terminales.');
@@ -150,7 +139,7 @@ export default function PagosAgendaProPage() {
         } finally {
             setIsFetchingTerminals(false);
         }
-    }
+    };
 
     const handleSetMainTerminal = async (terminalId: string, isChecked: boolean) => {
         const newTerminalId = isChecked ? terminalId : null;
@@ -163,25 +152,38 @@ export default function PagosAgendaProPage() {
             console.error("Error setting main terminal:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar la terminal principal.' });
         }
-    }
+    };
 
-    // Helper functionality
-    const collectionUrl = 'https://vatosalfa--agenda-1ae08.us-central1.hosted.app/link-cobro';
-
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(collectionUrl);
-        toast({
-            title: '¡Copiado!',
-            description: 'El link de cobro ha sido copiado al portapapeles.',
-        });
-    }
-
-
+    const handleSyncStore = async () => {
+        const token = form.getValues('mercadoPagoAccessToken');
+        const uid = form.getValues('mercadoPagoUserId');
+        if (!token || !uid) {
+            toast({ variant: "destructive", title: "Faltan datos", description: "Guarda primero tu Access Token y User ID." });
+            return;
+        }
+        setIsSyncingStore(true);
+        try {
+            const res = await fetch('/api/mercadopago/sync-store', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accessToken: token, userId: uid })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast({ title: "¡Éxito!", description: `Sucursal y Caja sincronizadas. ID Sucursal: ${data.store?.id || 'OK'}` });
+            } else {
+                throw new Error(data.error || "Error desconocido");
+            }
+        } catch (e: any) {
+            toast({ variant: "destructive", title: "Error", description: e.message });
+        } finally {
+            setIsSyncingStore(false);
+        }
+    };
 
     const onSubmit = async (data: PagosSettings) => {
         setIsSubmitting(true);
         try {
-            // 1. Save Generic Payment Settings
             const pagosRef = doc(db, 'configuracion', 'pagos');
             const pagosData = {
                 showTips: data.showTips,
@@ -194,7 +196,6 @@ export default function PagosAgendaProPage() {
             };
             await setDoc(pagosRef, pagosData, { merge: true });
 
-            // 2. Save Mercado Pago Credentials (separately for backend security/isolation)
             const mpRef = doc(db, 'configuracion', 'mercadopago');
             const mpData = {
                 publicKey: data.mercadoPagoPublicKey,
@@ -204,151 +205,221 @@ export default function PagosAgendaProPage() {
             await setDoc(mpRef, mpData, { merge: true });
 
             toast({
-                title: "Configuración guardada con éxito",
+                title: "Configuración guardada",
                 description: "Tus credenciales y preferencias han sido actualizadas."
-            })
+            });
         } catch (error) {
             console.error("Error saving payment settings:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron guardar los cambios.' });
         } finally {
             setIsSubmitting(false);
         }
-    }
+    };
 
     return (
-        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight">Pagos</h2>
-                <p className="text-muted-foreground">
-                    Configura tus métodos de pago, comisiones y credenciales.
-                </p>
+        <div className="flex-1 space-y-5 max-w-5xl pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/60">
+                <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">Pagos y Terminales</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Configura las credenciales de Mercado Pago y administra las terminales físicas de cobro.
+                    </p>
+                </div>
             </div>
 
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-
-                <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
-
-
-                    <AccordionItem value="item-3" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Proveedores de pago externos (Mercado pago)</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <p className="text-sm text-muted-foreground">
-                                Si tienes una cuenta de MercadoPago puedes agregar tus propias credenciales para que las ventas se procesen a través de tu cuenta.
-                            </p>
-                            <div className="space-y-2">
-                                <Label htmlFor="mercadoPagoPublicKey">Public Key</Label>
-                                <Controller name="mercadoPagoPublicKey" control={form.control} render={({ field }) => (
-                                    <Input id="mercadoPagoPublicKey" {...field} placeholder="Tu Public Key de MercadoPago" />
-                                )} />
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                {/* 1. MERCADO PAGO CREDENCIALES */}
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardHeader className="py-3 px-4 sm:px-5 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center gap-2">
+                            <CreditCard className="h-4 w-4 text-slate-400 shrink-0" />
+                            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                Proveedor de Pagos (Mercado Pago)
+                            </CardTitle>
+                        </div>
+                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                            Conecta tus credenciales de producción para procesar anticipos y cobros con tarjeta y SPEI.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 sm:p-5 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <Label htmlFor="mercadoPagoPublicKey" className="text-xs font-semibold text-foreground">
+                                    Public Key
+                                </Label>
+                                <Controller
+                                    name="mercadoPagoPublicKey"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Input
+                                            id="mercadoPagoPublicKey"
+                                            {...field}
+                                            placeholder="APP_USR-..."
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    )}
+                                />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="mercadoPagoAccessToken">Access Token</Label>
-                                <Controller name="mercadoPagoAccessToken" control={form.control} render={({ field }) => (
-                                    <Input id="mercadoPagoAccessToken" {...field} placeholder="Tu Access Token de MercadoPago" type="password" />
-                                )} />
+
+                            <div className="space-y-1">
+                                <Label htmlFor="mercadoPagoUserId" className="text-xs font-semibold text-foreground">
+                                    User ID de Mercado Pago
+                                </Label>
+                                <Controller
+                                    name="mercadoPagoUserId"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Input
+                                            id="mercadoPagoUserId"
+                                            {...field}
+                                            placeholder="Ej. 123456789"
+                                            className="h-8 text-xs font-mono"
+                                        />
+                                    )}
+                                />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="mercadoPagoUserId">User ID (Requerido para Sincronización)</Label>
-                                <Controller name="mercadoPagoUserId" control={form.control} render={({ field }) => (
-                                    <Input id="mercadoPagoUserId" {...field} placeholder="Ej: 123456789" />
-                                )} />
-                            </div>
-                            <div className="pt-2">
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={async () => {
-                                        const token = form.getValues('mercadoPagoAccessToken');
-                                        const uid = form.getValues('mercadoPagoUserId');
-                                        if (!token || !uid) {
-                                            toast({ variant: "destructive", title: "Faltan datos", description: "Guarda primero tu Access Token y User ID." });
-                                            return;
-                                        }
-                                        toast({ title: "Sincronizando...", description: "Creando Sucursal y Caja en Mercado Pago..." });
-                                        try {
-                                            const res = await fetch('/api/mercadopago/sync-store', {
-                                                method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
-                                                body: JSON.stringify({ accessToken: token, userId: uid })
-                                            });
-                                            const data = await res.json();
-                                            if (res.ok) {
-                                                toast({ title: "¡Éxito!", description: `Sucursal y Caja sincronizadas. ID Sucursal: ${data.store.id}` });
-                                            } else {
-                                                throw new Error(data.error || "Error desconocido");
-                                            }
-                                        } catch (e: any) {
-                                            toast({ variant: "destructive", title: "Error", description: e.message });
-                                        }
-                                    }}
-                                >
-                                    Sincronizar Sucursales y Cajas (Mejorar Calidad MP)
-                                </Button>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Esto creará la sucursal y caja vía API para cumplir con los estándares de calidad de Mercado Pago.
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label htmlFor="mercadoPagoAccessToken" className="text-xs font-semibold text-foreground">
+                                Access Token (Privado)
+                            </Label>
+                            <Controller
+                                name="mercadoPagoAccessToken"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Input
+                                        id="mercadoPagoAccessToken"
+                                        {...field}
+                                        placeholder="APP_USR-..."
+                                        type="password"
+                                        className="h-8 text-xs font-mono"
+                                    />
+                                )}
+                            />
+                        </div>
+
+                        <div className="p-3 sm:p-3.5 rounded-xl border border-border/60 bg-muted/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="space-y-0.5">
+                                <span className="text-xs font-semibold text-foreground block">
+                                    Sincronizar Sucursales y Cajas con Mercado Pago
+                                </span>
+                                <p className="text-[11px] text-muted-foreground">
+                                    Crea automáticamente la sucursal y caja requerida por las APIs de cobro de Mercado Pago.
                                 </p>
                             </div>
-                        </AccordionContent>
-                    </AccordionItem>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isSyncingStore}
+                                onClick={handleSyncStore}
+                                className="h-8 px-3 text-xs shrink-0 rounded-lg border-border/80 hover:bg-muted/50"
+                            >
+                                {isSyncingStore && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                Sincronizar Tienda
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                    <AccordionItem value="item-terminal" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6 font-semibold text-base">Terminal de pagos</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="flex flex-col space-y-4">
-                                <p className="text-sm text-muted-foreground">
-                                    Conecta y gestiona tus terminales de pago de Mercado Pago.
-                                </p>
-                                <div className="flex items-center gap-4">
-                                    <Button type="button" onClick={handleFetchAndSaveTerminals} disabled={isFetchingTerminals}>
-                                        {isFetchingTerminals && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Refrescar Terminales
-                                    </Button>
-                                </div>
-                                <div className="mt-4 border rounded-md">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Nombre</TableHead>
-                                                <TableHead>ID</TableHead>
-                                                <TableHead>Modo de Operación</TableHead>
-                                                <TableHead>Principal</TableHead>
+                {/* 2. TERMINALES POINT (TABLA COMPACTA - REGLA 6) */}
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardHeader className="py-3 px-4 sm:px-5 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Smartphone className="h-4 w-4 text-slate-400 shrink-0" />
+                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                    Terminales Físicas (Mercado Pago Point)
+                                </CardTitle>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleFetchAndSaveTerminals}
+                                disabled={isFetchingTerminals}
+                                className="h-8 px-3 text-xs shrink-0 rounded-lg border-border/80 hover:bg-muted/50 gap-1.5"
+                            >
+                                <RefreshCw className={cn("h-3.5 w-3.5 text-slate-400", isFetchingTerminals && "animate-spin")} />
+                                <span>Refrescar Terminales</span>
+                            </Button>
+                        </div>
+                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                            Conecta tus lectores de tarjetas en modo Punto de Venta (PDV) para cobrar en recepción.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Nombre de Terminal</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">ID de Dispositivo</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">Modo</TableHead>
+                                    <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-28">Principal</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {terminalsLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="py-8 text-center">
+                                            <Loader2 className="animate-spin h-5 w-5 text-slate-400 mx-auto" />
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (!terminals || terminals.length === 0) ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="py-8 text-center text-xs text-muted-foreground">
+                                            No se encontraron terminales registradas. Haz clic en "Refrescar Terminales".
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    terminals.map((terminal: any) => {
+                                        const isMain = cashboxSettings?.mercadoPagoTerminalId === terminal.id;
+                                        return (
+                                            <TableRow key={terminal.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                <TableCell className="py-1.5 px-3.5 text-xs font-semibold text-foreground">
+                                                    {terminal.display_name || 'Terminal Point'}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs font-mono text-muted-foreground">
+                                                    {terminal.id}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs">
+                                                    <Badge variant="outline" className="text-[10px] font-sans font-medium py-0 px-2 rounded-full border-border/60">
+                                                        {terminal.operating_mode || 'PDV'}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-center">
+                                                    <Switch
+                                                        className="scale-90"
+                                                        checked={isMain}
+                                                        onCheckedChange={(checked) => handleSetMainTerminal(terminal.id, checked)}
+                                                    />
+                                                </TableCell>
                                             </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {terminalsLoading ? (
-                                                <TableRow><TableCell colSpan={4} className="text-center h-24"><Loader2 className="animate-spin h-6 w-6" /></TableCell></TableRow>
-                                            ) : terminals?.length === 0 ? (
-                                                <TableRow><TableCell colSpan={4} className="text-center h-24">No se encontraron terminales. Haz clic en "Refrescar Terminales".</TableCell></TableRow>
-                                            ) : (
-                                                terminals?.map((terminal: any) => (
-                                                    <TableRow key={terminal.id}>
-                                                        <TableCell className="font-medium">{terminal.display_name || 'Terminal sin nombre'}</TableCell>
-                                                        <TableCell>{terminal.id}</TableCell>
-                                                        <TableCell>{terminal.operating_mode}</TableCell>
-                                                        <TableCell>
-                                                            <Switch
-                                                                checked={cashboxSettings?.mercadoPagoTerminalId === terminal.id}
-                                                                onCheckedChange={(checked) => handleSetMainTerminal(terminal.id, checked)}
-                                                            />
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
 
-
-                </Accordion>
-
-                <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-                    <Button type="submit" disabled={isSubmitting || isLoading}>
-                        {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Guardar Cambios
+                {/* Botón Guardar Cambios (Alfa) */}
+                <div className="sticky bottom-0 z-10 py-3 bg-background/90 backdrop-blur-md border-t border-border/40 flex justify-end">
+                    <Button
+                        type="submit"
+                        disabled={isSubmitting || isLoading}
+                        variant="alfa"
+                        className="h-9 px-6 text-xs font-semibold"
+                    >
+                        {(isSubmitting || isLoading) ? (
+                            <>
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                Guardando...
+                            </>
+                        ) : (
+                            "Guardar Cambios"
+                        )}
                     </Button>
                 </div>
             </form>

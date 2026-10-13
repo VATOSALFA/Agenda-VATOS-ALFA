@@ -14,8 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Search, Loader2 } from "lucide-react";
+import { CalendarIcon, Search, Loader2, Shield, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 import { useInvoicedSales } from "../invoiced/use-invoiced-sales";
@@ -46,23 +47,30 @@ export default function MyPerformancePage() {
     const [queryKey, setQueryKey] = useState(0);
 
     const { data: professionals, loading: profLoading } = useFirestoreQuery<Profesional>('profesionales');
-    const myProfessionalId = professionals?.find(p => p.userId === user?.uid || p.email === user?.email)?.id;
+    const isAdmin = user?.role === 'Administrador general';
+    const autoProfessionalId = professionals?.find(p => p.userId === user?.uid || p.email === user?.email)?.id;
+    const [selectedAdminProfId, setSelectedAdminProfId] = useState<string>('');
+
+    const effectiveProfessionalId = autoProfessionalId || (isAdmin ? (selectedAdminProfId || professionals?.find(p => !p.deleted && p.active !== false)?.id || professionals?.[0]?.id) : undefined);
+    const activeProf = professionals?.find(p => p.id === effectiveProfessionalId);
 
     useEffect(() => {
         const today = new Date();
         const initialDateRange = { from: startOfDay(today), to: endOfDay(today) };
         setDateRange(initialDateRange);
 
-        setActiveFilters({
-            dateRange: initialDateRange,
-            local: 'todos',
-            paymentMethod: 'todos',
-            professional: myProfessionalId || 'none'
-        });
-    }, [user, myProfessionalId]);
+        if (effectiveProfessionalId) {
+            setActiveFilters({
+                dateRange: initialDateRange,
+                local: 'todos',
+                paymentMethod: 'todos',
+                professional: effectiveProfessionalId
+            });
+        }
+    }, [user, effectiveProfessionalId]);
 
     const handleSearch = () => {
-        if (!myProfessionalId) {
+        if (!effectiveProfessionalId) {
             toast({ variant: 'destructive', title: 'Error', description: 'No se encontró tu perfil de profesional.' });
             return;
         }
@@ -71,7 +79,7 @@ export default function MyPerformancePage() {
             dateRange,
             local: 'todos',
             paymentMethod: 'todos',
-            professional: myProfessionalId
+            professional: effectiveProfessionalId
         });
         setQueryKey(prev => prev + 1);
     };
@@ -97,7 +105,7 @@ export default function MyPerformancePage() {
         loading: loadingCommissions
     } = useCommissionsData(activeFilters, queryKey);
 
-    const myCommissionSummary = myCommissionsList.find(s => s.professionalId === myProfessionalId);
+    const myCommissionSummary = myCommissionsList.find(s => s.professionalId === effectiveProfessionalId);
 
     // Calculate tips from sales just for this professional
     const myTips = mySales.flatMap(sale => sale.propina && Number(sale.propina) > 0 ? [{
@@ -118,7 +126,7 @@ export default function MyPerformancePage() {
 
     if (!user) return null;
 
-    if (!profLoading && !myProfessionalId) {
+    if (!profLoading && !effectiveProfessionalId && !isAdmin) {
         return (
             <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
                 <div className="flex items-center justify-between space-y-2">
@@ -137,8 +145,43 @@ export default function MyPerformancePage() {
 
     return (
         <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-            <div className="flex items-center justify-between space-y-2">
-                <h2 className="text-3xl font-bold tracking-tight">Mi Rendimiento</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                        {isAdmin && activeProf ? `Rendimiento de ${activeProf.name}` : 'Mi Rendimiento'}
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                        {isAdmin 
+                            ? 'Vista de Administrador: Consultando métricas de comisiones, ventas y propinas del barbero' 
+                            : 'Consulta tus servicios facturados, comisiones acumuladas y propinas recibidas'}
+                    </p>
+                </div>
+
+                {isAdmin && professionals && professionals.length > 0 && (
+                    <div className="flex items-center gap-2 bg-blue-500/10 border-2 border-blue-500 rounded-xl px-3 py-2 shadow-xs shrink-0">
+                        <Shield className="h-4 w-4 text-blue-400 shrink-0" />
+                        <span className="text-xs font-semibold text-foreground">Barbero:</span>
+                        <Select
+                            value={effectiveProfessionalId}
+                            onValueChange={(val) => {
+                                setSelectedAdminProfId(val);
+                                setActiveFilters(prev => ({ ...prev, professional: val }));
+                                setQueryKey(k => k + 1);
+                            }}
+                        >
+                            <SelectTrigger className="h-7 w-36 sm:w-44 text-xs font-semibold bg-background border-border/80">
+                                <SelectValue placeholder="Seleccionar..." />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                {professionals.filter(p => !p.deleted && p.active !== false).map(p => (
+                                    <SelectItem key={p.id} value={p.id} className="text-xs font-medium cursor-pointer">
+                                        {p.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
             </div>
 
             <Card>
@@ -178,7 +221,7 @@ export default function MyPerformancePage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <Button onClick={handleSearch} disabled={isLoading || !myProfessionalId}>
+                        <Button onClick={handleSearch} disabled={isLoading || !effectiveProfessionalId}>
                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                         </Button>
                     </div>
@@ -219,7 +262,7 @@ export default function MyPerformancePage() {
                                                 <TableBody>
                                                     {mySales.map(sale => {
                                                         const dateObj = sale.fecha_hora_venta?.seconds ? new Date(sale.fecha_hora_venta.seconds * 1000) : new Date(sale.fecha_hora_venta);
-                                                        const myItems = sale.items.filter(i => i.barbero_id === myProfessionalId);
+                                                        const myItems = sale.items.filter(i => i.barbero_id === effectiveProfessionalId);
                                                         const concepts = myItems.map(i => i.nombre).join(', ');
 
                                                         return (
@@ -227,7 +270,7 @@ export default function MyPerformancePage() {
                                                                 <TableCell>{format(dateObj, 'PP p', { locale: es })}</TableCell>
                                                                 <TableCell>{sale.client ? `${sale.client.nombre} ${sale.client.apellido || ''}` : 'Cliente'}</TableCell>
                                                                 <TableCell>{concepts}</TableCell>
-                                                                <TableCell className="text-right text-green-600 font-medium">${(sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real.toLocaleString('es-MX', { minimumFractionDigits: 2 }) : sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
+                                                                <TableCell className="text-right font-semibold text-foreground">${(sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real.toLocaleString('es-MX', { minimumFractionDigits: 2 }) : sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
                                                             </TableRow>
                                                         );
                                                     })}
@@ -342,7 +385,7 @@ export default function MyPerformancePage() {
                                                         <TableRow key={idx}>
                                                             <TableCell>{prop.clientName || 'Cliente'}</TableCell>
                                                             <TableCell>{prop.itemName}</TableCell>
-                                                            <TableCell className="text-right font-bold text-green-600">+${prop.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
+                                                            <TableCell className="text-right font-bold text-blue-400">+${prop.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
                                                         </TableRow>
                                                     ))}
                                                 </TableBody>

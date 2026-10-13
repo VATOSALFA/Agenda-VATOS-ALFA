@@ -1,9 +1,7 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { EditComisionesModal } from '@/components/admin/comisiones/edit-comisiones-modal';
 import { EditServiceComisionesModal } from '@/components/admin/comisiones/edit-service-comisiones-modal';
 import { EditProductComisionModal } from '@/components/admin/comisiones/edit-product-comision-modal';
@@ -16,8 +14,8 @@ import { db } from '@/lib/firebase-client';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
-
+import { Loader2, HelpCircle, Pencil, Percent, Scissors, Package } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export default function ComisionesPage() {
   const [queryKey, setQueryKey] = useState(0);
@@ -61,7 +59,7 @@ export default function ComisionesPage() {
     } catch (error) {
       console.error("Error saving setting:", error);
       toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la configuración." });
-      setDiscountsAffectCommissions(!checked); // Revert on error
+      setDiscountsAffectCommissions(!checked);
     }
   };
 
@@ -83,21 +81,41 @@ export default function ComisionesPage() {
 
   return (
     <>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex items-center justify-between space-y-2">
-          <h2 className="text-3xl font-bold tracking-tight">Comisiones</h2>
+      <div className="flex-1 space-y-4 p-3 sm:p-6 pt-4 sm:pt-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Comisiones</h2>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              Configura esquemas de comisiones para profesionales, servicios y productos de venta.
+            </p>
+          </div>
         </div>
 
-        <Card className="p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label className="text-base font-medium">Los descuentos afectan la comisión</Label>
-              <p className="text-sm text-muted-foreground">
-                Si está activo, la comisión se calcula sobre el total DESPUÉS de descuentos. <br />
-                Si está inactivo, se calcula sobre el precio original.
-              </p>
+        {/* Setting Card */}
+        <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Label className="text-xs sm:text-sm font-semibold text-foreground cursor-pointer">
+                Los descuentos afectan la comisión
+              </Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
+                    <HelpCircle className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-3 text-xs border-2 border-blue-500 rounded-xl bg-card shadow-xl">
+                  <p className="font-semibold mb-1 text-foreground">Cálculo de Descuentos:</p>
+                  <p className="text-muted-foreground leading-relaxed">
+                    <strong>Activo:</strong> la comisión se calcula sobre el total final tras aplicar descuentos.<br />
+                    <strong>Inactivo:</strong> la comisión se calcula sobre el precio de lista original.
+                  </p>
+                </PopoverContent>
+              </Popover>
             </div>
-            {isSettingsLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
+            {isSettingsLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+            ) : (
               <Switch
                 checked={discountsAffectCommissions}
                 onCheckedChange={toggleDiscountsSetting}
@@ -107,65 +125,125 @@ export default function ComisionesPage() {
         </Card>
 
         <Tabs defaultValue="por-profesional" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="por-profesional">Por profesional</TabsTrigger>
-            <TabsTrigger value="por-servicio">Por servicio</TabsTrigger>
-            <TabsTrigger value="por-producto">Por producto</TabsTrigger>
+          <TabsList className="bg-muted/40 p-1 border border-border/60 rounded-xl h-auto">
+            <TabsTrigger value="por-profesional" className="rounded-lg text-xs py-1.5 px-3">
+              Por profesional
+            </TabsTrigger>
+            <TabsTrigger value="por-servicio" className="rounded-lg text-xs py-1.5 px-3">
+              Por servicio
+            </TabsTrigger>
+            <TabsTrigger value="por-producto" className="rounded-lg text-xs py-1.5 px-3">
+              Por producto
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="por-profesional">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <TabsContent value="por-profesional" className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
-              ) : (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))
+              ) : sortedProfessionals.length > 0 ? (
                 sortedProfessionals.map((prof) => (
-                  <Card key={prof.id} className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="font-bold">{prof.name}</p>
+                  <Card
+                    key={prof.id}
+                    className="rounded-xl border border-border/60 bg-card/50 hover:border-blue-500/40 hover:bg-card/80 transition-all p-3 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <Percent className="h-4 w-4 text-blue-400 shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold truncate text-foreground">
+                        {prof.name}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingProfessional(prof)}>Editar</Button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProfessional(prof)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-1 shrink-0"
+                      title="Editar comisión"
+                      aria-label={`Editar comisión de ${prof.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                   </Card>
                 ))
+              ) : (
+                <div className="col-span-full py-8 text-center text-xs text-muted-foreground">
+                  No hay profesionales registrados.
+                </div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="por-servicio">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <TabsContent value="por-servicio" className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
-              ) : (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))
+              ) : sortedServices.length > 0 ? (
                 sortedServices.map((serv) => (
-                  <Card key={serv.id} className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="font-bold">{serv.name}</p>
+                  <Card
+                    key={serv.id}
+                    className="rounded-xl border border-border/60 bg-card/50 hover:border-blue-500/40 hover:bg-card/80 transition-all p-3 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <Scissors className="h-4 w-4 text-blue-400 shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold truncate text-foreground">
+                        {serv.name}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingService(serv)}>Editar</Button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingService(serv)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-1 shrink-0"
+                      title="Editar comisión"
+                      aria-label={`Editar comisión de ${serv.name}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                   </Card>
                 ))
+              ) : (
+                <div className="col-span-full py-8 text-center text-xs text-muted-foreground">
+                  No hay servicios registrados.
+                </div>
               )}
             </div>
           </TabsContent>
 
-          <TabsContent value="por-producto">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <TabsContent value="por-producto" className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
               {isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
-              ) : (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                ))
+              ) : sortedProducts.length > 0 ? (
                 sortedProducts.map((prod) => (
-                  <Card key={prod.id} className="flex items-center justify-between p-4">
-                    <div>
-                      <p className="font-bold">{prod.nombre}</p>
+                  <Card
+                    key={prod.id}
+                    className="rounded-xl border border-border/60 bg-card/50 hover:border-blue-500/40 hover:bg-card/80 transition-all p-3 flex items-center justify-between gap-2"
+                  >
+                    <div className="flex items-center gap-2.5 truncate">
+                      <Package className="h-4 w-4 text-blue-400 shrink-0" />
+                      <span className="text-xs sm:text-sm font-semibold truncate text-foreground">
+                        {prod.nombre}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setEditingProduct(prod)}>Editar</Button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProduct(prod)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-1 shrink-0"
+                      title="Editar comisión"
+                      aria-label={`Editar comisión de ${prod.nombre}`}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
                   </Card>
                 ))
+              ) : (
+                <div className="col-span-full py-8 text-center text-xs text-muted-foreground">
+                  No hay productos registrados.
+                </div>
               )}
             </div>
           </TabsContent>

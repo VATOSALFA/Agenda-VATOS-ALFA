@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { UploadCloud, FileSpreadsheet, Loader2, Download } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Loader2, Download, X } from 'lucide-react';
 import { format, parse, isValid } from 'date-fns';
 
 interface UploadClientsModalProps {
@@ -265,82 +265,109 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[85dvh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Cargar Clientes desde Excel o CSV</DialogTitle>
-          <DialogDescription>
-            Sube un archivo .xlsx, .xls o .csv para importar tus clientes de forma masiva.
-          </DialogDescription>
-        </DialogHeader>
-
-        {parsedData.length === 0 ? (
-          <div className="py-8 space-y-6">
-            <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
-              <input {...getInputProps()} />
-              <UploadCloud className="h-12 w-12 text-muted-foreground" />
-              <p className="mt-4 text-center text-muted-foreground">
-                Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
-              </p>
+      <DialogContent hideCloseButton={true} className="max-w-4xl max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+        {/* Header Oficial Vatos Alfa */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          <div className="header-light-beam" aria-hidden="true" />
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-3 min-w-0">
+              <UploadCloud className="h-5 w-5 text-slate-300 shrink-0" />
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                  Cargar Clientes desde Excel o CSV
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300">
+                  Importa tus clientes de forma masiva mediante archivo .xlsx o .csv
+                </DialogDescription>
+              </div>
             </div>
-            <Alert>
-              <FileSpreadsheet className="h-4 w-4" />
-              <AlertTitle>Formato del archivo</AlertTitle>
-              <AlertDescription className="space-y-3">
-                <p>
-                  Asegúrate de que tu archivo .xlsx, .xls o .csv tenga las columnas: <strong>nombre</strong>, <strong>apellido</strong>, <strong>telefono</strong>, y (opcionalmente) otras columnas como <strong>correo</strong>, <strong>fecha de nacimiento</strong>, etc.
-                </p>
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-2 border-primary text-primary hover:bg-primary/5 font-bold"
-                    onClick={downloadTemplate}
-                  >
-                    <Download className="h-4 w-4" />
-                    Descargar archivo de ejemplo (.xlsx)
-                  </Button>
-                </div>
-              </AlertDescription>
-            </Alert>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              className="h-8 w-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-        ) : (
-          <div className="flex-grow flex flex-col overflow-hidden">
-            <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} clientes)</p>
-            <ScrollArea className="border rounded-md flex-grow">
-              <Table>
-                <TableHeader className="sticky top-0 bg-muted">
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Apellido</TableHead>
-                    <TableHead>Correo</TableHead>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Gasto Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {parsedData.slice(0, 100).map((client, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{client.nombre}</TableCell>
-                      <TableCell>{client.apellido}</TableCell>
-                      <TableCell>{client.correo || 'N/A'}</TableCell>
-                      <TableCell>{client.telefono}</TableCell>
-                      <TableCell>${(client.gasto_total || 0).toLocaleString('es-CL')}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
-            </ScrollArea>
-          </div>
-        )}
+        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isProcessing}>Cancelar</Button>
-          <Button onClick={handleUpload} disabled={parsedData.length === 0 || isProcessing}>
-            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Importar {parsedData.length > 0 ? parsedData.length : ''} Clientes
+        <div className="p-4 sm:p-5 flex-grow overflow-y-auto">
+          {parsedData.length === 0 ? (
+            <div className="py-4 space-y-5">
+              <div {...getRootProps()} className={`flex flex-col items-center justify-center p-8 sm:p-12 border-2 border-dashed rounded-xl cursor-pointer hover:border-blue-500/60 transition-colors ${isDragActive ? 'border-blue-500 bg-blue-500/5' : 'border-border/70'}`}>
+                <input {...getInputProps()} />
+                <UploadCloud className="h-10 w-10 text-slate-400" />
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  Arrastra y suelta tu archivo aquí, o <span className="text-blue-500 font-semibold underline underline-offset-2">haz clic para seleccionarlo</span>.
+                </p>
+              </div>
+              <Alert className="rounded-xl border-border/70">
+                <FileSpreadsheet className="h-4 w-4 text-slate-400" />
+                <AlertTitle className="text-xs font-semibold">Formato del archivo</AlertTitle>
+                <AlertDescription className="space-y-3 text-xs text-muted-foreground">
+                  <p>
+                    Asegúrate de que tu archivo .xlsx, .xls o .csv contenga las columnas: <strong className="text-foreground">nombre</strong>, <strong className="text-foreground">apellido</strong>, <strong className="text-foreground">telefono</strong>, y opcionalmente <strong className="text-foreground">correo</strong>, <strong className="text-foreground">fecha de nacimiento</strong>.
+                  </p>
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2 rounded-xl text-xs font-semibold h-8"
+                      onClick={downloadTemplate}
+                    >
+                      <Download className="h-3.5 w-3.5 text-slate-400" />
+                      Descargar plantilla de ejemplo (.xlsx)
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : (
+            <div className="flex-grow flex flex-col overflow-hidden">
+              <p className="text-xs font-semibold mb-2">Vista previa de la importación ({parsedData.length} clientes)</p>
+              <ScrollArea className="border rounded-xl flex-grow max-h-[45vh]">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-muted/40 text-xs">
+                    <TableRow className="h-8">
+                      <TableHead className="py-1 px-3 text-xs">Nombre</TableHead>
+                      <TableHead className="py-1 px-3 text-xs">Apellido</TableHead>
+                      <TableHead className="py-1 px-3 text-xs">Correo</TableHead>
+                      <TableHead className="py-1 px-3 text-xs">Teléfono</TableHead>
+                      <TableHead className="py-1 px-3 text-xs">Gasto Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parsedData.slice(0, 100).map((client, index) => (
+                      <TableRow key={index} className="h-8 hover:bg-muted/30">
+                        <TableCell className="py-1.5 px-3 text-xs font-medium">{client.nombre}</TableCell>
+                        <TableCell className="py-1.5 px-3 text-xs">{client.apellido}</TableCell>
+                        <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">{client.correo || 'N/A'}</TableCell>
+                        <TableCell className="py-1.5 px-3 text-xs">{client.telefono}</TableCell>
+                        <TableCell className="py-1.5 px-3 text-xs font-semibold">${(client.gasto_total || 0).toLocaleString('es-MX')}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {parsedData.length > 100 && <p className="text-center text-xs text-muted-foreground p-3">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
+              </ScrollArea>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2 shrink-0">
+          <Button variant="outline" onClick={handleClose} disabled={isProcessing} className="rounded-xl h-9 text-xs">
+            Cancelar
           </Button>
-        </DialogFooter>
+          <Button
+            onClick={handleUpload}
+            disabled={parsedData.length === 0 || isProcessing}
+            className="btn-vatos-alfa rounded-xl h-9 px-4 text-xs font-bold text-white shadow-md"
+          >
+            {isProcessing && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+            Importar {parsedData.length > 0 ? `${parsedData.length} ` : ''}Clientes
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

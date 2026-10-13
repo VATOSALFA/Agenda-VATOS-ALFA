@@ -99,12 +99,12 @@ export const ClientInput = ({ value, onChange, clients, loading, onSearchChange 
             <Popover open={open && search.trim().length > 0} onOpenChange={setOpen} modal={false}>
                 <PopoverTrigger asChild>
                     <div
-                        className="flex items-center border rounded-md px-3 border-input bg-background ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-text"
+                        className="flex items-center border rounded-xl px-3 border-border/80 bg-card hover:border-primary/40 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 h-10 transition-all cursor-text shadow-2xs"
                         onClick={() => {
                             if (search.trim().length > 0) setOpen(true);
                         }}
                     >
-                        <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                        <Search className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
                         <CommandPrimitive.Input
                             value={search}
                             onValueChange={(val) => {
@@ -117,18 +117,18 @@ export const ClientInput = ({ value, onChange, clients, loading, onSearchChange 
                                 if (search.trim().length > 0) setOpen(true);
                             }}
                             placeholder="Buscar cliente por nombre o teléfono..."
-                            className="border-none focus:ring-0 h-9 p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground w-full py-2 text-sm"
+                            className="border-none focus:ring-0 h-full p-0 bg-transparent flex-grow outline-none placeholder:text-muted-foreground w-full text-xs sm:text-sm font-medium"
                             disabled={loading}
                         />
                     </div>
                 </PopoverTrigger>
                 <PopoverContent
-                    className="w-[calc(100vw-4rem)] sm:w-[500px] p-0 z-[200]"
+                    className="w-[calc(100vw-4rem)] sm:w-[500px] p-1.5 z-[250] border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-popover/95 backdrop-blur-md overflow-hidden"
                     align="start"
                     onOpenAutoFocus={(e) => e.preventDefault()}
                 >
-                    <CommandList>
-                        <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                    <CommandList className="max-h-[300px]">
+                        <CommandEmpty className="py-6 text-center text-xs text-muted-foreground">No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
                             {filteredClients.map((client) => {
                                 return (
@@ -141,15 +141,25 @@ export const ClientInput = ({ value, onChange, clients, loading, onSearchChange 
                                             e.stopPropagation();
                                         }}
                                         onClick={() => handleSelect(client.id, client.fullName)}
-                                        className="cursor-pointer !pointer-events-auto hover:bg-accent hover:text-accent-foreground"
+                                        className="cursor-pointer !pointer-events-auto rounded-xl p-2 my-0.5 hover:bg-blue-500/10 transition-colors flex items-center justify-between"
                                     >
+                                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <div className="h-7 w-7 rounded-full bg-[#202A49] text-white text-[10px] font-bold flex items-center justify-center shrink-0 shadow-2xs">
+                                                {client.nombre?.slice(0, 1).toUpperCase() || 'C'}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-semibold text-xs text-foreground truncate">{client.fullName}</p>
+                                                {client.telefono && (
+                                                    <p className="text-[10px] font-mono text-muted-foreground truncate">{client.telefono}</p>
+                                                )}
+                                            </div>
+                                        </div>
                                         <Check
                                             className={cn(
-                                                "mr-2 h-4 w-4",
+                                                "h-3.5 w-3.5 text-blue-500 shrink-0 ml-2",
                                                 value === client.id ? "opacity-100" : "opacity-0"
                                             )}
                                         />
-                                        {client.fullName}
                                     </CommandItem>
                                 );
                             })}

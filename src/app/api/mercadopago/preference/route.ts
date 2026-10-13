@@ -5,7 +5,7 @@ import { getDb } from '@/lib/firebase-server';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { items, payer } = body;
+        const { items = [], payer = {} } = body;
 
         // Use provided reservationId or generate a REAL UNIQUE Firestore ID
         // This ID will be the key to create the document in the Webhook
@@ -42,13 +42,8 @@ export async function POST(req: NextRequest) {
         // To unblock testing, if we are on localhost, we will set the BACK URL 
         // to the PRODUCTION domain (https://vatosalfa.com).
 
-        const isLocal = baseUrl.includes('localhost');
-        const returnUrl = baseUrl;
-
-        // Protocol Check for BaseURL (only if NOT local and NOT already having protocol)
-        if (!isLocal && !baseUrl.startsWith('http')) {
-            baseUrl = `https://${baseUrl}`;
-        }
+        const isLocal = !baseUrl || baseUrl.includes('localhost') || !baseUrl.startsWith('https://');
+        const returnUrl = isLocal ? 'https://vatosalfa.com' : baseUrl;
 
         console.log(`[MP] Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`[MP] Base URL: ${baseUrl}`);
@@ -56,7 +51,7 @@ export async function POST(req: NextRequest) {
 
         // Construct Back URLs
         const backUrls = {
-            success: `${returnUrl}/`,
+            success: `${returnUrl}/reserva/exitosa`,
             failure: `${returnUrl}/reserva/fallida`,
             pending: `${returnUrl}/`
         };

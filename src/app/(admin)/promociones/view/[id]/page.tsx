@@ -96,7 +96,7 @@ export default function PromotionDetailView() {
                 {/* Info Section */}
                 <div className="flex flex-col">
                     <div className="flex items-center gap-3 mb-4">
-                        <Badge className={promo.active ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-gray-500 text-white'}>
+                        <Badge className={promo.active ? 'bg-[#202A49] text-blue-400 border border-blue-500/40 hover:bg-[#202A49]' : 'bg-muted text-muted-foreground border-border'}>
                             {promo.active ? 'PROMO ACTIVA' : 'INACTIVA'}
                         </Badge>
                         <span className="text-sm font-medium text-muted-foreground flex items-center">

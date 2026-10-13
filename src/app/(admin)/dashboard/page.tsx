@@ -13,6 +13,7 @@ import { startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay, forma
 import { Sale } from '@/lib/types';
 import { where, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -146,9 +147,9 @@ export default function DashboardPage() {
                     <p className="text-muted-foreground">Aquí está tu rendimiento de este mes.</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                    <div className="flex items-center space-x-2 bg-secondary/50 p-2 rounded-lg">
-                        <Trophy className="h-5 w-5 text-yellow-500" />
-                        <span className="font-bold text-sm">Nivel {dashboardData?.level}: {dashboardData?.levelName}</span>
+                    <div className="flex items-center space-x-2 bg-muted/30 border border-border/60 px-3 py-1.5 rounded-xl">
+                        <Trophy className="h-4 w-4 text-[#C5A880]" />
+                        <span className="font-bold text-xs sm:text-sm text-foreground">Nivel {dashboardData?.level}: {dashboardData?.levelName}</span>
                     </div>
                     {dashboardData?.myProfessionalId && (
                         <button 
@@ -159,78 +160,85 @@ export default function DashboardPage() {
                                 navigator.clipboard.writeText(link);
                                 toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado al portapapeles." });
                             }}
-                            className="flex items-center text-sm text-primary hover:underline"
+                            className="flex items-center text-xs text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                         >
-                            <Share2 className="w-4 h-4 mr-1" /> Copiar mi enlace de citas
+                            <Share2 className="w-3.5 h-3.5 mr-1" /> Copiar mi enlace de citas
                         </button>
                     )}
                 </div>
             </div>
 
             {/* Gamification Banner */}
-            <Card className="bg-gradient-to-r from-violet-600 to-indigo-600 text-white border-0 shadow-lg">
-                <CardContent className="p-6">
+            <Card className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white border border-slate-800 shadow-xl rounded-2xl">
+                <div className="header-light-beam absolute inset-0 pointer-events-none" />
+                <CardContent className="p-5 sm:p-6 relative z-10">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-                        <div className="space-y-2 text-center md:text-left">
-                            <h3 className="text-2xl font-bold flex items-center gap-2 justify-center md:justify-start">
-                                <Award className="h-6 w-6 text-yellow-300" />
-                                {dashboardData?.levelName}
+                        <div className="space-y-1.5 text-center md:text-left">
+                            <h3 className="text-xl sm:text-2xl font-bold flex items-center gap-2 justify-center md:justify-start">
+                                <Award className="h-6 w-6 text-[#C5A880] shrink-0" />
+                                <span>{dashboardData?.levelName}</span>
                             </h3>
-                            <p className="text-indigo-100">
-                                Has generado <b>${dashboardData?.myTotal.toLocaleString()}</b> este mes.
-                                {dashboardData && dashboardData.level < 4 && ` ¡Faltan $${(dashboardData.nextLevelTarget - dashboardData.myTotal).toLocaleString()} para el siguiente nivel!`}
+                            <p className="text-slate-300 text-xs sm:text-sm">
+                                Has generado <b className="text-white">${(dashboardData?.myTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b> este mes.
+                                {dashboardData && dashboardData.level < 4 && ` ¡Faltan $${((dashboardData.nextLevelTarget || 0) - (dashboardData.myTotal || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} para el siguiente nivel!`}
                             </p>
                         </div>
-                        <div className="w-full md:w-1/3 space-y-1">
-                            <div className="flex justify-between text-xs font-medium text-indigo-200">
+                        <div className="w-full md:w-1/3 space-y-1.5">
+                            <div className="flex justify-between text-xs font-semibold text-slate-300">
                                 <span>Progreso Nivel {(dashboardData?.level || 0) + 1}</span>
-                                <span>{Math.round(dashboardData?.progressToNext || 0)}%</span>
+                                <span className="text-[#C5A880] font-bold">{Math.round(dashboardData?.progressToNext || 0)}%</span>
                             </div>
-                            <Progress value={dashboardData?.progressToNext} className="h-3 bg-black/20" />
+                            <Progress value={dashboardData?.progressToNext} className="h-2.5 bg-black/40 [&>div]:bg-[#C5A880]" />
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card>
+            <div className="grid gap-3.5 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+                <Card className="border border-border/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Ventas Hoy</CardTitle>
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-xs sm:text-sm font-medium">Ventas Hoy</CardTitle>
+                        <DollarSign className="h-4 w-4 text-slate-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${dashboardData?.myTodayTotal.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">+0% desde ayer (Simulado)</p>
+                        <div className="text-lg sm:text-2xl font-bold text-foreground">
+                            ${(dashboardData?.myTodayTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">+0% desde ayer (Simulado)</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border border-border/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Ventas Mensuales</CardTitle>
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-xs sm:text-sm font-medium">Ventas Mensuales</CardTitle>
+                        <TrendingUp className="h-4 w-4 text-slate-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${dashboardData?.myTotal.toLocaleString()}</div>
-                        <p className="text-xs text-muted-foreground">Progreso mensual</p>
+                        <div className="text-lg sm:text-2xl font-bold text-foreground">
+                            ${(dashboardData?.myTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Progreso mensual</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border border-border/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Ranking Global</CardTitle>
-                        <Trophy className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-xs sm:text-sm font-medium">Ranking Global</CardTitle>
+                        <Trophy className="h-4 w-4 text-[#C5A880]" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">#{dashboardData?.myRanking}</div>
-                        <p className="text-xs text-muted-foreground">de {professionals?.length || 0} barberos</p>
+                        <div className="text-lg sm:text-2xl font-bold text-foreground">#{dashboardData?.myRanking}</div>
+                        <p className="text-[11px] text-muted-foreground">de {professionals?.length || 0} barberos</p>
                     </CardContent>
                 </Card>
-                <Card>
+                <Card className="border border-border/60">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Meta Mensual</CardTitle>
-                        <Target className="h-4 w-4 text-muted-foreground" />
+                        <CardTitle className="text-xs sm:text-sm font-medium">Meta Mensual</CardTitle>
+                        <Target className="h-4 w-4 text-slate-400" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${dashboardData?.nextLevelTarget.toLocaleString()}</div>
-                        <Progress value={dashboardData?.progressToNext} className="h-2 mt-2" />
+                        <div className="text-lg sm:text-2xl font-bold text-foreground">
+                            ${(dashboardData?.nextLevelTarget || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <Progress value={dashboardData?.progressToNext} className="h-2 mt-2 [&>div]:bg-blue-500" />
                     </CardContent>
                 </Card>
             </div>
@@ -249,19 +257,24 @@ export default function DashboardPage() {
                                 const professional = professionals?.find((p: any) => p.id === prof.id);
                                 return (
                                     <div className="flex items-center" key={prof.id}>
-                                        <div className="font-bold text-lg w-8 text-muted-foreground">#{i + 1}</div>
-                                        <Avatar className="h-9 w-9">
+                                        <div className={cn(
+                                            "font-bold text-base w-8 shrink-0",
+                                            i === 0 ? "text-[#C5A880]" : i === 1 ? "text-slate-300" : "text-muted-foreground"
+                                        )}>
+                                            #{i + 1}
+                                        </div>
+                                        <Avatar className="h-9 w-9 shrink-0 border border-border/60">
                                             <AvatarImage src={professional?.avatarUrl} alt="Avatar" />
-                                            <AvatarFallback>{professional?.name?.substring(0, 2)}</AvatarFallback>
+                                            <AvatarFallback className="bg-[#202A49] text-white text-xs">{professional?.name?.substring(0, 2)}</AvatarFallback>
                                         </Avatar>
-                                        <div className="ml-4 space-y-1">
-                                            <p className="text-sm font-medium leading-none">{professional?.name || 'Desconocido'}</p>
-                                            <p className="text-xs text-muted-foreground">
+                                        <div className="ml-3.5 space-y-0.5 min-w-0 flex-1">
+                                            <p className="text-xs sm:text-sm font-semibold leading-tight text-foreground truncate">{professional?.name || 'Desconocido'}</p>
+                                            <p className="text-[11px] text-muted-foreground truncate">
                                                 {professional?.email}
                                             </p>
                                         </div>
-                                        <div className="ml-auto font-medium">
-                                            ${prof.total.toLocaleString()}
+                                        <div className="ml-auto font-semibold text-xs sm:text-sm text-foreground shrink-0 pl-2">
+                                            ${(prof.total || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                     </div>
                                 );

@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
+import { sendBookingCancellation } from '@/lib/actions/booking';
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
 
         // Perform the action
         const newStatus = action === 'confirm' ? 'Confirmado' : 'Cancelado';
-        const { Timestamp } = await import('firebase-admin/firestore');
+        const { Timestamp, FieldValue } = await import('firebase-admin/firestore');
 
         const historyEntry = {
             action: newStatus,
@@ -83,6 +84,25 @@ export async function GET(req: NextRequest) {
             // Invalidate the token after use (one-time use for cancel)
             ...(action === 'cancel' ? { actionToken: null } : {})
         });
+
+        // Si la acción fue cancelar, actualizar contador de cancelaciones del cliente
+        if (action === 'cancel' && reserva.cliente_id) {
+            db.collection('clientes').doc(reserva.cliente_id).update({
+                citas_canceladas: FieldValue.increment(1),
+                actualizado_el: Timestamp.now()
+            }).catch(err => console.warn('[Cita Action] Error updating client canceladas:', err));
+        }
+
+        // Si la acción fue cancelar, enviar correo de cancelación al cliente
+        if (action === 'cancel') {
+            sendBookingCancellation({
+                reservationId: reservaId,
+                reservation: { ...reserva, id: reservaId, estado: 'Cancelado' },
+                reason: 'Cancelado por el cliente desde el correo'
+            }).catch(err => {
+                console.error('[Cita Action] Error enviando correo de cancelación:', err);
+            });
+        }
 
         // Redirect to success page
         const clientName = reserva.cliente_nombre || '';

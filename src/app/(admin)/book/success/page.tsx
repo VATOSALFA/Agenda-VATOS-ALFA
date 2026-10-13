@@ -11,8 +11,8 @@ export default function BookingSuccessPage() {
     <div className="max-w-2xl mx-auto py-12">
       <Card>
         <CardHeader className="items-center text-center">
-            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-3xl">¡Reserva Confirmada!</CardTitle>
+            <CheckCircle className="h-16 w-16 text-blue-400 mx-auto mb-4" />
+            <CardTitle className="text-3xl font-bold">¡Reserva Confirmada!</CardTitle>
             <CardDescription>Tu cita ha sido agendada con éxito.</CardDescription>
         </CardHeader>
         <CardContent className="text-center space-y-4">
@@ -20,8 +20,8 @@ export default function BookingSuccessPage() {
                 Hemos enviado un correo electrónico con los detalles de tu reserva. 
                 Recibirás un recordatorio por WhatsApp un día antes de tu cita.
             </p>
-            <p className="font-semibold">¡Te esperamos!</p>
-            <Button asChild>
+            <p className="font-semibold text-foreground">¡Te esperamos!</p>
+            <Button asChild variant="alfa" className="px-6 text-white font-bold">
                 <Link href="/">Volver al Inicio</Link>
             </Button>
         </CardContent>

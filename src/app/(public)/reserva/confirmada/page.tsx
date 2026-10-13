@@ -1,9 +1,9 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { VatosButton } from '@/components/ui/vatos-button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { CheckCircle, Calendar, Clock, MapPin, ArrowRight, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { doc, getDoc } from 'firebase/firestore';
@@ -17,7 +17,6 @@ export default function ReservaConfirmadaPage() {
     const router = useRouter();
     const reservationId = searchParams.get('external_reference');
     const paymentId = searchParams.get('payment_id');
-    const status = searchParams.get('status');
 
     const [reservation, setReservation] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -53,60 +52,89 @@ export default function ReservaConfirmadaPage() {
     }, [reservationId]);
 
     if (loading) {
-        return <div className="min-h-screen flex items-center justify-center"><CustomLoader /></div>;
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+                <CustomLoader />
+            </div>
+        );
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-md shadow-lg border-green-200">
-                <CardHeader className="text-center bg-green-50 rounded-t-lg pb-6 border-b border-green-100">
-                    <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                        <CheckCircle className="w-10 h-10 text-green-600" />
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+            {/* Ambient background glow */}
+            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+
+            <Card className="w-full max-w-md shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-slate-900 rounded-2xl overflow-hidden relative z-10">
+                {/* Official Header */}
+                <div className="relative bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-6 text-center border-b border-blue-500/20 overflow-hidden">
+                    <div className="header-light-beam pointer-events-none" />
+                    
+                    <div className="relative z-10 flex flex-col items-center">
+                        <img 
+                            src="/logo-v-400x400.webp" 
+                            alt="Vatos Alfa" 
+                            className="w-14 h-14 rounded-full border-2 border-blue-500/40 object-cover shadow-lg mb-3"
+                        />
+                        <CheckCircle className="w-8 h-8 text-blue-400 mb-1" />
+                        <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">¡Pago Exitoso!</h1>
+                        <p className="text-xs sm:text-sm text-slate-300 mt-1">Tu reserva ha sido confirmada correctamente.</p>
                     </div>
-                    <CardTitle className="text-2xl font-bold text-green-800">¡Pago Exitoso!</CardTitle>
-                    <p className="text-green-700 mt-2">Tu reserva ha sido confirmada.</p>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-6 bg-white">
+                </div>
+
+                <CardContent className="space-y-6 p-6">
                     {reservation ? (
                         <div className="space-y-4">
-                            <div className="bg-slate-50 p-4 rounded-lg space-y-3 border border-slate-100">
-                                <div className="flex items-center gap-3 text-slate-700">
-                                    <Calendar className="w-5 h-5 text-blue-600" />
-                                    <span className="font-medium capitalize">
+                            <div className="bg-slate-950/60 p-4 rounded-xl space-y-3 border border-slate-800">
+                                <div className="flex items-center gap-3 text-slate-200">
+                                    <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+                                    <span className="font-semibold text-sm capitalize">
                                         {format(parseDate(reservation.fecha), 'EEEE d, MMMM yyyy', { locale: es })}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-3 text-slate-700">
-                                    <Clock className="w-5 h-5 text-blue-600" />
-                                    <span className="font-medium">{reservation.hora_inicio}</span>
+                                <div className="flex items-center gap-3 text-slate-200">
+                                    <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                                    <span className="font-semibold text-sm">{reservation.hora_inicio} hrs</span>
                                 </div>
                                 {reservation.local_id && (
-                                    <div className="flex items-center gap-3 text-slate-700">
-                                        <MapPin className="w-5 h-5 text-blue-600" />
-                                        <span className="text-sm">Sucursal Confirmada</span>
+                                    <div className="flex items-center gap-3 text-slate-200">
+                                        <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
+                                        <span className="text-xs text-slate-400">Sucursal Confirmada</span>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="text-sm text-slate-500 text-center">
-                                <p>ID de Reserva: <span className="font-mono text-slate-700">{reservationId}</span></p>
-                                <p>ID de Pago: <span className="font-mono text-slate-700">{paymentId}</span></p>
+                            <div className="text-xs text-slate-400 text-center space-y-1">
+                                <p>Folio Reserva: <span className="font-mono text-white font-semibold">{reservationId?.slice(0, 8)}</span></p>
+                                {paymentId && <p>ID de Pago: <span className="font-mono text-slate-300">{paymentId}</span></p>}
                             </div>
                         </div>
                     ) : (
-                        <p className="text-center text-slate-500">
-                            No se encontraron los detalles de la reserva, pero tu pago fue procesado correctamente.
-                            <br />ID Referencia: {reservationId}
-                        </p>
+                        <div className="text-center text-sm text-slate-300 bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                            <p>No se encontraron los detalles de la reserva, pero tu pago fue procesado correctamente.</p>
+                            {reservationId && <p className="mt-2 font-mono text-xs text-blue-400">ID: {reservationId.slice(0, 8)}</p>}
+                        </div>
                     )}
 
-                    <div className="pt-4 space-y-3">
-                        <VatosButton className="w-full bg-slate-900 hover:bg-slate-800 text-white" onClick={() => router.push('/')}>
+                    <div className="pt-2 space-y-3">
+                        <Button 
+                            variant="alfa" 
+                            className="w-full h-11 text-sm font-bold shadow-lg"
+                            onClick={() => router.push('/')}
+                        >
                             Volver al Inicio
-                        </VatosButton>
-                        <VatosButton variant="outline" className="w-full" onClick={() => router.push('/reservar')}>
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            className="w-full h-10 text-xs sm:text-sm text-slate-300 border-slate-700 bg-slate-800/40 hover:bg-slate-800 hover:text-white"
+                            onClick={() => router.push('/reservar')}
+                        >
+                            <RotateCcw className="w-3.5 h-3.5 mr-2 text-slate-400" />
                             Hacer otra reserva
-                        </VatosButton>
+                        </Button>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-800 text-center">
+                        <p className="text-[11px] font-bold tracking-widest uppercase text-slate-400">VATOS ALFA Barber Shop</p>
                     </div>
                 </CardContent>
             </Card>

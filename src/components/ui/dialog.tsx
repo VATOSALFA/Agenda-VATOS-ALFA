@@ -20,6 +20,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
+    data-lenis-prevent="true"
     className={cn(
       "fixed inset-0 z-50 bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
@@ -29,38 +30,45 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+function DialogBodyScrollLock() {
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const win = window as any;
+    // 1. Pausar Lenis smooth scroll si está activo en la página
+    win.__lenis?.stop();
+
+    // 2. Bloquear scroll nativo en html y body
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      // Verificar si aún queda algún otro modal abierto antes de reactivar scroll
+      setTimeout(() => {
+        const stillHasModal = !!document.querySelector('[role="dialog"]');
+        if (!stillHasModal) {
+          document.documentElement.style.overflow = "";
+          document.body.style.overflow = "";
+          document.body.style.pointerEvents = "";
+          win.__lenis?.start();
+        }
+      }, 50);
+    };
+  }, []);
+
+  return null;
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideCloseButton?: boolean }
 >(({ className, children, hideCloseButton, ...props }, ref) => {
-
-  // Efecto para garantizar la limpieza de estilos del body al desmontar el componente.
-  React.useEffect(() => {
-    return () => {
-      // Limpieza inmediata
-      document.body.style.pointerEvents = "";
-      document.body.style.overflow = "";
-
-      // Backup cleanup con timeout más largo para casos edge
-      const cleanup = () => {
-        document.body.style.pointerEvents = "";
-        document.body.style.overflow = "";
-        document.body.style.paddingRight = "";
-      };
-
-      setTimeout(cleanup, 100);
-      setTimeout(cleanup, 300);
-      setTimeout(cleanup, 500);
-      setTimeout(cleanup, 1000);
-    };
-  }, []);
-
-
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
+        data-lenis-prevent="true"
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 max-h-[90dvh] overflow-hidden flex flex-col data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           "pb-[max(1.5rem,env(safe-area-inset-bottom))]",
@@ -69,6 +77,7 @@ const DialogContent = React.forwardRef<
         onOpenAutoFocus={(e) => e.preventDefault()}
         {...props}
       >
+        <DialogBodyScrollLock />
         {children}
         {!hideCloseButton && (
           <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">

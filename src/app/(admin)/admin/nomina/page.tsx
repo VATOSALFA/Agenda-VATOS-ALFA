@@ -31,6 +31,11 @@ import {
     Banknote,
     RotateCcw,
     AlertTriangle,
+    X,
+    Wallet,
+    Calendar,
+    Search,
+    ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -54,6 +59,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -122,6 +133,14 @@ export default function NominaPage() {
     const [historySortConfig, setHistorySortConfig] = useState<{ key: PaymentSortKey; direction: SortDirection }>({ key: 'fecha', direction: 'desc' });
     const [historyPage, setHistoryPage] = useState(1);
     const [historyPerPage, setHistoryPerPage] = useState(10);
+    const [historyFilterMode, setHistoryFilterMode] = useState<'current_month' | 'previous_month' | 'custom_month' | 'all'>('current_month');
+    const [customMonth, setCustomMonth] = useState(() => {
+        const d = new Date();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        return `${yyyy}-${mm}`;
+    });
+    const [historySearchTerm, setHistorySearchTerm] = useState('');
 
     // Query key for refreshing
     const [queryKey, setQueryKey] = useState(0);
@@ -498,9 +517,96 @@ export default function NominaPage() {
         }
     };
 
+    // Generate list of distinct months from history + past 12 months
+    const availableMonths = useMemo(() => {
+        const monthMap = new Map<string, string>();
+        
+        // 1. Add current month and past 11 months
+        const now = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const label = format(d, 'MMMM yyyy', { locale: es });
+            const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
+            monthMap.set(key, capitalized);
+        }
+
+        // 2. Add any additional month from paymentHistory that might be older
+        paymentHistory.forEach(record => {
+            if (record.fecha) {
+                const date = record.fecha instanceof Timestamp ? record.fecha.toDate() : new Date(record.fecha);
+                const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthMap.has(key)) {
+                    const label = format(date, 'MMMM yyyy', { locale: es });
+                    const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
+                    monthMap.set(key, capitalized);
+                }
+            }
+        });
+
+        // Sort descending (newest month first)
+        return Array.from(monthMap.entries())
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .map(([key, label]) => ({ key, label }));
+    }, [paymentHistory]);
+
+    const selectedMonthLabel = useMemo(() => {
+        const found = availableMonths.find(m => m.key === customMonth);
+        return found ? found.label : customMonth;
+    }, [availableMonths, customMonth]);
+
+    // Filtered payment history by month/period and search term
+    const filteredHistory = useMemo(() => {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+
+        const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
+        const prevYear = prevMonthDate.getFullYear();
+        const prevMonth = prevMonthDate.getMonth();
+
+        return paymentHistory.filter(record => {
+            if (!record.fecha) return false;
+            const recordDate = record.fecha instanceof Timestamp ? record.fecha.toDate() : new Date(record.fecha);
+            const recYear = recordDate.getFullYear();
+            const recMonth = recordDate.getMonth();
+
+            // 1. Period filter
+            if (historyFilterMode === 'current_month') {
+                if (recYear !== currentYear || recMonth !== currentMonth) return false;
+            } else if (historyFilterMode === 'previous_month') {
+                if (recYear !== prevYear || recMonth !== prevMonth) return false;
+            } else if (historyFilterMode === 'custom_month') {
+                if (customMonth) {
+                    const [targetYear, targetMonth] = customMonth.split('-').map(Number);
+                    if (recYear !== targetYear || (recMonth + 1) !== targetMonth) return false;
+                }
+            }
+
+            // 2. Search filter
+            if (historySearchTerm.trim()) {
+                const query = historySearchTerm.toLowerCase();
+                const matchesEmp = (record.empleado_nombre || '').toLowerCase().includes(query);
+                const matchesLoc = (record.local_nombre || '').toLowerCase().includes(query);
+                const matchesPayer = (record.quien_paga_nombre || '').toLowerCase().includes(query);
+                if (!matchesEmp && !matchesLoc && !matchesPayer) return false;
+            }
+
+            return true;
+        });
+    }, [paymentHistory, historyFilterMode, customMonth, historySearchTerm]);
+
+    // Period totals for summary badge
+    const periodTotals = useMemo(() => {
+        const totalMonto = filteredHistory.reduce((sum, r) => sum + (r.total_pagado || 0), 0);
+        const totalHoras = filteredHistory.reduce((sum, r) => sum + (r.horas_trabajadas || 0), 0);
+        const count = filteredHistory.length;
+        return { totalMonto, totalHoras, count };
+    }, [filteredHistory]);
+
     // Sorted and paginated payment history
     const sortedHistory = useMemo(() => {
-        return [...paymentHistory].sort((a, b) => {
+        return [...filteredHistory].sort((a, b) => {
             const { key, direction } = historySortConfig;
             const dir = direction === 'asc' ? 1 : -1;
 
@@ -516,7 +622,7 @@ export default function NominaPage() {
                 return ((a[key] || '').localeCompare(b[key] || '')) * dir;
             }
         });
-    }, [paymentHistory, historySortConfig]);
+    }, [filteredHistory, historySortConfig]);
 
     const totalHistoryPages = Math.ceil(sortedHistory.length / historyPerPage);
     const paginatedHistory = sortedHistory.slice(
@@ -548,34 +654,39 @@ export default function NominaPage() {
     );
 
     return (
-        <div className="flex flex-col gap-6 p-6">
+        <div className="flex-1 space-y-4 p-3 sm:p-6 pt-4 sm:pt-6">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Nómina de Recepcionistas</h1>
-                    <p className="text-muted-foreground">Calcula y registra el pago de horas trabajadas.</p>
-                </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
                 <div className="flex items-center gap-3">
-                    <Label className="text-sm font-medium whitespace-nowrap">Tarifa por Hora</Label>
-                    <div className="relative">
-                        <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                            className="pl-9 w-32"
-                            type="number"
-                            value={tarifaHora}
-                            onChange={(e) => setTarifaHora(Number(e.target.value))}
-                            step="0.5"
-                            min="0"
-                        />
+                    <Wallet className="w-5 h-5 text-slate-300" />
+                    <div>
+                        <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Nómina de Recepcionistas</h2>
+                        <p className="text-xs text-muted-foreground hidden sm:block">Calcula y registra el pago de horas trabajadas y sesiones de turno.</p>
+                    </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 bg-muted/20 border border-border/60 rounded-xl px-2.5 py-1">
+                        <Label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Tarifa/hr:</Label>
+                        <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                            <Input
+                                className="pl-5 w-20 h-7 text-xs bg-background border-border/60 text-right font-medium"
+                                type="number"
+                                value={tarifaHora}
+                                onChange={(e) => setTarifaHora(Number(e.target.value))}
+                                step="0.5"
+                                min="0"
+                            />
+                        </div>
                     </div>
                     {sessions.length > 0 && (
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 border rounded-md px-3 py-1.5 bg-background shadow-sm">
+                        <>
+                            <div className="flex items-center gap-1.5 bg-muted/20 border border-border/60 rounded-xl px-2.5 py-1">
                                 <Label htmlFor="round-toggle" className="text-xs font-medium cursor-pointer">Redondeo 30m</Label>
                                 <input
                                     id="round-toggle"
                                     type="checkbox"
-                                    className="accent-primary h-4 w-4 cursor-pointer"
+                                    className="accent-blue-500 h-3.5 w-3.5 cursor-pointer rounded"
                                     checked={roundHours}
                                     onChange={(e) => setRoundHours(e.target.checked)}
                                 />
@@ -584,265 +695,417 @@ export default function NominaPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setIsResetModalOpen(true)}
-                                className="text-muted-foreground"
+                                className="h-8 text-xs border-border/60 text-slate-400 hover:text-foreground"
                             >
-                                <RotateCcw className="mr-2 h-4 w-4" />
-                                Reiniciar contador
+                                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                                Reiniciar
                             </Button>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-4">
-                        <div className="p-2 bg-muted rounded-lg">
-                            <Users className="h-5 w-5 text-primary" />
+            {/* KPI Cards: Franja compacta optimizada para móvil (3 columnas en una sola tarjeta sin scroll excesivo) */}
+            <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-2 sm:p-4">
+                <div className="grid grid-cols-3 divide-x divide-border/60 items-center">
+                    {/* Empleados pendientes */}
+                    <div className="px-2 sm:px-4 flex items-center justify-between">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                <span className="sm:hidden">Pendientes</span>
+                                <span className="hidden sm:inline">Empleados pendientes</span>
+                            </p>
+                            <p className="text-sm sm:text-xl font-bold text-foreground mt-0.5">{empleadosPendientes}</p>
                         </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Empleados con horas pendientes</p>
-                            <p className="text-2xl font-bold">{empleadosPendientes}</p>
+                        <Users className="h-5 w-5 text-blue-400 hidden sm:block shrink-0" />
+                    </div>
+
+                    {/* Total horas pendientes */}
+                    <div className="px-2 sm:px-4 flex items-center justify-between">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                <span className="sm:hidden">Horas pend.</span>
+                                <span className="hidden sm:inline">Total horas pendientes</span>
+                            </p>
+                            <p className="text-sm sm:text-xl font-bold text-foreground mt-0.5">
+                                {totalHorasPendientes.toFixed(2)} <span className="text-[10px] font-normal text-muted-foreground sm:text-xs">hrs</span>
+                            </p>
                         </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-4">
-                        <div className="p-2 bg-muted rounded-lg">
-                            <Clock className="h-5 w-5 text-primary" />
+                        <Clock className="h-5 w-5 text-blue-400 hidden sm:block shrink-0" />
+                    </div>
+
+                    {/* Total a liquidar */}
+                    <div className="px-2 sm:px-4 flex items-center justify-between">
+                        <div className="min-w-0">
+                            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                                <span className="sm:hidden">Por liquidar</span>
+                                <span className="hidden sm:inline">Total a liquidar</span>
+                            </p>
+                            <p className="text-sm sm:text-xl font-bold text-blue-400 mt-0.5 truncate">
+                                ${totalPorPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
                         </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Total horas pendientes</p>
-                            <p className="text-2xl font-bold">{totalHorasPendientes.toFixed(2)} hrs</p>
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-4 flex items-center gap-4">
-                        <div className="p-2 bg-muted rounded-lg">
-                            <Banknote className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Total por pagar</p>
-                            <p className="text-2xl font-bold">${totalPorPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
+                        <Banknote className="h-5 w-5 text-blue-400 hidden sm:block shrink-0" />
+                    </div>
+                </div>
+            </Card>
 
             {/* Hours Summary Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Horas Pendientes de Pago</CardTitle>
-                    <CardDescription>Sesiones cerradas que aún no han sido pagadas.</CardDescription>
+            <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="p-3 sm:p-4 border-b border-border/60">
+                    <CardTitle className="text-sm font-semibold">Horas Pendientes de Pago</CardTitle>
+                    <CardDescription className="text-[11px] text-muted-foreground hidden sm:block">
+                        Sesiones de trabajo cerradas acumuladas listas para liquidar.
+                    </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0">
                     {loading ? (
                         <div className="flex justify-center p-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                         </div>
                     ) : (
-                        <div className="rounded-md border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="py-1 px-3 text-xs font-semibold">Empleado</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold hidden md:table-cell">Rol</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold hidden sm:table-cell">Sucursal</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-right">Horas</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-right">Total a Pagar</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-center hidden sm:table-cell">Estado</TableHead>
+                                    <TableHead className="py-1 px-2 text-xs font-semibold text-center">Acción</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {groupedData.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
+                                            No hay horas pendientes de pago. ¡Todo al corriente!
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    groupedData.map((employee) => (
+                                        <TableRow key={employee.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                            <TableCell className="py-1.5 px-3 text-xs font-semibold text-foreground truncate max-w-[140px] sm:max-w-none">
+                                                {employee.empleado_nombre}
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden md:table-cell">{employee.roles.join(', ')}</TableCell>
+                                            <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden sm:table-cell">{getLocalName(employee.local_id)}</TableCell>
+                                            <TableCell className="py-1.5 px-3 text-right">
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    <div className="flex items-center gap-1">
+                                                        <Input
+                                                            type="number"
+                                                            className={cn(
+                                                                "w-16 h-6 text-right px-1 text-xs font-medium bg-background border-border/60",
+                                                                employee.isManual && "border-blue-500 bg-blue-500/10 text-blue-400"
+                                                            )}
+                                                            value={employee.totalHoras.toString()}
+                                                            onChange={(e) => handleManualHoursChange(employee.id, e.target.value)}
+                                                            onBlur={(e) => {
+                                                                if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                                                                    handleManualHoursChange(employee.id, '');
+                                                                }
+                                                            }}
+                                                            step="0.01"
+                                                        />
+                                                        <span className="text-[10px] text-muted-foreground">hrs</span>
+                                                    </div>
+                                                    {employee.isManual && (
+                                                        <button
+                                                            type="button"
+                                                            className="text-[9px] text-blue-400 hover:underline"
+                                                            onClick={() => handleManualHoursChange(employee.id, '')}
+                                                        >
+                                                            Restaurar ({employee.totalHorasCalculadas.toFixed(2)})
+                                                        </button>
+                                                    )}
+                                                    {!employee.isManual && roundHours && (
+                                                        <span className="text-[9px] text-muted-foreground">
+                                                            Real: {employee.totalHorasReal.toFixed(2)}h
+                                                        </span>
+                                                    )}
+                                                    {employee.unpaidSessions > 0 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                            className="text-[9px] text-blue-400 hover:underline font-semibold"
+                                                        >
+                                                            Ver {employee.unpaidSessions} sesión(es)
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-right text-xs font-semibold text-foreground">
+                                                ${employee.totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-center hidden sm:table-cell">
+                                                {employee.unclosedSessions > 0 ? (
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="text-[10px] cursor-pointer border-blue-500/40 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 transition-colors flex items-center justify-center gap-1 mx-auto w-fit py-0 px-2 h-5"
+                                                        onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                    >
+                                                        <Clock className="h-2.5 w-2.5 animate-pulse" />
+                                                        {employee.unclosedSessions} abierta(s)
+                                                    </Badge>
+                                                ) : employee.unpaidSessions > 0 ? (
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className="text-[10px] cursor-pointer border-border/60 text-muted-foreground hover:bg-muted/40 transition-colors py-0 px-2 h-5"
+                                                        onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
+                                                    >
+                                                        Listo
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-[10px] text-muted-foreground">Al corriente</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-2 text-center">
+                                                {employee.unpaidSessions > 0 && employee.totalPagar > 0 ? (
+                                                    <Button
+                                                        variant="alfa"
+                                                        size="sm"
+                                                        className="h-7 text-xs px-2.5"
+                                                        onClick={() => handleOpenPayment(employee)}
+                                                    >
+                                                        <DollarSign className="mr-0.5 h-3 w-3" />
+                                                        Pagar
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-[10px] text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Payment History Table */}
+            <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="p-3 sm:p-4 border-b border-border/60">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <CardTitle className="text-sm font-semibold text-foreground">Historial de Pagos</CardTitle>
+                                <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px] py-0 px-2 h-5 font-sans">
+                                    {periodTotals.count} {periodTotals.count === 1 ? 'pago' : 'pagos'}
+                                </Badge>
+                                {periodTotals.count > 0 && (
+                                    <span className="text-xs font-semibold text-blue-400">
+                                        Total: ${periodTotals.totalMonto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </span>
+                                )}
+                            </div>
+                            <CardDescription className="text-[11px] text-muted-foreground mt-0.5">
+                                {historyFilterMode === 'current_month' && `Mostrando pagos del mes en curso (${format(new Date(), 'MMMM yyyy', { locale: es })}).`}
+                                {historyFilterMode === 'previous_month' && 'Mostrando pagos del mes anterior.'}
+                                {historyFilterMode === 'custom_month' && `Mostrando pagos de ${selectedMonthLabel}.`}
+                                {historyFilterMode === 'all' && 'Mostrando todo el historial cronológico de pagos.'}
+                            </CardDescription>
+                        </div>
+
+                        {/* Filtros de periodo y búsqueda */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* Selector de periodo rápido */}
+                            <div className="flex items-center bg-muted/40 p-0.5 border border-border/60 rounded-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => { setHistoryFilterMode('current_month'); setHistoryPage(1); }}
+                                    className={cn(
+                                        "px-2.5 py-1 text-xs rounded-lg font-medium transition-colors",
+                                        historyFilterMode === 'current_month'
+                                            ? "bg-background text-foreground shadow-sm font-semibold"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Mes en curso
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setHistoryFilterMode('previous_month'); setHistoryPage(1); }}
+                                    className={cn(
+                                        "px-2.5 py-1 text-xs rounded-lg font-medium transition-colors",
+                                        historyFilterMode === 'previous_month'
+                                            ? "bg-background text-foreground shadow-sm font-semibold"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Mes anterior
+                                </button>
+                                {/* Dropdown de selección de mes */}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className={cn(
+                                                "px-2.5 py-1 text-xs rounded-lg font-medium transition-colors flex items-center gap-1",
+                                                historyFilterMode === 'custom_month'
+                                                    ? "bg-background text-foreground shadow-sm font-semibold"
+                                                    : "text-muted-foreground hover:text-foreground"
+                                            )}
+                                        >
+                                            <span>{historyFilterMode === 'custom_month' ? selectedMonthLabel : 'Elegir mes'}</span>
+                                            <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        className="w-48 max-h-60 overflow-y-auto border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1 bg-card"
+                                    >
+                                        {availableMonths.map((m) => (
+                                            <DropdownMenuItem
+                                                key={m.key}
+                                                onClick={() => {
+                                                    setCustomMonth(m.key);
+                                                    setHistoryFilterMode('custom_month');
+                                                    setHistoryPage(1);
+                                                }}
+                                                className={cn(
+                                                    "text-xs px-2.5 py-1.5 rounded-lg cursor-pointer flex items-center justify-between",
+                                                    historyFilterMode === 'custom_month' && customMonth === m.key
+                                                        ? "bg-blue-500/10 text-blue-400 font-semibold"
+                                                        : "text-foreground hover:bg-muted/30"
+                                                )}
+                                            >
+                                                <span>{m.label}</span>
+                                                {historyFilterMode === 'custom_month' && customMonth === m.key && (
+                                                    <span className="text-[10px] text-blue-400 font-bold">✓</span>
+                                                )}
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+
+                                <button
+                                    type="button"
+                                    onClick={() => { setHistoryFilterMode('all'); setHistoryPage(1); }}
+                                    className={cn(
+                                        "px-2.5 py-1 text-xs rounded-lg font-medium transition-colors",
+                                        historyFilterMode === 'all'
+                                            ? "bg-background text-foreground shadow-sm font-semibold"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    Todos
+                                </button>
+                            </div>
+
+                            {/* Buscador de empleado */}
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                <Input
+                                    placeholder="Buscar..."
+                                    value={historySearchTerm}
+                                    onChange={(e) => { setHistorySearchTerm(e.target.value); setHistoryPage(1); }}
+                                    className="h-8 pl-8 pr-7 text-xs bg-background border-border/60 w-32 sm:w-40 rounded-xl font-sans"
+                                />
+                                {historySearchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setHistorySearchTerm('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {loadingHistory ? (
+                        <div className="flex justify-center p-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : (
+                        <>
                             <Table>
                                 <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Empleado</TableHead>
-                                        <TableHead>Rol</TableHead>
-                                        <TableHead>Sucursal</TableHead>
-                                        <TableHead className="text-right">Horas Trabajadas</TableHead>
-                                        <TableHead className="text-right">Total a Pagar</TableHead>
-                                        <TableHead className="text-center">Estado</TableHead>
-                                        <TableHead className="text-center">Acción</TableHead>
+                                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                        <TableHead className="py-1 px-3 text-xs font-semibold"><SortableHeader label="Fecha" sortKey="fecha" /></TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold"><SortableHeader label="Quién recibe" sortKey="empleado_nombre" /></TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold hidden sm:table-cell"><SortableHeader label="Sucursal" sortKey="local_nombre" /></TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold hidden md:table-cell"><SortableHeader label="Quién paga" sortKey="quien_paga_nombre" /></TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right hidden sm:table-cell"><SortableHeader label="Horas" sortKey="horas_trabajadas" /></TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right"><SortableHeader label="Total Pagado" sortKey="total_pagado" /></TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {groupedData.length === 0 ? (
+                                    {paginatedHistory.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                                No hay horas pendientes de pago. ¡Todo al corriente!
+                                            <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
+                                                <div className="flex flex-col items-center justify-center gap-2">
+                                                    <p>No hay pagos registrados en este periodo.</p>
+                                                    {historyFilterMode !== 'all' && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => { setHistoryFilterMode('all'); setHistoryPage(1); }}
+                                                            className="h-7 text-xs border-border/60 text-blue-400 hover:text-blue-300"
+                                                        >
+                                                            Ver todo el historial completo
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
-                                        groupedData.map((employee) => (
-                                            <TableRow key={employee.id}>
-                                                <TableCell className="font-medium">{employee.empleado_nombre}</TableCell>
-                                                <TableCell>{employee.roles.join(', ')}</TableCell>
-                                                <TableCell>{getLocalName(employee.local_id)}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        <div className="flex items-center gap-1">
-                                                            <Input
-                                                                type="number"
-                                                                className={cn(
-                                                                    "w-20 h-8 text-right px-2 font-medium",
-                                                                    employee.isManual && "border-primary bg-primary/5"
-                                                                )}
-                                                                value={employee.totalHoras.toString()}
-                                                                onChange={(e) => handleManualHoursChange(employee.id, e.target.value)}
-                                                                onBlur={(e) => {
-                                                                    // If input is empty or invalid on blur, reset to calculated
-                                                                    if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
-                                                                        handleManualHoursChange(employee.id, '');
-                                                                    }
-                                                                }}
-                                                                step="0.01"
-                                                            />
-                                                            <span className="text-xs font-normal text-muted-foreground mr-1">hrs</span>
-                                                        </div>
-                                                        {employee.isManual && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-auto p-0 text-[10px] text-primary hover:bg-transparent"
-                                                                onClick={() => handleManualHoursChange(employee.id, '')}
-                                                            >
-                                                                Restaurar ({employee.totalHorasCalculadas.toFixed(2)})
-                                                            </Button>
-                                                        )}
-                                                        {!employee.isManual && roundHours && (
-                                                            <span className="text-[10px] text-primary/70">
-                                                                Real: {employee.totalHorasReal.toFixed(2)} hrs
-                                                            </span>
-                                                        )}
-                                                        {employee.unpaidSessions > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
-                                                                className="text-[10px] text-primary hover:underline font-semibold focus:outline-none mt-1"
-                                                            >
-                                                                Ver {employee.unpaidSessions} sesión(es)
-                                                            </button>
-                                                        )}
-                                                    </div>
+                                        paginatedHistory.map((record) => (
+                                            <TableRow key={record.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap text-muted-foreground">
+                                                    {record.fecha instanceof Timestamp
+                                                        ? format(record.fecha.toDate(), 'dd/MM/yyyy HH:mm', { locale: es })
+                                                        : 'N/A'
+                                                    }
                                                 </TableCell>
-                                                <TableCell className="text-right font-semibold">
-                                                    ${employee.totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground truncate max-w-[140px] sm:max-w-none">
+                                                    {record.empleado_nombre}
                                                 </TableCell>
-                                                <TableCell className="text-center">
-                                                    {employee.unclosedSessions > 0 ? (
-                                                        <Badge 
-                                                            variant="secondary" 
-                                                            className="text-xs cursor-pointer bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 transition-colors flex items-center justify-center gap-1 mx-auto w-fit"
-                                                            onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
-                                                        >
-                                                            <Clock className="h-3 w-3 animate-pulse" />
-                                                            {employee.unclosedSessions} sesión(es) abierta(s)
-                                                        </Badge>
-                                                    ) : employee.unpaidSessions > 0 ? (
-                                                        <Badge 
-                                                            variant="outline" 
-                                                            className="text-xs cursor-pointer hover:bg-muted transition-colors"
-                                                            onClick={() => handleOpenSessionDetails(employee.id, employee.empleado_nombre)}
-                                                        >
-                                                            Listo para pagar
-                                                        </Badge>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">Sin horas</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    {employee.unpaidSessions > 0 && employee.totalPagar > 0 && (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleOpenPayment(employee)}
-                                                        >
-                                                            <DollarSign className="mr-1 h-3 w-3" />
-                                                            Pagar
-                                                        </Button>
-                                                    )}
+                                                <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden sm:table-cell">{record.local_nombre}</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden md:table-cell">{record.quien_paga_nombre}</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right text-muted-foreground hidden sm:table-cell">{record.horas_trabajadas.toFixed(2)} hrs</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right font-semibold text-foreground">
+                                                    ${record.total_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </TableCell>
                                             </TableRow>
                                         ))
                                     )}
                                 </TableBody>
                             </Table>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
 
-            {/* Payment History Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Historial de Pagos</CardTitle>
-                    <CardDescription>Registro de todos los pagos de nómina realizados.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loadingHistory ? (
-                        <div className="flex justify-center p-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : (
-                        <>
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead><SortableHeader label="Fecha" sortKey="fecha" /></TableHead>
-                                            <TableHead><SortableHeader label="Quién recibe" sortKey="empleado_nombre" /></TableHead>
-                                            <TableHead><SortableHeader label="Sucursal" sortKey="local_nombre" /></TableHead>
-                                            <TableHead><SortableHeader label="Quién paga" sortKey="quien_paga_nombre" /></TableHead>
-                                            <TableHead className="text-right"><SortableHeader label="Horas" sortKey="horas_trabajadas" /></TableHead>
-                                            <TableHead className="text-right"><SortableHeader label="Total Pagado" sortKey="total_pagado" /></TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {paginatedHistory.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                                    No hay pagos registrados aún.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            paginatedHistory.map((record) => (
-                                                <TableRow key={record.id}>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {record.fecha instanceof Timestamp
-                                                            ? format(record.fecha.toDate(), 'dd/MM/yyyy HH:mm', { locale: es })
-                                                            : 'Fecha inválida'
-                                                        }
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">{record.empleado_nombre}</TableCell>
-                                                    <TableCell>{record.local_nombre}</TableCell>
-                                                    <TableCell>{record.quien_paga_nombre}</TableCell>
-                                                    <TableCell className="text-right">{record.horas_trabajadas.toFixed(2)} hrs</TableCell>
-                                                    <TableCell className="text-right font-semibold">
-                                                        ${record.total_pagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-
-                            {/* Pagination */}
+                            {/* Single-line Compact Pagination */}
                             {sortedHistory.length > 0 && (
-                                <div className="flex items-center justify-end gap-4 mt-4 text-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-3 p-3 border-t border-border/60 text-xs bg-muted/10">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-muted-foreground">Por página</span>
+                                        <span className="text-muted-foreground text-[11px]">Por página:</span>
                                         <Select value={String(historyPerPage)} onValueChange={(val) => { setHistoryPerPage(Number(val)); setHistoryPage(1); }}>
-                                            <SelectTrigger className="w-[70px] h-8">
+                                            <SelectTrigger className="w-[65px] h-7 text-xs border-border/60 bg-background">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent className="border-2 border-blue-500 rounded-xl">
                                                 <SelectItem value="10">10</SelectItem>
                                                 <SelectItem value="25">25</SelectItem>
                                                 <SelectItem value="50">50</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <span className="text-muted-foreground">
-                                        Página {historyPage} de {totalHistoryPages || 1}
-                                    </span>
-                                    <div className="flex gap-1">
-                                        <Button variant="outline" size="sm" disabled={historyPage <= 1} onClick={() => setHistoryPage(p => p - 1)}>
-                                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                                        </Button>
-                                        <Button variant="outline" size="sm" disabled={historyPage >= totalHistoryPages} onClick={() => setHistoryPage(p => p + 1)}>
-                                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-                                        </Button>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-muted-foreground text-[11px]">
+                                            Pág. {historyPage} de {totalHistoryPages || 1}
+                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs border-border/60" disabled={historyPage <= 1} onClick={() => setHistoryPage(p => p - 1)}>
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                            </Button>
+                                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs border-border/60" disabled={historyPage >= totalHistoryPages} onClick={() => setHistoryPage(p => p + 1)}>
+                                                <ChevronRight className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -851,54 +1114,72 @@ export default function NominaPage() {
                 </CardContent>
             </Card>
 
-            {/* ── Pay Modal ── */}
+            {/* ── Modal 1: Registrar Pago de Nómina ── */}
             <Dialog open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Registrar Pago de Nómina</DialogTitle>
-                        <DialogDescription>
-                            Confirma el pago y selecciona quién autoriza.
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card">
+                    {/* Cabecera Oficial VATOS ALFA */}
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-border/60">
+                        <div className="header-light-beam" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Banknote className="h-5 w-5 text-slate-300" />
+                                <div>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                        Registrar Pago de Nómina
+                                    </DialogTitle>
+                                    <p className="text-xs text-slate-300">
+                                        Confirma la liquidación y selecciona quién autoriza el desembolso.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsPaymentModalOpen(false)}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
 
                     {payingEmployee && (
-                        <div className="space-y-4 py-4">
-                            <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                                <div className="flex justify-between text-sm">
+                        <div className="p-4 sm:p-5 space-y-4">
+                            <div className="rounded-xl border border-border/60 bg-muted/10 p-3.5 space-y-2">
+                                <div className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">Empleado:</span>
-                                    <span className="font-semibold">{payingEmployee.empleado_nombre}</span>
+                                    <span className="font-semibold text-foreground">{payingEmployee.empleado_nombre}</span>
                                 </div>
-                                <div className="flex justify-between text-sm">
+                                <div className="flex justify-between text-xs">
                                     <span className="text-muted-foreground">Horas trabajadas:</span>
-                                    <span className="font-medium">{payingEmployee.totalHoras.toFixed(2)} hrs</span>
+                                    <span className="font-medium text-foreground">{payingEmployee.totalHoras.toFixed(2)} hrs</span>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Tarifa:</span>
-                                    <span className="font-medium">${tarifaHora}/hr</span>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Tarifa por hora:</span>
+                                    <span className="font-medium text-foreground">${tarifaHora}/hr</span>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                    <span className="text-muted-foreground">Sesiones:</span>
-                                    <span className="font-medium">{payingEmployee.unpaidSessions}</span>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-muted-foreground">Sesiones liquidadas:</span>
+                                    <span className="font-medium text-foreground">{payingEmployee.unpaidSessions}</span>
                                 </div>
-                                <div className="border-t pt-2 flex justify-between">
-                                    <span className="font-semibold">Total a Pagar:</span>
-                                    <span className="font-bold text-lg">
+                                <div className="border-t border-border/60 pt-2 flex justify-between items-center">
+                                    <span className="font-semibold text-xs text-foreground">Total a Pagar:</span>
+                                    <span className="font-bold text-base text-blue-400">
                                         ${payingEmployee.totalPagar.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label className="text-sm font-medium">¿Quién paga?</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-foreground">¿Quién autoriza el pago?</Label>
                                 <Select value={selectedPayerId} onValueChange={setSelectedPayerId}>
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-9 text-xs border-border/60 bg-background">
                                         <SelectValue placeholder="Selecciona quién autoriza el pago" />
                                     </SelectTrigger>
-                                    <SelectContent>
+                                    <SelectContent className="border-2 border-blue-500 rounded-xl">
                                         {adminsDisponibles.map(admin => (
-                                            <SelectItem key={admin.id} value={admin.id}>
+                                            <SelectItem key={admin.id} value={admin.id} className="text-xs">
                                                 {admin.name}{' '}
-                                                <span className="text-muted-foreground text-xs">
+                                                <span className="text-muted-foreground text-[10px]">
                                                     ({admin.role === 'Administrador general' ? 'Admin General' : 'Admin Local'})
                                                 </span>
                                             </SelectItem>
@@ -909,110 +1190,139 @@ export default function NominaPage() {
                         </div>
                     )}
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsPaymentModalOpen(false)} disabled={processingPayment}>
+                    <div className="p-3 sm:p-4 border-t border-border/60 flex items-center justify-end gap-2 bg-muted/20">
+                        <Button variant="ghost" size="sm" onClick={() => setIsPaymentModalOpen(false)} disabled={processingPayment} className="text-xs h-8">
                             Cancelar
                         </Button>
                         <Button
+                            variant="alfa"
+                            size="sm"
                             onClick={handlePayNomina}
                             disabled={processingPayment || !selectedPayerId}
+                            className="text-xs h-8"
                         >
-                            {processingPayment ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                            {processingPayment ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
                             Confirmar Pago
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
-            {/* ── Reset Modal ── */}
+            {/* ── Modal 2: Reset Modal ── */}
             <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-destructive" />
-                            Reiniciar contador de horas
-                        </DialogTitle>
-                        <DialogDescription>
+                <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card">
+                    {/* Cabecera Oficial VATOS ALFA */}
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-border/60">
+                        <div className="header-light-beam" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <RotateCcw className="h-5 w-5 text-slate-300" />
+                                <div>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                        Reiniciar Contador de Horas
+                                    </DialogTitle>
+                                    <p className="text-xs text-slate-300">
+                                        Limpia las sesiones acumuladas para comenzar un nuevo ciclo.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setIsResetModalOpen(false); setResetAuthCode(''); }}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="p-4 sm:p-5 space-y-3">
+                        <div className="text-xs text-muted-foreground rounded-xl border border-border/60 bg-muted/10 p-3 leading-relaxed">
                             Esta acción marcará todas las sesiones actuales ({sessions.length} sesiones) como liquidadas
-                            <strong> sin generar un egreso ni un registro de pago</strong>. Úsalo solo para empezar el conteo desde cero.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-2 text-sm text-muted-foreground rounded-md border bg-muted/50 p-3">
-                        Se limpiarán <strong>{sessions.length} sesiones</strong> de los empleados:
-                        <ul className="mt-1 ml-4 list-disc">
-                            {groupedData.map(e => (
-                                <li key={e.id}>{e.empleado_nombre} — {e.totalHoras.toFixed(2)} hrs</li>
-                            ))}
-                        </ul>
+                            <strong className="text-foreground"> sin generar un egreso ni un registro de pago</strong>. Úsalo solo para empezar el conteo desde cero.
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-foreground">
+                                Escribe <strong className="text-blue-400">REINICIAR</strong> para confirmar:
+                            </Label>
+                            <Input
+                                value={resetAuthCode}
+                                onChange={(e) => setResetAuthCode(e.target.value)}
+                                placeholder="Escribe REINICIAR"
+                                className={cn(
+                                    "h-8 text-xs bg-background border-border/60 font-mono",
+                                    resetAuthCode.length > 0 &&
+                                    resetAuthCode.trim().toUpperCase() !== 'REINICIAR'
+                                        ? 'border-destructive'
+                                        : ''
+                                )}
+                            />
+                        </div>
                     </div>
 
-                    {/* Authorization code */}
-                    <div className="space-y-2">
-                        <Label className="text-sm font-medium">
-                            Código de autorización
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                            Escribe <strong>REINICIAR</strong> para confirmar esta acción.
-                        </p>
-                        <Input
-                            value={resetAuthCode}
-                            onChange={(e) => setResetAuthCode(e.target.value)}
-                            placeholder="Escribe REINICIAR para confirmar"
-                            className={cn(
-                                resetAuthCode.length > 0 &&
-                                resetAuthCode.trim().toUpperCase() !== 'REINICIAR'
-                                    ? 'border-destructive'
-                                    : ''
-                            )}
-                        />
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => { setIsResetModalOpen(false); setResetAuthCode(''); }} disabled={processingReset}>
+                    <div className="p-3 sm:p-4 border-t border-border/60 flex items-center justify-end gap-2 bg-muted/20">
+                        <Button variant="ghost" size="sm" onClick={() => { setIsResetModalOpen(false); setResetAuthCode(''); }} disabled={processingReset} className="text-xs h-8">
                             Cancelar
                         </Button>
                         <Button
                             variant="destructive"
+                            size="sm"
                             onClick={handleResetAllSessions}
                             disabled={processingReset || resetAuthCode.trim().toUpperCase() !== 'REINICIAR'}
+                            className="text-xs h-8"
                         >
-                            {processingReset ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                            {processingReset ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
                             Sí, reiniciar desde cero
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
 
-            {/* ── Sessions Details Modal ── */}
+            {/* ── Modal 3: Sessions Details Modal ── */}
             <Dialog open={isSessionsModalOpen} onOpenChange={setIsSessionsModalOpen}>
-                <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Clock className="h-5 w-5 text-primary" />
-                            Detalle de Sesiones — {selectedEmployeeSessions?.name}
-                        </DialogTitle>
-                        <DialogDescription>
-                            Listado de sesiones de trabajo no liquidadas. Las sesiones abiertas no se acumulan en el cálculo hasta que se registre su salida.
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent hideCloseButton={true} className="sm:max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card">
+                    {/* Cabecera Oficial VATOS ALFA */}
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-border/60 shrink-0">
+                        <div className="header-light-beam" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Clock className="h-5 w-5 text-slate-300" />
+                                <div>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                        Detalle de Sesiones — {selectedEmployeeSessions?.name}
+                                    </DialogTitle>
+                                    <p className="text-xs text-slate-300">
+                                        Listado de sesiones de trabajo no liquidadas.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsSessionsModalOpen(false)}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
 
-                    <div className="flex-1 mt-4 overflow-y-auto pr-2 max-h-[55vh]">
+                    <div className="flex-1 overflow-y-auto p-0 max-h-[55vh]">
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Fecha</TableHead>
-                                    <TableHead>Entrada</TableHead>
-                                    <TableHead>Salida</TableHead>
-                                    <TableHead>Dispositivo</TableHead>
-                                    <TableHead className="text-right">Duración</TableHead>
-                                    <TableHead className="text-center">Estado</TableHead>
-                                    <TableHead className="text-center">Acción</TableHead>
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="py-1 px-3 text-xs font-semibold">Fecha</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold">Entrada</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold">Salida</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-right">Duración</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-center">Estado</TableHead>
+                                    <TableHead className="py-1 px-2 text-xs font-semibold text-center">Acción</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!selectedEmployeeSessions?.sessions || selectedEmployeeSessions.sessions.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
                                             No hay sesiones registradas para este empleado.
                                         </TableCell>
                                     </TableRow>
@@ -1021,7 +1331,7 @@ export default function NominaPage() {
                                         .sort((a, b) => {
                                             const timeA = a.hora_entrada ? a.hora_entrada.toDate().getTime() : 0;
                                             const timeB = b.hora_entrada ? b.hora_entrada.toDate().getTime() : 0;
-                                            return timeB - timeA; // Descending
+                                            return timeB - timeA;
                                         })
                                         .map((session) => {
                                             const hasSalida = !!session.hora_salida;
@@ -1036,18 +1346,18 @@ export default function NominaPage() {
                                             const hasHeartbeat = !!session.ultima_actividad;
                                             
                                             return (
-                                                <TableRow key={session.id}>
-                                                    <TableCell className="font-medium">
+                                                <TableRow key={session.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                    <TableCell className="py-1.5 px-3 text-xs font-medium">
                                                         {entradaDate ? format(entradaDate, 'dd/MM/yyyy', { locale: es }) : 'N/A'}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
                                                         {entradaDate ? format(entradaDate, 'HH:mm:ss') : 'N/A'}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
                                                         {hasSalida && session.hora_salida ? (
                                                             format(session.hora_salida.toDate(), 'HH:mm:ss')
                                                         ) : isCurrentlyActive ? (
-                                                            <span className="text-primary font-medium">En curso</span>
+                                                            <span className="text-blue-400 font-medium">En curso</span>
                                                         ) : session.ultima_actividad ? (
                                                             <span className="text-muted-foreground font-medium" title={`Cierre automático (último latido: ${format(session.ultima_actividad.toDate(), 'HH:mm:ss')})`}>
                                                                 {format(session.ultima_actividad.toDate(), 'HH:mm:ss')} (Auto)
@@ -1056,41 +1366,38 @@ export default function NominaPage() {
                                                             <span className="text-muted-foreground font-medium">Falta salida</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate" title={session.dispositivo || 'No registrado'}>
-                                                        {session.dispositivo || <span className="italic text-gray-400">No registrado</span>}
-                                                    </TableCell>
-                                                    <TableCell className="text-right font-medium">
+                                                    <TableCell className="py-1.5 px-3 text-xs text-right font-medium">
                                                         {showAsClosed ? (
                                                             getSessionDuration(session)
                                                         ) : (
                                                             <span className="text-muted-foreground">-</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-center">
+                                                    <TableCell className="py-1.5 px-3 text-center">
                                                         {hasSalida ? (
-                                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 text-xs">
+                                                            <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px] py-0 px-2 h-5">
                                                                 Cerrada
                                                             </Badge>
                                                         ) : isCurrentlyActive ? (
-                                                            <Badge variant="secondary" className="animate-pulse text-xs bg-primary/10 text-primary border-primary/20">
+                                                            <Badge variant="outline" className="animate-pulse border-blue-500/40 text-blue-400 bg-blue-500/10 text-[10px] py-0 px-2 h-5">
                                                                 En curso
                                                             </Badge>
                                                         ) : hasHeartbeat ? (
-                                                            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10 text-xs" title="Sesión auto-cerrada al final del día">
+                                                            <Badge variant="outline" className="border-border/60 text-muted-foreground text-[10px] py-0 px-2 h-5" title="Sesión auto-cerrada al final del día">
                                                                 Cerrada (Auto)
                                                             </Badge>
                                                         ) : (
-                                                            <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-muted-foreground/20">
+                                                            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border/60 py-0 px-2 h-5">
                                                                 Falta salida
                                                             </Badge>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-center">
+                                                    <TableCell className="py-1.5 px-2 text-center">
                                                         {isCurrentlyActive ? (
                                                             <Button 
                                                                 variant="outline" 
                                                                 size="sm" 
-                                                                className="h-7 px-2.5 text-[11px] text-primary border-primary/20 hover:bg-primary/5 font-semibold"
+                                                                className="h-6 px-2 text-[10px] text-blue-400 border-blue-500/40 hover:bg-blue-500/10 font-semibold"
                                                                 onClick={() => handleForceCloseSession(session.id, selectedEmployeeSessions?.name || 'Empleado')}
                                                             >
                                                                 Cerrar turno
@@ -1099,13 +1406,13 @@ export default function NominaPage() {
                                                             <Button 
                                                                 variant="outline" 
                                                                 size="sm" 
-                                                                className="h-7 px-2.5 text-[11px] text-primary border-primary/20 hover:bg-primary/5 font-semibold"
+                                                                className="h-6 px-2 text-[10px] text-blue-400 border-blue-500/40 hover:bg-blue-500/10 font-semibold"
                                                                 onClick={() => handleForceCloseSession(session.id, selectedEmployeeSessions?.name || 'Empleado')}
                                                             >
                                                                 Forzar Salida
                                                             </Button>
                                                         ) : (
-                                                            <span className="text-muted-foreground">-</span>
+                                                            <span className="text-muted-foreground text-xs">-</span>
                                                         )}
                                                     </TableCell>
                                                 </TableRow>
@@ -1116,11 +1423,11 @@ export default function NominaPage() {
                         </Table>
                     </div>
 
-                    <DialogFooter className="mt-4">
-                        <Button onClick={() => setIsSessionsModalOpen(false)}>
+                    <div className="p-3 sm:p-4 border-t border-border/60 flex items-center justify-end bg-muted/20 shrink-0">
+                        <Button variant="ghost" size="sm" onClick={() => setIsSessionsModalOpen(false)} className="text-xs h-8">
                             Cerrar
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

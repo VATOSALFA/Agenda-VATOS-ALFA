@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailPreviewProps {
     config: any;
-    type: 'confirmation' | 'reminder' | 'professional' | 'dailySummary';
+    type: 'confirmation' | 'cancellation' | 'reminder' | 'professional' | 'dailySummary';
     companyDetails?: {
         name: string;
         logo: string;
@@ -18,6 +18,7 @@ export function EmailPreview({ config, type, companyDetails }: EmailPreviewProps
 
     const typeLabels = {
         confirmation: 'Confirmación',
+        cancellation: 'Cancelación',
         reminder: 'Recordatorio',
         professional: 'Profesional',
         dailySummary: 'Resumen Diario'
@@ -115,6 +116,106 @@ export function EmailPreview({ config, type, companyDetails }: EmailPreviewProps
                 </div>
             </div>
         </div>`;
+
+        } else if (type === 'cancellation') {
+            const headline = (config.cancelHeadline || '¡Hola {nombre}, tu cita ha sido cancelada!').replace('{nombre}', clientName);
+            const cancellationNote = (config.cancellationEmailNote || 'Lamentamos informarte que tu cita ha sido cancelada. Si deseas volver a agendar con nosotros, puedes reservar una nueva cita en línea cuando gustes.').replace(/\n/g, '<br/>');
+            const buttonText = config.cancelButtonText || 'AGENDAR NUEVA CITA';
+            const buttonUrl = config.cancelButtonUrl || 'https://vatosalfa.com/reservar';
+            const whatsappText = config.cancelWhatsappText || 'Contáctanos por WhatsApp';
+            const showReason = config.cancelShowReason !== false;
+            const showButton = config.showCancelButton !== false;
+            const showDate = config.cancelShowDate !== false;
+            const showTime = config.cancelShowTime !== false;
+            const showProfessional = config.cancelShowProfessional !== false;
+            const showLocation = config.cancelShowLocation !== false;
+            const showServices = config.cancelShowServices !== false;
+
+            return `
+            <div style="font-family: 'Roboto', Arial, sans-serif; color: #1e293b; max-width: 100%; padding: 20px;">
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;600;700&display=swap" rel="stylesheet">
+                <div style="max-width: 400px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+                    
+                    <div style="background-color: #ffffff; padding: 22px 25px 10px 25px; text-align: center;">
+                        <img src="${logoUrl}" alt="${senderName}" style="display: block; margin: 0 auto; width: 100%; max-width: 250px; height: auto; object-fit: contain;" />
+                    </div>
+
+                    <div style="padding: 12px 25px 25px 25px;">
+                        
+                        <div style="text-align: center; margin-bottom: 12px;">
+                            <span style="display: inline-block; background-color: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; padding: 3px 12px; border-radius: 9999px;">CITA CANCELADA</span>
+                        </div>
+
+                        <h2 style="color: #0f172a; text-align: center; margin-top: 0px; margin-bottom: 6px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 22px; line-height: 1.25;">
+                            ${headline}
+                        </h2>
+
+                        ${showServices ? `
+                        <div style="margin-bottom: 18px; text-align: center;">
+                            <div style="font-family: 'Roboto', Arial, sans-serif; font-size: 1.35em; font-weight: 700; color: #1e293b;">Corte de Cabello</div>
+                        </div>` : ''}
+
+                        <table style="width: 100%; border-collapse: separate; border-spacing: 0 9px;">
+                            ${showDate ? `
+                            <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                                <td style="font-weight: 600; font-size: 0.95em; color: #334155; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                            </tr>` : ''}
+                            
+                            ${showTime ? `
+                            <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 0.95em; color: #334155; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                            </tr>` : ''}
+
+                            ${showProfessional ? `
+                            <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 0.95em; color: #334155; vertical-align: middle; padding-left: 12px;">${professionalName}</td>
+                            </tr>` : ''}
+
+                            ${showLocation ? `
+                            <tr>
+                                <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                                <td style="font-weight: 600; font-size: 0.95em; color: #334155; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                            </tr>` : ''}
+                        </table>
+
+                        <div style="background-color: #f8fafc; color: #334155; padding: 15px; border-radius: 10px; font-size: 0.9em; margin-top: 18px; text-align: center; border: 1px solid #e2e8f0; line-height: 1.45;">
+                            ${showReason ? `
+                            <div style="font-weight: 700; color: #b91c1c; margin-bottom: 5px; font-size: 0.95em;">
+                                Motivo: <span style="font-weight: 500; color: #475569;">Cancelación solicitada por el cliente</span>
+                            </div>` : ''}
+                            <div style="color: #475569;">${cancellationNote}</div>
+                        </div>
+
+                        ${showButton ? `
+                        <div style="margin-top: 22px; text-align: center;">
+                            <a href="${buttonUrl}" style="display: inline-block; background-color: ${secondaryColor}; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-size: 12px; font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;">
+                                ${buttonText}
+                            </a>
+                        </div>` : ''}
+
+                        <div style="margin-top: 22px; text-align: left; padding-top: 16px; border-top: 1px solid #f1f5f9;">
+                            <div style="margin-bottom: 10px; padding-left: 2px;">
+                                <a href="${whatsappLink}" style="text-decoration: none; color: #1e293b; display: inline-flex; align-items: center;">
+                                    <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" style="margin-right: 12px;" alt="WhatsApp" />
+                                    <span style="font-weight: 700; font-size: 0.95em;">${whatsappText}</span>
+                                </a>
+                            </div>
+                            <div style="display: flex; align-items: center; color: #1e293b; padding-left: 2px;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/724/724664.png" width="20" style="margin-right: 12px; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);" alt="Teléfono" />
+                                <span style="font-weight: 700; font-size: 0.95em;">${localPhone}</span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div style="background-color: #fbfbfc; padding: 18px; text-align: center; font-size: 0.75em; color: #94a3b8; border-top: 1px solid #f1f5f9;">
+                        ${(config.signature || senderName).replace(/\n/g, '<br/>')}
+                    </div>
+                </div>
+            </div>`;
 
         } else if (type === 'dailySummary') {
             const headline = (config.dailySummaryHeadline || 'Hola {nombre}, aquí está tu agenda para hoy.').replace('{nombre}', professionalName);

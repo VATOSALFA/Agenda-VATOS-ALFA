@@ -152,9 +152,11 @@ export async function markConversationAsRead({ conversationId }: { conversationI
 export async function getClientDetailsForChat({
   phone,
   clientId,
+  email,
 }: {
   phone?: string;
   clientId?: string;
+  email?: string;
 }) {
   try {
     const db = getDb();
@@ -185,6 +187,20 @@ export async function getClientDetailsForChat({
             const p = (d.data().telefono || '').replace(/\D/g, '');
             return p.includes(cleanPhone);
           });
+        }
+      }
+    }
+
+    // 3. Si no se encontró por ID ni teléfono, buscar por correo/email
+    if (!clientDoc && email && email.includes('@')) {
+      const cleanEmail = email.trim().toLowerCase();
+      const emailSnap = await db.collection('clientes').where('correo', '==', cleanEmail).limit(1).get();
+      if (!emailSnap.empty) {
+        clientDoc = emailSnap.docs[0];
+      } else {
+        const legacyEmailSnap = await db.collection('clientes').where('email', '==', cleanEmail).limit(1).get();
+        if (!legacyEmailSnap.empty) {
+          clientDoc = legacyEmailSnap.docs[0];
         }
       }
     }
@@ -506,6 +522,488 @@ export async function deleteConversation(conversationId: string) {
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting conversation:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function handleClientAppointmentAction({
+  conversationId,
+  messageId,
+  reservationId,
+  action,
+  clientName,
+}: {
+  conversationId: string;
+  messageId: string;
+  reservationId: string;
+  action: 'confirm' | 'reschedule' | 'cancel';
+  clientName?: string;
+}) {
+  try {
+    const db = getDb();
+    const now = new Date();
+    const convRef = db.collection('conversaciones').doc(conversationId);
+    const msgRef = convRef.collection('mensajes').doc(messageId);
+    const resRef = db.collection('reservas').doc(reservationId);
+
+    const resDoc = await resRef.get();
+    const resData = resDoc.exists ? resDoc.data() : null;
+
+    if (action === 'confirm') {
+      // 1. Update reservation status to Confirmado (yellow tag in agenda)
+      await resRef.update({
+        estado: 'Confirmado',
+        confirmada_por_cliente: true,
+        confirmada_en: now,
+        whatsappConfirmationSent: true,
+        updated_at: now,
+      });
+
+      // 2. Mark action in message metadata
+      await msgRef.update({
+        'metadata.selected_action': 'confirm',
+        'metadata.answered_at': now,
+      });
+
+      // 3. Post reply from Janet (using custom confirmation template from settings if configured)
+      const replyMsgRef = convRef.collection('mensajes').doc();
+      const horaStr = resData?.hora_inicio || '';
+      let replyText = `¡Excelente${clientName ? ` ${clientName}` : ''}! 🎉 Tu cita ha quedado confirmada para el día de hoy${horaStr ? ` a las ${horaStr}` : ''}. Te esperamos con gusto en Vatos Alfa. 💈✂️`;
+
+      try {
+        const sofiaSnap = await db.collection('settings').doc('sofia').get();
+        if (sofiaSnap.exists && sofiaSnap.data()?.chatConfirmationTemplate) {
+          const tpl = sofiaSnap.data()?.chatConfirmationTemplate;
+          const profName =
+            resData?.customer?.professionalName ||
+            resData?.items?.[0]?.barbero_name ||
+            resData?.barbero_nombre ||
+            'tu barbero';
+          const servicesText =
+            resData?.items && resData.items.length > 0
+              ? resData.items.map((i: any) => i.nombre || i.servicio).join(', ')
+              : resData?.servicio || 'Servicio de Barbería';
+          const locationStr = 'Av. Cerro Sombrerete 1001, Col. Cipreses (Suc. Sombrerete)';
+
+          replyText = tpl
+            .replace(/{nombre}/g, clientName || resData?.cliente_nombre || resData?.customer?.nombre || 'Cliente')
+            .replace(/{fecha}/g, resData?.fecha || '')
+            .replace(/{hora}/g, resData?.hora_inicio || '')
+            .replace(/{profesional}/g, profName)
+            .replace(/{servicios}/g, servicesText)
+            .replace(/{ubicacion}/g, locationStr);
+        }
+      } catch (err) {
+        console.warn('Could not read chatConfirmationTemplate from settings, using default:', err);
+      }
+
+      await replyMsgRef.set({
+        id: replyMsgRef.id,
+        conversation_id: conversationId,
+        de: 'bot',
+        texto: replyText,
+        timestamp: now,
+        tipo: 'texto',
+        estado: 'enviado',
+      });
+
+      await convRef.update({
+        ultimo_mensaje: replyText,
+        fecha_ultimo_mensaje: now,
+        updated_at: now,
+      });
+
+      return {
+        success: true,
+        action: 'confirm',
+        message: 'Cita confirmada correctamente con etiqueta amarilla.',
+      };
+    } else if (action === 'reschedule') {
+      // 1. Mark action in message metadata
+      await msgRef.update({
+        'metadata.selected_action': 'reschedule',
+        'metadata.answered_at': now,
+      });
+
+      // 2. Post reply from Janet to initiate rescheduling
+      const replyMsgRef = convRef.collection('mensajes').doc();
+      const replyText = `¡Hola${clientName ? ` ${clientName}` : ''}! Con gusto te ayudo a reagendar tu cita. 📅✂️\n\n¿Para qué día y en qué horario te gustaría moverla? Indícamelo aquí mismo para consultar la disponibilidad de los barberos.`;
+
+      await replyMsgRef.set({
+        id: replyMsgRef.id,
+        conversation_id: conversationId,
+        de: 'bot',
+        texto: replyText,
+        timestamp: now,
+        tipo: 'texto',
+        estado: 'enviado',
+      });
+
+      await convRef.update({
+        ultimo_mensaje: replyText,
+        fecha_ultimo_mensaje: now,
+        modo_atencion: 'bot_activo',
+        updated_at: now,
+      });
+
+      return {
+        success: true,
+        action: 'reschedule',
+        message: 'Reagendamiento iniciado.',
+      };
+    } else if (action === 'cancel') {
+      // 1. Update reservation status to Cancelado
+      await resRef.update({
+        estado: 'Cancelado',
+        cancelada_por_cliente: true,
+        cancelada_en: now,
+        updated_at: now,
+      });
+
+      // 2. Mark action in message metadata
+      await msgRef.update({
+        'metadata.selected_action': 'cancel',
+        'metadata.answered_at': now,
+      });
+
+      // 3. Post reply from Janet
+      const replyMsgRef = convRef.collection('mensajes').doc();
+      const replyText = `Tu cita ha sido cancelada conforme a lo solicitado y el turno ha quedado liberado. 💈\n\nSi deseas agendar en otra ocasión, aquí estaré lista para ayudarte. ¡Hasta pronto!`;
+
+      await replyMsgRef.set({
+        id: replyMsgRef.id,
+        conversation_id: conversationId,
+        de: 'bot',
+        texto: replyText,
+        timestamp: now,
+        tipo: 'texto',
+        estado: 'enviado',
+      });
+
+      await convRef.update({
+        ultimo_mensaje: replyText,
+        fecha_ultimo_mensaje: now,
+        updated_at: now,
+      });
+
+      return {
+        success: true,
+        action: 'cancel',
+        message: 'Cita cancelada y turno liberado.',
+      };
+    }
+
+    return { success: false, error: 'Acción no válida' };
+  } catch (error: any) {
+    console.error('Error handling appointment action from chat:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendAppointmentChatReminder({
+  reservationId,
+}: {
+  reservationId: string;
+}) {
+  try {
+    const db = getDb();
+    const now = new Date();
+    const resRef = db.collection('reservas').doc(reservationId);
+    const resSnap = await resRef.get();
+    if (!resSnap.exists) return { success: false, error: 'Reserva no encontrada' };
+
+    const res = resSnap.data()!;
+    if (res.chatReminderSent) {
+      return { success: true, message: 'El recordatorio ya fue enviado previamente.' };
+    }
+
+    // Load Janet settings from settings/sofia
+    let sofiaConfig: any = null;
+    const sofiaSnap = await db.collection('settings').doc('sofia').get();
+    if (sofiaSnap.exists) {
+      sofiaConfig = sofiaSnap.data();
+    }
+
+    const tpl =
+      sofiaConfig?.chatReminderTemplate ||
+      '¡Hola *{nombre}*, te recordamos tu cita en Vatos Alfa! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n✂️ *Servicio(s):* {servicios}\n📍 *Ubicación:* {ubicacion}\n\nPor favor confirma tu asistencia presionando una opción abajo:';
+
+    const btnConfirmText = sofiaConfig?.chatButtonConfirmText || 'Confirmar Asistencia';
+    const btnRescheduleText = sofiaConfig?.chatButtonRescheduleText || 'Reagendar';
+    const btnCancelText = sofiaConfig?.chatButtonCancelText || 'Cancelar';
+
+    // Format text
+    const clientName = res.customer?.nombre || res.cliente_nombre || 'Cliente';
+    const clientPhone = res.customer?.telefono || res.cliente_telefono || '';
+    const profName =
+      res.customer?.professionalName ||
+      res.items?.[0]?.barbero_name ||
+      res.barbero_nombre ||
+      'tu barbero';
+    const servicesText =
+      res.items && res.items.length > 0
+        ? res.items.map((i: any) => i.nombre || i.servicio).join(', ')
+        : res.servicio || 'Servicio de Barbería';
+    const googleMapsUrl = 'https://maps.google.com/?q=VATOS+ALFA+Barber+Shop+Av+Cerro+Sombrerete+1001+Col+Cipreses';
+    const locationStr = `[Av. Cerro Sombrerete 1001, Col. Cipreses (Suc. Sombrerete)](${googleMapsUrl})`;
+
+    const formattedMessage = tpl
+      .replace(/{nombre}/g, clientName)
+      .replace(/{fecha}/g, res.fecha || '')
+      .replace(/{hora}/g, res.hora_inicio || '')
+      .replace(/{profesional}/g, profName)
+      .replace(/{servicios}/g, servicesText)
+      .replace(/{ubicacion}/g, locationStr);
+
+    // Find or create conversation for this client
+    let conversationId = '';
+    const cleanPhone = clientPhone.replace(/\D/g, '');
+
+    // Search by client_id or phone
+    const convQuery = await db
+      .collection('conversaciones')
+      .where('cliente_id', '==', res.cliente_id || '')
+      .limit(1)
+      .get();
+
+    if (!convQuery.empty) {
+      conversationId = convQuery.docs[0].id;
+    } else if (cleanPhone) {
+      const phoneQuery = await db
+        .collection('conversaciones')
+        .where('cliente_telefono', '==', cleanPhone)
+        .limit(1)
+        .get();
+      if (!phoneQuery.empty) {
+        conversationId = phoneQuery.docs[0].id;
+      }
+    }
+
+    if (!conversationId) {
+      // Create new conversation
+      const newConvRef = db.collection('conversaciones').doc();
+      conversationId = newConvRef.id;
+      await newConvRef.set({
+        id: conversationId,
+        cliente_id: res.cliente_id || null,
+        cliente_nombre: clientName,
+        cliente_telefono: cleanPhone,
+        cliente_email: res.customer?.correo || res.cliente_email || null,
+        canal: 'app',
+        modo_atencion: 'bot_activo',
+        mensajes_no_leidos: 1,
+        ultimo_mensaje: formattedMessage,
+        fecha_ultimo_mensaje: now,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    const convRef = db.collection('conversaciones').doc(conversationId);
+    const msgRef = convRef.collection('mensajes').doc();
+
+    const buttons = [
+      { id: 'confirm', label: btnConfirmText, action: 'confirm', variant: 'confirm' },
+      { id: 'reschedule', label: btnRescheduleText, action: 'reschedule', variant: 'reschedule' },
+      { id: 'cancel', label: btnCancelText, action: 'cancel', variant: 'cancel' },
+    ];
+
+    await msgRef.set({
+      id: msgRef.id,
+      conversation_id: conversationId,
+      de: 'bot',
+      texto: formattedMessage,
+      timestamp: now,
+      tipo: 'accion',
+      estado: 'enviado',
+      metadata: {
+        action_type: 'appointment_reminder',
+        reservation_id: reservationId,
+        buttons,
+      },
+    });
+
+    await convRef.update({
+      ultimo_mensaje: formattedMessage,
+      fecha_ultimo_mensaje: now,
+      mensajes_no_leidos: 1,
+      updated_at: now,
+    });
+
+    // Mark reservation as reminder sent in both chat and whatsapp so it's acknowledged
+    await resRef.update({
+      chatReminderSent: true,
+      whatsappReminderSent: true,
+      chatReminderDate: now,
+    });
+
+    return {
+      success: true,
+      conversationId,
+      messageId: msgRef.id,
+    };
+  } catch (error: any) {
+    console.error('Error sending appointment chat reminder:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function checkAndSendPendingChatReminders() {
+  try {
+    const db = getDb();
+    const sofiaSnap = await db.collection('settings').doc('sofia').get();
+    const sofiaConfig = sofiaSnap.exists ? sofiaSnap.data() : null;
+
+    if (sofiaConfig && sofiaConfig.autoChatReminders === false) {
+      return { success: true, processed: 0, reason: 'Recordatorios en chat desactivados' };
+    }
+
+    const minutesBefore = sofiaConfig?.chatReminderMinutesBefore ?? 120; // 2 horas por defecto
+
+    // Get Mexico time
+    const timeZone = 'America/Mexico_City';
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    const todayStr = formatter.format(now); // YYYY-MM-DD
+
+    const timeParts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(now);
+    const nowH = parseInt(timeParts.find((x) => x.type === 'hour')!.value, 10);
+    const nowM = parseInt(timeParts.find((x) => x.type === 'minute')!.value, 10);
+    const nowMinutes = nowH * 60 + nowM;
+
+    // Window: from now to now + minutesBefore
+    const windowEndMinutes = nowMinutes + minutesBefore;
+
+    const snapToday = await db.collection('reservas').where('fecha', '==', todayStr).get();
+
+    let processedCount = 0;
+
+    for (const docSnap of snapToday.docs) {
+      const res = docSnap.data();
+      // Skip if cancelled, finished, or already reminded
+      if (
+        res.estado === 'Cancelado' ||
+        res.estado === 'Cancelada' ||
+        res.estado === 'Asiste' ||
+        res.estado === 'No asiste'
+      )
+        continue;
+      if (res.chatReminderSent) continue;
+      if (!res.hora_inicio) continue;
+
+      const [hStr, mStr] = res.hora_inicio.split(':');
+      const aptMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+
+      // Check if appointment is within the reminder window
+      if (aptMinutes >= nowMinutes && aptMinutes <= windowEndMinutes) {
+        await sendAppointmentChatReminder({ reservationId: docSnap.id });
+        processedCount++;
+      }
+    }
+
+    return { success: true, processed: processedCount };
+  } catch (error: any) {
+    console.error('Error in checkAndSendPendingChatReminders:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendTestChatReminder({
+  conversationId,
+  clientName,
+}: {
+  conversationId: string;
+  clientName?: string;
+}) {
+  try {
+    const db = getDb();
+    const now = new Date();
+    const convRef = db.collection('conversaciones').doc(conversationId);
+    const convSnap = await convRef.get();
+    if (!convSnap.exists) return { success: false, error: 'Conversación no encontrada' };
+
+    // Load Janet settings from settings/sofia
+    let sofiaConfig: any = null;
+    const sofiaSnap = await db.collection('settings').doc('sofia').get();
+    if (sofiaSnap.exists) {
+      sofiaConfig = sofiaSnap.data();
+    }
+
+    const tpl =
+      sofiaConfig?.chatReminderTemplate ||
+      '¡Hola *{nombre}*, te recordamos tu cita en Vatos Alfa! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n✂️ *Servicio(s):* {servicios}\n📍 *Ubicación:* {ubicacion}\n\nPor favor confirma tu asistencia presionando una opción abajo:';
+
+    const btnConfirmText = sofiaConfig?.chatButtonConfirmText || 'Confirmar Asistencia';
+    const btnRescheduleText = sofiaConfig?.chatButtonRescheduleText || 'Reagendar';
+    const btnCancelText = sofiaConfig?.chatButtonCancelText || 'Cancelar';
+
+    const targetName = clientName || convSnap.data()?.cliente_nombre || 'Cliente';
+    const formattedMessage = tpl
+      .replace(/{nombre}/g, targetName)
+      .replace(/{fecha}/g, new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium' }).format(now))
+      .replace(/{hora}/g, '17:00')
+      .replace(/{profesional}/g, 'Carlos Barber')
+      .replace(/{servicios}/g, 'Corte de cabello')
+      .replace(/{ubicacion}/g, '[Av. Cerro Sombrerete 1001, Col. Cipreses (Suc. Sombrerete)](https://maps.google.com/?q=VATOS+ALFA+Barber+Shop+Av+Cerro+Sombrerete+1001+Col+Cipreses)');
+
+    // Check if client has a real reservation in database
+    let reservationId = `test-res-${Date.now()}`;
+    const phone = convSnap.data()?.cliente_telefono;
+    if (phone) {
+      const snapRes = await db
+        .collection('reservas')
+        .where('cliente_telefono', '==', phone)
+        .limit(1)
+        .get();
+      if (!snapRes.empty) {
+        reservationId = snapRes.docs[0].id;
+      }
+    }
+
+    const msgRef = convRef.collection('mensajes').doc();
+    const buttons = [
+      { id: 'confirm', label: btnConfirmText, action: 'confirm', variant: 'confirm' },
+      { id: 'reschedule', label: btnRescheduleText, action: 'reschedule', variant: 'reschedule' },
+      { id: 'cancel', label: btnCancelText, action: 'cancel', variant: 'cancel' },
+    ];
+
+    await msgRef.set({
+      id: msgRef.id,
+      conversation_id: conversationId,
+      de: 'bot',
+      texto: formattedMessage,
+      timestamp: now,
+      tipo: 'accion',
+      estado: 'enviado',
+      metadata: {
+        action_type: 'appointment_reminder',
+        reservation_id: reservationId,
+        buttons,
+      },
+    });
+
+    await convRef.update({
+      ultimo_mensaje: formattedMessage,
+      fecha_ultimo_mensaje: now,
+      updated_at: now,
+    });
+
+    return {
+      success: true,
+      messageId: msgRef.id,
+    };
+  } catch (error: any) {
+    console.error('Error sending test chat reminder:', error);
     return { success: false, error: error.message };
   }
 }

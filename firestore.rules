@@ -28,7 +28,7 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     match /configuracion/{docId} {
-      allow read: if docId in ['servicios', 'agenda', 'pase_alfa', 'app_movil', 'reglas_reservas'] || isAuthenticated();
+      allow read: if docId in ['servicios', 'agenda', 'pase_alfa', 'app_movil', 'reglas_reservas', 'inspiracion_alfa'] || isAuthenticated();
       allow write: if isAuthenticated();
     }
     match /locales/{document=**} {
@@ -97,6 +97,7 @@ service cloud.firestore {
 
     // 6. Business Logic (Sales, Clients, Finance)
     match /reservas/{document=**} { allow read, write: if isAuthenticated(); }
+    match /reservas_sandbox/{document=**} { allow read, write: if true; }
     match /bloqueos_horario/{document=**} { allow read, write: if isAuthenticated(); }
     match /jornadas_especiales/{id} {
       allow read: if true;
@@ -111,6 +112,12 @@ service cloud.firestore {
     
     match /clientes/{document=**} { allow read, write: if isAuthenticated(); } 
     match /clients/{document=**} { allow read, write: if isAuthenticated(); } 
+
+    // Canjes de Beneficios (Pase Alfa y Cupones App Móvil)
+    match /canjes_beneficios/{document=**} { 
+      allow read: if true;
+      allow write: if isAuthenticated();
+    } 
 
     match /finanzas/{document=**} { allow read, write: if isAuthenticated(); }
     match /finanzas_mensuales/{document=**} { allow read, write: if isAuthenticated(); }

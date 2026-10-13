@@ -1,8 +1,11 @@
 {
-  "silent": true,
-  "showModal": false,
-  "version": "1790449256561",
-  "title": "",
-  "summary": "",
-  "notes": []
+  "silent": false,
+  "showModal": true,
+  "title": "Nueva versión disponible",
+  "summary": "Actualización con mejoras en la agenda, perfil de staff, nuevo lector QR y sitio web.",
+  "notes": [
+    "Optimización integral de la agenda y visualización exclusiva para Staff.",
+    "Lector QR mejorado para Pase Alfa Club y sellos de lealtad.",
+    "Nueva landing page con catálogo de cortes, reservas y servicios."
+  ]
 }

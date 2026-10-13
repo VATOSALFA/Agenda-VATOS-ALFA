@@ -1,4 +1,6 @@
 
+'use client';
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -19,7 +21,7 @@ export default function RemindersPage() {
                 <span>Seleccionar Rango de Fechas</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
+            <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="end">
               <Calendar
                 initialFocus
                 mode="range"
@@ -31,74 +33,74 @@ export default function RemindersPage() {
         </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="border border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos por Confirmación</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Ingresos por Confirmación</CardTitle>
+            <DollarSign className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$1,250,000</div>
-            <p className="text-xs text-muted-foreground">+20.1% desde el mes pasado</p>
+            <div className="text-xl sm:text-2xl font-bold text-foreground">$1,250,000.00</div>
+            <p className="text-[11px] text-muted-foreground">+20.1% desde el mes pasado</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Citas Confirmadas</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Citas Confirmadas</CardTitle>
+            <CheckCircle className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">85%</div>
-            <p className="text-xs text-muted-foreground">125 de 147 citas</p>
+            <div className="text-xl sm:text-2xl font-bold text-foreground">85%</div>
+            <p className="text-[11px] text-muted-foreground">125 de 147 citas</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensajes Enviados (WhatsApp)</CardTitle>
-            <Send className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Mensajes Enviados (WhatsApp)</CardTitle>
+            <Send className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+235</div>
-            <p className="text-xs text-muted-foreground">95% de tasa de entrega</p>
+            <div className="text-xl sm:text-2xl font-bold text-foreground">+235</div>
+            <p className="text-[11px] text-muted-foreground">95% de tasa de entrega</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="border border-border/60">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Mensajes Enviados (Email)</CardTitle>
-            <Send className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-xs sm:text-sm font-medium">Mensajes Enviados (Email)</CardTitle>
+            <Send className="h-4 w-4 text-slate-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+180</div>
-            <p className="text-xs text-muted-foreground">99% de tasa de entrega</p>
+            <div className="text-xl sm:text-2xl font-bold text-foreground">+180</div>
+            <p className="text-[11px] text-muted-foreground">99% de tasa de entrega</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-            <CardTitle>Estadísticas de Envío</CardTitle>
-            <CardDescription>Detalle de los estados de los recordatorios enviados.</CardDescription>
+      <Card className="border border-border/60">
+        <CardHeader className="py-3 px-4 sm:px-5 border-b border-border/50 bg-muted/10">
+            <CardTitle className="text-sm font-semibold text-foreground">Estadísticas de Envío</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">Detalle de los estados de los recordatorios enviados.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="p-4 sm:p-5 space-y-5">
             <div>
-                <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-green-600">Enviados y Entregados</span>
-                    <span className="text-sm font-medium text-green-600">139 (94.5%)</span>
+                <div className="flex justify-between mb-1 text-xs">
+                    <span className="font-semibold text-blue-400">Enviados y Entregados</span>
+                    <span className="font-semibold text-blue-400">139 (94.5%)</span>
                 </div>
-                <Progress value={94.5} className="[&>div]:bg-green-500" />
+                <Progress value={94.5} className="h-2 [&>div]:bg-blue-500" />
             </div>
             <div>
-                <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-red-600">Envíos Fallidos</span>
-                    <span className="text-sm font-medium text-red-600">5 (3.4%)</span>
+                <div className="flex justify-between mb-1 text-xs">
+                    <span className="font-semibold text-red-400">Envíos Fallidos</span>
+                    <span className="font-semibold text-red-400">5 (3.4%)</span>
                 </div>
-                <Progress value={3.4} className="[&>div]:bg-red-500" />
+                <Progress value={3.4} className="h-2 [&>div]:bg-red-500" />
             </div>
             <div>
-                <div className="flex justify-between mb-1">
-                    <span className="text-base font-medium text-yellow-600">Pendientes de Envío</span>
-                    <span className="text-sm font-medium text-yellow-600">3 (2.1%)</span>
+                <div className="flex justify-between mb-1 text-xs">
+                    <span className="font-semibold text-slate-400">Pendientes de Envío</span>
+                    <span className="font-semibold text-slate-400">3 (2.1%)</span>
                 </div>
-                <Progress value={2.1} className="[&>div]:bg-yellow-500" />
+                <Progress value={2.1} className="h-2 [&>div]:bg-slate-600" />
             </div>
         </CardContent>
       </Card>

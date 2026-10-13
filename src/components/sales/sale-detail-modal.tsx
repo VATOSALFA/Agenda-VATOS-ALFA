@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import {
@@ -10,11 +8,27 @@ import {
     DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { Mail, Printer, X, Pencil, Store } from 'lucide-react';
+import {
+    Mail,
+    Printer,
+    X,
+    Pencil,
+    Store,
+    Receipt,
+    CreditCard,
+    Calendar,
+    User,
+    UserCheck,
+    Scissors,
+    DollarSign,
+    CheckCircle2,
+    Loader2
+} from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Client, Local, Sale, Profesional, User } from '@/lib/types';
+import type { Client, Local, Sale, Profesional, User as UserType } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { useMemo, useState } from 'react';
 import Image from 'next/image';
@@ -22,6 +36,7 @@ import { BluetoothPrinter } from '@/lib/printer';
 import { useToast } from '@/hooks/use-toast';
 import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { doc, getDoc } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
 interface EmpresaSettings {
     receipt_logo_url?: string;
@@ -35,18 +50,11 @@ interface SaleDetailModalProps {
     sale: Sale | null;
 }
 
-const InfoItem = ({ label, value }: { label: string, value: string | number | undefined }) => (
-    <div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="font-medium">{value}</div>
-    </div>
-);
-
 export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalProps) {
     const { toast } = useToast();
     const { data: locales } = useFirestoreQuery<Local>('locales');
     const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
-    const { data: users } = useFirestoreQuery<User>('usuarios');
+    const { data: users } = useFirestoreQuery<UserType>('usuarios');
     const { data: empresaData } = useFirestoreQuery<EmpresaSettings>('empresa');
     const empresa = empresaData?.[0];
     const [isPrinting, setIsPrinting] = useState(false);
@@ -68,6 +76,13 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         return map;
     }, [professionals, users]);
 
+    const displaySaleId = useMemo(() => {
+        if (!sale) return '';
+        if (sale.id.startsWith('deposit_')) {
+            return sale.reservationId ? sale.reservationId.slice(0, 8) : sale.id.replace('deposit_', '').slice(0, 8);
+        }
+        return sale.id.slice(0, 8);
+    }, [sale]);
 
     if (!sale) return null;
 
@@ -82,7 +97,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             return 'Fecha inválida';
         }
         if (isNaN(dateObj.getTime())) return 'Fecha inválida';
-        return format(dateObj, 'PP p', { locale: es });
+        return format(dateObj, "dd 'de' MMMM yyyy, hh:mm a", { locale: es });
     };
 
     const subtotal = sale.subtotal || sale.items?.reduce((acc, item) => acc + (item.precio_unitario || 0) * item.cantidad, 0) || 0;
@@ -101,11 +116,6 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 await printer.printImage(empresa.receipt_logo_url);
             }
 
-            // Prepare cart items from sale.items
-            // sale.items structure matches what formatTicket expects (nombre, cantidad, subtotal/precio_unitario)
-            // But we need to ensure 'subtotal' exists on item for the printer or rename it.
-            // In new-sale-sheet, we passed 'cart' which has 'subtotal'.
-            // Here sale.items has 'precio_unitario' and 'cantidad'.
             const formattedItems = sale.items.map(item => ({
                 nombre: item.nombre,
                 cantidad: item.cantidad,
@@ -119,12 +129,12 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             const ticketData = {
                 storeName: localData?.name || empresa?.name || "VATOS ALFA",
                 storeAddress: localData?.address || empresa?.address || "",
-                date: formatDate(sale.fecha_hora_venta), // Reuse format logic or simplified
+                date: formatDate(sale.fecha_hora_venta),
                 customerName: sale.client ? `${sale.client.nombre} ${sale.client.apellido}` : "Cliente General",
                 reservationId: sale.reservationId || "",
                 items: formattedItems,
                 subtotal: subtotal,
-                anticipoPagado: (sale as any).anticipoPagado || 0, // In case we added it to Sale type or it's extra field
+                anticipoPagado: (sale as any).anticipoPagado || 0,
                 discount: discountAmount,
                 total: sale.total,
                 footerMessage: ticketFooterMessage
@@ -165,147 +175,316 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         }
     };
 
+    const paymentMethodLabel = (() => {
+        switch (sale.metodo_pago) {
+            case 'efectivo': return 'Efectivo';
+            case 'tarjeta': return 'Tarjeta';
+            case 'transferencia': return 'Transferencia';
+            case 'mercadopago': return 'Pagos en Línea';
+            case 'combinado': return 'Pago Combinado';
+            default: return sale.metodo_pago || 'No especificado';
+        }
+    })();
+
+    const totalConPropina = (sale.total || 0) + (sale.propina || 0);
+
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl p-0" hideCloseButton>
-                <DialogHeader className="p-4 border-b flex-row items-center justify-between">
-                    <DialogTitle>
-                        Comprobante de pago ID: {sale.id.startsWith('deposit_') ? (sale.reservationId ? sale.reservationId.slice(0, 8) : sale.id.replace('deposit_', '').slice(0, 8)) : sale.id.slice(0, 8)}
-                    </DialogTitle>
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={handleSendEmail} disabled={isSendingEmail || isPrinting}>
-                            <Mail className={`h-4 w-4 ${isSendingEmail ? 'animate-pulse text-primary' : ''}`} />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={handlePrintTicket} disabled={isPrinting || isSendingEmail}>
-                            <Printer className={`h-4 w-4 ${isPrinting ? 'animate-pulse text-blue-500' : ''}`} />
-                        </Button>
-                    </div>
-                </DialogHeader>
-                <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
-                    <div className="flex justify-center items-center mb-6">
-                        {empresa?.receipt_logo_url ? (
-                            <Image src={empresa.receipt_logo_url} alt="Logo" width={200} height={100} className="h-auto" />
-                        ) : (
-                            <h2 className="text-2xl font-bold">{empresa?.name || "Vatos Alfa"}</h2>
-                        )}
-                    </div>
-                    <div className="p-4 border rounded-lg">
-                        <h3 className="font-semibold mb-4">Resumen de pago</h3>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                            <InfoItem label="Fecha" value={formatDate(sale.fecha_hora_venta)} />
-                            <InfoItem label="Cajero" value={sale.creado_por_nombre || 'Sin información'} />
-                            <InfoItem label="Cliente" value={`${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`.trim() || 'No registrado'} />
-                            <InfoItem label="Local" value={localData?.name || 'Desconocido'} />
-                            {sale.metodo_pago === 'combinado' && sale.detalle_pago_combinado ? (
-                                <div className="col-span-3 mt-2 border-t pt-2">
-                                    <div className="font-semibold text-xs mb-1">Desglose de Pago:</div>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                        {(sale.detalle_pago_combinado.efectivo > 0) && (
-                                            <div className="flex justify-between"><span>Efectivo:</span> <span>${sale.detalle_pago_combinado.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                        )}
-                                        {(sale.detalle_pago_combinado.tarjeta > 0) && (
-                                            <div className="flex justify-between"><span>Tarjeta:</span> <span>${sale.detalle_pago_combinado.tarjeta.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                        )}
-                                        {(sale.detalle_pago_combinado.transferencia && sale.detalle_pago_combinado.transferencia > 0) && (
-                                            <div className="flex justify-between"><span>Transferencia:</span> <span>${(sale.detalle_pago_combinado.transferencia || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                        )}
-                                        {(sale.detalle_pago_combinado.pagos_en_linea && sale.detalle_pago_combinado.pagos_en_linea > 0) && (
-                                            <div className="flex justify-between"><span>Pagos en Linea:</span> <span>${sale.detalle_pago_combinado.pagos_en_linea.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
-                                        )}
-                                    </div>
+            <DialogContent className="max-w-2xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background" hideCloseButton>
+                {/* HEADER ESTILO VATOS ALFA */}
+                <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+                    {/* Haz de luz animado sutil */}
+                    <div className="header-light-beam" aria-hidden="true" />
+
+                    <div className="relative z-10 flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                            <Receipt className="h-5 w-5 text-slate-300 shrink-0" />
+                            <div className="space-y-0.5">
+                                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                    Comprobante de Pago
+                                </DialogTitle>
+                                <div className="flex items-center gap-2 text-xs text-slate-300 flex-wrap">
+                                    <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-[11px] border border-white/10">
+                                        ID: {displaySaleId}
+                                    </span>
+                                    {localData && (
+                                        <>
+                                            <span>•</span>
+                                            <span className="text-slate-300 font-medium">{localData.name}</span>
+                                        </>
+                                    )}
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Botones de acción minimalistas sin contenedor */}
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={handleSendEmail}
+                                disabled={isSendingEmail || isPrinting}
+                                className="p-1.5 text-slate-300 hover:text-white transition-colors disabled:opacity-40"
+                                title="Enviar comprobante por correo"
+                                aria-label="Enviar por correo"
+                            >
+                                {isSendingEmail ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Mail className="h-4 w-4" />}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handlePrintTicket}
+                                disabled={isPrinting || isSendingEmail}
+                                className="p-1.5 text-slate-300 hover:text-white transition-colors disabled:opacity-40"
+                                title="Imprimir ticket térmico"
+                                aria-label="Imprimir ticket"
+                            >
+                                {isPrinting ? <Loader2 className="h-4 w-4 animate-spin text-blue-400" /> : <Printer className="h-4 w-4" />}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onOpenChange(false)}
+                                className="p-1.5 text-slate-300 hover:text-white transition-colors"
+                                aria-label="Cerrar modal"
+                                title="Cerrar"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* CONTENIDO SCROLLEABLE */}
+                <div className="p-4 sm:p-6 space-y-4 flex-1 min-h-0 overflow-y-auto text-sm">
+                    {/* ENCABEZADO DE MARCA / LOGO */}
+                    <div className="flex items-center justify-between gap-4 pt-1 pb-4 border-b border-border/60">
+                        <div className="flex items-center">
+                            {empresa?.receipt_logo_url ? (
+                                <Image
+                                    src={empresa.receipt_logo_url}
+                                    alt="Logo"
+                                    width={240}
+                                    height={90}
+                                    className="h-auto max-h-16 sm:max-h-20 w-auto object-contain dark:brightness-110"
+                                    priority
+                                />
                             ) : (
-                                <InfoItem label="Método de pago" value={sale.metodo_pago === 'mercadopago' ? 'Pagos en Linea' : sale.metodo_pago} />
+                                <div>
+                                    <h2 className="text-xl sm:text-2xl font-black tracking-widest text-foreground uppercase">VATOS ALFA</h2>
+                                    <span className="text-[10px] text-muted-foreground tracking-widest uppercase">Barber Shop</span>
+                                </div>
                             )}
-                            <InfoItem 
-                                label="Monto total" 
-                                value={`$${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${sale.propina && sale.propina > 0 ? ` (Incluye $${sale.propina.toLocaleString('es-MX', { minimumFractionDigits: 2 })} propina)` : ''}`} 
-                            />
+                        </div>
+                        <div className="text-right space-y-0.5 max-w-[55%]">
+                            <p className="font-bold text-sm sm:text-base text-foreground leading-tight">
+                                {localData?.name || empresa?.name || 'VATOS ALFA Barber Shop'}
+                            </p>
+                            <p className="text-xs text-muted-foreground leading-snug">
+                                {localData?.address || empresa?.address || 'Querétaro, Qro.'}
+                            </p>
+                            {localData?.phone && (
+                                <p className="text-[11px] text-muted-foreground font-mono">
+                                    Tel: {localData.phone}
+                                </p>
+                            )}
                         </div>
                     </div>
 
-                    <div className="p-4 border rounded-lg">
-                        <h3 className="font-semibold mb-4">Detalle de la venta</h3>
+                    {/* 1. RESUMEN DE PAGO */}
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-xs space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                <CreditCard className="w-3.5 h-3.5 text-primary" /> Resumen de Pago
+                            </h3>
+                            <Badge variant="outline" className="border-border bg-muted/40 font-semibold text-[11px] px-2 py-0.5">
+                                {paymentMethodLabel}
+                            </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Fecha y Hora:</span>
+                                <strong className="text-foreground font-semibold">{formatDate(sale.fecha_hora_venta)}</strong>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Cajero / Recepción:</span>
+                                <strong className="text-foreground font-semibold truncate block">{sale.creado_por_nombre || 'Recepción'}</strong>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Cliente:</span>
+                                <strong className="text-foreground font-semibold truncate block">
+                                    {`${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`.trim() || 'Cliente General'}
+                                </strong>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Sucursal:</span>
+                                <strong className="text-foreground font-semibold truncate block">{localData?.name || 'Sucursal Principal'}</strong>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Método de Pago:</span>
+                                <strong className="text-foreground font-semibold block">{paymentMethodLabel}</strong>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-muted-foreground block text-[11px]">Total Transacción:</span>
+                                <strong className="text-foreground font-bold text-sm block">
+                                    ${totalConPropina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {Boolean(sale.propina && sale.propina > 0) && (
+                                        <span className="text-[10px] text-blue-400 font-normal ml-1">
+                                            (incluye propina)
+                                        </span>
+                                    )}
+                                </strong>
+                            </div>
+                        </div>
+
+                        {/* Desglose de pago combinado si aplica */}
+                        {sale.metodo_pago === 'combinado' && sale.detalle_pago_combinado && (
+                            <div className="mt-3 pt-2 border-t border-border/50 text-xs">
+                                <span className="font-semibold text-[11px] text-muted-foreground block mb-1.5 uppercase tracking-wider">
+                                    Desglose del Pago Combinado:
+                                </span>
+                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                    {Boolean(sale.detalle_pago_combinado.efectivo && sale.detalle_pago_combinado.efectivo > 0) && (
+                                        <div className="flex justify-between bg-muted/30 p-2 rounded-lg">
+                                            <span className="text-muted-foreground">Efectivo:</span>
+                                            <strong className="text-foreground font-semibold">${sale.detalle_pago_combinado.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    )}
+                                    {Boolean(sale.detalle_pago_combinado.tarjeta && sale.detalle_pago_combinado.tarjeta > 0) && (
+                                        <div className="flex justify-between bg-muted/30 p-2 rounded-lg">
+                                            <span className="text-muted-foreground">Tarjeta:</span>
+                                            <strong className="text-foreground font-semibold">${sale.detalle_pago_combinado.tarjeta.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    )}
+                                    {Boolean(sale.detalle_pago_combinado.transferencia && sale.detalle_pago_combinado.transferencia > 0) && (
+                                        <div className="flex justify-between bg-muted/30 p-2 rounded-lg">
+                                            <span className="text-muted-foreground">Transferencia:</span>
+                                            <strong className="text-foreground font-semibold">${(sale.detalle_pago_combinado.transferencia || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    )}
+                                    {Boolean(sale.detalle_pago_combinado.pagos_en_linea && sale.detalle_pago_combinado.pagos_en_linea > 0) && (
+                                        <div className="flex justify-between bg-muted/30 p-2 rounded-lg">
+                                            <span className="text-muted-foreground">Pagos en Línea:</span>
+                                            <strong className="text-foreground font-semibold">${(sale.detalle_pago_combinado.pagos_en_linea || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 2. DETALLE DE LA VENTA */}
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-xs space-y-3">
+                        <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <Scissors className="w-3.5 h-3.5 text-primary" /> Detalle de la Venta ({sale.items?.length || 0})
+                        </h3>
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Nombre</TableHead>
-                                    <TableHead>Vendedor</TableHead>
-                                    <TableHead className="text-right">Precio</TableHead>
+                                <TableRow className="border-border/60 hover:bg-transparent">
+                                    <TableHead className="text-xs uppercase text-muted-foreground font-semibold">Concepto</TableHead>
+                                    <TableHead className="text-xs uppercase text-muted-foreground font-semibold">Profesional</TableHead>
+                                    <TableHead className="text-right text-xs uppercase text-muted-foreground font-semibold">Precio</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sale.items?.map((item, index) => (
-                                    <TableRow key={index}>
-                                        <TableCell>{item.nombre}</TableCell>
-                                        <TableCell>{sellerMap.get(item.barbero_id) || 'N/A'}</TableCell>
-                                        <TableCell className="text-right">${(item.precio_unitario || item.precio || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    <TableRow key={index} className="border-border/40 hover:bg-muted/20">
+                                        <TableCell className="font-medium text-foreground py-2.5 text-xs">
+                                            {item.nombre}
+                                            {item.cantidad > 1 && (
+                                                <span className="text-muted-foreground ml-1.5 text-[11px]">x{item.cantidad}</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-xs py-2.5">
+                                            {sellerMap.get(item.barbero_id) || 'Personal Sucursal'}
+                                        </TableCell>
+                                        <TableCell className="text-right font-semibold text-foreground text-xs py-2.5">
+                                            ${(item.precio_unitario || item.precio || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell colSpan={2} className="text-right">Subtotal</TableCell>
-                                    <TableCell className="text-right">${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                            <TableFooter className="bg-transparent">
+                                <TableRow className="hover:bg-transparent border-t border-border/60">
+                                    <TableCell colSpan={2} className="text-right text-xs text-muted-foreground font-medium">Subtotal</TableCell>
+                                    <TableCell className="text-right text-xs font-semibold text-foreground">${subtotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                 </TableRow>
-                                {discountAmount > 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={2} className="text-right">Descuento</TableCell>
-                                        <TableCell className="text-right text-destructive">-${discountAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+
+                                {discountAmount > 0 ? (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={2} className="text-right text-xs text-destructive font-medium">Descuento</TableCell>
+                                        <TableCell className="text-right text-xs font-semibold text-destructive">-${discountAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
-                                )}
-                                {Boolean(sale.propina && sale.propina > 0) && (
-                                    <TableRow className="text-primary font-medium bg-primary/5">
-                                         <TableCell colSpan={2} className="text-right">
-                                             Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''} {(sale as any).propina_metodo ? `• ${(sale as any).propina_metodo.charAt(0).toUpperCase() + (sale as any).propina_metodo.slice(1)}` : ''}
-                                         </TableCell>
-                                         <TableCell className="text-right">+${(sale.propina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                ) : null}
+
+                                {Boolean(sale.propina && sale.propina > 0) ? (
+                                    <TableRow className="hover:bg-transparent text-blue-400 bg-blue-500/5">
+                                        <TableCell colSpan={2} className="text-right text-xs font-medium">
+                                            Propina {sale.propina_detalles?.length === 1 && sellerMap.get(sale.propina_detalles[0].barbero_id) ? `(${sellerMap.get(sale.propina_detalles[0].barbero_id)})` : ''} {(sale as any).propina_metodo ? `• ${(sale as any).propina_metodo.charAt(0).toUpperCase() + (sale as any).propina_metodo.slice(1)}` : ''}
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs font-bold">+${(sale.propina || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
-                                )}
-                                <TableRow className="font-bold text-lg border-t-2">
-                                    {/* Logic to detailed breakdown if it's a partial payment */}
-                                    {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) ? (
-                                         <>
-                                             <TableCell colSpan={2} className="text-right pt-2">Valor Total del Servicio</TableCell>
-                                             <TableCell className="text-right pt-2">${sale.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </>
-                                    ) : (
-                                         <>
-                                             <TableCell colSpan={2} className="text-right">{sale.propina && sale.propina > 0 ? "Total Pagado" : "Total"}</TableCell>
-                                             <TableCell className="text-right">${((sale.total || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </>
-                                    )}
+                                ) : null}
+
+                                <TableRow className="font-bold text-base border-t-2 border-border hover:bg-transparent">
+                                    <TableCell colSpan={2} className="text-right text-foreground pt-3">
+                                        {sale.propina && sale.propina > 0 ? "Total Pagado" : "Total"}
+                                    </TableCell>
+                                    <TableCell className="text-right text-foreground font-black text-lg pt-3">
+                                        ${totalConPropina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
                                 </TableRow>
-                                {(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) && (
-                                     <>
-                                         <TableRow className="text-orange-600 font-medium">
-                                             <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>
-                                             <TableCell className="text-right">-${(sale.monto_pagado_real || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </TableRow>
-                                         <TableRow className="text-muted-foreground">
-                                             <TableCell colSpan={2} className="text-right">Saldo Pendiente</TableCell>
-                                             <TableCell className="text-right">${(sale.total - (sale.monto_pagado_real || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </TableRow>
-                                     </>
-                                )}
-                                {sale.pago_estado === 'Pagado' && sale.anticipoPagado && sale.anticipoPagado > 0 && (
-                                     <>
-                                         <TableRow className="text-orange-600 font-medium">
-                                             <TableCell colSpan={2} className="text-right">Anticipo Pagado Previamente</TableCell>
-                                             <TableCell className="text-right">-${sale.anticipoPagado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </TableRow>
-                                         <TableRow className="text-emerald-700 dark:text-emerald-400 font-bold">
-                                             <TableCell colSpan={2} className="text-right">Liquidación Pagada en esta Venta</TableCell>
-                                             <TableCell className="text-right">${(sale.total - sale.anticipoPagado + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                         </TableRow>
-                                     </>
-                                )}
+
+                                {/* Desglose si es anticipo parcial */}
+                                {Boolean(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) ? (
+                                    <>
+                                        <TableRow className="text-slate-600 dark:text-slate-400 font-medium text-xs hover:bg-transparent">
+                                            <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>
+                                            <TableCell className="text-right">-${(sale.monto_pagado_real || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="text-muted-foreground text-xs hover:bg-transparent">
+                                            <TableCell colSpan={2} className="text-right">Saldo Pendiente</TableCell>
+                                            <TableCell className="text-right font-semibold">${(sale.total - (sale.monto_pagado_real || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    </>
+                                ) : null}
+
+                                {/* Desglose si es liquidación de cita que ya tenía anticipo previo */}
+                                {Boolean(sale.pago_estado === 'Pagado' && sale.anticipoPagado && sale.anticipoPagado > 0) ? (
+                                    <>
+                                        <TableRow className="text-slate-600 dark:text-slate-400 font-medium text-xs hover:bg-transparent">
+                                            <TableCell colSpan={2} className="text-right">Anticipo Pagado Previamente</TableCell>
+                                            <TableCell className="text-right">-${(sale.anticipoPagado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="text-blue-400 font-bold text-xs hover:bg-transparent">
+                                            <TableCell colSpan={2} className="text-right">Liquidación Pagada en esta Venta</TableCell>
+                                            <TableCell className="text-right font-bold">${(sale.total - (sale.anticipoPagado || 0) + (sale.propina || 0)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    </>
+                                ) : null}
                             </TableFooter>
                         </Table>
                     </div>
                 </div>
-                <DialogFooter className="p-4 border-t flex justify-end">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
+
+                {/* FOOTER DE ACCIONES */}
+                <DialogFooter className="p-4 sm:p-5 border-t border-border/80 flex items-center justify-between flex-shrink-0 bg-muted/20">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handlePrintTicket}
+                        disabled={isPrinting}
+                        className="rounded-xl text-xs gap-1.5"
+                    >
+                        {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                        Imprimir Ticket
+                    </Button>
+                    <Button
+                        variant="alfa"
+                        size="sm"
+                        onClick={() => onOpenChange(false)}
+                        className="rounded-xl px-5 text-xs font-bold text-white shadow-md"
+                    >
+                        Cerrar
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

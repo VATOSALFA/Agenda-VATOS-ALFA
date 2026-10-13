@@ -79,8 +79,14 @@
   * {
     @apply border-border;
   }
+  html {
+    overflow-x: clip;
+    max-width: 100vw;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    overflow-x: clip;
+    max-width: 100vw;
   }
 }
 
@@ -106,27 +112,76 @@
     scrollbar-width: none;  /* Firefox */
   }
 
-  /* Thin subtle scrollbar */
+  /* Thin subtle scrollbar Vatos Alfa */
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: transparent transparent;
+    scrollbar-color: rgba(59, 130, 246, 0.45) transparent;
   }
   .scrollbar-thin:hover {
-    scrollbar-color: hsl(var(--border)) transparent;
+    scrollbar-color: #3b82f6 transparent;
   }
   .scrollbar-thin::-webkit-scrollbar {
-    width: 4px;
+    width: 5px;
+    height: 5px;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: transparent;
-    border-radius: 4px;
+    background-color: rgba(59, 130, 246, 0.45);
+    border-radius: 9999px;
   }
   .scrollbar-thin:hover::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--border));
+    background-color: #3b82f6;
   }
+
+/* ==========================================================================
+   VATOS ALFA - ESTÁNDAR GLOBAL DE BARRAS DE SCROLL (SCROLLBARS)
+   Color Oficial: Azul Acento Móvil (#3B82F6) / Azul Navy (#202A49)
+   ========================================================================== */
+
+/* Estándar WebKit (Chrome, Edge, Safari, Opera, WebViews) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(59, 130, 246, 0.45); /* Azul Acento Vatos Alfa sutil */
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #3b82f6; /* Azul Acento Móvil vibrante al interactuar */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #2563eb;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Ocultar botones triangulares toscos nativos de Windows */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Estándar W3C / Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(59, 130, 246, 0.45) transparent;
+}
 
   @keyframes wave {
     0% { transform: translateX(-100%); opacity: 0; }
@@ -153,6 +208,307 @@
   .animate-gradient-flow {
     background-size: 200% 200%;
     animation: gradientShift 4s ease infinite;
+  }
+
+  @keyframes headerLightSweep {
+    0% {
+      transform: translateX(-150%) skewX(-20deg);
+      opacity: 0;
+    }
+    10% {
+      opacity: 1;
+    }
+    55% {
+      transform: translateX(380%) skewX(-20deg);
+      opacity: 0;
+    }
+    100% {
+      transform: translateX(380%) skewX(-20deg);
+      opacity: 0;
+    }
+  }
+
+  .header-light-beam {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 35%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 20%,
+      rgba(147, 197, 253, 0.12) 48%,
+      rgba(255, 255, 255, 0.22) 50%,
+      rgba(147, 197, 253, 0.12) 52%,
+      rgba(255, 255, 255, 0.02) 80%,
+      transparent 100%
+    );
+    animation: headerLightSweep 6.5s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Keyframe para la luz que viaja dentro del boton de izquierda a derecha */
+  @keyframes btnLightSweep {
+    0% {
+      transform: translateX(-180%) skewX(-20deg);
+    }
+    45% {
+      transform: translateX(380%) skewX(-20deg);
+    }
+    100% {
+      transform: translateX(380%) skewX(-20deg);
+    }
+  }
+
+  .animate-btn-light-sweep {
+    animation: btnLightSweep 3.5s ease-in-out infinite;
+  }
+
+  /* Keyframe para el giro del borde láser conic (idéntico a ShinyButton de la app móvil) */
+  @keyframes conicLaserSpin {
+    0% {
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+    100% {
+      transform: translate(-50%, -50%) rotate(360deg);
+    }
+  }
+
+  .animate-conic-laser {
+    animation: conicLaserSpin 3.4s linear infinite;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(37, 99, 235, 0.05) 15deg,
+      rgba(59, 130, 246, 0.35) 45deg,
+      #2563EB 70deg,
+      #3B82F6 80deg,
+      #60A5FA 87deg,
+      #FFFFFF 92deg,
+      #BAE6FD 95deg,
+      #60A5FA 99deg,
+      #3B82F6 106deg,
+      #1D4ED8 115deg,
+      rgba(37, 99, 235, 0.25) 130deg,
+      transparent 150deg,
+      transparent 360deg
+    );
+  }
+
+  /* Keyframe para la luz laser que recorre el contorno del boton (SVG fallback) */
+  @keyframes btnBorderLaser {
+    0% {
+      stroke-dashoffset: 100;
+    }
+    100% {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .animate-btn-border-laser {
+    animation: btnBorderLaser 3.2s linear infinite;
+  }
+
+  /* Keyframe para el parpadeo del punto indicador del carrusel de Staff */
+  @keyframes dotBlink {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+    }
+    20% {
+      opacity: 0.15;
+      transform: scale(0.75);
+      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.35);
+      background-color: #60a5fa;
+      box-shadow: 0 0 10px 3px rgba(59, 130, 246, 0.85);
+    }
+    75% {
+      opacity: 0.3;
+      transform: scale(0.9);
+      box-shadow: 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+      background-color: #3b82f6;
+      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+    }
+  }
+
+  .animate-dot-blink {
+    animation: dotBlink 0.5s ease-in-out;
+  }
+
+  /* Keyframes para el efecto Bomba de Humo Dorado Mate al abrir modal (Sutil, Suave y Visible) */
+  @keyframes smokeAuraExpand {
+    0% {
+      transform: scale(0.7) translateZ(0);
+      opacity: 0;
+    }
+    18% {
+      opacity: 0.95;
+      transform: scale(1.02) translateZ(0);
+    }
+    55% {
+      opacity: 0.55;
+      transform: scale(1.15) translateZ(0);
+    }
+    100% {
+      transform: scale(1.3) translateZ(0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes smokePuffBurst {
+    0% {
+      transform: translate(0, 0) scale(0.3) rotate(0deg) translateZ(0);
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.85;
+      transform: translate(calc(var(--tx) * 0.6), calc(var(--ty) * 0.6)) scale(0.9) rotate(var(--rot)) translateZ(0);
+    }
+    60% {
+      opacity: 0.45;
+      transform: translate(calc(var(--tx) * 0.9), calc(var(--ty) * 0.9)) scale(1.2) rotate(calc(var(--rot) * 1.3)) translateZ(0);
+    }
+    100% {
+      transform: translate(var(--tx), var(--ty)) scale(1.35) rotate(calc(var(--rot) * 1.5)) translateZ(0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes smokePuffBurstMobile {
+    0% {
+      transform: translate(0, 0) scale(0.3) rotate(0deg) translateZ(0);
+      opacity: 0;
+    }
+    22% {
+      opacity: 0.9;
+      transform: translate(calc(var(--tx-m, var(--tx)) * 0.6), calc(var(--ty-m, var(--ty)) * 0.6)) scale(0.95) rotate(var(--rot)) translateZ(0);
+    }
+    60% {
+      opacity: 0.5;
+      transform: translate(calc(var(--tx-m, var(--tx)) * 0.9), calc(var(--ty-m, var(--ty)) * 0.9)) scale(1.25) rotate(calc(var(--rot) * 1.3)) translateZ(0);
+    }
+    100% {
+      transform: translate(var(--tx-m, var(--tx)), var(--ty-m, var(--ty))) scale(1.42) rotate(calc(var(--rot) * 1.5)) translateZ(0);
+      opacity: 0;
+    }
+  }
+
+  @keyframes goldGlowBurst {
+    0% {
+      transform: scale(0.65) translateZ(0);
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.85;
+      transform: scale(1.02) translateZ(0);
+    }
+    55% {
+      opacity: 0.45;
+      transform: scale(1.18) translateZ(0);
+    }
+    100% {
+      transform: scale(1.32) translateZ(0);
+      opacity: 0;
+    }
+  }
+
+  .animate-gold-glow-burst {
+    animation: goldGlowBurst 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  @keyframes goldRayShine {
+    0% {
+      opacity: 0;
+      transform: scale(0.4) rotate(var(--angle, 0deg)) translateZ(0);
+    }
+    25% {
+      opacity: 0.95;
+      transform: scale(1.08) rotate(var(--angle, 0deg)) translateZ(0);
+    }
+    65% {
+      opacity: 0.45;
+      transform: scale(1.25) rotate(var(--angle, 0deg)) translateZ(0);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.4) rotate(var(--angle, 0deg)) translateZ(0);
+    }
+  }
+
+  .animate-smoke-aura {
+    animation: smokeAuraExpand 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  .animate-smoke-puff {
+    animation: smokePuffBurst 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  @media (max-width: 639px) {
+    .animate-smoke-puff {
+      animation: smokePuffBurstMobile 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+  }
+
+  .animate-smoke-rim-glow {
+    animation: smokeRimGlow 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity, box-shadow;
+  }
+
+  .animate-gold-ray {
+    animation: goldRayShine 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  /* Boton Oficial Vatos Alfa (Estilo App Movil de una sola pieza, con rayo laser en el contorno exterior exacto) */
+  .btn-vatos-alfa {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5px !important;
+    background: rgba(37, 99, 235, 0.25) !important;
+    color: #ffffff !important;
+    border: none !important;
+    box-shadow: 0 4px 14px 0 rgba(10, 16, 32, 0.45) !important;
+    overflow: hidden !important;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+  }
+  .btn-vatos-alfa:hover {
+    box-shadow: 0 6px 20px 0 rgba(37, 99, 235, 0.4) !important;
+    filter: brightness(1.05);
+  }
+  .btn-vatos-alfa:active {
+    transform: scale(0.97) !important;
+  }
+
+  /* Dropdowns y Selects oscuros institucionales (#151b2e) con alto contraste */
+  .bg-\[\#151b2e\] [role="menuitem"],
+  .bg-\[\#151b2e\] [role="option"] {
+    color: #ffffff !important;
+  }
+  .bg-\[\#151b2e\] [role="menuitem"]:hover,
+  .bg-\[\#151b2e\] [role="menuitem"]:focus,
+  .bg-\[\#151b2e\] [role="menuitem"][data-highlighted],
+  .bg-\[\#151b2e\] [role="option"]:hover,
+  .bg-\[\#151b2e\] [role="option"]:focus,
+  .bg-\[\#151b2e\] [role="option"][data-highlighted] {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    color: #ffffff !important;
   }
 }
 

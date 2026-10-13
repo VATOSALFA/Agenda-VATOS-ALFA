@@ -11,62 +11,45 @@ export function ParallaxHero({ children }: ParallaxPageProps) {
 
   useEffect(() => {
     let lenis: any;
-    let stCleanup: (() => void) | undefined;
+    let rafId: number;
 
-    const initParallax = async () => {
-      const container = containerRef.current;
-      if (!container) return;
+    const initSmoothScroll = async () => {
+      // Enable smooth inertial scrolling on desktop / non-touch screens
+      if (typeof window !== 'undefined' && window.innerWidth > 768) {
+        try {
+          const lenisModule = await import('@studio-freight/lenis');
+          const Lenis = lenisModule.default || lenisModule;
 
-      const [gsapModule, scrollTriggerModule, lenisModule] = await Promise.all([
-        import('gsap'),
-        import('gsap/ScrollTrigger'),
-        import('@studio-freight/lenis')
-      ]);
+          lenis = new Lenis({
+            duration: 1.15,
+            easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+            smoothWheel: true,
+            wheelMultiplier: 0.95,
+            touchMultiplier: 1.5,
+          });
 
-      const gsap = gsapModule.default || gsapModule;
-      const ScrollTrigger = scrollTriggerModule.ScrollTrigger || scrollTriggerModule.default;
-      const Lenis = lenisModule.default || lenisModule;
+          (window as any).__lenis = lenis;
 
-      gsap.registerPlugin(ScrollTrigger);
+          const raf = (time: number) => {
+            lenis.raf(time);
+            rafId = requestAnimationFrame(raf);
+          };
 
-      // Hero background parallax — aurora moves slower than scroll
-      const triggerElement = container.querySelector('[data-parallax-layers]');
-      if (triggerElement) {
-        const tl = gsap.timeline({
-          scrollTrigger: {
-            trigger: triggerElement,
-            start: "0% 0%",
-            end: "100% 0%",
-            scrub: 0,
-          }
-        });
-        tl.to(triggerElement.querySelectorAll('[data-parallax-layer="1"]'), { yPercent: 70, ease: "none" });
-        tl.to(triggerElement.querySelectorAll('[data-parallax-layer="2"]'), { yPercent: 55, ease: "none" }, "<");
+          rafId = requestAnimationFrame(raf);
+        } catch (e) {
+          console.warn('Lenis could not be initialized:', e);
+        }
       }
-
-      // Smooth scroll with Lenis - Only on Desktop
-      if (window.innerWidth > 768) {
-        lenis = new Lenis({
-          duration: 1.2,
-          easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-          smoothWheel: true,
-          wheelMultiplier: 1,
-        });
-        lenis.on('scroll', ScrollTrigger.update);
-        gsap.ticker.add((time: number) => { lenis.raf(time * 1000); });
-        gsap.ticker.lagSmoothing(0);
-      }
-
-      stCleanup = () => {
-        ScrollTrigger.getAll().forEach(st => st.kill());
-      };
     };
 
-    initParallax();
+    initSmoothScroll();
 
     return () => {
-      if (stCleanup) stCleanup();
-      if (lenis) lenis.destroy();
+      if (rafId) cancelAnimationFrame(rafId);
+      if (lenis) {
+        lenis.destroy();
+        delete (window as any).__lenis;
+      }
     };
   }, []);
 

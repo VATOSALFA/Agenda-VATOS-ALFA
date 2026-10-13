@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { UploadCloud, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { UploadCloud, FileSpreadsheet, Loader2, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface UploadProductsModalProps {
@@ -159,68 +159,102 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[85dvh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Cargar Productos desde Excel o CSV</DialogTitle>
-          <DialogDescription>
-            Sube un archivo .xlsx, .xls o .csv para importar tus productos de forma masiva.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent hideCloseButton={true} className="max-w-4xl max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+        {/* Official Vatos Alfa Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 text-white border-b border-blue-900/40 flex-shrink-0">
+          <div className="header-light-beam" />
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <UploadCloud className="h-5 w-5 text-slate-300" />
+              <div>
+                <DialogTitle className="font-bold text-base sm:text-lg text-white leading-tight">
+                  Importar Productos
+                </DialogTitle>
+                <p className="text-xs text-slate-300">
+                  Sube un archivo .xlsx, .xls o .csv para importar tus productos de forma masiva
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleClose}
+              className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
 
         {parsedData.length === 0 ? (
-          <div className="py-8 space-y-6">
-            <div {...getRootProps()} className={`flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors ${isDragActive ? 'border-primary bg-primary/5' : ''}`}>
+          <div className="p-4 sm:p-6 space-y-4 flex-grow overflow-y-auto">
+            <div 
+              {...getRootProps()} 
+              className={`flex flex-col items-center justify-center p-8 sm:p-12 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
+                isDragActive 
+                  ? 'border-blue-500 bg-blue-500/10' 
+                  : 'border-border/60 hover:border-blue-500/60 bg-muted/10 hover:bg-muted/20'
+              }`}
+            >
               <input {...getInputProps()} />
-              <UploadCloud className="h-12 w-12 text-muted-foreground" />
-              <p className="mt-4 text-center text-muted-foreground">
-                Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo.
+              <UploadCloud className="h-12 w-12 text-slate-400 mb-2" />
+              <p className="text-sm font-semibold text-foreground text-center">
+                Arrastra y suelta tu archivo aquí, o haz clic para seleccionarlo
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 text-center">
+                Formatos compatibles: .xlsx, .xls, .csv
               </p>
             </div>
-            <Alert>
-              <FileSpreadsheet className="h-4 w-4" />
-              <AlertTitle>Formato del archivo</AlertTitle>
-              <AlertDescription>
-                Asegúrate de que tu archivo tenga todas las columnas del formulario de "Nuevo Producto".
-                <a href="/plantilla-productos.csv" download="plantilla-productos.csv" className="font-bold text-primary hover:underline ml-2">Descargar archivo de ejemplo</a>.
+            <Alert className="rounded-xl border-border/60 bg-muted/20">
+              <FileSpreadsheet className="h-4 w-4 text-slate-400" />
+              <AlertTitle className="text-xs font-semibold">Formato del archivo</AlertTitle>
+              <AlertDescription className="text-xs text-muted-foreground">
+                Asegúrate de que tu archivo contenga las columnas requeridas (Nombre, Marca, Categoría, Formato/Presentación).
+                <a href="/plantilla-productos.csv" download="plantilla-productos.csv" className="font-bold text-blue-400 hover:underline ml-1">
+                  Descargar archivo de ejemplo
+                </a>
               </AlertDescription>
             </Alert>
           </div>
         ) : (
-          <div className="flex-grow flex flex-col overflow-hidden">
-            <p className="text-sm font-semibold mb-2">Vista previa de la importación ({parsedData.length} productos)</p>
-            <ScrollArea className="border rounded-md flex-grow">
+          <div className="flex-grow flex flex-col overflow-hidden p-4 sm:p-6">
+            <p className="text-xs font-semibold mb-2">Vista previa de la importación ({parsedData.length} productos detectados)</p>
+            <ScrollArea className="border border-border/60 rounded-xl flex-grow overflow-hidden">
               <Table>
-                <TableHeader className="sticky top-0 bg-muted">
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Marca</TableHead>
-                    <TableHead>Categoría</TableHead>
-                    <TableHead>Precio</TableHead>
-                    <TableHead>Stock</TableHead>
+                <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+                  <TableRow className="border-b border-border/60">
+                    <TableHead className="text-xs py-2 px-3">Nombre</TableHead>
+                    <TableHead className="text-xs py-2 px-3">Marca</TableHead>
+                    <TableHead className="text-xs py-2 px-3">Categoría</TableHead>
+                    <TableHead className="text-xs py-2 px-3 text-right">Precio</TableHead>
+                    <TableHead className="text-xs py-2 px-3 text-center">Stock</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {parsedData.slice(0, 100).map((product, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{product.nombre}</TableCell>
-                      <TableCell>{product.brand_id}</TableCell>
-                      <TableCell>{product.category_id}</TableCell>
-                      <TableCell>${(product.public_price || 0).toLocaleString('es-CL')}</TableCell>
-                      <TableCell>{product.stock}</TableCell>
+                    <TableRow key={index} className="border-b border-border/40 hover:bg-muted/20">
+                      <TableCell className="text-xs py-2 px-3 font-medium">{product.nombre}</TableCell>
+                      <TableCell className="text-xs py-2 px-3 text-muted-foreground">{product.brand_id}</TableCell>
+                      <TableCell className="text-xs py-2 px-3 text-muted-foreground">{product.category_id}</TableCell>
+                      <TableCell className="text-xs py-2 px-3 text-right font-semibold">${(product.public_price || 0).toLocaleString('es-MX')}</TableCell>
+                      <TableCell className="text-xs py-2 px-3 text-center">{product.stock}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              {parsedData.length > 100 && <p className="text-center text-sm text-muted-foreground p-4">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
+              {parsedData.length > 100 && <p className="text-center text-xs text-muted-foreground p-3">Mostrando los primeros 100 de {parsedData.length} registros.</p>}
             </ScrollArea>
           </div>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isProcessing}>Cancelar</Button>
-          <Button onClick={handleUpload} disabled={parsedData.length === 0 || isProcessing}>
+        <DialogFooter className="p-4 sm:p-5 border-t border-border/60 flex items-center justify-end gap-3 bg-muted/10 flex-shrink-0">
+          <Button variant="outline" className="rounded-xl border-border/60 hover:bg-white/5 font-medium" onClick={handleClose} disabled={isProcessing}>
+            Cancelar
+          </Button>
+          <Button variant="alfa" className="rounded-xl font-bold shadow-md px-5" onClick={handleUpload} disabled={parsedData.length === 0 || isProcessing}>
             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Importar {parsedData.length > 0 ? parsedData.length : ''} Productos
+            Importar {parsedData.length > 0 ? `${parsedData.length} ` : ''}Productos
           </Button>
         </DialogFooter>
       </DialogContent>

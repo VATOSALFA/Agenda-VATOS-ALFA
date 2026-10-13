@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { addDoc, collection } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CalendarCheck, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -112,15 +112,40 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Habilitar Horario Especial</DialogTitle>
-                    <DialogDescription>
-                        Definir un horario disponible para {initialData?.barberName || 'el profesional'} en este día.
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent 
+                hideCloseButton={true}
+                className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col"
+            >
+                {/* CABECERA OFICIAL VATOS ALFA */}
+                <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+                    {/* Haz de luz animado en diagonal */}
+                    <div className="header-light-beam" aria-hidden="true" />
 
-                <div className="grid gap-4 py-4">
+                    <div className="relative z-10 flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                            <CalendarCheck className="h-5 w-5 text-slate-300 shrink-0" />
+                            <div>
+                                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                    Habilitar Horario Especial
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                    Definir horario disponible para {initialData?.barberName || 'el profesional'}.
+                                </DialogDescription>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="p-1 text-slate-300 hover:text-white transition-colors"
+                            aria-label="Cerrar modal"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-5 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Hora Inicio</Label>
@@ -159,11 +184,11 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+                <DialogFooter className="px-5 pb-5 pt-0">
+                    <Button variant="outline" className="rounded-xl" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
                         Cancelar
                     </Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
+                    <Button onClick={handleSubmit} disabled={isSubmitting} className="btn-vatos-alfa rounded-xl font-bold">
                         {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Habilitar'}
                     </Button>
                 </DialogFooter>

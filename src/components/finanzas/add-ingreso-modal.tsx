@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Tag, Store } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Tag, Store, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
@@ -199,17 +199,34 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 sm:max-w-lg" hideCloseButton={true}>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col overflow-hidden">
-            <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Editar Ingreso Manual' : 'Registrar Ingreso de Caja'}</DialogTitle>
-              <DialogDescription>
-                Añade dinero a la caja chica (fondo inicial, cambios, etc).
-              </DialogDescription>
-            </DialogHeader>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col overflow-hidden max-h-[85vh]">
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-slate-800 text-white">
+              <div className="header-light-beam" />
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <DollarSign className="h-5 w-5 text-[#C5A880]" />
+                  <div>
+                    <DialogTitle className="text-base font-semibold text-white tracking-tight">
+                      {isEditMode ? 'Editar Ingreso Manual' : 'Registrar Ingreso de Caja'}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-300">
+                      Añade dinero a la caja chica (fondo inicial, reposición, etc.)
+                    </DialogDescription>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenChange(false)}
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
 
-            <div className="space-y-5 px-1 py-6 flex-1 overflow-y-auto min-h-0">
+            <div className="space-y-4 px-5 py-5 flex-1 overflow-y-auto min-h-0">
 
               {/* Fila 1: Monto y Fecha */}
               <div className="grid grid-cols-2 gap-4">
@@ -239,17 +256,17 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
                       <Popover modal={true} open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
-                            <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                              {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona fecha</span>}
-                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            <Button variant={"outline"} className={cn("w-full h-10 pl-3 text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 shadow-xs", !field.value && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                              {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : format(new Date(), "EEEE dd 'de' MMMM", { locale: es })}
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
+                        <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start">
                           <Calendar
                             locale={es}
                             mode="single"
-                            selected={field.value}
+                            selected={field.value || new Date()}
                             onSelect={(date) => {
                               if (date) {
                                 const current = field.value || new Date();
@@ -349,13 +366,13 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
               />
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting}>
+            <div className="p-4 bg-muted/20 border-t border-border/40 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl">Cancelar</Button>
+              <Button type="submit" variant="alfa" disabled={isSubmitting} className="px-5 font-semibold">
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar Ingreso
+                {isEditMode ? 'Actualizar Ingreso' : 'Guardar Ingreso'}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </Form>
       </DialogContent>

@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Edit, Save, AlertTriangle } from 'lucide-react';
+import { Loader2, Edit, Save, AlertTriangle, LogOut, X, ShieldAlert, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { cn, formatMoney, roundMoney } from '@/lib/utils';
 import { Label } from '../ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '../ui/table';
@@ -69,6 +69,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
 
   const [fondoBase, setFondoBase] = useState(1000);
   const [isSavingFondo, setIsSavingFondo] = useState(false);
+  const [isCalcOpen, setIsCalcOpen] = useState(true);
 
   // Load base fund from configurations when modal opens
   useEffect(() => {
@@ -220,179 +221,351 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-5xl max-h-[90dvh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>Realizar Corte de Caja</DialogTitle>
-            <DialogDescription>
-              {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex-grow overflow-y-auto">
+        <DialogContent hideCloseButton={true} className="sm:max-w-5xl max-h-[92dvh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+          {/* Header Oficial Vatos Alfa */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 text-white border-b border-blue-900/40 flex-shrink-0">
+            <div className="header-light-beam" />
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <LogOut className="h-5 w-5 text-slate-300" />
+                <div>
+                  <DialogTitle className="font-bold text-base sm:text-lg text-white leading-tight">
+                    Realizar Corte de Caja
+                  </DialogTitle>
+                  <p className="text-xs text-slate-300">
+                    {format(new Date(), "HH:mm 'hs.' dd 'de' MMMM 'de' yyyy", { locale: es })}
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex-grow overflow-y-auto px-4 sm:px-6">
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 md:h-full flex flex-col">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:flex-grow">
-                  {/* Left Column */}
-                  <div className="space-y-4 flex flex-col md:h-full">
-                    <h3 className="font-semibold flex-shrink-0">Calculadora de Efectivo</h3>
-                    <div className="h-[300px] md:h-auto md:flex-grow border rounded-lg overflow-hidden flex flex-col">
-                      <ScrollArea className="h-full">
-                        <div className="p-4 space-y-3">
-                          {denominations.map(d => (
-                            <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
-                              <Label htmlFor={`den-${d.value}`} className="text-right">{d.label}</Label>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="py-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Left Column: Calculadora de Efectivo */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-sm sm:text-base text-foreground">Calculadora de Efectivo</h3>
+                        <span className="text-xs font-bold text-foreground bg-muted/40 px-2 py-0.5 rounded-lg border border-border/60">
+                          ${formatMoney(totalContado)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDenominationCounts(initialDenominations)}
+                          className="text-xs text-slate-400 hover:text-white transition-colors p-1 flex items-center gap-1"
+                          title="Limpiar conteo"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline text-[11px]">Limpiar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsCalcOpen(!isCalcOpen)}
+                          className="md:hidden text-xs text-blue-400 hover:text-blue-300 font-medium p-1 flex items-center gap-1"
+                        >
+                          <span>{isCalcOpen ? 'Ocultar' : 'Ver desglose'}</span>
+                          {isCalcOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isCalcOpen && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {denominations.map(d => {
+                          const count = denominationCounts[d.value] || '';
+                          const countNum = Number(count) || 0;
+                          const subtotal = d.value * countNum;
+                          return (
+                            <div
+                              key={d.value}
+                              className={cn(
+                                "flex items-center justify-between gap-1.5 p-2 rounded-xl border transition-all",
+                                countNum > 0
+                                  ? "border-blue-500/50 bg-blue-500/5 shadow-sm"
+                                  : "border-border/50 bg-card/40"
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <Label htmlFor={`den-${d.value}`} className="text-xs font-bold text-foreground cursor-pointer block leading-tight">
+                                  {d.label}
+                                </Label>
+                                <span className="text-[10px] text-muted-foreground block truncate">
+                                  = ${formatMoney(subtotal)}
+                                </span>
+                              </div>
                               <Input
                                 id={`den-${d.value}`}
                                 type="number"
+                                min="0"
                                 placeholder="0"
-                                value={denominationCounts[d.value] || ''}
+                                value={count}
                                 onChange={(e) => handleDenominationChange(d.value, e.target.value)}
-                                className="h-8 text-center"
+                                className="h-8 w-14 text-center font-bold text-xs px-1 rounded-lg border-border/60 bg-background"
                               />
-                              <p className="font-medium text-sm text-center">= ${formatMoney(d.value * (denominationCounts[d.value] || 0))}</p>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </div>
+                          );
+                        })}
+                        {/* 12th card: Limpiar conteo */}
+                        <button
+                          type="button"
+                          onClick={() => setDenominationCounts(initialDenominations)}
+                          className="flex items-center justify-center gap-1 p-2 rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground hover:text-white hover:bg-muted/20 transition-colors text-xs font-medium cursor-pointer"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span>Limpiar todo</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Right Column */}
-                  <div className="space-y-4 flex flex-col">
-                    <p className="text-sm text-right text-muted-foreground">{user?.displayName}</p>
-                    <div className="space-y-2">
-                      <FormLabel className="flex justify-between items-center">
-                        <span>Fondo base en caja</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={isSavingFondo}
-                          onClick={() => {
-                            if (isEditingFondo) {
-                              handleSaveFondoBase();
-                            } else {
-                              handleAuthRequest();
-                            }
-                          }}
-                        >
-                          {isSavingFondo ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : isEditingFondo ? (
-                            <Save className="h-4 w-4 mr-2" />
-                          ) : (
-                            <Edit className="h-4 w-4 mr-2" />
-                          )}
-                          {isSavingFondo ? 'Guardando...' : isEditingFondo ? 'Guardar' : 'Editar'}
-                        </Button>
-                      </FormLabel>
-                      {isEditingFondo ? (
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                          <Input type="number" value={fondoBase} onChange={(e) => setFondoBase(Number(e.target.value))} className="pl-6" />
+                  {/* Right Column: Resumen y Responsables */}
+                  <div className="space-y-3.5 flex flex-col justify-between">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-border/40 pb-2">
+                        <span>Responsable en turno:</span>
+                        <span className="font-semibold text-foreground">{user?.displayName || 'Usuario actual'}</span>
+                      </div>
+
+                      {/* 2x2 Metric Cards */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* 1. Efectivo Sistema */}
+                        <div className="p-2.5 rounded-xl border border-border/60 bg-card/60">
+                          <span className="text-[10px] text-muted-foreground uppercase font-semibold block leading-tight">Efectivo Sistema</span>
+                          <span className="text-sm sm:text-base font-bold text-foreground block mt-0.5">
+                            ${formatMoney(initialCash)}
+                          </span>
                         </div>
-                      ) : (
-                        <p className="font-semibold text-lg">$ {formatMoney(fondoBase)}</p>
-                      )}
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="monto_entregado"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Total contado</FormLabel>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                            <FormControl><Input type="number" {...field} readOnly className="pl-6 font-bold" /></FormControl>
+
+                        {/* 2. Total Contado */}
+                        <div className="p-2.5 rounded-xl border border-border/60 bg-card/60">
+                          <span className="text-[10px] text-muted-foreground uppercase font-semibold block leading-tight">Total Contado</span>
+                          <span className="text-sm sm:text-base font-bold text-foreground block mt-0.5">
+                            ${formatMoney(totalContado)}
+                          </span>
+                        </div>
+
+                        {/* 3. Fondo Base (con Editar/Guardar) */}
+                        <div className="p-2.5 rounded-xl border border-border/60 bg-card/60">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold leading-tight">Fondo Base</span>
+                            <button
+                              type="button"
+                              disabled={isSavingFondo}
+                              onClick={() => {
+                                if (isEditingFondo) {
+                                  handleSaveFondoBase();
+                                } else {
+                                  handleAuthRequest();
+                                }
+                              }}
+                              className="text-[10px] text-blue-400 hover:text-blue-300 font-medium cursor-pointer"
+                            >
+                              {isSavingFondo ? '...' : isEditingFondo ? 'Guardar' : 'Editar'}
+                            </button>
                           </div>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="space-y-2">
-                      <Label>Efectivo en caja</Label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                        <Input value={formatMoney(initialCash)} readOnly className="pl-6 bg-muted/20" />
+                          {isEditingFondo ? (
+                            <div className="relative mt-1">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                              <Input
+                                type="number"
+                                value={fondoBase}
+                                onChange={(e) => setFondoBase(Number(e.target.value))}
+                                className="h-7 pl-5 text-xs font-bold rounded-lg"
+                                autoFocus
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-sm sm:text-base font-bold text-foreground block mt-0.5">
+                              ${formatMoney(fondoBase)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 4. Diferencia */}
+                        <div className={cn(
+                          "p-2.5 rounded-xl border",
+                          diferencia === 0
+                            ? "border-border/60 bg-card/60"
+                            : diferencia > 0
+                              ? "border-blue-500/40 bg-blue-500/5"
+                              : "border-red-500/40 bg-red-500/5"
+                        )}>
+                          <span className="text-[10px] text-muted-foreground uppercase font-semibold block leading-tight">Diferencia</span>
+                          <span className={cn(
+                            "text-sm sm:text-base font-bold block mt-0.5",
+                            diferencia === 0
+                              ? "text-foreground"
+                              : diferencia > 0
+                                ? "text-blue-400"
+                                : "text-red-400"
+                          )}>
+                            {diferencia === 0
+                              ? '$0.00'
+                              : diferencia > 0
+                                ? `+$${formatMoney(diferencia)}`
+                                : `-$${formatMoney(Math.abs(diferencia))}`}
+                          </span>
+                          {diferencia !== 0 && (
+                            <span className="text-[9px] text-muted-foreground block">
+                              {diferencia > 0 ? 'Sobrante en caja' : 'Faltante en caja'}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name="persona_recibe"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nombre de quien recibe</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
+
+                      {/* Total a Entregar Banner */}
+                      <div className="p-3 sm:p-4 rounded-xl border border-blue-900/50 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-center shadow-lg relative overflow-hidden">
+                        <div className="header-light-beam" />
+                        <div className="relative z-10">
+                          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400">
+                            Total a Entregar (Contado - Fondo)
+                          </p>
+                          <p className="text-2xl sm:text-3xl font-black text-white mt-0.5 tracking-tight">
+                            ${formatMoney(totalContado - fondoBase)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Inputs: Persona recibe & Comentarios */}
+                      <FormField
+                        control={form.control}
+                        name="persona_recibe"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs font-semibold">Nombre de quien recibe</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={usersLoading}>
+                              <FormControl>
+                                <SelectTrigger className="h-9 rounded-xl border-border/60">
+                                  <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                {filteredUsers.map((u) => (
+                                  <SelectItem key={u.id} value={u.name}>
+                                    {u.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="comentarios"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1">
+                            <FormLabel className="text-xs font-semibold">Comentarios</FormLabel>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={usersLoading ? 'Cargando...' : 'Selecciona un usuario'} />
-                              </SelectTrigger>
+                              <Input {...field} placeholder="(Opcional)" className="h-9 rounded-xl border-border/60 text-xs" />
                             </FormControl>
-                            <SelectContent>
-                              {filteredUsers.map((u) => (
-                                <SelectItem key={u.id} value={u.name}>
-                                  {u.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="comentarios"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Comentarios</FormLabel>
-                          <FormControl><Input {...field} placeholder="(Opcional)" /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <div className="space-y-2 pt-4 border-t flex-shrink-0">
-                      <div className="p-4 bg-primary rounded-lg text-primary-foreground text-center shadow-md">
-                        <p className="text-sm font-medium opacity-90 uppercase tracking-widest">Total entregado</p>
-                        <p className="text-4xl font-extrabold mt-1">
-                          ${formatMoney(totalContado - fondoBase)}
-                        </p>
-                      </div>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                     </div>
                   </div>
                 </div>
-                <DialogFooter className="pt-8 border-t flex-shrink-0">
-                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                  <Button type="submit" disabled={isSubmitting}>
+
+                {/* Footer Buttons */}
+                <div className="pt-3 pb-2 border-t border-border/60 bg-muted/10 flex justify-end gap-2.5 flex-shrink-0 -mx-4 sm:-mx-6 px-4 sm:px-6">
+                  <Button type="button" variant="outline" className="rounded-xl border-border/60 h-9 sm:h-10 text-xs sm:text-sm font-medium" onClick={() => onOpenChange(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" variant="alfa" className="h-9 sm:h-10 rounded-xl px-5 text-xs sm:text-sm font-bold shadow-md" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Guardar Corte
                   </Button>
-                </DialogFooter>
+                </div>
               </form>
             </Form>
           </div>
         </DialogContent>
       </Dialog>
-      <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-6 w-6 text-yellow-500" />
-              Requiere Autorización
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Para editar el fondo de caja, es necesario un código con permisos de caja.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <Label htmlFor="auth-code-fondo">Código de Autorización</Label>
-            <Input id="auth-code-fondo" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+      <Dialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
+        <DialogContent hideCloseButton={true} className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background max-w-md">
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 text-white border-b border-blue-900/40">
+            <div className="header-light-beam" />
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ShieldAlert className="h-5 w-5 text-slate-300" />
+                <div>
+                  <DialogTitle className="font-bold text-base text-white leading-tight">
+                    Requiere Autorización
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    Permiso para editar fondo de caja
+                  </DialogDescription>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => { setAuthCode(''); setIsAuthModalOpen(false); }}
+                className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleAuthCodeSubmit}>Aceptar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <div className="p-4 sm:p-5 space-y-4">
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Para editar el fondo de caja, es necesario un código con permisos de caja.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="auth-code-fondo" className="text-xs font-semibold">Código de Autorización</Label>
+              <Input
+                id="auth-code-fondo"
+                type="password"
+                placeholder="••••••••"
+                value={authCode}
+                onChange={e => setAuthCode(e.target.value)}
+                className="rounded-xl h-10 border-border/60 text-center tracking-widest font-mono text-sm"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleAuthCodeSubmit();
+                }}
+              />
+            </div>
+          </div>
+          <div className="p-3 sm:p-4 border-t border-border/60 bg-muted/10 flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-xl border-border/60 hover:bg-white/5 font-medium text-xs h-9"
+              onClick={() => { setAuthCode(''); setIsAuthModalOpen(false); }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="alfa"
+              size="sm"
+              className="h-9 rounded-xl px-4 text-xs font-bold text-white shadow-md"
+              onClick={handleAuthCodeSubmit}
+            >
+              Aceptar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

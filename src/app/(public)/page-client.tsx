@@ -1,28 +1,63 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
+import { getBranchOperationalStatus } from '@/lib/branch-status';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2 } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { CustomLoader } from '@/components/ui/custom-loader';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { db } from '@/lib/firebase-client';
+import { doc, getDoc } from 'firebase/firestore';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { ParallaxHero } from '@/components/ui/parallax-hero';
 import { toast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import { AlfaServicesSection } from '@/components/ui/alfa-services-section';
+import { AlfaHeroBackground } from '@/components/ui/alfa-hero-background';
+import { ScrollProgressBar } from '@/components/ui/scroll-progress-bar';
+import { ScrollReveal } from '@/components/ui/scroll-reveal';
 import { getServiceLocalImage } from '@/lib/service-images';
+import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
+import { AlfaFloatingBottomBar } from '@/components/ui/alfa-floating-bottom-bar';
 
-const BackgroundAurora = dynamic(() => import('@/components/ui/background-aurora'), { ssr: false });
+const Team360Gallery = dynamic(() => import('@/components/ui/team-360-gallery').then((m) => m.Team360Gallery), {
+    ssr: false,
+    loading: () => <div className="min-h-[480px] w-full flex items-center justify-center" />,
+});
+const Alfa3DCarousel = dynamic(() => import('@/components/ui/alfa-3d-carousel').then((m) => m.Alfa3DCarousel), {
+    ssr: false,
+    loading: () => <div className="min-h-[420px] w-full" />,
+});
+const AlfaProductsSection = dynamic(() => import('@/components/ui/alfa-products-section').then((m) => m.AlfaProductsSection), {
+    ssr: false,
+    loading: () => <div className="min-h-[350px] w-full" />,
+});
+const AlfaBenefitsSection = dynamic(() => import('@/components/ui/alfa-benefits-section').then((m) => m.AlfaBenefitsSection), {
+    ssr: false,
+    loading: () => <div className="min-h-[400px] w-full" />,
+});
+const JanetChatModal = dynamic(() => import('@/components/ui/janet-chat-modal').then((m) => m.JanetChatModal), {
+    ssr: false,
+});
+const AlfaGoldSmokeBurst = dynamic(() => import('@/components/ui/alfa-gold-smoke-burst').then((m) => m.AlfaGoldSmokeBurst), {
+    ssr: false,
+});
+const VerticalSectionNavigator = dynamic(() => import('@/components/ui/vertical-section-navigator').then((m) => m.VerticalSectionNavigator), {
+    ssr: false,
+});
 const FloatingMenu = dynamic(() => import('@/components/ui/floating-menu'), { ssr: false });
+const AppDownloadModal = dynamic(() => import('@/components/ui/app-download-modal').then((m) => m.AppDownloadModal), {
+    ssr: false,
+});
 
 
 // Hook moved inside component
@@ -51,47 +86,7 @@ const getPackageDescription = (name: string) => {
     return null;
 };
 
-const jsonLd = {
-  "@context": "https://schema.org",
-  "@type": "HairSalon",
-  "name": "VATOS ALFA Barber Shop",
-  "image": "https://www.vatosalfa.com/logo.png", 
-  "url": "https://www.vatosalfa.com",
-  "telephone": "+524428727279",
-  "priceRange": "$$",
-  "address": {
-    "@type": "PostalAddress",
-    "streetAddress": "Av. Sombrerete 1001 Col. Cipreses",
-    "addressLocality": "Santiago de Querétaro",
-    "addressRegion": "QRO",
-    "postalCode": "76125",
-    "addressCountry": "MX"
-  },
-  "geo": {
-    "@type": "GeoCoordinates",
-    "latitude": 20.6277,
-    "longitude": -100.4184
-  },
-  "openingHoursSpecification": [
-    {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday"
-      ],
-      "opens": "10:00",
-      "closes": "20:00"
-    }
-  ],
-  "sameAs": [
-    "https://www.facebook.com/vatosalfa",
-    "https://www.instagram.com/vatosalfa"
-  ]
-};
+
 
 // Lazy video component using IntersectionObserver
 function LazyVideo({ src, className, cover = true, muted = true, loop = true, playsInline = true, controls = false, onError }: { src: string; className?: string; cover?: boolean; muted?: boolean; loop?: boolean; playsInline?: boolean; controls?: boolean; onError?: () => void }) {
@@ -193,24 +188,6 @@ export default function LandingPageClient() {
     const regularServices = sortedServices.filter((s: any) => !packageCategoryIds.includes(s.category));
     const packageServices = sortedServices.filter((s: any) => packageCategoryIds.includes(s.category));
 
-    // Dynamically build JSON-LD schema with our services catalog
-    const dynamicJsonLd = {
-        ...jsonLd,
-        "hasOfferCatalog": {
-            "@type": "OfferCatalog",
-            "name": "Servicios de Barbería y Cuidado Masculino",
-            "itemListElement": regularServices.map((service: any) => ({
-                "@type": "Offer",
-                "itemOffered": {
-                    "@type": "Service",
-                    "name": service.name,
-                    "description": getPackageDescription(service.name) || `Servicio profesional de ${service.name.toLowerCase()}`
-                },
-                "price": service.price,
-                "priceCurrency": "MXN"
-            }))
-        }
-    };
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -236,6 +213,84 @@ export default function LandingPageClient() {
     const [showTerms, setShowTerms] = useState<any>(null);
     const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
     const [termsModalOpen, setTermsModalOpen] = useState(false);
+    const [isJanetChatOpen, setIsJanetChatOpen] = useState(false);
+    const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
+
+    // Galería de Cortes Reales en vivo (sincronizada en espejo con App Móvil y Sitio Web)
+    const [cortesReales, setCortesReales] = useState<any[]>([]);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchCortesReales() {
+            // 1. Probar primero configuracion/app_movil (autorizado públicamente en reglas de Firestore)
+            try {
+                const appMovilRef = doc(db, 'configuracion', 'app_movil');
+                const appSnap = await getDoc(appMovilRef);
+                if (appSnap.exists() && Array.isArray(appSnap.data().inspiracion_alfa) && appSnap.data().inspiracion_alfa.length > 0) {
+                    const activeItems = appSnap.data().inspiracion_alfa.filter((item: any) => item.activo !== false);
+                    if (activeItems.length > 0 && isMounted) {
+                        setCortesReales(activeItems);
+                        return;
+                    }
+                }
+            } catch (appErr) {
+                console.warn('Cortes reales fallback from app_movil notice:', appErr);
+            }
+
+            // 2. Probar configuracion/inspiracion_alfa
+            try {
+                const docRef = doc(db, 'configuracion', 'inspiracion_alfa');
+                const snap = await getDoc(docRef);
+                if (snap.exists() && Array.isArray(snap.data().items) && snap.data().items.length > 0) {
+                    const activeItems = snap.data().items.filter((item: any) => item.activo !== false);
+                    if (activeItems.length > 0 && isMounted) {
+                        setCortesReales(activeItems);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn('Cortes reales fallback from inspiracion_alfa notice:', err);
+            }
+        }
+        fetchCortesReales();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    // Configuración y Beneficios de Pase Alfa en vivo (sincronizada en espejo con App Móvil y Sitio Web)
+    const [paseAlfaConfig, setPaseAlfaConfig] = useState<any>(null);
+    useEffect(() => {
+        let isMounted = true;
+        async function fetchPaseAlfaConfig() {
+            try {
+                // 1. Probar configuracion/pase_alfa
+                const paRef = doc(db, 'configuracion', 'pase_alfa');
+                const paSnap = await getDoc(paRef);
+                if (paSnap.exists() && isMounted) {
+                    setPaseAlfaConfig(paSnap.data());
+                    return;
+                }
+            } catch (err) {
+                console.warn('Pase Alfa config fetch from configuracion/pase_alfa notice:', err);
+            }
+
+            try {
+                // 2. Probar configuracion/app_movil (campo pase_alfa)
+                const appMovilRef = doc(db, 'configuracion', 'app_movil');
+                const appSnap = await getDoc(appMovilRef);
+                if (appSnap.exists() && appSnap.data().pase_alfa && isMounted) {
+                    setPaseAlfaConfig(appSnap.data().pase_alfa);
+                    return;
+                }
+            } catch (err) {
+                console.warn('Pase Alfa config fallback notice:', err);
+            }
+        }
+        fetchPaseAlfaConfig();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     // Auto-select branch if only one exists or set default
     useEffect(() => {
@@ -247,25 +302,74 @@ export default function LandingPageClient() {
         }
     }, [locales, selectedBranch]);
 
+    const activeLocales = locales?.filter((l: any) => l.status === 'active') || [];
+    const currentBranchObj = activeLocales.find((l: any) => l.id === selectedBranch);
+    const currentBranchName = currentBranchObj
+        ? (currentBranchObj.name?.toLowerCase().includes('sombrerete') || currentBranchObj.name?.includes('Suc1') ? 'Sucursal Sombrerete' : currentBranchObj.name)
+        : 'Sucursal Sombrerete';
+
+    // Reactividad en tiempo real para el horario y estado de apertura de la sucursal
+    const [currentTime, setCurrentTime] = useState<Date>(new Date());
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 30000); // Recalcula cada 30 segundos
+        return () => clearInterval(timer);
+    }, []);
+
+    const defaultBranchFallback = useMemo(() => ({
+        name: 'Sucursal Sombrerete',
+        address: 'Av. Sombrerete 1001, Col. Cipreses, Querétaro',
+        phone: '4428727279',
+        timezone: 'America/Mexico_City',
+        schedule: {
+            lunes: { active: true, open: '10:00', close: '20:00' },
+            martes: { active: true, open: '10:00', close: '20:00' },
+            miercoles: { active: true, open: '10:00', close: '20:00' },
+            jueves: { active: true, open: '10:00', close: '20:00' },
+            viernes: { active: true, open: '10:00', close: '20:00' },
+            sabado: { active: true, open: '10:00', close: '20:00' },
+            domingo: { active: false, open: '10:00', close: '15:00' },
+        }
+    }), []);
+
+    const effectiveBranchObj = currentBranchObj || defaultBranchFallback;
+
+    const branchStatus = useMemo(() => {
+        return getBranchOperationalStatus(effectiveBranchObj, currentTime);
+    }, [effectiveBranchObj, currentTime]);
+
     const isLoading = loadingServices || loadingEmpresa || loadingLocales || loadingSettings || authLoading;
 
     const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};
     const companyName = empresa?.[0]?.name || 'VATOS ALFA Barber Shop';
-    const companySlogan = websiteSettings.slogan || empresa?.[0]?.slogan || 'Estilo y profesionalismo para el hombre moderno.';
-    const heroDescription = websiteSettings.heroDescription || 'Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional.';
-    const companyDescription = empresa?.[0]?.description || 'Plataforma de gestión de citas y barbería VATOS ALFA.';
+    const companySlogan = websiteSettings.slogan || empresa?.[0]?.slogan || 'No es solo un corte. Es tu mejor versión.';
+    const heroDescription = websiteSettings.heroDescription || 'Agenda tu cita en segundos con nuestros Master Barbers. Cortes clásicos, fades de alta precisión y el tradicional ritual de toalla caliente.';
+    const companyDescription = websiteSettings.description || empresa?.[0]?.description || 'En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente. Utilizamos productos de la más alta calidad para garantizar un acabado impecable. Si buscas un cambio de imagen profesional, estás en el lugar correcto.';
     const logoUrl = empresa?.[0]?.logo_url;
     const iconUrl = empresa?.[0]?.icon_url;
 
-    if (isLoading && !empresa) {
-        return (
-            <div className="flex h-screen w-full items-center justify-center bg-background">
-                <CustomLoader size={50} />
-            </div>
-        );
-    }
-
-
+    // Segmenta el slogan para aplicar el acento de degradado azul institucional a la segunda parte
+    const sloganParts = useMemo(() => {
+        const text = (companySlogan || '').trim();
+        if (!text) return { first: 'No es solo un corte.', second: 'Es tu mejor versión.' };
+        if (text.includes('.')) {
+            const dotIndex = text.indexOf('.');
+            return {
+                first: text.slice(0, dotIndex + 1),
+                second: text.slice(dotIndex + 1).trim()
+            };
+        }
+        const words = text.split(' ');
+        if (words.length > 2) {
+            const mid = Math.ceil(words.length / 2);
+            return {
+                first: words.slice(0, mid).join(' '),
+                second: words.slice(mid).join(' ')
+            };
+        }
+        return { first: text, second: '' };
+    }, [companySlogan]);
 
     if (websiteSettings.onlineReservations === false) {
         return (
@@ -368,17 +472,72 @@ export default function LandingPageClient() {
         filteredProfessionals = result;
     }
 
+    const heroRef = useRef<HTMLElement>(null);
+    const { scrollYProgress: heroScroll } = useScroll({
+        target: heroRef,
+        offset: ['start start', 'end start'],
+    });
+
+    // Suavizado cinemático con física de resortes para eliminar brincos y micro-tirones en pantallas táctiles de celulares
+    const smoothHeroScroll = useSpring(heroScroll, {
+        stiffness: 260,
+        damping: 32,
+        mass: 0.15,
+        restDelta: 0.001,
+    });
+
+    // Traslación directa en píxeles acelerada por GPU (evita recálculos de porcentaje y layout thrashing en móvil)
+    const heroContentY = useTransform(smoothHeroScroll, [0, 1], [0, 180]);
+    const heroContentOpacity = useTransform(smoothHeroScroll, [0, 0.60], [1, 0]);
+    const heroContentScale = useTransform(smoothHeroScroll, [0, 0.75], [1, 0.90]);
+
+    const scrollToSection = (id: string) => {
+        const el = document.getElementById(id);
+        if (el) {
+            const offset = 75;
+            const bodyRect = document.body.getBoundingClientRect().top;
+            const elementRect = el.getBoundingClientRect().top;
+            const elementPosition = elementRect - bodyRect;
+            const offsetPosition = elementPosition - offset;
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    // Manejo inteligente de Descarga de App Móvil (tienda directa si está en celular y configurado, o modal)
+    const effectivePlayStoreUrl = websiteSettings?.playStoreUrl || paseAlfaConfig?.play_store_url || '';
+    const effectiveAppStoreUrl = websiteSettings?.appStoreUrl || paseAlfaConfig?.app_store_url || '';
+
+    const handleAppDownloadClick = () => {
+        if (typeof window === 'undefined') return;
+        const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+        const isAndroid = /android/i.test(userAgent);
+        const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !(window as any).MSStream;
+
+        // Si es dispositivo móvil y tiene configurada la URL de la tienda correspondiente, abrir directamente
+        if (isAndroid && effectivePlayStoreUrl) {
+            window.open(effectivePlayStoreUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        if (isIOS && effectiveAppStoreUrl) {
+            window.open(effectiveAppStoreUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        // En caso contrario (desktop o aún sin links asignados), abrir el modal oficial de descarga
+        setIsAppDownloadOpen(true);
+    };
+
     return (
         <ParallaxHero>
+        <ScrollProgressBar />
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
-            {/* Structured Data (JSON-LD) for Local SEO & AEO */}
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{ __html: JSON.stringify(dynamicJsonLd) }}
-            />
+
             {/* SEO & Bot Purpose Verification */}
             <div className="sr-only">
-                <h1>VATOS ALFA Barber Shop - Plataforma de Reservas</h1>
+                <h2>VATOS ALFA Barber Shop - Plataforma de Reservas</h2>
                 <p>Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.</p>
                 <nav>
                     <Link href="/blog" prefetch={false}>Blog</Link>
@@ -387,7 +546,7 @@ export default function LandingPageClient() {
                 </nav>
             </div>
             {/* Header */}
-            <header className="sticky top-0 z-50 w-full border-b bg-background/95 md:backdrop-blur md:supports-[backdrop-filter]:bg-background/60">
+            <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-muted/90 md:backdrop-blur md:supports-[backdrop-filter]:bg-muted/80">
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
                         <Link href="/" prefetch={false} className="flex items-center gap-2">
@@ -397,38 +556,82 @@ export default function LandingPageClient() {
                                 width={36}
                                 height={36}
                                 priority
-                                className="h-9 w-9 rounded-full object-cover border border-slate-200 aspect-square" 
+                                className="h-9 w-9 rounded-full object-cover border border-slate-300 aspect-square" 
                             />
                             <span className="hidden sm:inline-block">{companyName}</span>
                         </Link>
                     </div>
 
-                    <div className="flex gap-2 items-center">
-                        {/* Branch Selector */}
-                        {locales && locales.length > 1 && (
-                            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Seleccionar Sucursal" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {locales.filter((l: any) => l.status === 'active').map((local: any) => (
-                                        <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
-                        {locales && locales.length === 1 && (
-                            <div className="flex items-center gap-1 text-sm text-muted-foreground mr-2">
-                                <MapPin className="h-4 w-4" />
-                                {locales[0].name === 'VATOS ALFA Barber Shop Suc1' || locales[0].name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : locales[0].name}
-                            </div>
+                    <div className="flex gap-2 sm:gap-3 items-center">
+                        {/* 0. Botón Descargar App Oficial */}
+                        {websiteSettings.showAppDownload !== false && (
+                            <button
+                                type="button"
+                                onClick={handleAppDownloadClick}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors py-1.5 px-2.5 sm:px-3 rounded-xl border border-slate-700/80 hover:border-blue-500/60 bg-slate-900/60 hover:bg-blue-600/10 cursor-pointer shadow-xs shrink-0"
+                                title="Descargar App Móvil"
+                                aria-label="Descargar App Móvil"
+                            >
+                                <Smartphone className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                <span className="hidden sm:inline">Descargar App</span>
+                                <span className="sm:hidden">App</span>
+                            </button>
                         )}
 
-                        <Link href="/blog" prefetch={false} className="text-sm font-medium hover:text-primary transition-colors mr-3 text-muted-foreground hover:text-foreground">
-                            Blog
-                        </Link>
+                        {/* 1. Izquierda: Botón Reservar Cita (Oficial Alfa) */}
                         <Link href="/reservar" prefetch={false}>
-                            <VatosButton variant="default" size="sm">Reservar Cita</VatosButton>
+                            <Button 
+                                variant="alfa" 
+                                size="sm" 
+                                className="h-9 px-3.5 sm:px-4 text-xs font-bold rounded-xl shadow-[0_4px_15px_rgba(32,42,73,0.6)] cursor-pointer shrink-0"
+                            >
+                                Reservar Cita
+                            </Button>
+                        </Link>
+
+                        {/* 2. Medio: Sucursal (Sin contenedor, bare icon y texto limpio) */}
+                        <Select 
+                            value={selectedBranch} 
+                            onValueChange={(val) => {
+                                if (val === 'coming-soon') {
+                                    toast({
+                                        title: "Nueva Sucursal",
+                                        description: "Próximamente anunciaremos nuestra nueva ubicación. Por ahora todas las citas se atienden en Sucursal Sombrerete.",
+                                    });
+                                    return;
+                                }
+                                setSelectedBranch(val);
+                            }}
+                        >
+                            <SelectTrigger className="h-auto p-0 border-0 border-none bg-transparent hover:bg-transparent text-xs font-semibold text-foreground hover:text-blue-600 transition-colors shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-auto gap-1 cursor-pointer">
+                                <div className="flex items-center gap-1.5 truncate">
+                                    <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                                    <SelectValue placeholder="Suc. Sombrerete" />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#0d1424] text-white">
+                                {activeLocales.map((local: any) => {
+                                    const displayName = local.name?.toLowerCase().includes('sombrerete') || local.name?.includes('Suc1')
+                                        ? 'Suc. Sombrerete'
+                                        : local.name;
+                                    return (
+                                        <SelectItem key={local.id} value={local.id} className="text-xs py-2 cursor-pointer focus:bg-blue-600/20 focus:text-white">
+                                            {displayName}
+                                        </SelectItem>
+                                    );
+                                })}
+                                {/* Opción de otra sucursal si solo hay una en BD */}
+                                {activeLocales.length <= 1 && (
+                                    <SelectItem value="coming-soon" className="text-xs py-2 cursor-pointer text-slate-400 focus:bg-blue-600/20 focus:text-slate-300">
+                                        Próximamente
+                                    </SelectItem>
+                                )}
+                            </SelectContent>
+                        </Select>
+
+                        {/* 3. Derecha: Blog */}
+                        <Link href="/blog" prefetch={false} className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground hover:text-foreground">
+                            Blog
                         </Link>
                     </div>
                 </div>
@@ -436,628 +639,638 @@ export default function LandingPageClient() {
 
             {/* Main Content Landmark */}
             <main className="flex-1">
-                {/* Hero with Parallax */}
+                {/* Hero Institucional Vatos Alfa (Concepto 2: Malla Geométrica & Haces Láser - Viewport Completo 100vh) */}
                 <section
-                    className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 text-center px-4 relative overflow-hidden bg-slate-950 min-h-[280px] md:min-h-[400px]"
+                    ref={heroRef}
+                    id="hero"
+                    className="relative flex flex-col items-center justify-between pt-4 pb-6 sm:pb-8 md:pb-10 text-center px-4 overflow-hidden min-h-[calc(100svh-4rem)] sm:min-h-[calc(100vh-4rem)] z-10"
                 >
-                  <div data-parallax-layers className="absolute inset-0">
-                      <div data-parallax-layer="1" className="absolute inset-0">
-                          <BackgroundAurora />
-                      </div>
-                      <div data-parallax-layer="2" className="absolute inset-0 bg-black/40 pointer-events-none"></div>
-                  </div>
+                    <AlfaHeroBackground />
 
-                  {/* SEO & AEO Optimized Heading */}
-                  <h1 className="sr-only">VATOS ALFA: La Mejor Barbería y Cuidado Masculino en Querétaro</h1>
-                  <h2 className="relative text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tighter mb-6 text-white animate-in slide-in-from-bottom-5 duration-700 z-10">
-                      {companySlogan}
-                  </h2>
-                  <p className="relative text-lg md:text-xl text-white/90 max-w-[700px] mb-8 animate-in slide-in-from-bottom-5 duration-1000 delay-200 z-10">
-                      Agenda tu cita en segundos en nuestra sucursal Sombrerete.
-                  </p>
-                  {/* Navigation Buttons moved to Floating Bar */}
-              </section>
-
-            {/* Professional Profile Dialog */}
-            <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
-                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
-                    {/* Image Section - Large and Square-ish */}
-                    <div className="w-full sm:w-1/2 bg-slate-100 flex items-center justify-center p-6 lg:p-10 relative">
-                        <div className="relative w-full aspect-square max-w-[350px] shadow-xl rounded-lg overflow-hidden border-4 border-white transform transition-transform hover:scale-[1.02] duration-500">
-                            {selectedPro?.avatarUrl ? (
-                                <Image src={selectedPro.avatarUrl} alt={selectedPro.publicName || selectedPro.name} fill sizes="(max-width: 768px) 100vw, 350px" className="object-cover" />
-                            ) : (
-                                <div className="h-full w-full bg-muted flex items-center justify-center">
-                                    <User className="h-24 w-24 text-muted-foreground/50" />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Info Section */}
-                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-center text-center sm:text-left overflow-y-auto flex-1 sm:flex-none">
-                        <DialogHeader>
-                            <DialogTitle className="text-3xl lg:text-4xl font-extrabold mb-2 text-primary tracking-tight text-center sm:text-left">{selectedPro?.publicName || selectedPro?.name}</DialogTitle>
-                        </DialogHeader>
-                        <div className="h-1 w-20 bg-primary/20 mx-auto sm:mx-0 mb-6 rounded-full shrink-0"></div>
-
-                        <div className="prose prose-sm text-muted-foreground leading-relaxed text-lg italic mb-6">
-                            "{selectedPro?.biography || "Sin biografía disponible."}"
-                        </div>
-
-                        <div className="mt-auto pt-4">
-                            <VatosButton className="w-full h-12 text-lg" onClick={() => {
-                                setSelectedPro(null);
-                                router.push(`/reservar?professionalId=${selectedPro.id}`);
-                            }}>
-                                <Scissors className="mr-2 h-5 w-5" /> Reservar Ahora
-                            </VatosButton>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog >
-
-            {/* Services */}
-
-
-
-            {/* Context Paragraph Section for Local SEO & AEO */}
-            <section className="py-14 md:py-24 bg-slate-50 border-y min-h-[300px] flex flex-col justify-center">
-                <div className="container max-w-4xl mx-auto px-4 text-center">
-                    <h2 className="text-3xl font-extrabold tracking-tight mb-4 text-slate-900 sm:text-4xl">
-                        Especialistas en Cortes y Barbas en Querétaro
-                    </h2>
-                    <p className="text-lg text-muted-foreground leading-relaxed">
-                        En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente. Utilizamos productos de la más alta calidad para garantizar un acabado impecable. Si buscas un cambio de imagen profesional, estás en el lugar correcto.
-                    </p>
-                </div>
-            </section>
-
-            {/* Professionals Section */}
-            {filteredProfessionals && filteredProfessionals.length > 0 && (
-                <section id="profesionales" className="py-16 md:py-24 bg-white">
-                    <div className="container px-4 md:px-6">
-                        {activePromotions.length > 0 && (
-                            <div className="flex justify-center mb-10">
-                                <Link 
-                                    href="#promociones" 
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        document.getElementById('promociones')?.scrollIntoView({ behavior: 'smooth' });
-                                    }}
-                                    className="group relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-slate-950 text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-500/30 overflow-hidden shadow-md"
+                    <motion.div 
+                        style={{ 
+                            y: heroContentY, 
+                            opacity: heroContentOpacity, 
+                            scale: heroContentScale,
+                            transformStyle: 'preserve-3d',
+                            backfaceVisibility: 'hidden',
+                        }}
+                        className="relative z-10 max-w-5xl mx-auto flex flex-col items-center justify-between w-full h-full flex-1 will-change-transform"
+                    >
+                        {/* 0. Enlaces Rápidos a Secciones (Arriba, sin contenedor, sin iconos, tipografía fina) */}
+                        <div className="mb-auto pt-1 w-full flex justify-center animate-in fade-in slide-in-from-top-2 duration-700">
+                            <nav 
+                                aria-label="Navegación rápida de secciones"
+                                className="inline-flex items-center justify-center gap-4 sm:gap-6 md:gap-8 max-w-full overflow-x-auto scrollbar-none py-1 px-3"
+                            >
+                                <button
+                                    onClick={() => scrollToSection('servicios')}
+                                    className="text-[11px] sm:text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 py-0.5"
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
-                                    
-                                    <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
-                                    </span>
-                                    
-                                    <span className="relative z-10 flex items-center gap-2">
-                                        <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
-                                        ¡Tenemos Promociones Activas! Ver ofertas
-                                    </span>
-                                    
-                                    <ArrowRight className="w-4 h-4 text-cyan-400 group-hover:translate-x-1 transition-transform" />
-                                </Link>
-                            </div>
-                        )}
+                                    Servicios
+                                </button>
 
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestro Equipo</h2>
-                            <p className="text-muted-foreground">Expertos listos para atenderte.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 justify-center max-w-6xl mx-auto">
-                            {filteredProfessionals.map((pro: any) => (
-                                <Card key={pro.id} className="overflow-hidden border-none shadow-md hover:shadow-xl transition-all text-center bg-slate-50">
-                                    <div className="relative w-full aspect-square overflow-hidden bg-slate-200 group">
-                                        {pro.avatarUrl ? (
-                                            <Image
-                                                src={pro.avatarUrl}
-                                                alt={pro.publicName || pro.name}
-                                                fill
-                                                quality={75}
-                                                loading="lazy"
-                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 150px, 300px"
-                                            />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
-                                                <User className="h-20 w-20" />
-                                            </div>
-                                        )}
-                                        {/* Overlay with Booking Action */}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                            <VatosButton variant="secondary" className="font-semibold" onClick={() => setSelectedPro(pro)}>
-                                                <Eye className="mr-2 h-4 w-4" /> Ver Perfil
-                                            </VatosButton>
-                                        </div>
-                                    </div>
-
-                                    <CardFooter className="p-4 justify-center">
-                                        <VatosButton className="w-full" onClick={() => router.push(`/reservar?professionalId=${pro.id}`)}>
-                                            Reservar
-                                        </VatosButton>
-                                    </CardFooter>
-                                </Card>
-                            ))}
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            <section id="servicios" className="py-16 md:py-24 bg-muted/30">
-                <div className="container px-4 md:px-6">
-                    <div className="text-center mb-12">
-                        <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestros Servicios</h2>
-                        <p className="text-muted-foreground">Calidad y detalle en cada corte.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-                        {regularServices.map((service: any) => {
-                            const count = getCount(service.id);
-                            const isSelected = count > 0;
-
-                            return (
-                                <Card
-                                    key={service.id}
-                                    className={cn(
-                                        "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
-                                        isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
-                                    )}
-                                    onClick={() => setSelectedService(service)}
+                                <button
+                                    onClick={() => scrollToSection('profesionales')}
+                                    className="text-[11px] sm:text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 py-0.5"
                                 >
-                                    {/* Small Square Image/Icon */}
-                                    <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 aspect-square">
-                                        {getServiceLocalImage(service.name, service.images) ? (
-                                            <Image
-                                                src={getServiceLocalImage(service.name, service.images)!}
-                                                alt={service.name}
-                                                fill
-                                                quality={75}
-                                                loading="lazy"
-                                                className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                sizes="(max-width: 768px) 150px, 300px"
-                                            />
-                                        ) : (
-                                            <div className="h-full w-full flex items-center justify-center text-slate-300">
-                                                <Scissors className="h-8 w-8" />
-                                            </div>
-                                        )}
-                                        {/* Optional "Added" indicator overlay if selected */}
-                                        {isSelected && (
-                                            <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
-                                                <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
-                                                    <Check className="h-4 w-4" />
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                    Staff
+                                </button>
 
-                                    <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
-                                        <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
-                                            {service.name}
-                                        </h3>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
-                                            {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
-                                        </div>
-                                    </div>
+                                <button
+                                    onClick={() => scrollToSection('inspiracion')}
+                                    className="text-[11px] sm:text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 py-0.5"
+                                >
+                                    Inspiración
+                                </button>
 
-                                    {/* Simple Arrow or Action Icon */}
-                                    <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
-                                        <ChevronRight className="h-6 w-6" />
-                                    </div>
-                                </Card>
-                            );
-                        })}
-                        {regularServices.length === 0 && !loadingServices && (
-                            <div className="col-span-full text-center text-muted-foreground p-10 border rounded-lg border-dashed">
-                                No hay servicios disponibles en este momento.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </section >
-
-            {/* Packages Section */}
-            {
-                packageServices.length > 0 && (
-                    <section id="paquetes" className="py-16 md:py-24 bg-white">
-                        <div className="container px-4 md:px-6">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl font-bold tracking-tight mb-2">Paquetes</h2>
-                                <p className="text-muted-foreground">Las mejores combinaciones para ti.</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-                                {packageServices.map((service: any) => {
-                                    const count = getCount(service.id);
-                                    const isSelected = count > 0;
-
-                                    return (
-                                        <Card
-                                            key={service.id}
-                                            className={cn(
-                                                "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-slate-50 overflow-hidden p-2",
-                                                isSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-100"
-                                            )}
-                                            onClick={() => setSelectedService(service)}
-                                        >
-                                            <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-200 flex-shrink-0 border border-slate-200 aspect-square">
-                                                {getServiceLocalImage(service.name, service.images) ? (
-                                                    <Image
-                                                        src={getServiceLocalImage(service.name, service.images)!}
-                                                        alt={service.name}
-                                                        fill
-                                                        quality={75}
-                                                        loading="lazy"
-                                                        className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                        sizes="(max-width: 768px) 150px, 300px"
-                                                    />
-                                                ) : (
-                                                    <div className="h-full w-full flex items-center justify-center text-slate-400">
-                                                        <Scissors className="h-8 w-8" />
-                                                    </div>
-                                                )}
-                                                {isSelected && (
-                                                    <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
-                                                        <div className="bg-primary text-primary-foreground rounded-full p-1 shadow-sm">
-                                                            <Check className="h-4 w-4" />
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
-                                                <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
-                                                    {service.name}
-                                                </h3>
-                                                {getPackageDescription(service.name) && (
-                                                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                                        {getPackageDescription(service.name)}
-                                                    </p>
-                                                )}
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="font-bold text-lg text-slate-900">{formatPrice(service.price)}</span>
-                                                    {service.oldPrice && <span className="text-xs text-muted-foreground line-through">{formatPrice(service.oldPrice)}</span>}
-                                                </div>
-                                            </div>
-
-                                            <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
-                                                <ChevronRight className="h-6 w-6" />
-                                            </div>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </section>
-                )
-            }
-
-            {/* Products Section */}
-            {
-                products && products.length > 0 && (
-                    <section id="productos" className="py-16 md:py-24 bg-slate-50">
-                        <div className="container px-4 md:px-6">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl font-bold tracking-tight mb-2">Productos Destacados</h2>
-                            <p className="text-muted-foreground">Lleva la experiencia de la barbería a tu casa.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-                            {products.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
-                                const pCount = getProductCount(product.id);
-                                const isPSelected = pCount > 0;
-
-                                return (
-                                    <Card
-                                        key={product.id}
-                                        className={cn(
-                                            "group flex flex-row items-center cursor-pointer transition-all duration-200 border-none shadow-sm hover:shadow-md bg-white overflow-hidden p-2",
-                                            isPSelected ? "ring-2 ring-primary bg-primary/5" : "hover:bg-slate-50"
-                                        )}
-                                        onClick={() => setSelectedProduct(product)}
+                                {products && products.length > 0 && (
+                                    <button
+                                        onClick={() => scrollToSection('productos')}
+                                        className="text-[11px] sm:text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 py-0.5"
                                     >
-                                        <div className="relative h-16 w-16 md:h-20 md:w-20 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-100 aspect-square">
-                                            {product.images && product.images.length > 0 ? (
-                                                <Image
-                                                    src={product.images[0]}
-                                                    alt={product.nombre}
-                                                    fill
-                                                    quality={75}
-                                                    loading="lazy"
-                                                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                                                    sizes="(max-width: 768px) 150px, 300px"
-                                                />
-                                            ) : (
-                                                <div className="h-full w-full flex items-center justify-center text-slate-300">
-                                                    <ShoppingBag className="h-8 w-8" />
-                                                </div>
-                                            )}
-
-                                            {/* Quantity Badge if selected */}
-                                            {isPSelected && (
-                                                <div className="absolute inset-0 bg-primary/20 flex items-center justify-center backdrop-blur-[1px]">
-                                                    <div className="bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center shadow-sm text-xs font-bold">
-                                                        {pCount}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex-1 ml-4 flex flex-col justify-center min-w-0">
-                                            <h3 className="font-bold text-base md:text-lg text-foreground group-hover:text-primary transition-colors truncate pr-2">
-                                                {product.nombre}
-                                            </h3>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="font-bold text-lg text-slate-900">{formatPrice(product.public_price)}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="pr-2 md:pr-4 text-muted-foreground/50 group-hover:text-primary transition-colors">
-                                            <ChevronRight className="h-6 w-6" />
-                                        </div>
-                                    </Card>
-                                )
-                            })}
-                        </div>
-                        </div>
-                    </section>
-                )
-            }
-
-            {/* Promotions Section */}
-            {
-                activePromotions && activePromotions.length > 0 && (
-                    <section id="promociones" className="py-16 md:py-24 bg-slate-50 border-t">
-                        <div className="container px-4 md:px-6">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl font-bold tracking-tight mb-2">Nuestras Promociones</h2>
-                                <p className="text-muted-foreground">Aprovecha nuestras ofertas exclusivas.</p>
-                            </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-                                {activePromotions.map((promo: any) => (
-                                    <Card 
-                                        key={promo.id} 
-                                        className="overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 border-none group cursor-pointer"
-                                        onClick={() => setSelectedPromotion(promo)}
-                                    >
-                                        <div className="relative aspect-[4/5] sm:aspect-square w-full bg-slate-200 overflow-hidden">
-                                            {promo.imageUrl ? (
-                                                <PromoMedia
-                                                    url={promo.imageUrl}
-                                                    name={promo.name}
-                                                    className="group-hover:scale-105 transition-transform duration-500"
-                                                />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-muted-foreground bg-slate-100">
-                                                    <ShoppingBag className="h-16 w-16 opacity-20" />
-                                                </div>
-                                            )}
-                                            <div className="absolute top-2 right-2 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-full shadow-sm z-10">
-                                                Oferta
-                                            </div>
-                                        </div>
-                                        <CardContent className="p-6">
-                                            <h3 className="text-xl font-bold mb-2 group-hover:text-primary transition-colors">{promo.name}</h3>
-                                            <div className="flex items-center text-sm text-muted-foreground mb-4">
-                                                <Clock className="w-4 h-4 mr-1" />
-                                                <span>
-                                                    {(() => {
-                                                        const formatDate = (date: any) => {
-                                                            if (!date) return null;
-                                                            if (typeof date === 'string') return parseISO(date);
-                                                            if (date.toDate) return date.toDate();
-                                                            return date;
-                                                        };
-
-                                                        const start = formatDate(promo.startDate);
-                                                        const end = formatDate(promo.endDate);
-
-                                                        if (start && end) {
-                                                            return `Del ${format(start, "d 'de' MMMM", { locale: es })} al ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
-                                                        } else if (end) {
-                                                            return `Válido hasta: ${format(end, "d 'de' MMMM 'de' yyyy", { locale: es })}`;
-                                                        }
-                                                        return 'Tiempo limitado';
-                                                    })()}
-                                                </span>
-                                            </div>
-                                            <div className="text-muted-foreground text-sm h-28 overflow-y-auto mb-4 pr-1 custom-scrollbar whitespace-pre-line">
-                                                {promo.description}
-                                            </div>
-                                            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-4">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedPromotion(promo);
-                                                    }}
-                                                    className="text-xs font-bold text-primary hover:underline transition-colors flex items-center gap-1"
-                                                >
-                                                    {promo.imageUrl && isVideo(promo.imageUrl) ? (
-                                                        <>
-                                                            <Video className="w-3 h-3" /> Ver video
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <ImageIcon className="w-3 h-3" /> Ver imagen
-                                                        </>
-                                                    )}
-                                                </button>
-                                                {promo.termsAndConditions && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            window.open(`/promociones/${promo.id}/terminos`, '_blank');
-                                                        }}
-                                                        className="text-xs font-medium text-muted-foreground hover:text-primary underline transition-colors"
-                                                    >
-                                                        Términos y condiciones
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </CardContent>
-                                        <CardFooter className="p-6 pt-0 z-20 relative">
-                                            <VatosButton className="w-full" onClick={(e) => {
-                                                e.stopPropagation();
-                                                router.push('/reservar');
-                                            }}>
-                                                Reservar Ahora
-                                            </VatosButton>
-                                        </CardFooter>
-                                    </Card>
-                                ))}
-                            </div>
-                        </div>
-                    </section>
-                )
-            }
-
-            {/* Service Details Modal */}
-            <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>
-                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
-                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
-                            {selectedService?.images && selectedService.images.length > 0 ? (
-                                <Image 
-                                    src={selectedService.images[0]} 
-                                    alt={selectedService.name} 
-                                    fill
-                                    className="object-contain p-2" 
-                                    sizes="(max-width: 768px) 150px, 300px"
-                                />
-                            ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
-                                    <Scissors className="h-24 w-24 text-muted-foreground/30" />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto flex-1 sm:flex-none">
-                        <div>
-                            <DialogHeader>
-                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedService?.name}</DialogTitle>
-                            </DialogHeader>
-
-                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
-                                <span className="text-3xl font-bold text-primary">{selectedService ? formatPrice(selectedService.price) : ''}</span>
-                                <div className="flex items-center text-muted-foreground gap-1">
-                                    <Clock className="h-4 w-4" />
-                                    <span className="text-sm font-medium">{selectedService?.duration} min</span>
-                                </div>
-                            </div>
-
-                            {selectedService?.payment_type === 'online-deposit' && (
-                                <div className="mb-6">
-                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
-                                        <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                                        </span>
-                                        {(() => {
-                                            const type = selectedService.payment_amount_type || '%';
-                                            const val = selectedService.payment_amount_value;
-                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
-                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
-                                            return 'Requiere anticipo del 50%';
-                                        })()}
-                                    </span>
-                                </div>
-                            )}
-
-                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
-                                <h4 className="font-semibold text-foreground mb-2">Descripción del servicio</h4>
-                                {selectedService?.description || getPackageDescription(selectedService?.name || '') ? (
-                                    <p className="whitespace-pre-line">{selectedService.description || getPackageDescription(selectedService?.name || '')}</p>
-                                ) : (
-                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                        Tienda
+                                    </button>
                                 )}
+
+                                <button
+                                    onClick={() => scrollToSection('beneficios')}
+                                    className="text-[11px] sm:text-xs font-semibold text-[#C5A880] hover:text-[#f3e3ce] transition-colors cursor-pointer shrink-0 py-0.5"
+                                >
+                                    Pase Alfa
+                                </button>
+
+                                {websiteSettings.showAppDownload !== false && (
+                                    <button
+                                        onClick={handleAppDownloadClick}
+                                        className="text-[11px] sm:text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors cursor-pointer shrink-0 py-0.5 flex items-center gap-1.5"
+                                    >
+                                        <Smartphone className="h-3 w-3 shrink-0" />
+                                        <span>Descargar App</span>
+                                    </button>
+                                )}
+
+                                {locales && locales.length > 0 && (
+                                    <button
+                                        onClick={() => scrollToSection('ubicacion')}
+                                        className="text-[11px] sm:text-xs font-medium text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0 py-0.5"
+                                    >
+                                        Ubicación
+                                    </button>
+                                )}
+                            </nav>
+                        </div>
+
+                        {/* Contenedor Central del Hero (Alineado verticalmente al centro) */}
+                        <div className="my-auto py-6 sm:py-10 max-w-4xl flex flex-col items-center">
+                            {/* 1. Pill Superior en Vivo (Horario y Estado Real de la Sucursal) */}
+                            <div
+                                className={cn(
+                                    "inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-6 backdrop-blur-md transition-all duration-300 animate-in fade-in slide-in-from-top-4 duration-700",
+                                    branchStatus.isOpen
+                                        ? "bg-blue-500/10 border border-blue-500/30 text-blue-400 shadow-[0_0_20px_rgba(59,130,246,0.25)]"
+                                        : "bg-slate-900/80 border border-slate-700/80 text-slate-300 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+                                )}
+                            >
+                                <span className="relative flex h-2 w-2">
+                                    {branchStatus.isOpen ? (
+                                        <>
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                        </>
+                                    ) : (
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-400/90 shadow-[0_0_6px_rgba(248,113,113,0.6)]"></span>
+                                    )}
+                                </span>
+                                <span>{branchStatus.fullBadgeText}</span>
+                            </div>
+
+                            {/* 2. Titular con Acento de Luz (Azul Institucional Vatos Alfa Puro) */}
+                            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white mb-6 leading-[1.1] animate-in slide-in-from-bottom-5 duration-700">
+                                {sloganParts.first}{" "}
+                                {sloganParts.second && (
+                                    <span className="block sm:inline text-transparent bg-clip-text bg-gradient-to-r from-[#dbeafe] via-[#60a5fa] to-[#2563eb] drop-shadow-[0_0_35px_rgba(59,130,246,0.45)]">
+                                        {sloganParts.second}
+                                    </span>
+                                )}
+                            </h2>
+
+                            {/* 3. Subtítulo Persuasivo */}
+                            <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed font-medium animate-in slide-in-from-bottom-5 duration-1000 delay-150">
+                                {heroDescription}
+                            </p>
+                        </div>
+
+                        {/* 4. Chips de Confianza / Prueba Social pegados cerca del borde inferior */}
+                        <div className="mt-auto w-full max-w-3xl flex flex-wrap items-center justify-center gap-3 sm:gap-6 pt-5 border-t border-slate-800/80 text-xs sm:text-sm text-slate-300 animate-in fade-in duration-1000 delay-300">
+                            <div className="flex items-center gap-1.5 font-semibold">
+                                <span className="text-[#C5A880] tracking-widest text-sm">★★★★★</span>
+                                <span className="text-white font-bold">4.9</span>
+                                <span className="text-slate-400 text-xs">(Google Reviews)</span>
+                            </div>
+                            <span className="hidden sm:inline text-slate-700">•</span>
+                            <div className="flex items-center gap-1.5 font-medium text-slate-300">
+                                <Clock className="w-4 h-4 text-slate-400" />
+                                <span>Cero Esperas: Citas Puntuales</span>
+                            </div>
+                            <span className="hidden sm:inline text-slate-700">•</span>
+                            <div className="flex items-center gap-1.5 font-medium text-slate-300">
+                                <Sparkles className="w-4 h-4 text-[#C5A880]" />
+                                <span>10ª Visita Gratis (Pase Alfa)</span>
+                            </div>
+                        </div>
+                    </motion.div>
+                </section>
+
+            {/* Professional Profile Dialog (Estilo App Móvil con Cabecera Oficial, Haz de Luz y Botón Alfa) */}
+            <Dialog open={!!selectedPro} onOpenChange={(open) => !open && setSelectedPro(null)}>
+                <DialogContent
+                    hideCloseButton={true}
+                    className="w-[calc(100%-2.5rem)] sm:w-full max-w-2xl bg-transparent border-none shadow-none p-0 overflow-visible flex flex-col justify-center items-center max-h-[90vh] z-50 gap-0"
+                >
+
+                    {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
+                    <AlfaGoldSmokeBurst key={selectedPro?.id || 'pro-smoke'} />
+
+                    {/* Contenedor Oficial del Modal */}
+                    <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
+                        {/* Cabecera Oficial VATOS ALFA con haz de luz */}
+                        <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 relative overflow-hidden shrink-0">
+                            <div className="header-light-beam" aria-hidden="true" />
+                            <div className="relative z-10 flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2.5">
+                                    <User className="h-5 w-5 text-slate-300 shrink-0" />
+                                    <div>
+                                        <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+                                            Biografía
+                                        </DialogTitle>
+                                        <DialogDescription className="sr-only">
+                                            Biografía de {selectedPro?.publicName || selectedPro?.name}
+                                        </DialogDescription>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedPro(null)}
+                                    className="p-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                    aria-label="Cerrar modal"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
                             </div>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t">
-                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
-                                addToCart(selectedService.id);
-                                setSelectedService(null);
-                            }}>
-                                <Plus className="mr-2 h-5 w-5" /> Agregar y Seguir Explorando
-                            </VatosButton>
-                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedService(null)}>
-                                Volver a Servicios
-                            </VatosButton>
+                        {/* Cuerpo del Modal */}
+                        <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-4 sm:gap-5">
+                            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-center sm:items-start">
+                                {/* Foto del Barbero */}
+                                <div className="relative w-36 h-36 sm:w-52 sm:h-52 rounded-xl overflow-hidden bg-slate-900 border border-border/60 shrink-0 shadow-md flex items-center justify-center group mx-auto sm:mx-0">
+                                    {selectedPro?.avatarUrl ? (
+                                        <Image
+                                            src={selectedPro.avatarUrl}
+                                            alt={`${selectedPro.publicName || selectedPro.name || 'Barbero'} - Barbero Profesional en ${companyName} ${currentBranchName} Querétaro`}
+                                            fill
+                                            sizes="(max-width: 640px) 150px, 220px"
+                                            className="object-cover transition-transform duration-500 group-hover:scale-105"
+                                            unoptimized={true}
+                                        />
+                                    ) : (
+                                        <div className="h-full w-full bg-slate-800 flex items-center justify-center">
+                                            <User className="h-16 w-16 text-slate-500" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Información y Biografía */}
+                                <div className="flex-1 flex flex-col justify-between w-full">
+                                    <div className="space-y-2.5 sm:space-y-3">
+                                        <div className="text-center sm:text-left">
+                                            <h3 className="text-xl sm:text-3xl font-extrabold text-[#111827] tracking-tight">
+                                                {selectedPro?.publicName || selectedPro?.name}
+                                            </h3>
+                                        </div>
+
+                                        {/* Cita / Filosofía de corte */}
+                                        <div className="relative p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-slate-700 italic text-xs sm:text-sm leading-relaxed">
+                                            <span className="text-xl sm:text-2xl font-serif text-slate-400 absolute -top-1 left-2 select-none">“</span>
+                                            <p className="pl-3 sm:pl-3.5">
+                                                {selectedPro?.biography || "Especialista en cortes limpios, fades de alta precisión y perfilado de barba con el tradicional ritual de toalla caliente en VATOS ALFA."}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botón de Acción Principal Oficial */}
+                            <div className="pt-3 sm:pt-4 border-t border-border/60">
+                                <Button
+                                    variant="alfa"
+                                    className="w-full h-11 sm:h-12 rounded-xl text-xs sm:text-base font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                                    onClick={() => {
+                                        const proId = selectedPro.id;
+                                        setSelectedPro(null);
+                                        router.push(`/reservar?professionalId=${proId}`);
+                                    }}
+                                >
+                                    <Calendar className="w-4 h-4 text-slate-300" />
+                                    <span>Agendar Cita con {selectedPro?.publicName ? selectedPro.publicName.split(' ')[0] : (selectedPro?.name ? selectedPro.name.split(' ')[0] : 'Barbero')}</span>
+                                    <ArrowRight className="w-4 h-4 text-slate-300" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
 
-            {/* Product Details Modal */}
-            <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-                <DialogContent className="max-w-3xl border-none shadow-2xl overflow-hidden p-0 bg-white rounded-xl sm:rounded-2xl h-[90vh] sm:h-auto sm:max-h-[600px] flex flex-col sm:flex-row">
-                    <div className="w-full sm:w-1/2 h-56 sm:h-auto bg-slate-50 flex items-center justify-center p-0 relative shrink-0">
-                        <div className="relative w-full h-full bg-slate-100 flex items-center justify-center overflow-hidden">
-                            {selectedProduct?.images && selectedProduct.images.length > 0 ? (
-                                <Image src={selectedProduct.images[0]} alt={selectedProduct.nombre} fill sizes="(max-width: 768px) 150px, 300px" className="object-contain p-4" />
-                            ) : (
-                                <div className="h-full w-full flex items-center justify-center bg-slate-200">
-                                    <ShoppingBag className="h-24 w-24 text-muted-foreground/30" />
+            {/* Services */}
+
+
+
+            {/* Context Paragraph Section for Local SEO & AEO (Discreto y compacto) */}
+            <ScrollReveal distance={20}>
+                <section id="descripcion" className="py-6 sm:py-8 bg-slate-50 border-b border-border/60 flex flex-col justify-center scroll-mt-20">
+                    <div className="container max-w-3xl mx-auto px-4 text-center">
+                        <h1 className="text-sm sm:text-base md:text-lg font-black tracking-wider uppercase text-[#202A49] dark:text-white mb-2">
+                            Especialistas en Cortes y Barbas en Querétaro
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl mx-auto font-medium">
+                            {companyDescription}
+                        </p>
+                    </div>
+                </section>
+            </ScrollReveal>
+
+            {/* Professionals Section */}
+            {filteredProfessionals && filteredProfessionals.length > 0 && (
+                <ScrollReveal className="w-full">
+                    <section id="profesionales" className="min-h-[100svh] flex flex-col justify-center py-16 sm:py-20 md:py-24 bg-white scroll-mt-20">
+                        <div className="container px-4 md:px-6 my-auto">
+                            {activePromotions.length > 0 && (
+                                <div className="flex justify-center mb-10">
+                                    <Link 
+                                        href="#beneficios" 
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            document.getElementById('beneficios')?.scrollIntoView({ behavior: 'smooth' });
+                                        }}
+                                        className="group relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-slate-950 text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-500/30 overflow-hidden shadow-md"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-blue-600 to-[#2563eb] opacity-20 group-hover:opacity-40 transition-opacity duration-300" />
+                                        
+                                        <span className="relative flex h-2.5 w-2.5">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500"></span>
+                                        </span>
+                                        
+                                        <span className="relative z-10 flex items-center gap-2">
+                                            <Sparkles className="w-4 h-4 text-blue-400 animate-pulse" />
+                                            ¡Tenemos Promociones Activas! Ver ofertas
+                                        </span>
+                                        
+                                        <ArrowRight className="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition-transform" />
+                                    </Link>
                                 </div>
                             )}
+
+                            <div className="text-center mb-6 sm:mb-8">
+                                <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-foreground uppercase">
+                                    STAFF
+                                </h2>
+                            </div>
+
+                            <Team360Gallery
+                                barbers={filteredProfessionals}
+                                onSelectBarber={(pro) => setSelectedPro(pro)}
+                                onBookBarber={(pro) => router.push(`/reservar?professionalId=${pro.id}`)}
+                                branchName={currentBranchName}
+                                companyName={companyName}
+                            />
+                        </div>
+                    </section>
+                </ScrollReveal>
+            )}
+
+            {/* 2. Unified Services and Packages Section (Estilo App Móvil) */}
+            <ScrollReveal>
+                <AlfaServicesSection
+                    regularServices={regularServices}
+                    packageServices={packageServices}
+                    onSelectService={(service) => setSelectedService(service)}
+                    onAddToCart={(serviceId) => {
+                        if (cart.includes(serviceId)) {
+                            removeFromCart(serviceId);
+                        } else {
+                            addToCart(serviceId);
+                        }
+                    }}
+                    cartServiceIds={cart}
+                    formatPrice={formatPrice}
+                    getPackageDescription={getPackageDescription}
+                />
+            </ScrollReveal>
+
+            {/* 3. Inspiración Alfa: Carrusel 3D Cilíndrico de Cortes Reales (Estilo App Móvil) */}
+            <ScrollReveal className="w-full">
+                <section id="inspiracion" className="min-h-[100svh] flex flex-col justify-center bg-[#0b101e] border-y border-slate-800 scroll-mt-20">
+                    <Alfa3DCarousel
+                        stylesList={cortesReales.length > 0 ? cortesReales : undefined}
+                        onBookStyle={(style) => {
+                            router.push('/reservar' + (style.serviceMatchId ? `?serviceId=${style.serviceMatchId}` : ''));
+                        }}
+                    />
+                </section>
+            </ScrollReveal>
+
+            {/* Products Section (Estilo App Móvil: Tarjetas Cuadradas, 2 Columnas Móvil) */}
+            {
+                products && products.length > 0 && (
+                    <ScrollReveal>
+                        <AlfaProductsSection
+                            products={products}
+                            onSelectProduct={(product) => setSelectedProduct(product)}
+                            onAddToCart={(productId) => addToProductCart(productId)}
+                            productCart={productCart}
+                            getProductCount={getProductCount}
+                            formatPrice={formatPrice}
+                        />
+                    </ScrollReveal>
+                )
+            }
+
+            {/* 4. Beneficios Exclusivos y Pase Alfa Club (Estilo App Móvil) */}
+            <AlfaBenefitsSection
+                promotions={activePromotions}
+                paseAlfaData={paseAlfaConfig}
+                onBookBenefit={(_benefit) => {
+                    router.push('/reservar');
+                }}
+                onDownloadApp={handleAppDownloadClick}
+            />
+
+            {/* Service Details Modal (Estilo App Móvil con Cabecera Oficial y Botón de Agendar) */}
+            <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>
+                <DialogContent
+                    hideCloseButton={true}
+                    className="w-[calc(100%-2.5rem)] sm:w-full max-w-2xl bg-transparent border-none shadow-none p-0 overflow-visible flex flex-col justify-center items-center max-h-[90vh] z-50 gap-0"
+                >
+
+                    {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
+                    <AlfaGoldSmokeBurst key={selectedService?.id || 'smoke'} />
+
+                    {/* Contenedor Oficial del Modal */}
+                    <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
+                        {/* Cabecera Oficial VATOS ALFA con haz de luz */}
+                    <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 relative overflow-hidden shrink-0">
+                        <div className="header-light-beam" aria-hidden="true" />
+                        <div className="relative z-10 flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2.5">
+                                <Scissors className="h-5 w-5 text-slate-300 shrink-0" />
+                                <div>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+                                        {selectedService?.name}
+                                    </DialogTitle>
+                                    <DialogDescription className="sr-only">
+                                        Detalles del servicio {selectedService?.name}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedService(null)}
+                                className="p-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                aria-label="Cerrar modal"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
                         </div>
                     </div>
 
-                    <div className="w-full sm:w-1/2 p-6 lg:p-10 flex flex-col justify-between overflow-y-auto flex-1 sm:flex-none">
-                        <div>
-                            <DialogHeader>
-                                <DialogTitle className="text-2xl lg:text-3xl font-extrabold mb-2 tracking-tight">{selectedProduct?.nombre}</DialogTitle>
-                            </DialogHeader>
-
-                            <div className="flex items-baseline justify-between mb-4 border-b pb-4">
-                                <span className="text-3xl font-bold text-primary">{selectedProduct ? formatPrice(selectedProduct.public_price) : ''}</span>
+                    {/* Cuerpo del Modal */}
+                    <div className="p-5 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-5">
+                        <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+                            {/* Imagen del Servicio */}
+                            <div className="relative w-full sm:w-52 aspect-video sm:aspect-square rounded-xl overflow-hidden bg-slate-900 border border-border/60 shrink-0 shadow-sm">
+                                {(() => {
+                                    const modalImg = selectedService ? getServiceLocalImage(selectedService.name, selectedService.images) : null;
+                                    return modalImg ? (
+                                        <Image
+                                            src={modalImg}
+                                            alt={selectedService?.name || 'Servicio'}
+                                            fill
+                                            className="object-cover"
+                                            unoptimized={true}
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
+                                            <Scissors className="h-12 w-12 text-slate-400" />
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
-                            {selectedProduct?.payment_type === 'deposit' && (
-                                <div className="mb-6">
-                                    <span className="text-sm text-amber-700 font-medium bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 flex items-center w-full justify-center gap-2">
-                                        <span className="relative flex h-2 w-2">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                            {/* Info: Precio, Duración, Anticipo y Descripción */}
+                            <div className="flex-1 w-full flex flex-col justify-between">
+                                <div>
+                                    <div className="flex items-baseline justify-between mb-3 pb-3 border-b border-border/60">
+                                        <span className="text-2xl sm:text-3xl font-bold text-foreground font-sans">
+                                            {selectedService ? formatPrice(selectedService.price) : ''}
                                         </span>
-                                        {(() => {
-                                            const type = selectedProduct.payment_amount_type || '%';
-                                            const val = selectedProduct.payment_amount_value;
-                                            if (type === '$' && val) return `Requiere anticipo de $${val}`;
-                                            if (type === '%' && val) return `Requiere anticipo del ${val}%`;
-                                            return 'Requiere anticipo';
-                                        })()}
-                                    </span>
-                                </div>
-                            )}
+                                        <div className="flex items-center text-muted-foreground gap-1.5 text-sm font-medium font-sans">
+                                            <Clock className="h-4 w-4 text-slate-400" />
+                                            <span>{selectedService?.duration || selectedService?.duracion || 40} min</span>
+                                        </div>
+                                    </div>
 
-                            <div className="prose prose-sm text-muted-foreground leading-relaxed text-base mb-6">
-                                <h4 className="font-semibold text-foreground mb-2">Descripción del producto</h4>
-                                {selectedProduct?.description ? (
-                                    <p className="whitespace-pre-line">{selectedProduct.description}</p>
-                                ) : (
-                                    <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
-                                )}
+                                    {selectedService?.payment_type === 'online-deposit' && (
+                                        <div className="mb-4">
+                                            <span className="text-xs text-[#C5A880] font-semibold bg-[#C5A880]/10 px-3 py-1.5 rounded-lg border border-[#C5A880]/30 flex items-center w-full justify-center gap-2">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A880] opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C5A880]"></span>
+                                                </span>
+                                                {(() => {
+                                                    const type = selectedService.payment_amount_type || '%';
+                                                    const val = selectedService.payment_amount_value;
+                                                    if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                    if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                    return 'Requiere anticipo del 50%';
+                                                })()}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                                        <h4 className="font-semibold text-foreground text-xs uppercase tracking-wider mb-1.5">
+                                            Descripción del servicio
+                                        </h4>
+                                        {selectedService?.description || (selectedService?.name ? getPackageDescription(selectedService.name) : null) ? (
+                                            <p className="whitespace-pre-line text-slate-600 dark:text-slate-300">
+                                                {selectedService.description || getPackageDescription(selectedService.name)}
+                                            </p>
+                                        ) : (
+                                            <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t">
-                            <VatosButton className="w-full shadow-lg hover:shadow-xl transition-all h-14 text-lg" onClick={() => {
-                                addToProductCart(selectedProduct.id);
-                                setSelectedProduct(null);
-                            }}>
-                                <ShoppingBag className="mr-2 h-5 w-5" /> Agregar al Pedido
-                            </VatosButton>
-                            <VatosButton variant="outline" className="w-full mt-3 h-12" onClick={() => setSelectedProduct(null)}>
-                                Volver a Productos
-                            </VatosButton>
+                        {/* Botones de Acción: Agendar y Agregar */}
+                        <div className="pt-4 border-t border-border/60 flex flex-col gap-2.5">
+                            <Button
+                                variant="alfa"
+                                className="w-full h-12 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                                onClick={() => {
+                                    const svcId = selectedService.id;
+                                    setSelectedService(null);
+                                    router.push(`/reservar?serviceId=${svcId}`);
+                                }}
+                            >
+                                <Calendar className="w-4 h-4 text-slate-300" />
+                                <span>Agendar este Servicio</span>
+                                <ArrowRight className="w-4 h-4 text-slate-300" />
+                            </Button>
+
+                            <Button
+                                variant="outline"
+                                className="w-full h-10 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:text-foreground flex items-center justify-center gap-1.5 cursor-pointer"
+                                onClick={() => {
+                                    addToCart(selectedService.id);
+                                    setSelectedService(null);
+                                }}
+                            >
+                                <Plus className="w-4 h-4 text-slate-400" />
+                                <span>Agregar al Pedido y Seguir</span>
+                            </Button>
+                        </div>
+                    </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Product Details Modal (Estilo App Móvil con Cabecera Oficial, Haz de Luz y Bomba de Humo Dorado Mate) */}
+            <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
+                <DialogContent
+                    hideCloseButton={true}
+                    className="w-[calc(100%-1.75rem)] sm:w-full max-w-2xl bg-transparent border-none shadow-none p-0 overflow-visible flex flex-col justify-center items-center max-h-[90vh] z-50 gap-0"
+                >
+
+                    {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
+                    <AlfaGoldSmokeBurst key={selectedProduct?.id || 'product-smoke'} />
+
+                    {/* Contenedor Oficial del Modal */}
+                    <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
+                        {/* Cabecera Oficial VATOS ALFA con haz de luz */}
+                        <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 relative overflow-hidden shrink-0">
+                            <div className="header-light-beam" aria-hidden="true" />
+                            <div className="relative z-10 flex items-center justify-between w-full">
+                                <div className="flex items-center gap-2.5">
+                                    <ShoppingBag className="h-5 w-5 text-slate-300 shrink-0" />
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+                                        {selectedProduct?.nombre}
+                                    </DialogTitle>
+                                    <DialogDescription className="sr-only">
+                                        Detalle del producto
+                                    </DialogDescription>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedProduct(null)}
+                                    className="p-1.5 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                    aria-label="Cerrar modal"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Cuerpo del Modal */}
+                        <div className="p-5 sm:p-6 overflow-y-auto flex-1 flex flex-col gap-5">
+                            <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+                                {/* Imagen del Producto */}
+                                <div className="relative w-full sm:w-52 aspect-square rounded-xl overflow-hidden bg-slate-900 border border-border/60 shrink-0 shadow-sm flex items-center justify-center">
+                                    {selectedProduct?.images && selectedProduct.images.length > 0 ? (
+                                        <Image
+                                            src={selectedProduct.images[0]}
+                                            alt={selectedProduct?.nombre || 'Producto'}
+                                            fill
+                                            className="object-cover"
+                                            unoptimized={true}
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
+                                            <ShoppingBag className="h-12 w-12 text-slate-400" />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Info: Precio, Stock, Anticipo y Descripción */}
+                                <div className="flex-1 w-full flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-baseline justify-between mb-3 pb-3 border-b border-border/60">
+                                            <span className="text-2xl sm:text-3xl font-bold text-foreground font-sans">
+                                                {selectedProduct ? formatPrice(selectedProduct.public_price) : ''}
+                                            </span>
+                                            {selectedProduct?.stock !== undefined && (
+                                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                                    {selectedProduct.stock > 0 ? 'En existencia' : 'Consultar stock'}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {selectedProduct?.payment_type === 'deposit' && (
+                                            <div className="mb-4">
+                                                <span className="text-xs text-[#C5A880] font-semibold bg-[#C5A880]/10 px-3 py-1.5 rounded-lg border border-[#C5A880]/30 flex items-center w-full justify-center gap-2">
+                                                    <span className="relative flex h-2 w-2">
+                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A880] opacity-75"></span>
+                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C5A880]"></span>
+                                                    </span>
+                                                    {(() => {
+                                                        const type = selectedProduct.payment_amount_type || '%';
+                                                        const val = selectedProduct.payment_amount_value;
+                                                        if (type === '$' && val) return `Requiere anticipo de $${val}`;
+                                                        if (type === '%' && val) return `Requiere anticipo del ${val}%`;
+                                                        return 'Requiere anticipo';
+                                                    })()}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <div className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                                            <h4 className="font-semibold text-foreground text-xs uppercase tracking-wider mb-1.5">
+                                                Descripción del producto
+                                            </h4>
+                                            {selectedProduct?.description ? (
+                                                <p className="whitespace-pre-line text-slate-600 dark:text-slate-300">
+                                                    {selectedProduct.description}
+                                                </p>
+                                            ) : (
+                                                <p className="italic text-slate-400">Sin descripción detallada disponible.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Botón de Acción Principal: Agregar al Pedido */}
+                            <div className="pt-4 border-t border-border/60">
+                                <Button
+                                    variant="alfa"
+                                    className="w-full h-12 rounded-xl text-sm sm:text-base font-bold flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                                    onClick={() => {
+                                        addToProductCart(selectedProduct.id);
+                                        setSelectedProduct(null);
+                                        toast({
+                                            title: "Producto agregado",
+                                            description: `${selectedProduct.nombre} se agregó a tu pedido.`,
+                                        });
+                                    }}
+                                >
+                                    <ShoppingBag className="w-4 h-4 text-slate-300" />
+                                    <span>Agregar al Pedido</span>
+                                    <Plus className="w-4 h-4 text-slate-300" />
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </DialogContent>
@@ -1132,100 +1345,124 @@ export default function LandingPageClient() {
                 </DialogContent>
             </Dialog>
 
-            {/* Cart Sticky Footer */}
-            {
-                totalItems > 0 && (
-                    <div className="fixed bottom-0 left-0 w-full bg-white border-t-2 border-primary/20 p-4 shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-50 animate-in slide-in-from-bottom-20 duration-500">
-                        <div className="container max-w-4xl mx-auto flex items-center justify-between">
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium text-muted-foreground">{totalItems} item{totalItems > 1 ? 's' : ''} seleccionado{totalItems > 1 ? 's' : ''}</span>
-                                <span className="text-2xl font-bold text-primary">{formatPrice(totalPrice)}</span>
-                            </div>
-                            <VatosButton size="lg" className="h-14 px-8 text-lg shadow-lg" onClick={handleBooking} disabled={isBooking} variant="default">
-                                {isBooking ? (
-                                    <CustomLoader size={24} className="text-primary-foreground" />
-                                ) : cart.length > 0 ? (
-                                    <>Confirmar Reserva <ArrowRight className="ml-2 h-5 w-5" /></>
-                                ) : (
-                                    <>Comprar Productos <ShoppingBag className="ml-2 h-5 w-5" /></>
-                                )}
-                            </VatosButton>
-                        </div>
-                    </div>
-                )
-            }
+            {/* Barra Flotante de Reserva Inferior (Sticky Bottom CTA Bar) */}
+            <AlfaFloatingBottomBar
+                totalItems={totalItems}
+                totalPrice={totalPrice}
+                formatPrice={formatPrice}
+                isBooking={isBooking}
+                hasServiceInCart={cart.length > 0}
+                onBookingClick={() => {
+                    if (selectedBranch && selectedBranch !== 'coming-soon') {
+                        router.push(`/reservar?branchId=${selectedBranch}`);
+                    } else {
+                        router.push('/reservar');
+                    }
+                }}
+                onConfirmCartClick={handleBooking}
+                onOpenJanetChat={() => setIsJanetChatOpen(true)}
+                branchName={currentBranchName}
+                branchAddress={currentBranchObj?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro'}
+                companyName={companyName}
+            />
+
+            {/* Modal de Chat Interactivo con Janet / Recepción */}
+            <JanetChatModal
+                isOpen={isJanetChatOpen}
+                onOpenChange={setIsJanetChatOpen}
+                branchName={currentBranchName}
+                branchAddress={currentBranchObj?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro'}
+                onNavigateToBooking={() => {
+                    if (selectedBranch && selectedBranch !== 'coming-soon') {
+                        router.push(`/reservar?branchId=${selectedBranch}`);
+                    } else {
+                        router.push('/reservar');
+                    }
+                }}
+            />
 
             {/* Locations / Branches Section */}
             {
                 locales && locales.length > 0 && (
-                    <section className="py-16 bg-slate-50 border-t">
-                        <div className="container px-4 md:px-6">
-                            <div className="text-center mb-12">
-                                <h2 className="text-3xl font-bold tracking-tight mb-2">Visítanos</h2>
-                                <p className="text-muted-foreground">Encuentra tu sucursal más cercana.</p>
-                            </div>
+                    <ScrollReveal>
+                        <section id="ubicacion" className="py-16 bg-slate-50 border-t scroll-mt-20">
+                            <div className="container px-4 md:px-6">
+                                <div className="text-center mb-12">
+                                    <h2 className="text-3xl font-bold tracking-tight mb-2">Visítanos</h2>
+                                    <p className="text-muted-foreground">Encuentra tu sucursal más cercana.</p>
+                                </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
-                                {locales.filter((l: any) => l.status === 'active').map((local: any) => (
-                                    <Card key={local.id} className="border-none shadow-md hover:shadow-xl transition-all">
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <MapPin className="h-5 w-5 text-primary" />
-                                                {local.name === 'VATOS ALFA Barber Shop Suc1' || local.name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : local.name}
-                                            </CardTitle>
-                                            <CardDescription>{local.address}</CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div className="space-y-2 text-sm text-muted-foreground">
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-foreground">Teléfono:</span>
-                                                    <a
-                                                        href={`https://wa.me/52${local.phone.replace(/\D/g, '')}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="flex items-center gap-1.5 hover:text-green-600 hover:underline transition-colors"
-                                                    >
-                                                        <svg viewBox="0 0 24 24" className="h-4 w-4 text-green-500 fill-current" fill="currentColor" role="img" xmlns="http://www.w3.org/2000/svg"><title>WhatsApp</title><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1-5.106c0-5.445 4.406-9.885 9.885-9.885 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.444-4.437 9.884-9.886 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
-                                                        {local.phone}
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-center">
+                                    {locales.filter((l: any) => l.status === 'active').map((local: any) => (
+                                        <Card key={local.id} className="border-none shadow-md hover:shadow-xl transition-all">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <MapPin className="h-5 w-5 text-primary" />
+                                                    {local.name === 'VATOS ALFA Barber Shop Suc1' || local.name?.includes('Suc1') ? 'VATOS ALFA Barber Shop - Sucursal Sombrerete' : local.name}
+                                                </CardTitle>
+                                                <CardDescription>{local.address}</CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="space-y-2 text-sm text-muted-foreground">
+                                                    <p className="flex items-center gap-2">
+                                                        <span className="font-semibold text-foreground">Teléfono:</span>
+                                                        <a
+                                                            href={`https://wa.me/52${local.phone.replace(/\D/g, '')}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 hover:text-blue-400 hover:underline transition-colors"
+                                                        >
+                                                            <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-400 fill-current" fill="currentColor" role="img" xmlns="http://www.w3.org/2000/svg"><title>WhatsApp</title><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1-5.106c0-5.445 4.406-9.885 9.885-9.885 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.444-4.437 9.884-9.886 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" /></svg>
+                                                            {local.phone}
+                                                        </a>
+                                                    </p>
+                                                    <p className="flex items-center gap-2">
+                                                        <span className="font-semibold text-foreground">Horario:</span>
+                                                        {local.schedule ? (() => {
+                                                            const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                                                            const todayIndex = new Date().getDay();
+                                                            const todayKey = days[todayIndex];
+                                                            const schedule = local.schedule[todayKey];
+
+                                                            return (
+                                                                <span className="text-muted-foreground">
+                                                                    {schedule?.enabled ? `${schedule.start} - ${schedule.end}` : 'Cerrado hoy'}
+                                                                </span>
+                                                            );
+                                                        })() : (
+                                                            <span className="text-muted-foreground">Lunes a Sábado: 10:00 - 20:00</span>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </CardContent>
+                                            <CardFooter className="flex flex-col gap-2">
+                                                <VatosButton variant="outline" className="w-full" asChild>
+                                                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
+                                                        Ver en Mapa
                                                     </a>
-                                                </p>
-                                                <p className="flex items-center gap-2">
-                                                    <span className="font-semibold text-foreground">Horario:</span>
-                                                    {local.schedule ? (() => {
-                                                        const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-                                                        const todayIndex = new Date().getDay();
-                                                        const todayKey = days[todayIndex];
-                                                        const schedule = local.schedule[todayKey];
-
-                                                        return (
-                                                            <span className="text-muted-foreground">
-                                                                {schedule?.enabled ? `${schedule.start} - ${schedule.end}` : 'Cerrado hoy'}
-                                                            </span>
-                                                        );
-                                                    })() : (
-                                                        <span className="text-muted-foreground">Lunes a Sábado: 10:00 - 20:00</span>
-                                                    )}
-                                                </p>
-                                            </div>
-                                        </CardContent>
-                                        <CardFooter>
-                                            <VatosButton variant="outline" className="w-full" asChild>
-                                                <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${companyName} ${local.address}`)}`} target="_blank" rel="noopener noreferrer">
-                                                    Ver en Mapa
-                                                </a>
-                                            </VatosButton>
-                                        </CardFooter>
-                                    </Card>
-                                ))}
+                                                </VatosButton>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    onClick={() => setIsJanetChatOpen(true)}
+                                                    className="w-full text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5 font-semibold"
+                                                >
+                                                    <Bot className="h-4 w-4 text-blue-600" />
+                                                    <span>Chatear con Recepción / Janet</span>
+                                                </Button>
+                                            </CardFooter>
+                                        </Card>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    </section>
+                        </section>
+                    </ScrollReveal>
                 )
             }
             </main>
 
             {/* Footer */}
-            <footer className="py-12 border-t border-slate-200 bg-slate-50 text-center text-sm text-slate-700">
+            <footer id="footer" className="py-12 border-t border-slate-200 bg-slate-50 text-center text-sm text-slate-700 scroll-mt-20">
                 <div className="container px-4 flex flex-col items-center gap-4 text-slate-700">
                     <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
 
@@ -1257,33 +1494,49 @@ export default function LandingPageClient() {
 
                     {/* Modals for Landing Page */}
                     <Dialog open={privacyModalOpen} onOpenChange={setPrivacyModalOpen}>
-                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold">Aviso de Privacidad</DialogTitle>
+                        <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-3xl bg-white p-6 rounded-2xl max-h-[85vh] flex flex-col shadow-2xl">
+                            <DialogHeader className="border-b pb-3">
+                                <DialogTitle className="text-xl font-bold text-foreground">Aviso de Privacidad Integral</DialogTitle>
                             </DialogHeader>
-                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
-                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                            <div className="flex-1 overflow-y-auto mt-4 pr-3 text-slate-700 leading-relaxed">
+                                <div className="text-xs sm:text-sm whitespace-pre-line">
                                     {websiteSettings.privacyText || 'Sin contenido de privacidad.'}
                                 </div>
                             </div>
-                            <DialogFooter className="mt-4">
-                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Cerrar</VatosButton>
+                            <DialogFooter className="mt-4 pt-3 border-t flex flex-row items-center justify-between">
+                                <a
+                                    href="/privacidad"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+                                >
+                                    Ver en página completa <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                                <VatosButton onClick={() => setPrivacyModalOpen(false)}>Entendido</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
 
                     <Dialog open={termsModalOpen} onOpenChange={setTermsModalOpen}>
-                        <DialogContent className="max-w-md bg-white p-6 rounded-xl max-h-[80vh] flex flex-col">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold">Términos y Condiciones</DialogTitle>
+                        <DialogContent className="max-w-md sm:max-w-2xl lg:max-w-3xl bg-white p-6 rounded-2xl max-h-[85vh] flex flex-col shadow-2xl">
+                            <DialogHeader className="border-b pb-3">
+                                <DialogTitle className="text-xl font-bold text-foreground">Términos y Condiciones de Servicio</DialogTitle>
                             </DialogHeader>
-                            <div className="flex-1 overflow-y-auto mt-4 pr-2">
-                                <div className="text-sm text-slate-700 whitespace-pre-line">
+                            <div className="flex-1 overflow-y-auto mt-4 pr-3 text-slate-700 leading-relaxed">
+                                <div className="text-xs sm:text-sm whitespace-pre-line">
                                     {websiteSettings.termsText || 'Sin términos y condiciones definidos.'}
                                 </div>
                             </div>
-                            <DialogFooter className="mt-4">
-                                <VatosButton onClick={() => setTermsModalOpen(false)}>Cerrar</VatosButton>
+                            <DialogFooter className="mt-4 pt-3 border-t flex flex-row items-center justify-between">
+                                <a
+                                    href="/terminos"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+                                >
+                                    Ver en página completa <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                                <VatosButton onClick={() => setTermsModalOpen(false)}>Aceptar y Cerrar</VatosButton>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
@@ -1294,6 +1547,17 @@ export default function LandingPageClient() {
 
             {/* Floating Navigation Menu */}
             <FloatingMenu totalItems={totalItems} hasActivePromotions={activePromotions && activePromotions.length > 0} />
+
+            {/* Navegación Vertical Rápida (Bare icons subir al inicio / bajar por secciones) */}
+            <VerticalSectionNavigator />
+
+            {/* Modal Oficial de Descarga de App Móvil */}
+            <AppDownloadModal
+                isOpen={isAppDownloadOpen}
+                onOpenChange={setIsAppDownloadOpen}
+                playStoreUrl={effectivePlayStoreUrl}
+                appStoreUrl={effectiveAppStoreUrl}
+            />
 
         </div>
         </ParallaxHero>

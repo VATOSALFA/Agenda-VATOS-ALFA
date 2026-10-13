@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,7 @@ import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
 import { ClientDetailModal } from '../clients/client-detail-modal';
 import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
+import { playAgendaClickSound } from '@/lib/notification-sound';
 
 
 
@@ -92,19 +93,24 @@ function SortableHeader({ barber, avatarUrl }: { barber: Profesional, avatarUrl:
       style={style}
       {...attributes}
       {...listeners}
-      className="p-2 h-28 flex flex-col items-center justify-center border-b select-none cursor-pointer hover:bg-muted/50 transition-colors bg-background"
+      className="p-1.5 h-[72px] flex flex-col items-center justify-center border-b select-none cursor-pointer hover:bg-muted/50 transition-colors bg-background"
       onClick={() => {
+        playAgendaClickSound();
         // dnd-kit should prevent this click if a drag occurred.
         // If the event fires, it means it was a click.
         router.push(`/agenda/semanal/${barber.id}`);
       }}
     >
-      <div className="flex flex-col items-center justify-center group w-full h-full">
-        <Avatar className="h-[60px] w-[60px] rounded-lg group-hover:ring-2 group-hover:ring-primary transition-all pointer-events-none">
-          <AvatarImage src={avatarUrl} alt={barber.publicName || barber.name} />
-          <AvatarFallback className="rounded-lg">{(barber.publicName || barber.name || '??').substring(0, 2)}</AvatarFallback>
+      <div className="relative w-[60px] h-[60px] rounded-xl overflow-hidden shadow-xs border border-border/60 group hover:ring-2 hover:ring-blue-500 transition-all flex items-center justify-center bg-muted/40 aspect-square">
+        <Avatar className="w-full h-full rounded-none pointer-events-none">
+          <AvatarImage src={avatarUrl} alt={barber.publicName || barber.name} className="object-cover w-full h-full" />
+          <AvatarFallback className="rounded-none text-xs font-bold">{(barber.publicName || barber.name || '??').substring(0, 2)}</AvatarFallback>
         </Avatar>
-        <p className="font-semibold text-sm text-center mt-2 group-hover:text-primary transition-colors">{barber.publicName || barber.name}</p>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent pt-3 pb-1 px-1 flex items-center justify-center pointer-events-none">
+          <span className="text-white text-[11px] font-bold truncate drop-shadow-md text-center leading-tight tracking-tight max-w-full">
+            {barber.publicName || barber.name}
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -178,6 +184,23 @@ export default function AgendaView() {
   const { user, db, loading: authLoading } = useAuth();
   const isStaff = Boolean(user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero')));
 
+  const [isLocalhost, setIsLocalhost] = useState(false);
+  const [sandboxViewMode, setSandboxViewMode] = useState<'hybrid' | 'sandbox_only' | 'real_only'>('hybrid');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isLocal = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1' ||
+                      window.location.search.includes('sandbox=true') ||
+                      window.location.search.includes('test=true');
+      setIsLocalhost(isLocal);
+      const savedMode = localStorage.getItem('vatos_agenda_sandbox_view_mode') as 'hybrid' | 'sandbox_only' | 'real_only';
+      if (savedMode && ['hybrid', 'sandbox_only', 'real_only'].includes(savedMode)) {
+        setSandboxViewMode(savedMode);
+      }
+    }
+  }, []);
+
   const hoveredSlotRef = useRef<{ barberId: string, time: string } | null>(null);
   const hoverPopoverRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const hoverPopoverTextRefs = useRef<Record<string, HTMLSpanElement | null>>({});
@@ -229,10 +252,11 @@ export default function AgendaView() {
   // Quick Consult Modal State
   const [isQuickConsultOpen, setIsQuickConsultOpen] = useState(false);
 
-  // Sidebar collapse state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Sidebar collapse state (default minimized on PC / tablet)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   const handleNonWorkClick = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
+    playAgendaClickSound();
     if (!canSee('bloquear_horarios')) return;
     e.stopPropagation();
 
@@ -441,6 +465,11 @@ export default function AgendaView() {
   const blocksQueryKey = useMemo(() => `blocks-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, [date, selectedLocalId, queryKey]);
 
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>('reservas', reservationsQueryKey, ...(reservationsQueryConstraint || []));
+  const { data: sandboxReservations, loading: sandboxReservationsLoading } = useFirestoreQuery<Reservation>(
+    'reservas_sandbox',
+    `sandbox-${reservationsQueryKey}`,
+    ...(reservationsQueryConstraint || [])
+  );
   const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
 
   // Fast on-demand batched client fetcher (loads only clients for current day's reservations)
@@ -448,10 +477,43 @@ export default function AgendaView() {
   const [clientsLoading, setClientsLoading] = useState(false);
   const fetchedClientIdsRef = useRef<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (!reservations || reservations.length === 0 || !db) return;
+  const effectiveReservations = useMemo(() => {
+    if (!isLocalhost) return reservations || [];
 
-    const uniqueClientIds = Array.from(new Set(reservations.map(r => r.cliente_id).filter(Boolean)));
+    const taggedSandbox = (sandboxReservations || []).map(r => {
+      const client = r.cliente_id ? clientsMap.get(r.cliente_id) : null;
+      const clientFullName = client ? formatClientName(client.nombre, client.apellido) : '';
+      const rawName = (r as any).cliente_nombre || clientFullName || (r as any).customer?.nombre || 'Prueba';
+      const testName = rawName.startsWith('[TEST]') ? rawName : `[TEST] ${rawName}`;
+      return {
+        ...r,
+        isSandbox: true,
+        cliente_nombre: testName,
+        customer: (client ? {
+          ...client,
+          nombre: testName,
+        } : {
+          id: r.cliente_id || 'sandbox-client',
+          nombre: testName,
+          telefono: (r as any).cliente_telefono || '',
+          correo: (r as any).cliente_email || ''
+        }) as unknown as Client
+      };
+    });
+
+    if (sandboxViewMode === 'sandbox_only') {
+      return taggedSandbox;
+    }
+    if (sandboxViewMode === 'real_only') {
+      return reservations || [];
+    }
+    return [...(reservations || []), ...taggedSandbox];
+  }, [reservations, sandboxReservations, isLocalhost, sandboxViewMode, clientsMap]);
+
+  useEffect(() => {
+    if (!effectiveReservations || effectiveReservations.length === 0 || !db) return;
+
+    const uniqueClientIds = Array.from(new Set(effectiveReservations.map(r => r.cliente_id).filter(Boolean)));
     const idsToFetch = uniqueClientIds.filter(id => !fetchedClientIdsRef.current.has(id));
 
     if (idsToFetch.length > 0) {
@@ -505,8 +567,14 @@ export default function AgendaView() {
     // If user cannot see global agenda, filter to only show themselves
     const canViewAll = canSee('ver_agenda_global');
     if (!canViewAll) {
-      // Fix: Match by email to avoid type errors with 'id' on CustomUser
-      const myProf = professionals.find(p => !p.deleted && p.email === user?.email);
+      const userEmailClean = user?.email?.toLowerCase().trim();
+      const userUid = user?.uid;
+      const myProf = professionals.find(p => 
+        !p.deleted && (
+          (userUid && p.userId === userUid) ||
+          (userEmailClean && p.email?.toLowerCase().trim() === userEmailClean)
+        )
+      );
       if (myProf) {
         professionalsOfLocal = [myProf];
       } else {
@@ -514,13 +582,13 @@ export default function AgendaView() {
       }
     }
 
-    if (selectedProfessionalFilter === 'todos') {
+    if (!canViewAll || selectedProfessionalFilter === 'todos') {
       return professionalsOfLocal.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
     }
     return professionalsOfLocal.filter(p => p.id === selectedProfessionalFilter);
   }, [professionals, selectedProfessionalFilter, selectedLocalId, user]);
 
-  const { allEvents, eventsWithLayout } = useAgendaEvents(reservations, timeBlocks, clients, professionals);
+  const { allEvents, eventsWithLayout } = useAgendaEvents(effectiveReservations, timeBlocks, clients, professionals);
 
 
 
@@ -641,6 +709,7 @@ export default function AgendaView() {
   }
 
   const handleClickSlot = (e: MouseEvent<HTMLDivElement>) => {
+    playAgendaClickSound();
     e.stopPropagation();
     if (hoveredSlotRef.current) {
       setPopoverState(hoveredSlotRef.current)
@@ -726,6 +795,7 @@ export default function AgendaView() {
 
 
   const handleOpenDetailModal = (event: AgendaEvent) => {
+    playAgendaClickSound();
     const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;
     if (fullReservation) {
       setSelectedReservation(fullReservation);
@@ -813,39 +883,42 @@ export default function AgendaView() {
     }
 
     try {
+      const isSandboxRes = Boolean((selectedReservation as any)?.isSandbox);
       const resId = selectedReservation.id;
       const total = (computedTotal && computedTotal > 0) ? computedTotal : (selectedReservation.total || selectedReservation.precio || 0);
       const saldoPendiente = Math.max(0, total - depositAmount);
 
       const isTerminal = paymentMethod === 'mercadopago';
       const depositSaleId = `deposit_${resId}_${Date.now()}`;
-      const resRef = doc(db, 'reservas', resId);
-      const saleRef = doc(db, 'ventas', depositSaleId);
+      const targetCol = isSandboxRes ? 'reservas_sandbox' : 'reservas';
+      const resRef = doc(db, targetCol, resId);
 
-      // Create deposit sale record in 'ventas'
-      // If paymentMethod === 'mercadopago', set initial status to 'Pendiente' until MP Terminal confirms via Webhook
-      const saleData = {
-        id: depositSaleId,
-        reservationId: resId,
-        cliente_id: selectedReservation.cliente_id || '',
-        cliente_nombre: formatClientName(selectedReservation.customer?.nombre, selectedReservation.customer?.apellido),
-        local_id: selectedReservation.local_id || selectedLocalId || 'default',
-        fecha_hora_venta: Timestamp.now(),
-        tipo_venta: 'anticipo',
-        total: total,
-        monto_pagado_real: isTerminal ? 0 : depositAmount,
-        monto_anticipo: depositAmount,
-        anticipoPagado: depositAmount,
-        anticipo_pagado: depositAmount,
-        monto_pagado: isTerminal ? 0 : depositAmount,
-        saldo_pendiente: isTerminal ? total : saldoPendiente,
-        pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
-        metodo_pago: paymentMethod,
-        items: selectedReservation.items || [],
-        creado_por: user?.email || 'recepcion'
-      };
+      // Create deposit sale record in 'ventas' (only for real bookings, never in sandbox)
+      if (!isSandboxRes) {
+        const saleRef = doc(db, 'ventas', depositSaleId);
+        const saleData = {
+          id: depositSaleId,
+          reservationId: resId,
+          cliente_id: selectedReservation.cliente_id || '',
+          cliente_nombre: formatClientName(selectedReservation.customer?.nombre, selectedReservation.customer?.apellido),
+          local_id: selectedReservation.local_id || selectedLocalId || 'default',
+          fecha_hora_venta: Timestamp.now(),
+          tipo_venta: 'anticipo',
+          total: total,
+          monto_pagado_real: isTerminal ? 0 : depositAmount,
+          monto_anticipo: depositAmount,
+          anticipoPagado: depositAmount,
+          anticipo_pagado: depositAmount,
+          monto_pagado: isTerminal ? 0 : depositAmount,
+          saldo_pendiente: isTerminal ? total : saldoPendiente,
+          pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
+          metodo_pago: paymentMethod,
+          items: selectedReservation.items || [],
+          creado_por: user?.email || 'recepcion'
+        };
 
-      await setDoc(saleRef, saleData);
+        await setDoc(saleRef, saleData);
+      }
 
       // For cash / bank transfer, update reservation immediately as deposit_paid
       if (!isTerminal) {
@@ -909,12 +982,18 @@ export default function AgendaView() {
       return;
     }
     try {
-      const resRef = doc(db, 'reservas', reservationId);
+      const isSandboxRes = Boolean(
+        (selectedReservation as any)?.isSandbox ||
+        allEvents.find(e => e.id === reservationId && (e as any).isSandbox) ||
+        (sandboxReservations || []).some(r => r.id === reservationId)
+      );
+      const targetCollection = isSandboxRes ? 'reservas_sandbox' : 'reservas';
+      const resRef = doc(db, targetCollection, reservationId);
       const resSnap = await getDoc(resRef);
       const resData = resSnap.exists() ? (resSnap.data() as Reservation) : selectedReservation;
 
       // Retained Deposit logic for "No asistió" (No asiste)
-      if (newStatus === 'No asiste' && (resData?.pago_estado === 'deposit_paid' || (resData?.monto_anticipo && resData.monto_anticipo > 0))) {
+      if (newStatus === 'No asiste' && !isSandboxRes && (resData?.pago_estado === 'deposit_paid' || (resData?.monto_anticipo && resData.monto_anticipo > 0))) {
         const depositAmount = resData?.monto_anticipo || resData?.monto_pagado_real || 0;
 
         if (depositAmount > 0) {
@@ -981,7 +1060,10 @@ export default function AgendaView() {
       }
 
       await updateDoc(resRef, { estado: newStatus });
-      toast({ title: 'Estado actualizado', description: `La reserva ahora está en estado: ${newStatus}` });
+      toast({
+        title: isSandboxRes ? 'Estado actualizado (Sandbox)' : 'Estado actualizado',
+        description: `La reserva ahora está en estado: ${newStatus}`
+      });
       if (selectedReservation && selectedReservation.id === reservationId) {
         setSelectedReservation({ ...selectedReservation, estado: newStatus });
       }
@@ -992,25 +1074,31 @@ export default function AgendaView() {
   };
 
   const handleCancelReservation = async (reservationId: string, reason: string) => {
-    if (!selectedReservation || !selectedReservation.cliente_id || !db) {
+    const isSandboxRes = Boolean((selectedReservation as any)?.isSandbox);
+    if (!selectedReservation || (!selectedReservation.cliente_id && !isSandboxRes) || !db) {
       toast({ variant: 'destructive', title: "Error", description: "La reserva no tiene un cliente asociado o no hay conexión con la base de datos." });
       return;
     }
 
     try {
-      await runTransaction(db, async (transaction) => {
-        if (!db) throw new Error("Database not available in transaction");
-        const resRef = doc(db, 'reservas', reservationId);
-        const clientRef = doc(db, 'clientes', selectedReservation.cliente_id!);
+      if (isSandboxRes) {
+        const resRef = doc(db, 'reservas_sandbox', reservationId);
+        await updateDoc(resRef, { estado: 'Cancelado', motivo_cancelacion: reason || '' });
+      } else {
+        await runTransaction(db, async (transaction) => {
+          if (!db) throw new Error("Database not available in transaction");
+          const resRef = doc(db, 'reservas', reservationId);
+          const clientRef = doc(db, 'clientes', selectedReservation.cliente_id!);
 
-        transaction.update(resRef, { estado: 'Cancelado', motivo_cancelacion: reason || '' });
-        transaction.update(clientRef, {
-          citas_canceladas: increment(1)
+          transaction.update(resRef, { estado: 'Cancelado', motivo_cancelacion: reason || '' });
+          transaction.update(clientRef, {
+            citas_canceladas: increment(1)
+          });
         });
-      });
+      }
 
       await logAuditAction({
-        action: 'Cancelar Reserva',
+        action: 'Cancelar Reserva' + (isSandboxRes ? ' (Sandbox)' : ''),
         details: `Se canceló la cita del cliente ${selectedReservation.customer?.nombre || 'Desconocido'}. Motivo: ${reason || 'No especificado'}. Fecha: ${selectedReservation.fecha} a las ${selectedReservation.hora_inicio}.`,
         userId: user?.uid || 'unknown',
         userName: user?.displayName || user?.email || 'Unknown',
@@ -1020,8 +1108,10 @@ export default function AgendaView() {
       });
 
       toast({
-        title: "Reserva Cancelada",
-        description: "El estado de la reserva ha sido actualizado a 'Cancelado'.",
+        title: isSandboxRes ? "Reserva Cancelada (Sandbox)" : "Reserva Cancelada",
+        description: isSandboxRes
+          ? "La cita de prueba ha sido cancelada en Sandbox."
+          : "El estado de la reserva ha sido actualizado a 'Cancelado'.",
       });
 
       setIsCancelModalOpen(false);
@@ -1167,9 +1257,14 @@ export default function AgendaView() {
     return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
   };
 
-  const selectedDateFormatted = date
-    ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })
-    : 'Cargando...';
+  const selectedDateFormatted = useMemo(() => {
+    if (!date) return 'Cargando...';
+    const dayName = format(date, 'EEEE', { locale: es });
+    const dayNum = format(date, 'd', { locale: es });
+    const month = format(date, 'MMM', { locale: es }).replace('.', '');
+    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    return `${capitalizedDay} ${dayNum} de ${month}.`;
+  }, [date]);
 
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
 
@@ -1189,8 +1284,8 @@ export default function AgendaView() {
   return (
     <TooltipProvider>
       <div className={cn("flex flex-col md:grid h-[calc(100vh-4rem)] bg-muted/40 gap-2 overflow-hidden", isSidebarCollapsed ? 'md:grid-cols-[0px_1fr]' : 'md:grid-cols-[288px_1fr]')} style={{ transition: 'grid-template-columns 0.3s ease' }}>
-        {/* Left Panel */}
-        <aside className={cn("bg-white border-r flex flex-col flex-shrink-0 min-h-0 overflow-y-auto scrollbar-thin transition-all duration-300", isSidebarCollapsed && 'hidden md:flex md:w-0 md:overflow-hidden md:p-0 md:opacity-0')}>
+        {/* Left Panel - Hidden on mobile, collapsible on desktop */}
+        <aside className={cn("bg-white border-r flex-col flex-shrink-0 min-h-0 overflow-y-auto scrollbar-thin transition-all duration-300 hidden md:flex", isSidebarCollapsed ? 'md:w-0 md:overflow-hidden md:p-0 md:opacity-0 md:border-r-0' : 'md:w-[288px]')}>
           <div className="p-3 grid grid-cols-2 gap-3 md:flex md:flex-col md:space-y-2 md:p-4">
             {user?.role === 'Administrador general' ? (
               <>
@@ -1222,7 +1317,7 @@ export default function AgendaView() {
                   </Select>
                 </div>
               </>
-            ) : (
+            ) : canSee('ver_agenda_global') ? (
               <div className="col-span-2 flex flex-col gap-1">
                 <Label htmlFor="professional-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profesional</Label>
                 <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
@@ -1237,7 +1332,7 @@ export default function AgendaView() {
                   </SelectContent>
                 </Select>
               </div>
-            )}
+            ) : null}
           </div>
           {isClientMounted && (
             <div className="hidden md:flex justify-center">
@@ -1264,6 +1359,22 @@ export default function AgendaView() {
           {/* Agenda Header */}
           <div className="flex-shrink-0 flex items-center justify-between gap-2 p-3 md:p-4 border-b">
             <div className="flex items-center gap-2 md:gap-4 min-w-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors hidden md:flex shrink-0"
+                  >
+                    {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isSidebarCollapsed ? 'Mostrar calendario lateral' : 'Ocultar calendario lateral'}
+                </TooltipContent>
+              </Tooltip>
+
               <div className="flex items-center gap-1">
                 <Button variant="outline" size="sm" className="h-8 px-2 text-xs" onClick={handleSetToday}>Hoy</Button>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevDay}><ChevronLeft className="h-4 w-4" /></Button>
@@ -1274,7 +1385,7 @@ export default function AgendaView() {
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1">
-                  <h2 className="text-xs md:text-lg font-bold capitalize truncate">
+                  <h2 className="text-xs sm:text-sm md:text-base font-normal text-foreground truncate">
                     {selectedDateFormatted}
                   </h2>
                   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -1305,32 +1416,141 @@ export default function AgendaView() {
               </div>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
+              {/* Botón de 3 puntitos para filtros en vista de celular */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors flex md:hidden shrink-0"
+                    title="Filtros de la agenda"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-72 p-3.5 space-y-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background z-[100]"
+                  align="end"
+                >
+                  <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">Filtros</span>
+                  </div>
+
+                  {user?.role === 'Administrador general' && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="mobile-branch-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Sucursal
+                      </Label>
+                      <Select value={selectedLocalId || ''} onValueChange={setSelectedLocalId} disabled={!!user?.local_id}>
+                        <SelectTrigger id="mobile-branch-select" className="h-8 text-xs rounded-lg">
+                          <SelectValue placeholder="Seleccionar..." />
+                        </SelectTrigger>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl z-[110]">
+                          {locales.map(local => (
+                            <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {canSee('ver_agenda_global') && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="mobile-professional-select" className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Profesional
+                      </Label>
+                      <Select value={selectedProfessionalFilter} onValueChange={setSelectedProfessionalFilter}>
+                        <SelectTrigger id="mobile-professional-select" className="h-8 text-xs rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl z-[110]">
+                          <SelectItem value="todos">Todos</SelectItem>
+                          {professionals.filter(p => p.active !== false && !p.deleted).map(prof => (
+                            <SelectItem key={prof.id} value={prof.id}>{prof.publicName || prof.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {isLocalhost && (
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-border/60">
+                      <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                        <span>Modo Sandbox (Local)</span>
+                      </div>
+                      <Select
+                        value={sandboxViewMode}
+                        onValueChange={(val: any) => {
+                          setSandboxViewMode(val);
+                          try { localStorage.setItem('vatos_agenda_sandbox_view_mode', val); } catch (e) {}
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs rounded-lg border-2 border-blue-500/50">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl z-[110]">
+                          <SelectItem value="hybrid">Híbrido (Reales + Test)</SelectItem>
+                          <SelectItem value="sandbox_only">Solo Test (Sandbox)</SelectItem>
+                          <SelectItem value="real_only">Solo Reales</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              {isLocalhost && (
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-950/70 border-2 border-blue-500/50 text-xs shadow-xs shrink-0">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <span className="text-[11px] font-bold text-white hidden lg:inline">Sandbox:</span>
+                  <select
+                    value={sandboxViewMode}
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setSandboxViewMode(val);
+                      try { localStorage.setItem('vatos_agenda_sandbox_view_mode', val); } catch (e) {}
+                    }}
+                    className="bg-transparent text-blue-300 font-semibold text-xs border-none focus:outline-none cursor-pointer pr-1"
+                    title="Modo Sandbox en Agenda (Pruebas Locales)"
+                  >
+                    <option value="hybrid" className="bg-slate-900 text-white">Híbrido (Reales + Test)</option>
+                    <option value="sandbox_only" className="bg-slate-900 text-white">Solo Test (Sandbox)</option>
+                    <option value="real_only" className="bg-slate-900 text-white">Solo Reales</option>
+                  </select>
+                </div>
+              )}
+
               {!isStaff && !authLoading && (
                 <>
                   <OverdueNotificationsPopover
-                    reservations={reservations}
+                    reservations={effectiveReservations}
                     professionals={professionals}
                     clients={clients}
                     onUpdateStatus={handleUpdateStatus}
                     onSelectReservation={handleOpenDetailModal}
                   />
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsQuickConsultOpen(true)}
-                    className="gap-1.5 h-8 text-primary border-primary/30 hover:bg-primary/5 hover:text-primary dark:hover:bg-primary/10 rounded-xl"
-                  >
-                    <Zap className="h-4 w-4 fill-current" />
-                    <span className="hidden sm:inline font-bold text-xs uppercase tracking-wider">Espacio Rápido</span>
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsQuickConsultOpen(true)}
+                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
+                      >
+                        <Zap className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Espacio Rápido</TooltipContent>
+                  </Tooltip>
                 </>
               )}
 
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <HelpCircle className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors">
+                    <HelpCircle className="h-4 w-4" />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80 p-0" align="end">
@@ -1442,8 +1662,8 @@ export default function AgendaView() {
               </Popover>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={() => window.open('/agenda/display', '_blank')} className="hidden md:flex">
-                    <Cast className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" onClick={() => window.open('/agenda/display', '_blank')} className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors hidden md:flex">
+                    <Cast className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-[250px] space-y-2 p-3 text-center z-[100]">
@@ -1455,28 +1675,34 @@ export default function AgendaView() {
                   </p>
                 </TooltipContent>
               </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hidden md:flex">
-                    {isSidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {isSidebarCollapsed ? 'Mostrar panel lateral' : 'Ocultar panel lateral'}
-                </TooltipContent>
-              </Tooltip>
             </div>
           </div>
 
           {/* Esta es la linea que genera el scroll vertical */}
           <div className="flex-grow overflow-auto">
-            {/* Professional Headers */}
-            <div className="sticky top-0 z-50 grid gap-2 bg-background border-b shadow-sm" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
+            {!isLoading && filteredProfessionals.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto my-16">
+                <User className="h-10 w-10 text-slate-400 mb-3" />
+                <h3 className="text-base font-semibold text-foreground mb-1">
+                  {!canSee('ver_agenda_global') ? 'Perfil de Barbero No Asignado' : 'No hay barberos disponibles'}
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {!canSee('ver_agenda_global')
+                    ? `Tu usuario (${user?.email || 'activo'}) tiene rol Staff pero aún no está vinculado a una columna de barbero en la sucursal seleccionada. Pide a un Administrador que ingrese a Ajustes > Profesionales y configure tu correo exacto a tu barbero.`
+                    : 'No se encontraron profesionales activos para la sucursal o filtro seleccionado.'}
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Professional Headers */}
+                <div className="sticky top-0 z-50 grid gap-2 bg-background border-b shadow-sm" style={{ gridTemplateColumns: `64px repeat(${filteredProfessionals.length}, minmax(200px, 1fr))` }}>
               <div className="sticky left-0 bg-background z-[60]">
-                <div className="h-28 flex items-center justify-center p-2 border-b border-r">
+                <div className="h-[72px] flex items-center justify-center p-2 border-b border-r">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon"><Clock className="h-5 w-5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors">
+                        <Clock className="h-4 w-4" />
+                      </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       {[5, 10, 15, 30, 40, 45, 60].map(min => (
@@ -1728,6 +1954,7 @@ export default function AgendaView() {
                                 }}
                                 className={cn(
                                   "absolute rounded-lg border-l-4 transition-all duration-200 ease-in-out hover:shadow-lg flex items-center justify-between text-left p-1.5 overflow-hidden cursor-pointer select-none",
+                                  (event as any).isSandbox && "ring-2 ring-blue-500/80 shadow-[0_0_12px_rgba(59,130,246,0.35)]",
                                   event.layout.isMinimized
                                     ? ((event as any).estado === 'No asiste'
                                       ? "bg-orange-500/20 border-orange-500 text-orange-800 dark:text-orange-200 z-15"
@@ -1768,6 +1995,11 @@ export default function AgendaView() {
                                       <div className="absolute top-0 right-0 h-full flex items-center shrink-0 pointer-events-none gap-1">
                                         {/* Origin & Confirmation Icons */}
                                         <div className="flex items-center gap-1 h-full px-1.5 shrink-0">
+                                          {(event as any).isSandbox && (
+                                            <span className="text-[9px] font-black px-1 py-0.5 bg-blue-500/25 text-blue-300 border border-blue-500/50 rounded tracking-tighter" title="Cita Simulada de Prueba (Sandbox)">
+                                              TEST
+                                            </span>
+                                          )}
                                           {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
                                             <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
                                           )}
@@ -1861,6 +2093,8 @@ export default function AgendaView() {
               })}
             </div>
             </div>
+            </>
+          )}
           </div>
         </div>
       </div>
@@ -1872,6 +2106,7 @@ export default function AgendaView() {
         onFormSubmit={onDataRefresh}
         initialData={reservationInitialData}
         isEditMode={!!reservationInitialData?.id}
+        isSandboxMode={isLocalhost && sandboxViewMode !== 'real_only'}
       />
 
       <BlockScheduleForm

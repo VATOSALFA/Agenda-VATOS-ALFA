@@ -10,12 +10,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from '@/components/ui/button';
-import { Trash2, Loader2, ChevronsRight } from 'lucide-react';
+import { Trash2, Loader2, ChevronsRight, AlertTriangle, CheckCircle2, ShieldAlert, X } from 'lucide-react';
 import type { Reservation } from '@/lib/types';
 import { Label } from '../ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { evaluateCancellationPolicy } from '@/lib/booking-rules';
 
 interface CancelReservationModalProps {
   reservation: Reservation | null;
@@ -29,6 +30,23 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
   const [cancelReason, setCancelReason] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const depositPaid = Number(
+    reservation?.monto_anticipo ||
+    reservation?.anticipo_pagado ||
+    reservation?.anticipoPagado ||
+    reservation?.monto_pagado ||
+    0
+  );
+
+  const evaluation =
+    reservation?.fecha && reservation?.hora_inicio
+      ? evaluateCancellationPolicy({
+          appointmentDate: reservation.fecha,
+          appointmentTime: reservation.hora_inicio,
+          depositPaid,
+        })
+      : null;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -134,21 +152,70 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-[425px]"
+        hideCloseButton={true}
+        className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <DialogHeader>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 mb-4">
-            <Trash2 className="h-6 w-6 text-red-600" />
-          </div>
-          <DialogTitle className="text-center text-xl">¿Estás seguro?</DialogTitle>
-          <DialogDescription className="text-center">
-            Esta acción no se puede revertir. El estado de la reserva cambiará a "Cancelado".
-          </DialogDescription>
-        </DialogHeader>
+        {/* CABECERA OFICIAL VATOS ALFA */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          {/* Haz de luz animado en diagonal */}
+          <div className="header-light-beam" aria-hidden="true" />
 
-        <div className="py-4 space-y-4">
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <Trash2 className="h-5 w-5 text-rose-400 shrink-0" />
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                  Cancelar Reserva
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                  Esta acción no se puede revertir. El estado cambiará a &quot;Cancelado&quot;.
+                </DialogDescription>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-1 text-slate-300 hover:text-white transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+
+        {evaluation && (
+          <div
+            className={cn(
+              "p-3 rounded-xl border text-xs flex items-start gap-2.5 mx-1",
+              evaluation.isLate
+                ? "bg-rose-500/10 border-rose-500/30 text-rose-900 dark:text-rose-200"
+                : "bg-blue-500/10 border-blue-500/30 text-blue-900 dark:text-blue-200"
+            )}
+          >
+            {evaluation.isLate ? (
+              <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+            ) : (
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500 dark:text-blue-400 mt-0.5" />
+            )}
+            <div className="space-y-0.5 text-left">
+              <p className="font-bold">
+                {evaluation.isLate
+                  ? `Cancelación Tardía (Política de Reserva)`
+                  : `Cancelación a Tiempo (${evaluation.diffHours}h de anticipación)`}
+              </p>
+              <p className="text-[11px] leading-tight opacity-90">
+                {evaluation.message}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="py-2 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="cancel-reason">
               Motivo de la cancelación
@@ -230,13 +297,14 @@ export function CancelReservationModal({ reservation, isOpen, onOpenChange, onCo
             </div>
           </div>
         </div>
+        </div>
 
-        <DialogFooter className="sm:justify-center">
+        <DialogFooter className="px-5 pb-5 pt-0 sm:justify-end">
           <Button
             variant="outline"
             onClick={handleClose}
             type="button"
-            className="w-full sm:w-auto"
+            className="rounded-xl w-full sm:w-auto"
           >
             Volver
           </Button>

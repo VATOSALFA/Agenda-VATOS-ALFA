@@ -46,6 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 
   return {
+    metadataBase: new URL('https://vatosalfa.com'),
     title: title,
     description: description,
     manifest: '/manifest.json',
@@ -53,9 +54,11 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: icon,
       apple: icon,
     },
-    verification: {
-      google: 'TU-CODIGO-DE-VERIFICACION-AQUI', // Reemplazar con el código real de Search Console
-    }
+    ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? {
+      verification: {
+        google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+      }
+    } : {})
   };
 }
 

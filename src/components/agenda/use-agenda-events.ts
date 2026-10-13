@@ -22,7 +22,15 @@ export function useAgendaEvents(
                 const globalStart = startH + startM / 60;
                 const globalEnd = endH + endM / 60;
                 const globalDuration = Math.max(0.0833, globalEnd - globalStart);
-                const customer = clientMap.get(res.cliente_id);
+                const baseCustomer = (res as any).isSandbox
+                    ? ((res as any).customer || clientMap.get(res.cliente_id))
+                    : (clientMap.get(res.cliente_id) || (res as any).customer);
+                const customer = baseCustomer || ((res as any).cliente_nombre ? {
+                    id: res.cliente_id || 'sandbox-client',
+                    nombre: (res as any).cliente_nombre,
+                    telefono: (res as any).cliente_telefono || '',
+                    correo: (res as any).cliente_email || ''
+                } as unknown as Client : undefined);
 
                 if (!res.items || res.items.length === 0) {
                     return [{

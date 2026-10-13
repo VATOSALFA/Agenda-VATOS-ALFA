@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/firebase-server';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getClientReservations, getClientReservation, validateAgentBooking, assertLiveAgentMutation } from './agent-reservations';
 import { hasPendingDeposit, isUpcomingReservation } from './agent-utils';
 import { ai } from '@/ai/genkit';
@@ -296,11 +297,20 @@ export const consultarDisponibilidadTool = ai.defineTool(
               (customClientDuration && /corte/i.test(service.name || service.nombre || '') ? customClientDuration : getBarberServiceDuration([service], b.id, 30)), 0);
             const barberDuration = Math.max(baseDuration, duracionMinutos || 0);
 
+            const isSimulation = Boolean(
+              currentCtx?.simulation ||
+              currentCtx?.conversationId?.startsWith('sim-sandbox') ||
+              clienteTelefono?.startsWith('sim') ||
+              currentCtx?.clientPhone?.startsWith('sim') ||
+              process.env.NODE_ENV !== 'production'
+            );
+
             const res = await getAvailableSlots({
               date: curDate,
               professionalId: b.id,
               durationMinutes: barberDuration,
               minReservationBufferMinutes: config.minReservationBuffer ?? 30,
+              isSandbox: isSimulation,
             });
 
             if (res && 'slots' in res && Array.isArray(res.slots)) {
@@ -467,11 +477,163 @@ export async function resolveProducts(
   return resolved;
 }
 
+export const verificarORegistrarClienteTool = ai.defineTool(
+  {
+    name: 'verificar_o_registrar_cliente',
+    description:
+      'Verifica si el cliente ya está registrado en la base de datos de VATOS ALFA mediante su celular o correo electrónico. Si el cliente NO está registrado pero ya proporcionó su nombre completo, celular (10 dígitos) y correo electrónico, lo registra formalmente en la base de datos de clientes con su número de cliente asignado para que pueda agendar.',
+    inputSchema: z.object({
+      celular: z.string().describe('Número de celular o WhatsApp del cliente (10 dígitos en México, ej. 4421234567)'),
+      correoElectronico: z.string().optional().describe('Correo electrónico del cliente (ej. cliente@gmail.com)'),
+      nombreCompleto: z.string().optional().describe('Nombre completo del cliente (nombre y apellido)'),
+    }),
+    outputSchema: z.object({
+      registrado: z.boolean(),
+      clienteId: z.string().optional(),
+      nombre: z.string().optional(),
+      celular: z.string().optional(),
+      correo: z.string().optional(),
+      numeroCliente: z.union([z.number(), z.string()]).optional(),
+      faltanDatos: z.array(z.string()).optional(),
+      mensaje: z.string(),
+    }),
+  },
+  async ({ celular, correoElectronico, nombreCompleto }) => {
+    try {
+      const cleanPhone = (celular || '').replace(/\D/g, '').slice(-10);
+      const cleanEmail = (correoElectronico || '').trim().toLowerCase();
+      const db = getDb();
+      const clientsRef = db.collection('clientes');
+
+      let existingDoc: any = null;
+
+      // 1. Buscar por teléfono si tiene al menos 10 dígitos
+      if (cleanPhone && cleanPhone.length >= 10) {
+        for (const phoneVariant of [cleanPhone, `52${cleanPhone}`, `521${cleanPhone}`]) {
+          const q = await clientsRef.where('telefono', '==', phoneVariant).limit(1).get();
+          if (!q.empty) {
+            existingDoc = q.docs[0];
+            break;
+          }
+        }
+      }
+
+      // 2. Si no se encontró por teléfono, buscar por correo
+      if (!existingDoc && cleanEmail && cleanEmail.includes('@')) {
+        const q = await clientsRef.where('correo', '==', cleanEmail).limit(1).get();
+        if (!q.empty) {
+          existingDoc = q.docs[0];
+        } else {
+          const qLegacy = await clientsRef.where('email', '==', cleanEmail).limit(1).get();
+          if (!qLegacy.empty) existingDoc = qLegacy.docs[0];
+        }
+      }
+
+      // 3. Si ya existe en la base de datos
+      if (existingDoc) {
+        const data = existingDoc.data();
+        const currentEmail = data.correo || data.email || '';
+
+        // Si le faltaba el correo y ahora lo proporcionó, actualizarlo
+        if ((!currentEmail || !currentEmail.includes('@')) && cleanEmail && cleanEmail.includes('@')) {
+          await clientsRef.doc(existingDoc.id).update({ correo: cleanEmail, updated_at: FieldValue.serverTimestamp() });
+          data.correo = cleanEmail;
+        }
+
+        const hasEmail = Boolean(data.correo || data.email) && String(data.correo || data.email).includes('@');
+        const hasPhone = Boolean(data.telefono) && String(data.telefono).replace(/\D/g, '').length >= 10;
+
+        const missing: string[] = [];
+        if (!hasPhone) missing.push('celular');
+        if (!hasEmail) missing.push('correo electrónico');
+
+        if (missing.length > 0) {
+          return {
+            registrado: false,
+            clienteId: existingDoc.id,
+            nombre: `${data.nombre || ''} ${data.apellido || ''}`.trim() || 'Cliente',
+            celular: data.telefono,
+            correo: data.correo || data.email,
+            faltanDatos: missing,
+            mensaje: `El cliente fue encontrado en la base de datos pero le falta: ${missing.join(', ')}. Es requisito indispensable solicitárselo antes de agendar.`,
+          };
+        }
+
+        return {
+          registrado: true,
+          clienteId: existingDoc.id,
+          nombre: `${data.nombre || ''} ${data.apellido || ''}`.trim() || 'Cliente',
+          celular: data.telefono,
+          correo: data.correo || data.email,
+          numeroCliente: data.numero_cliente,
+          mensaje: `El cliente ya está registrado en la base de datos de VATOS ALFA y sus datos están completos. Puedes proceder a agendar su cita con crear_cita.`,
+        };
+      }
+
+      // 4. Si NO existe en la base de datos: verificar si contamos con los datos para registrarlo
+      const missing: string[] = [];
+      if (!nombreCompleto || nombreCompleto.trim().length < 2 || /cliente/i.test(nombreCompleto)) missing.push('nombre completo');
+      if (!cleanPhone || cleanPhone.length < 10) missing.push('celular (10 dígitos)');
+      if (!cleanEmail || !cleanEmail.includes('@')) missing.push('correo electrónico');
+
+      if (missing.length > 0) {
+        return {
+          registrado: false,
+          faltanDatos: missing,
+          mensaje: `El cliente NO está registrado en la base de datos. Para poder agendar su cita, es OBLIGATORIO que le solicites con amabilidad los siguientes datos faltantes: ${missing.join(', ')}.`,
+        };
+      }
+
+      // 5. Proceder a registrarlo en Firestore
+      const nameParts = (nombreCompleto || '').trim().split(/\s+/);
+      const firstName = nameParts[0] || 'Cliente';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      let nextClientNumber = 1;
+      try {
+        const maxSnap = await clientsRef.where('numero_cliente', '>=', 0).orderBy('numero_cliente', 'desc').limit(1).get();
+        if (!maxSnap.empty) {
+          const val = Number(maxSnap.docs[0].data().numero_cliente);
+          if (!isNaN(val)) nextClientNumber = val + 1;
+        }
+      } catch (_) {}
+
+      const newClientDoc = {
+        nombre: firstName,
+        apellido: lastName,
+        telefono: cleanPhone,
+        correo: cleanEmail,
+        numero_cliente: nextClientNumber,
+        creado_en: FieldValue.serverTimestamp(),
+        origen: 'asistente_virtual_janet',
+      };
+
+      const added = await clientsRef.add(newClientDoc);
+
+      return {
+        registrado: true,
+        clienteId: added.id,
+        nombre: `${firstName} ${lastName}`.trim(),
+        celular: cleanPhone,
+        correo: cleanEmail,
+        numeroCliente: nextClientNumber,
+        mensaje: `¡Cliente registrado exitosamente en la base de datos de VATOS ALFA con el ID #${nextClientNumber}! Ahora procede a crear su cita con crear_cita.`,
+      };
+    } catch (err: any) {
+      console.error('Error in verificarORegistrarClienteTool:', err);
+      return {
+        registrado: false,
+        mensaje: `Error al verificar o registrar cliente: ${err.message}`,
+      };
+    }
+  }
+);
+
 export const crearCitaTool = ai.defineTool(
   {
     name: 'crear_cita',
     description:
-      'Registra una cita con los servicios, profesional, fecha y hora explícitamente aceptados por el cliente. No usar ante una consulta de información. Devuelve si queda pendiente de anticipo.',
+      'Registra una cita con los servicios, profesional, fecha y hora explícitamente aceptados por el cliente. Requiere que el cliente tenga número celular y correo electrónico para poder registrarse en la base de datos.',
     inputSchema: z.object({
       fecha: z.string().describe('Fecha de la cita AAAA-MM-DD según el calendario actual de la conversación. No usar fechas pasadas ni cambiar la fecha solicitada.'),
       hora: z.string().describe('Hora de inicio (ejemplo 17:00 o 5:00 PM)'),
@@ -483,7 +645,8 @@ export const crearCitaTool = ai.defineTool(
       productoNombre: z.string().optional().describe('Nombre de un producto fisico que el cliente desea comprar o apartar junto a su cita (ej. "Cera para peinar", "After shave", "Polvo textura")'),
       productosNombres: z.array(z.string()).optional().describe('Lista opcional de nombres de productos fisicos a apartar junto a la cita'),
       nombreCliente: z.string().describe('Nombre del cliente. Si ya conoces al cliente en la conversación, USA SU NOMBRE DIRECTAMENTE SIN PEDÍRSELO. Solo pídelo si no se tiene nombre registrado o si agenda para otra persona.'),
-      telefonoCliente: z.string().describe('Teléfono del cliente. USA EL TELÉFONO DE LA CONVERSACIÓN DIRECTAMENTE SIN PEDÍRSELO. Solo pídelo si agenda para otra persona.'),
+      telefonoCliente: z.string().describe('Teléfono o celular del cliente (10 dígitos).'),
+      correoCliente: z.string().optional().describe('Correo electrónico del cliente (ej. cliente@gmail.com). REQUISITO OBLIGATORIO para agendar y registrar al cliente en la base de datos.'),
       notas: z.string().optional().describe('Notas o peticiones especiales'),
       duracionMinutos: z.number().int().positive().max(720).optional().describe('Duración total en minutos calculada para la cita (incluyendo duraciones personalizadas de notas de cliente o cabello difícil si aplica)'),
     }),
@@ -499,7 +662,7 @@ export const crearCitaTool = ai.defineTool(
       detalles: z.string().optional(),
     }),
   },
-  async ({ fecha, hora, profesionalId, barberoNombre, servicioIds, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, notas, duracionMinutos }) => {
+  async ({ fecha, hora, profesionalId, barberoNombre, servicioIds, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, correoCliente, notas, duracionMinutos }) => {
     try {
       const db = getDb();
       const targetFecha = (fecha || '').trim();
@@ -600,11 +763,42 @@ export const crearCitaTool = ai.defineTool(
         anticipoCalc.requiereAnticipo ? `Requiere anticipo: $${anticipoCalc.montoAnticipo}` : 'Agendado por Asistente Virtual Janet',
       ].filter(Boolean).join(' | ');
 
+      const chatContext = chatContextStorage.getStore();
+      const resolvedEmail = (correoCliente || chatContext?.clientEmail || '').trim().toLowerCase();
+      const cleanPhone = (telefonoCliente || chatContext?.clientPhone || '').replace(/\D/g, '').slice(-10);
+
+      // VALIDACIÓN ESTRICTA: El cliente DEBE contar con celular y correo electrónico registrado antes de agendar
+      if (!resolvedEmail || !resolvedEmail.includes('@')) {
+        return {
+          exito: false,
+          mensaje: 'No es posible crear la cita todavía: en VATOS ALFA es REQUISITO OBLIGATORIO que todo cliente cuente con correo electrónico registrado antes de agendar. Por favor solicítale con amabilidad su correo electrónico al cliente para poder registrarlo en el sistema y agendar su cita.',
+        };
+      }
+
+      if (!cleanPhone || cleanPhone.length < 10) {
+        return {
+          exito: false,
+          mensaje: 'No es posible crear la cita todavía: se requiere un número de celular válido de 10 dígitos para registrar la cita y enviar las confirmaciones de WhatsApp. Por favor solicítale su celular al cliente.',
+        };
+      }
+
+      const isSimulation = Boolean(
+        chatContext?.simulation ||
+        chatContext?.clientPhone?.startsWith('web') ||
+        chatContext?.clientPhone?.startsWith('sim') ||
+        telefonoCliente?.startsWith('web') ||
+        telefonoCliente?.startsWith('sim') ||
+        chatContext?.conversationId?.startsWith('web') ||
+        chatContext?.conversationId?.startsWith('sim') ||
+        process.env.NODE_ENV !== 'production'
+      );
+
       const res = await createPublicReservation({
         client: {
           name: firstName,
           lastName: lastName,
-          phone: telefonoCliente,
+          phone: cleanPhone || telefonoCliente,
+          email: resolvedEmail,
         },
         serviceIds: finalServIds,
         professionalId: finalProfId!,
@@ -613,8 +807,9 @@ export const crearCitaTool = ai.defineTool(
         duration: bookingDuration,
         customDuration: bookingDuration,
         notes: extraNotes,
-        origin: 'chatbot',
-        canal_reserva: 'chatbot',
+        origin: isSimulation ? 'simulador' : 'chatbot',
+        canal_reserva: isSimulation ? 'chatbot_sandbox' : 'chatbot',
+        isSandbox: isSimulation,
         status: anticipoCalc.requiereAnticipo ? 'Pendiente de pago' : 'Reservado',
         amountDue: anticipoCalc.montoAnticipo,
         totalAmount: anticipoCalc.montoTotal,
@@ -630,6 +825,7 @@ export const crearCitaTool = ai.defineTool(
             date: targetFecha,
             professionalId: finalProfId!,
             durationMinutes: barberDuration,
+            isSandbox: isSimulation,
           });
           const validSlots = (slotsRes as any).slots || [];
           if (validSlots.length > 0) {
@@ -647,6 +843,19 @@ export const crearCitaTool = ai.defineTool(
       }
 
       const reservationId = (res as any).reservationId || (res as any).id;
+
+      // Marcar en la conversación que ya se completó el agendamiento y no insistir con venta cruzada hoy
+      if (chatContext?.conversationId) {
+        try {
+          await db.collection('conversaciones').doc(chatContext.conversationId).set(
+            {
+              fecha_ultima_oferta_cruzada: new Date(),
+              updated_at: new Date(),
+            },
+            { merge: true }
+          );
+        } catch (_) {}
+      }
 
       // Si requiere anticipo, generar preferencia de Mercado Pago y asociar enlace
       if (anticipoCalc.requiereAnticipo) {
@@ -666,7 +875,8 @@ export const crearCitaTool = ai.defineTool(
 
         // Guardar link de pago en la reserva
         if (linkPago) {
-          await db.collection('reservas').doc(reservationId).set(
+          const targetCol = isSimulation ? 'reservas_sandbox' : 'reservas';
+          await db.collection(targetCol).doc(reservationId).set(
             {
               link_pago_anticipo: linkPago,
               updated_at: new Date(),
@@ -959,15 +1169,20 @@ export const cancelarCitaTool = ai.defineTool(
       await db.runTransaction(async transaction => {
         const fresh = await transaction.get(ref);
         const data = fresh.data();
-        if (!data || !isUpcomingReservation(data) || data.cliente_id !== doc.data().cliente_id || data.cliente_telefono !== doc.data().cliente_telefono || data.fecha !== doc.data().fecha || data.hora_inicio !== doc.data().hora_inicio) throw new Error('La cita cambió. Consulta nuevamente antes de cancelar.');
+        const initial = doc.data();
+        const clientMatch = (!initial.cliente_id || data?.cliente_id === initial.cliente_id) &&
+          (!initial.cliente_telefono || data?.cliente_telefono === initial.cliente_telefono);
+        if (!data || !isUpcomingReservation(data) || !clientMatch || data.fecha !== initial.fecha || data.hora_inicio !== initial.hora_inicio) {
+          throw new Error('La cita cambió o ya no está activa. Consulta nuevamente antes de cancelar.');
+        }
         transaction.update(ref, {
-        estado: 'Cancelado',
-        cancelada_por_cliente: true,
-        etiqueta_recordatorio: 'cancelada',
-        motivo_cancelacion: motivo || 'Cancelada por cliente via Asistente Virtual Janet',
-        cancelada_en: new Date(),
-        updated_at: new Date(),
-      });
+          estado: 'Cancelado',
+          cancelada_por_cliente: true,
+          etiqueta_recordatorio: 'cancelada',
+          motivo_cancelacion: motivo || 'Cancelada por cliente via Asistente Virtual Janet',
+          cancelada_en: new Date(),
+          updated_at: new Date(),
+        });
       });
 
       return { exito: true, mensaje: 'Tu cita ha sido cancelada correctamente en la agenda.' };
@@ -1421,6 +1636,7 @@ export const consultarPoliticasYTerminosTool = ai.defineTool(
 
 export function getAgentTools({ userPickingSlot }: { userPickingSlot?: boolean } = {}) {
   return [
+    verificarORegistrarClienteTool,
     consultarUbicacionTool,
     consultarServiciosTool,
     consultarBarberosTool,

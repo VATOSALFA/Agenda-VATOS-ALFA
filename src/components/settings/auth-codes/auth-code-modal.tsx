@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogFooter,
   DialogDescription,
@@ -17,7 +16,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2 } from 'lucide-react';
+import { Loader2, KeyRound, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
@@ -101,24 +100,43 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent hideCloseButton className="p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] sm:max-w-lg bg-card">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Editar Código' : 'Agregar Código'}</DialogTitle>
-              <DialogDescription>
-                Configura los detalles y permisos para este código de autorización.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-6 space-y-4">
+            {/* Cabecera Oficial Vatos Alfa */}
+            <div className="relative px-5 py-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white overflow-hidden border-b border-slate-800">
+              <div className="header-light-beam" />
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <KeyRound className="h-5 w-5 text-slate-300 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-sm font-semibold text-white tracking-tight">
+                      {isEditMode ? 'Editar Código' : 'Agregar Código'}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-300">
+                      Configura el PIN y permisos de autorización operativa.
+                    </DialogDescription>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre</FormLabel>
+                    <FormLabel className="text-xs font-semibold text-foreground">Nombre / Rol de Referencia</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej: Cajero Turno Mañana" {...field} />
+                      <Input placeholder="Ej: Supervisor de Turno" className="h-8 text-xs font-sans" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -129,22 +147,26 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                 name="code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Código</FormLabel>
+                    <FormLabel className="text-xs font-semibold text-foreground">Código PIN Secreto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ingresa el código secreto" {...field} />
+                      <Input placeholder="Ingresa el PIN" type="password" className="h-8 text-xs font-mono" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="space-y-3 pt-4 border-t">
+
+              <div className="rounded-xl border border-border/60 divide-y divide-border/40 overflow-hidden bg-muted/5">
                 <FormField
                   control={form.control}
                   name="reserves"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Reservas</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormItem className="flex items-center justify-between p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-xs font-medium text-foreground cursor-pointer">Permiso en Reservas</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">Permite anular o sobreescribir citas agendadas.</p>
+                      </div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" /></FormControl>
                     </FormItem>
                   )}
                 />
@@ -152,9 +174,12 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                   control={form.control}
                   name="cashbox"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Caja</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormItem className="flex items-center justify-between p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-xs font-medium text-foreground cursor-pointer">Permiso en Caja</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">Permite aperturas, cortes y movimientos de caja manuales.</p>
+                      </div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" /></FormControl>
                     </FormItem>
                   )}
                 />
@@ -162,9 +187,12 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                   control={form.control}
                   name="download"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Descarga de Archivos</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormItem className="flex items-center justify-between p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-xs font-medium text-foreground cursor-pointer">Descarga de Reportes</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">Autoriza la exportación de archivos Excel y métricas confidenciales.</p>
+                      </div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" /></FormControl>
                     </FormItem>
                   )}
                 />
@@ -172,21 +200,25 @@ export function AuthCodeModal({ isOpen, onClose, onSave, code }: AuthCodeModalPr
                   control={form.control}
                   name="invoiced_sales"
                   render={({ field }) => (
-                    <FormItem className="flex items-center justify-between">
-                      <FormLabel>Permiso de Ventas Facturadas</FormLabel>
-                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <FormItem className="flex items-center justify-between p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-xs font-medium text-foreground cursor-pointer">Ventas Facturadas</FormLabel>
+                        <p className="text-[11px] text-muted-foreground">Permite la emisión o cancelación de comprobantes fiscales.</p>
+                      </div>
+                      <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="scale-90" /></FormControl>
                     </FormItem>
                   )}
                 />
               </div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+
+            <DialogFooter className="border-t border-border/50 p-4 bg-muted/10 flex items-center justify-end gap-2">
+              <Button type="button" variant="outline" onClick={onClose} className="h-9 px-4 text-xs rounded-xl border-border/80">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Guardar
+              <Button type="submit" variant="alfa" disabled={isSubmitting} className="h-9 px-5 text-xs font-semibold">
+                {isSubmitting && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                {isEditMode ? 'Guardar Cambios' : 'Crear Código'}
               </Button>
             </DialogFooter>
           </form>

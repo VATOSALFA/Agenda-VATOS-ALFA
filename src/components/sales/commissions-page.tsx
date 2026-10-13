@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye, AlertTriangle } from "lucide-react";
+import { Calendar as CalendarIcon, Search, Download, Briefcase, ShoppingBag, DollarSign, Loader2, Eye, AlertTriangle, ShieldAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { where, Timestamp, doc, getDocs, collection, query as firestoreQuery } from "firebase/firestore";
@@ -474,23 +474,29 @@ export default function CommissionsPage() {
     )}
 
     <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                    Requiere Autorización
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                    Para descargar este archivo, es necesario un código de autorización con permisos de descarga.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4">
-                <Label htmlFor="auth-code">Código de Autorización</Label>
-                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+        <AlertDialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background max-w-md">
+            {/* Header Oficial Vatos Alfa */}
+            <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+                <div className="header-light-beam" aria-hidden="true" />
+                <div className="relative z-10 flex items-center gap-3">
+                    <ShieldAlert className="h-5 w-5 text-slate-300 shrink-0" />
+                    <div>
+                        <AlertDialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                            Requiere Autorización
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-slate-300">
+                            Ingresa un código con permisos de descarga
+                        </AlertDialogDescription>
+                    </div>
+                </div>
             </div>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
+            <div className="p-5 space-y-3">
+                <Label htmlFor="auth-code" className="text-xs font-semibold">Código de Autorización</Label>
+                <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} className="h-9 text-xs" />
+            </div>
+            <AlertDialogFooter className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2">
+                <AlertDialogCancel onClick={() => setAuthCode('')} className="rounded-xl text-xs h-9">Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDownloadRequest} className="btn-vatos-alfa rounded-xl text-xs h-9 px-4 font-bold">Aceptar</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>

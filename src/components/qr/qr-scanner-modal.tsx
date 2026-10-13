@@ -32,12 +32,16 @@ import {
   Tag,
   Loader2,
   X,
+  Gift,
+  Coins,
+  FileText,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/firebase-client';
 import {
   doc,
   getDoc,
+  setDoc,
   collection,
   query,
   where,
@@ -104,30 +108,42 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   // Datos del escaneo
   const [scannedClient, setScannedClient] = useState<Client | null>(null);
   const [scannedPromo, setScannedPromo] = useState<any | null>(null);
+  const [scannedBenefit, setScannedBenefit] = useState<any | null>(null);
+  const [isRedeemingBenefit, setIsRedeemingBenefit] = useState(false);
   const [todayReservation, setTodayReservation] = useState<any | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isUpdatingStamp, setIsUpdatingStamp] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [targetStamps, setTargetStamps] = useState<number>(10);
   const [rewardName, setRewardName] = useState<string>('Corte de Cortesía');
+  const [beneficiosList, setBeneficiosList] = useState<any[]>([]);
 
   useEffect(() => {
     if (!db) return;
     async function loadPaseAlfaConfig() {
       try {
-        const snap = await getDoc(doc(db, 'configuracion', 'pase_alfa'));
+        const [snap, snapApp] = await Promise.all([
+          getDoc(doc(db, 'configuracion', 'pase_alfa')),
+          getDoc(doc(db, 'configuracion', 'app_movil')),
+        ]);
+        let bList: any[] = [];
         if (snap.exists()) {
           const d = snap.data();
           if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
           if (d.recompensa) setRewardName(d.recompensa);
-        } else {
-          const snapApp = await getDoc(doc(db, 'configuracion', 'app_movil'));
-          if (snapApp.exists()) {
-            const d = snapApp.data().pase_alfa || snapApp.data();
-            if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
-            if (d.recompensa) setRewardName(d.recompensa);
+          if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
+            bList = d.beneficios_detallados;
           }
         }
+        if (snapApp.exists()) {
+          const d = snapApp.data().pase_alfa || snapApp.data();
+          if (Number(d.sellosRequeridos) > 0 && !snap.exists()) setTargetStamps(Number(d.sellosRequeridos));
+          if (d.recompensa && !snap.exists()) setRewardName(d.recompensa);
+          if (bList.length === 0 && Array.isArray(d.beneficios_detallados)) {
+            bList = d.beneficios_detallados;
+          }
+        }
+        setBeneficiosList(bList);
       } catch (_) {}
     }
     loadPaseAlfaConfig();
@@ -161,12 +177,28 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
         let phoneToSearch = '';
         let clientNumberToSearch = '';
         let promoCodeToSearch = '';
+        let detectedBenefit: any = null;
 
         // Intentar parsear como JSON
         try {
           const parsed = JSON.parse(decodedText);
           if (parsed && typeof parsed === 'object') {
-            if (parsed.type === 'VATOS_ALFA_CLIENT_PASS') {
+            if (parsed.type === 'VATOS_ALFA_BENEFIT_REDEMPTION' || parsed.benefitId) {
+              detectedBenefit = {
+                folio: parsed.folio || `VA-BNF-${Date.now().toString().slice(-6)}`,
+                benefitId: parsed.benefitId || 'beneficio_alfa',
+                benefitTitle: parsed.benefitTitle || parsed.titulo || 'Beneficio Pase Alfa',
+                clientId: parsed.clientId || '',
+                phone: parsed.phone || parsed.clientPhone || '',
+                clientName: parsed.clientName || '',
+                discount: parsed.discount || 100,
+                terminos: parsed.terminos || parsed.terms || '',
+                descripcion: parsed.descripcion || parsed.description || '',
+                fechaLimite: parsed.fechaLimite || parsed.expiresAt || null,
+              };
+              clientIdToSearch = parsed.clientId || '';
+              phoneToSearch = parsed.phone || parsed.clientPhone || '';
+            } else if (parsed.type === 'VATOS_ALFA_CLIENT_PASS') {
               clientIdToSearch = parsed.clientId || '';
               phoneToSearch = parsed.phone || '';
             } else if (parsed.type === 'VATOS_ALFA_PROMO') {
@@ -178,9 +210,15 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             }
           }
         } catch {
-          // No es JSON, puede ser texto plano (código de promo, id de cliente o teléfono)
+          // No es JSON, puede ser texto plano (folio de beneficio, código de promo, id de cliente o teléfono)
           const clean = decodedText.trim();
-          if (clean.length === 10 && /^\d+$/.test(clean)) {
+          if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-')) {
+            detectedBenefit = {
+              folio: clean,
+              benefitTitle: clean.includes('CUMPLE') ? 'Regalo de Cumpleaños' : clean.includes('CORTE') ? '10.° Corte Gratis' : 'Beneficio Pase Alfa',
+              benefitId: clean.includes('CUMPLE') ? 'regalo_cumpleanos' : clean.includes('CORTE') ? 'decimo_corte' : 'beneficio_alfa',
+            };
+          } else if (clean.length === 10 && /^\d+$/.test(clean)) {
             phoneToSearch = clean;
           } else if (/^\d{1,5}$/.test(clean)) {
             clientNumberToSearch = clean;
@@ -192,8 +230,61 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           }
         }
 
+        // Cruzar y enriquecer beneficio con los términos y configuración guardada en el sistema
+        if (detectedBenefit) {
+          const matchedConfig = beneficiosList.find(b =>
+            (b.id && detectedBenefit.benefitId && String(b.id).toLowerCase() === String(detectedBenefit.benefitId).toLowerCase()) ||
+            (b.titulo && detectedBenefit.benefitTitle && String(b.titulo).toLowerCase().trim() === String(detectedBenefit.benefitTitle).toLowerCase().trim())
+          );
+
+          if (matchedConfig) {
+            if (!detectedBenefit.benefitTitle || detectedBenefit.benefitTitle === 'Beneficio Pase Alfa') {
+              detectedBenefit.benefitTitle = matchedConfig.titulo;
+            }
+            if (!detectedBenefit.descripcion) detectedBenefit.descripcion = matchedConfig.descripcion || '';
+            if (!detectedBenefit.terminos) detectedBenefit.terminos = matchedConfig.terminos || '';
+            if (!detectedBenefit.fechaLimite) detectedBenefit.fechaLimite = matchedConfig.fechaLimite || null;
+          }
+
+          // Verificar si el beneficio cuenta con fecha límite y ya expiró
+          if (detectedBenefit.fechaLimite) {
+            try {
+              const expDate = new Date(detectedBenefit.fechaLimite + 'T23:59:59');
+              if (!isNaN(expDate.getTime()) && expDate < new Date()) {
+                detectedBenefit.isExpired = true;
+              }
+            } catch (_) {}
+          }
+        }
+
         if (!db) {
           throw new Error('Base de datos no disponible');
+        }
+
+        // Verificar si el folio del beneficio ya fue canjeado previamente
+        if (detectedBenefit?.folio) {
+          try {
+            const canjeSnap = await getDoc(doc(db, 'canjes_beneficios', detectedBenefit.folio));
+            if (canjeSnap.exists()) {
+              const cData = canjeSnap.data();
+              if (cData.estado === 'canjeado') {
+                playBeep(false);
+                let fechaStr = 'una fecha previa';
+                try {
+                  const dObj = cData.fechaCanje?.toDate ? cData.fechaCanje.toDate() : (cData.canjeadoEn?.toDate ? cData.canjeadoEn.toDate() : null);
+                  if (dObj) fechaStr = format(dObj, 'PPP p');
+                } catch (_) {}
+                toast({
+                  variant: 'destructive',
+                  title: '⚠️ Beneficio Ya Canjeado',
+                  description: `El folio "${detectedBenefit.folio}" ya fue utilizado el ${fechaStr} en ${cData.sucursal || 'Sombrerete'}.`,
+                });
+                return;
+              }
+            }
+          } catch (e) {
+            console.warn('Error verificando canjes_beneficios:', e);
+          }
         }
 
         // 1. Buscar si es un Cliente
@@ -229,36 +320,41 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           }
         }
 
-        if (foundClient) {
+        if (foundClient || detectedBenefit) {
           playBeep(true);
           setScannedClient(foundClient);
+          setScannedBenefit(detectedBenefit);
           setScannedPromo(null);
           await stopCamera();
 
-          // Buscar cita de hoy para check-in
-          try {
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
-            const qRes = query(
-              collection(db, 'reservas'),
-              where('fecha', '==', todayStr),
-              where('estado', 'in', ['Pendiente', 'Confirmada', 'Reservado', 'Asiste'])
-            );
-            const snapRes = await getDocs(qRes);
-            const clientRes = snapRes.docs
-              .map(d => ({ id: d.id, ...d.data() }))
-              .find(
-                (r: any) =>
-                  r.cliente_id === foundClient?.id ||
-                  (foundClient?.telefono && r.telefono === foundClient.telefono)
+          // Buscar cita de hoy para check-in si tenemos cliente
+          if (foundClient) {
+            try {
+              const todayStr = format(new Date(), 'yyyy-MM-dd');
+              const qRes = query(
+                collection(db, 'reservas'),
+                where('fecha', '==', todayStr),
+                where('estado', 'in', ['Pendiente', 'Confirmada', 'Reservado', 'Asiste'])
               );
-            setTodayReservation(clientRes || null);
-          } catch (e) {
-            console.warn('Error buscando cita de hoy:', e);
+              const snapRes = await getDocs(qRes);
+              const clientRes = snapRes.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .find(
+                  (r: any) =>
+                    r.cliente_id === foundClient?.id ||
+                    (foundClient?.telefono && r.telefono === foundClient.telefono)
+                );
+              setTodayReservation(clientRes || null);
+            } catch (e) {
+              console.warn('Error buscando cita de hoy:', e);
+            }
           }
 
           toast({
-            title: '¡Cliente Identificado!',
-            description: `${foundClient.nombre} ${foundClient.apellido || ''} escaneado con éxito.`,
+            title: detectedBenefit ? '🎉 ¡Beneficio Alfa Identificado!' : '¡Cliente Identificado!',
+            description: detectedBenefit
+              ? `${detectedBenefit.benefitTitle} (${detectedBenefit.folio}) listo para validar.`
+              : `${foundClient?.nombre} ${foundClient?.apellido || ''} escaneado con éxito.`,
           });
           return;
         }
@@ -313,7 +409,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   );
 
   const startCamera = useCallback(async () => {
-    if (!isOpen || scannedClient || scannedPromo || activeTab !== 'camera') return;
+    if (!isOpen || scannedClient || scannedPromo || scannedBenefit || activeTab !== 'camera') return;
     setCameraError(null);
 
     try {
@@ -370,13 +466,14 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       }
       setCameraError(msg);
     }
-  }, [isOpen, scannedClient, scannedPromo, activeTab, selectedCameraId, stopCamera, handleScanText]);
+  }, [isOpen, scannedClient, scannedPromo, scannedBenefit, activeTab, selectedCameraId, stopCamera, handleScanText]);
 
   // Manejar apertura y cierre del modal
   useEffect(() => {
     if (isOpen) {
       setScannedClient(null);
       setScannedPromo(null);
+      setScannedBenefit(null);
       setTodayReservation(null);
       setManualInput('');
       setActiveTab('camera');
@@ -540,19 +637,91 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
     }
   };
 
+  // Acción: Canjear beneficio QR específico
+  const handleRedeemBenefit = async (applyToCashbox = false) => {
+    if (!scannedBenefit || !db) return;
+    setIsRedeemingBenefit(true);
+
+    try {
+      const folio = scannedBenefit.folio || `VA-BNF-${Date.now().toString().slice(-6)}`;
+      const clientName = scannedClient ? `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim() : (scannedBenefit.clientName || 'Cliente Alfa');
+      const clientPhone = scannedClient?.telefono || scannedBenefit.phone || '';
+      const clientId = scannedClient?.id || scannedBenefit.clientId || '';
+
+      await setDoc(doc(db, 'canjes_beneficios', folio), {
+        folio,
+        benefitId: scannedBenefit.benefitId || 'beneficio_alfa',
+        benefitTitle: scannedBenefit.benefitTitle || 'Beneficio Pase Alfa',
+        clienteId: clientId,
+        clienteNombre: clientName,
+        telefono: clientPhone,
+        estado: 'canjeado',
+        canjeadoEn: serverTimestamp(),
+        fechaCanje: serverTimestamp(),
+        sucursal: 'Sombrerete',
+        registradoPor: 'Recepción',
+      }, { merge: true });
+
+      // Si es el 10.° corte gratis, reiniciar sellos del cliente en Firestore
+      if (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis') {
+        if (clientId) {
+          await updateDoc(doc(db, 'clientes', clientId), {
+            cortes_acumulados: 0,
+            corte_gratis_disponible: false,
+            actualizado_en: serverTimestamp(),
+          });
+          if (scannedClient) {
+            setScannedClient({ ...scannedClient, cortes_acumulados: 0, corte_gratis_disponible: false });
+          }
+        }
+      }
+
+      playBeep(true);
+      toast({
+        title: '🎉 ¡Beneficio Canjeado con Éxito!',
+        description: `Se registró el canje de "${scannedBenefit.benefitTitle}" para ${clientName}.`,
+      });
+
+      if (applyToCashbox) {
+        onOpenChange(false);
+        document.dispatchEvent(
+          new CustomEvent('new-sale', {
+            detail: {
+              client: scannedClient || undefined,
+              benefitRedeemed: { ...scannedBenefit, folio },
+              items: [],
+            },
+          })
+        );
+      } else {
+        setScannedBenefit({ ...scannedBenefit, isRedeemed: true });
+      }
+    } catch (err: any) {
+      console.error('Error al canjear beneficio:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error al canjear',
+        description: err.message,
+      });
+    } finally {
+      setIsRedeemingBenefit(false);
+    }
+  };
+
   // Acción: Cobrar en Caja de Ventas
   const handleOpenInCashbox = () => {
-    if (!scannedClient) return;
+    if (!scannedClient && !scannedBenefit) return;
     onOpenChange(false);
 
-    if (onClientSelectedForSale) {
+    if (onClientSelectedForSale && scannedClient) {
       onClientSelectedForSale(scannedClient);
     } else {
       // Disparar evento para abrir NewSaleSheet automáticamente con el cliente precargado
       document.dispatchEvent(
         new CustomEvent('new-sale', {
           detail: {
-            client: scannedClient,
+            client: scannedClient || undefined,
+            benefitRedeemed: scannedBenefit || undefined,
             items: [],
           },
         })
@@ -564,6 +733,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   const handleResetScanner = () => {
     setScannedClient(null);
     setScannedPromo(null);
+    setScannedBenefit(null);
     setTodayReservation(null);
     setManualInput('');
     setActiveTab('camera');
@@ -581,8 +751,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-xl bg-[#0F172A] border border-[#C5A880]/30 text-white shadow-2xl p-0 overflow-hidden">
           {/* Header */}
-          <DialogHeader className="bg-gradient-to-r from-[#161E35] to-[#202A49] p-5 border-b border-[#C5A880]/30">
-            <div className="flex items-center justify-between">
+          <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-[#C5A880]/30 relative overflow-hidden">
+            {/* Haz de luz animado sutil */}
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="h-9 w-9 rounded-xl bg-[#C5A880]/15 border border-[#C5A880]/40 flex items-center justify-center text-[#C5A880]">
                   <QrCode className="h-5 w-5" />
@@ -600,73 +773,190 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           </DialogHeader>
 
           <div className="p-5 space-y-4">
-            {/* VISTA 1: RESULTADO DE CLIENTE ESCANEADO */}
-            {scannedClient && (
+            {/* VISTA 1: RESULTADO DE CLIENTE O BENEFICIO ESCANEADO */}
+            {(scannedClient || scannedBenefit) && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                {/* Tarjeta de Identificación del Cliente */}
-                <div className="bg-[#161E35] border border-[#C5A880]/30 rounded-2xl p-4 shadow-lg relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A880]/5 rounded-full blur-2xl pointer-events-none" />
+                {/* TARJETA DESTACADA DE BENEFICIO ESCANEADO */}
+                {scannedBenefit && (
+                  <div className="bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border-2 border-[#C5A880]/60 rounded-2xl p-4 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A880]/10 rounded-full blur-2xl pointer-events-none" />
 
-                  <div className="flex items-start gap-3.5">
-                    <Avatar className="h-16 w-16 border-2 border-[#C5A880] shadow-md shrink-0">
-                      <AvatarImage
-                        src={scannedClient.fotoUrl || scannedClient.avatarUrl || (scannedClient as any).foto_perfil_url}
-                        alt={scannedClient.nombre}
-                        className="object-cover"
-                      />
-                      <AvatarFallback className="text-lg font-bold bg-[#202A49] text-[#C5A880]">
-                        {scannedClient.nombre?.charAt(0)}
-                        {scannedClient.apellido?.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="text-base font-bold text-white truncate">
-                          {scannedClient.nombre} {scannedClient.apellido || ''}
-                        </h3>
-                        {scannedClient.numero_cliente && (
-                          <Badge variant="outline" className="text-[10px] border-[#C5A880]/50 text-[#C5A880] px-1.5 py-0">
-                            #{scannedClient.numero_cliente}
-                          </Badge>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
-                        <span>{scannedClient.telefono || 'Sin teléfono'}</span>
-                        {scannedClient.correo && (
-                          <>
-                            <span>&bull;</span>
-                            <span className="truncate">{scannedClient.correo}</span>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Nivel / Tier */}
-                      <div className="mt-2 flex items-center gap-2">
-                        <Badge
-                          className={cn(
-                            'text-[10px] font-bold px-2 py-0.5 border',
-                            scannedClient.nivel === 'Alfa Black VIP'
-                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-                              : scannedClient.nivel === 'Alfa Gold'
-                              ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50'
-                              : 'bg-slate-700/50 text-slate-200 border-slate-600'
+                    <div className="flex items-start justify-between gap-3 relative z-10">
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-12 rounded-xl bg-[#C5A880] flex items-center justify-center text-black shadow-md shrink-0">
+                          <Gift className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/50 text-[10px] font-bold">
+                              BENEFICIO ALFA APP
+                            </Badge>
+                            {scannedBenefit.folio && (
+                              <span className="text-[10px] text-gray-300 font-mono bg-black/40 px-1.5 py-0.5 rounded border border-white/10">
+                                Folio: {scannedBenefit.folio}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-base font-bold text-white mt-1">
+                            {scannedBenefit.benefitTitle || 'Beneficio Exclusivo'}
+                          </h4>
+                          {(scannedBenefit.clientName || scannedClient) && (
+                            <p className="text-xs text-gray-300 mt-0.5">
+                              Cliente:{' '}
+                              <span className="text-white font-medium">
+                                {scannedClient
+                                  ? `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim()
+                                  : scannedBenefit.clientName}
+                              </span>
+                              {scannedBenefit.phone && (
+                                <span className="text-gray-400 ml-1">({scannedBenefit.phone})</span>
+                              )}
+                            </p>
                           )}
-                        >
-                          <Award className="h-3 w-3 mr-1 inline" />
-                          {scannedClient.nivel || 'Alfa Member'}
-                        </Badge>
+                          {scannedBenefit.descripcion && (
+                            <p className="text-xs text-slate-300 mt-1 leading-snug">
+                              {scannedBenefit.descripcion}
+                            </p>
+                          )}
+                          {scannedBenefit.fechaLimite && (
+                            <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-300">
+                              <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                              <span>Vigencia: hasta {scannedBenefit.fechaLimite}</span>
+                              {scannedBenefit.isExpired && (
+                                <span className="text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded ml-1">
+                                  Expirado
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
 
-                        {scannedClient.appVinculada && (
-                          <span className="text-[10px] text-emerald-400 font-semibold flex items-center">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mr-1 animate-pulse" />
-                            App Vinculada
-                          </span>
-                        )}
+                      {scannedBenefit.isRedeemed ? (
+                        <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-xs px-2.5 py-1">
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                          Canjeado
+                        </Badge>
+                      ) : scannedBenefit.isExpired ? (
+                        <Badge className="bg-red-500/20 text-red-300 border-red-500/40 text-xs px-2.5 py-1">
+                          Expirado
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-xs px-2.5 py-1 animate-pulse">
+                          Listo para Canjear
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Términos y Condiciones Oficiales del Beneficio */}
+                    {scannedBenefit.terminos && (
+                      <div className="mt-3 p-3 rounded-xl bg-black/40 border border-[#C5A880]/30 text-xs space-y-1 relative z-10">
+                        <span className="font-semibold text-[#C5A880] flex items-center gap-1.5 text-[11px] uppercase tracking-wide">
+                          <FileText className="h-3.5 w-3.5" /> Términos y Condiciones del Beneficio
+                        </span>
+                        <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line font-normal">
+                          {scannedBenefit.terminos}
+                        </p>
+                      </div>
+                    )}
+
+                    {!scannedBenefit.isRedeemed && (
+                      <div className="mt-4 pt-3 border-t border-[#C5A880]/20 flex gap-2 relative z-10">
+                        <Button
+                          disabled={isRedeemingBenefit}
+                          onClick={() => handleRedeemBenefit(true)}
+                          className="flex-1 bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-md"
+                        >
+                          {isRedeemingBenefit ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                          ) : (
+                            <CreditCard className="h-4 w-4 mr-1.5" />
+                          )}
+                          Canjear y Aplicar en Caja
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={isRedeemingBenefit}
+                          onClick={() => handleRedeemBenefit(false)}
+                          className="border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/10 text-xs h-10 px-3"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                          Solo Canjear
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tarjeta de Identificación del Cliente */}
+                {scannedClient && (
+                  <>
+                    <div className="bg-[#161E35] border border-[#C5A880]/30 rounded-2xl p-4 shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-[#C5A880]/5 rounded-full blur-2xl pointer-events-none" />
+
+                    <div className="flex items-start gap-3.5">
+                      <Avatar className="h-16 w-16 border-2 border-[#C5A880] shadow-md shrink-0">
+                        <AvatarImage
+                          src={scannedClient.fotoUrl || scannedClient.avatarUrl || (scannedClient as any).foto_perfil_url}
+                          alt={scannedClient.nombre}
+                          className="object-cover"
+                        />
+                        <AvatarFallback className="text-lg font-bold bg-[#202A49] text-[#C5A880]">
+                          {scannedClient.nombre?.charAt(0)}
+                          {scannedClient.apellido?.charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-base font-bold text-white truncate">
+                            {scannedClient.nombre} {scannedClient.apellido || ''}
+                          </h3>
+                          {scannedClient.numero_cliente && (
+                            <Badge variant="outline" className="text-[10px] border-[#C5A880]/50 text-[#C5A880] px-1.5 py-0">
+                              #{scannedClient.numero_cliente}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
+                          <span>{scannedClient.telefono || 'Sin teléfono'}</span>
+                          {scannedClient.correo && (
+                            <>
+                              <span>&bull;</span>
+                              <span className="truncate">{scannedClient.correo}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Nivel / Tier y AlfaCoins */}
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          <Badge
+                            className={cn(
+                              'text-[10px] font-bold px-2 py-0.5 border',
+                              scannedClient.nivel === 'Alfa Black VIP' || scannedClient.nivel === 'Alfa Gold'
+                                ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/50'
+                                : 'bg-slate-700/50 text-slate-200 border-slate-600'
+                            )}
+                          >
+                            <Award className="h-3 w-3 mr-1 inline text-[#C5A880]" />
+                            {scannedClient.nivel || 'Alfa Member'}
+                          </Badge>
+
+                          <Badge className="bg-[#C5A880]/10 border border-[#C5A880]/30 text-[#C5A880] text-[10px] font-bold px-2 py-0.5">
+                            <Coins className="h-3 w-3 mr-1 inline text-[#C5A880]" />
+                            {Number(scannedClient.alfaCoins ?? (scannedClient as any).alfa_coins ?? scannedClient.puntosLealtad ?? (scannedClient as any).puntos_lealtad ?? 0)} ALFA COINS
+                          </Badge>
+
+                          {scannedClient.appVinculada && (
+                            <span className="text-[10px] text-blue-400 font-semibold flex items-center">
+                              <span className="h-1.5 w-1.5 rounded-full bg-blue-400 mr-1 animate-pulse" />
+                              App Vinculada
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Pase Alfa: Tarjeta de Sellos Visual */}
                   <div className="mt-4 pt-3.5 border-t border-[#C5A880]/20">
@@ -692,10 +982,10 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                               'h-8 rounded-lg flex items-center justify-center border text-[11px] font-bold transition-all',
                               isFilled
                                 ? isLast
-                                  ? 'bg-gradient-to-br from-amber-400 to-amber-600 border-amber-300 text-black shadow-lg shadow-amber-500/30'
+                                  ? 'bg-[#C5A880] border-[#C5A880] text-black shadow-lg shadow-[#C5A880]/30'
                                   : 'bg-[#C5A880] border-[#C5A880] text-black shadow-sm'
                                 : isLast
-                                ? 'bg-amber-950/30 border-dashed border-amber-500/40 text-amber-400'
+                                ? 'bg-[#C5A880]/10 border-dashed border-[#C5A880]/40 text-[#C5A880]'
                                 : 'bg-[#0F172A] border-white/10 text-gray-500'
                             )}
                           >
@@ -717,11 +1007,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
                     {/* Banner si el corte gratis está listo */}
                     {freeCutAvailable ? (
-                      <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-emerald-950/80 to-amber-950/80 border border-emerald-500/50 flex items-center justify-between">
+                      <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border border-[#C5A880]/50 flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-amber-400 animate-bounce" />
+                          <Sparkles className="h-5 w-5 text-[#C5A880] animate-bounce" />
                           <div>
-                            <p className="text-xs font-bold text-emerald-300">¡{rewardName} Disponible!</p>
+                            <p className="text-xs font-bold text-[#C5A880]">¡{rewardName} Disponible!</p>
                             <p className="text-[10px] text-gray-300">El cliente completó sus {targetStamps} visitas en la app.</p>
                           </div>
                         </div>
@@ -729,7 +1019,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                           size="sm"
                           disabled={isUpdatingStamp}
                           onClick={handleRedeemFreeCut}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md"
+                          className="bg-[#C5A880] hover:bg-[#b0936b] text-black text-xs font-bold shadow-md"
                         >
                           {isUpdatingStamp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Canjear Ahora'}
                         </Button>
@@ -770,7 +1060,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                             className={cn(
                               'text-[9px] px-1.5 py-0',
                               todayReservation.estado === 'Asiste'
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                ? 'bg-blue-600/30 text-blue-200 border-blue-400/40'
                                 : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
                             )}
                           >
@@ -816,6 +1106,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                     Ver Ficha Completa
                   </Button>
                 </div>
+                </>
+                )}
 
                 <div className="pt-2 text-center">
                   <Button
@@ -825,7 +1117,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                     className="text-xs text-gray-400 hover:text-white"
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                    Escanear a otro cliente
+                    Escanear a otro cliente / código
                   </Button>
                 </div>
               </div>
@@ -834,12 +1126,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             {/* VISTA 2: RESULTADO DE PROMOCIÓN / CUPÓN ESCANEADO */}
             {scannedPromo && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                <div className="bg-[#161E35] border border-amber-500/40 rounded-2xl p-5 shadow-lg text-center space-y-3">
-                  <div className="mx-auto h-12 w-12 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400">
+                <div className="bg-[#161E35] border border-[#C5A880]/40 rounded-2xl p-5 shadow-lg text-center space-y-3">
+                  <div className="mx-auto h-12 w-12 rounded-2xl bg-[#C5A880]/20 border border-[#C5A880]/50 flex items-center justify-center text-[#C5A880]">
                     <Tag className="h-6 w-6" />
                   </div>
                   <div>
-                    <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-xs font-bold px-3 py-1">
+                    <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-xs font-bold px-3 py-1">
                       CÓDIGO: {scannedPromo.codigoDescuento}
                     </Badge>
                     <h3 className="text-lg font-bold text-white mt-2">{scannedPromo.titulo}</h3>
@@ -879,7 +1171,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             )}
 
             {/* VISTA 3: ESCÁNER ACTIVO (CÁMARA / MANUAL) */}
-            {!scannedClient && !scannedPromo && (
+            {!scannedClient && !scannedPromo && !scannedBenefit && (
               <div className="space-y-3">
                 {/* Selector de modo */}
                 <div className="flex bg-[#161E35] p-1 rounded-xl border border-white/10">
@@ -937,7 +1229,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
                       {cameraError && (
                         <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center p-4 text-center space-y-2">
-                          <AlertCircle className="h-8 w-8 text-amber-400" />
+                          <AlertCircle className="h-8 w-8 text-red-400" />
                           <p className="text-xs text-gray-200">{cameraError}</p>
                           <Button
                             size="sm"

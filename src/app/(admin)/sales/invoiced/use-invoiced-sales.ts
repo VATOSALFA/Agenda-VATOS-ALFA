@@ -20,12 +20,13 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
     const salesQueryConstraints = useMemo(() => {
         const constraints = [];
         const fromDate = activeFilters.dateRange?.from;
+        const toDate = activeFilters.dateRange?.to || fromDate;
 
         if (fromDate) {
             constraints.push(where('fecha_hora_venta', '>=', startOfDay(fromDate)));
         }
-        if (activeFilters.dateRange?.to) {
-            constraints.push(where('fecha_hora_venta', '<=', endOfDay(activeFilters.dateRange.to)));
+        if (toDate) {
+            constraints.push(where('fecha_hora_venta', '<=', endOfDay(toDate)));
         }
         return constraints;
     }, [activeFilters.dateRange]);

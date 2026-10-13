@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A flow to send a WhatsApp message (STUBBED - Twilio Disabled).
+ * @fileOverview A flow to send a WhatsApp message (Disabled).
  */
 
 import { ai } from '@/ai/genkit';
@@ -36,7 +36,7 @@ const sendWhatsAppMessageFlow = ai.defineFlow(
     outputSchema: WhatsAppMessageOutputSchema,
   },
   async (input) => {
-    console.log('[STUB] sendWhatsAppMessageFlow triggered. Twilio integration has been removed.');
+    console.log('[STUB] sendWhatsAppMessageFlow triggered. Messaging module is currently disabled.');
     console.log('[STUB] Message data:', input);
 
     return {

@@ -1,35 +1,38 @@
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, Plus, Trash2, GripVertical, Image as ImageIcon } from "lucide-react";
+import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { ImageUploader } from '@/components/shared/image-uploader';
+import { cn } from '@/lib/utils';
+import { GaleriaCortesManager } from '@/components/admin/galeria-cortes-manager';
+import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
+import PromotionsManager from '@/app/(admin)/settings/promotions/promotions-manager';
 
 const customerFields = [
-    { id: 'email', label: 'Email' },
-    { id: 'phone', label: 'Teléfono' },
-    { id: 'dob', label: 'Fecha de Nacimiento' },
-    { id: 'address', label: 'Dirección' },
-    { id: 'notes', label: 'Notas del Cliente' },
+    { id: 'email', label: 'Correo electrónico' },
+    { id: 'phone', label: 'Número telefónico' },
+    { id: 'dob', label: 'Fecha de nacimiento' },
+    { id: 'address', label: 'Dirección física' },
+    { id: 'notes', label: 'Notas del cliente' },
 ];
 
 export default function SitioWebPage() {
     const { toast } = useToast();
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [activeTab, setActiveTab] = useState('general');
 
     const form = useForm({
         defaultValues: {
@@ -39,8 +42,9 @@ export default function SitioWebPage() {
             showHoursBy: 'professional',
             exclusiveForCreatedClients: false,
             allowClientNotes: true,
-            heroDescription: '', // Added hero description
-            slotInterval: 30, // New default for slot interval
+            heroDescription: '',
+            description: '',
+            slotInterval: 30,
             predefinedNotes: '',
             cancellableReservations: true,
             editableReservations: true,
@@ -74,13 +78,11 @@ export default function SitioWebPage() {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
 
-                    // Normalize customerFields (handle Legacy Flat vs New Nested)
                     let normalizedFields = { ...form.getValues().customerFields };
 
                     if (data.customerFields) {
                         normalizedFields = { ...normalizedFields, ...data.customerFields };
                     } else {
-                        // Check for flat fields in root (Legacy migration)
                         customerFields.forEach(field => {
                             if (data[field.id]) {
                                 normalizedFields[field.id] = data[field.id];
@@ -91,8 +93,9 @@ export default function SitioWebPage() {
                     form.reset({
                         ...form.getValues(),
                         ...data,
-                        heroDescription: data.heroDescription || '', // Load hero description
-                        slotInterval: data.slotInterval || 30, // Load slot interval
+                        heroDescription: data.heroDescription || '',
+                        description: data.description || '',
+                        slotInterval: data.slotInterval || 30,
                         customerFields: normalizedFields
                     });
                 }
@@ -101,29 +104,27 @@ export default function SitioWebPage() {
             }
         };
         loadSettings();
-    }, [db]);
+    }, [db, form]);
 
     const onSubmit = async (data: any) => {
         if (!db) return;
         setIsSubmitting(true);
         try {
-            // Prepare data, ensuring numbers are numbers and cleaning up structure
             const saveData: any = {
                 ...data,
-                minReservationTime: Number(data.minReservationTime),
-                maxFutureTime: Number(data.maxFutureTime),
+                minReservationTime: Number(data.minReservationTime || 1),
+                maxFutureTime: Number(data.maxFutureTime || 14),
                 customerFields: data.customerFields
             };
 
-            // Remove legacy flat fields if they exist in the form data
             customerFields.forEach(field => {
                 delete saveData[field.id];
             });
 
             await setDoc(doc(db, 'settings', 'website'), saveData);
             toast({
-                title: "Configuración guardada con éxito",
-                description: "Los cambios en la configuración de tu sitio web han sido guardados."
+                title: "Configuración guardada",
+                description: "Los cambios en tu sitio web de reservas han sido actualizados."
             });
         } catch (error) {
             console.error("Error saving settings:", error);
@@ -135,326 +136,302 @@ export default function SitioWebPage() {
         } finally {
             setIsSubmitting(false);
         }
-    }
+    };
 
     return (
-        <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight">Sitio Web</h2>
-                <p className="text-muted-foreground">
-                    Configura todo lo relacionado a tu sitio web de reservas.
-                </p>
+        <div className="flex-1 space-y-4 max-w-5xl pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-border/60">
+                <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">Sitio Web</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Configura el portal de agendamiento online, políticas, galería de cortes, Pase Alfa y promociones.
+                    </p>
+                </div>
             </div>
 
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
+                    <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 h-auto p-1 bg-muted/20 border border-border/60 rounded-xl">
+                        <TabsTrigger
+                            value="general"
+                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                        >
+                            <Globe className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span>General</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="politicas"
+                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                        >
+                            <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span>Políticas</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="galeria"
+                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                        >
+                            <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span>Galería</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="pase_alfa"
+                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                        >
+                            <Award className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span>Pase Alfa</span>
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="promociones"
+                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer col-span-2 sm:col-span-1"
+                        >
+                            <Tag className="h-4 w-4 text-slate-400 shrink-0" />
+                            <span>Promociones</span>
+                        </TabsTrigger>
+                    </TabsList>
 
-
-                <Accordion type="multiple" defaultValue={[]} className="w-full space-y-4">
-                    <AccordionItem value="item-1" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Título y Subtítulo</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <Label>Título Principal (Slogan)</Label>
-                                    <span className="text-xs text-muted-foreground">
-                                        {(form.watch('slogan') || '').length}/50
-                                    </span>
+                    {/* 1. GENERAL (ENCABEZADO + CAMPOS DE CLIENTE) */}
+                    <TabsContent value="general" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                        {/* 1. ENCABEZADO Y SLOGAN */}
+                        <Card className="border border-border/70 shadow-xs overflow-hidden">
+                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                                <div className="flex items-center gap-2">
+                                    <Globe className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                        Encabezado y Slogan del Portal
+                                    </CardTitle>
                                 </div>
-                                <Input
-                                    placeholder="Tu slogan principal"
-                                    maxLength={50}
-                                    {...form.register('slogan')}
-                                />
-                            </div>
-
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <Label>Subtítulo (Descripción)</Label>
-                                    <span className="text-xs text-muted-foreground">
-                                        {(form.watch('heroDescription') || '').length}/50
-                                    </span>
+                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                                    Personaliza el título principal y la descripción visible para tus clientes al entrar a agendar.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-5 space-y-3.5">
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Título Principal (Slogan)
+                                        </Label>
+                                        <span className="text-[11px] text-muted-foreground font-sans">
+                                            {(form.watch('slogan') || '').length}/80 caracteres
+                                        </span>
+                                    </div>
+                                    <Input
+                                        placeholder="Tu slogan principal (ej. No es solo un corte. Es tu mejor versión.)"
+                                        maxLength={80}
+                                        className="h-8 text-xs sm:text-sm"
+                                        {...form.register('slogan')}
+                                    />
                                 </div>
-                                <Textarea
-                                    placeholder="Agenda tu cita en segundos. Selecciona sucursal, servicios y profesional."
-                                    maxLength={50}
-                                    {...form.register('heroDescription')}
-                                />
-                                <p className="text-[0.8rem] text-muted-foreground">
-                                    Texto que aparece debajo del título principal. Máximo 50 caracteres.
-                                </p>
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
 
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Subtítulo (Descripción de bienvenida)
+                                        </Label>
+                                        <span className="text-[11px] text-muted-foreground font-sans">
+                                            {(form.watch('heroDescription') || '').length}/250 caracteres
+                                        </span>
+                                    </div>
+                                    <Textarea
+                                        placeholder="Agenda tu cita en segundos con nuestros Master Barbers. Cortes clásicos, fades de alta precisión y el tradicional ritual de toalla caliente."
+                                        maxLength={250}
+                                        rows={3}
+                                        className="text-xs sm:text-sm resize-none"
+                                        {...form.register('heroDescription')}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Texto visible inmediatamente debajo del título principal en el Hero. Máximo 250 caracteres.
+                                    </p>
+                                </div>
 
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Descripción (Debajo del Hero)
+                                        </Label>
+                                        <span className="text-[11px] text-muted-foreground font-sans">
+                                            {(form.watch('description') || '').length}/450 caracteres
+                                        </span>
+                                    </div>
+                                    <Textarea
+                                        placeholder="En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente..."
+                                        maxLength={450}
+                                        rows={4}
+                                        className="text-xs sm:text-sm resize-none"
+                                        {...form.register('description')}
+                                    />
+                                    <p className="text-[11px] text-muted-foreground">
+                                        Párrafo informativo que se muestra en la página web inmediatamente abajo del Hero. Máximo 450 caracteres.
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
 
-                    <AccordionItem value="item-3" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Términos y condiciones</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="privacyPolicyEnabled">Políticas de Reserva y Privacidad</Label>
-                                <Controller
-                                    control={form.control}
-                                    name="privacyPolicyEnabled"
-                                    render={({ field }) => (
-                                        <Switch
-                                            id="privacyPolicyEnabled"
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                        />
-                                    )}
-                                />
-                            </div>
+                        {/* 2. CAMPOS REQUERIDOS AL AGENDAR (TABLA COMPACTA - REGLA 6) */}
+                        <Card className="border border-border/70 shadow-xs overflow-hidden">
+                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                                <div className="flex items-center gap-2">
+                                    <ListChecks className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                        Datos Solicitados al Cliente
+                                    </CardTitle>
+                                </div>
+                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                                    Elige qué datos pedir al cliente en el formulario de reserva online y cuáles son obligatorios.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                            <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Campo de Registro</TableHead>
+                                            <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Solicitar</TableHead>
+                                            <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Obligatorio</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {customerFields.map(field => (
+                                            <TableRow key={field.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                <TableCell className="py-1.5 px-3.5 text-xs font-medium text-foreground">
+                                                    {field.label}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-center">
+                                                    <Switch
+                                                        className="scale-90"
+                                                        checked={form.watch(`customerFields.${field.id}.use`)}
+                                                        onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.use`, checked)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-center">
+                                                    <Switch
+                                                        className="scale-90"
+                                                        checked={form.watch(`customerFields.${field.id}.required`)}
+                                                        onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.required`, checked)}
+                                                    />
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* 2. POLÍTICAS Y AVISO LEGAL */}
+                    <TabsContent value="politicas" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                        <Card className="border border-border/70 shadow-xs overflow-hidden">
+                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
+                                        <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                            Políticas y Términos Legales
+                                        </CardTitle>
+                                    </div>
+                                    <Controller
+                                        control={form.control}
+                                        name="privacyPolicyEnabled"
+                                        render={({ field }) => (
+                                            <Switch
+                                                id="privacyPolicyEnabled"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                </div>
+                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                                    Obliga al cliente a aceptar tus políticas de cancelación y términos antes de reservar.
+                                </CardDescription>
+                            </CardHeader>
 
                             {form.watch('privacyPolicyEnabled') && (
-                                <>
-                                    <div className="space-y-4 border-l-2 pl-4 border-slate-200 my-4">
-                                        <h4 className="font-semibold text-sm">Aviso de Privacidad</h4>
-                                        <div className="space-y-2">
-                                            <Label>URL Externa (opcional)</Label>
-                                            <Input
-                                                placeholder="https://vatosalfa.com/privacidad"
-                                                {...form.register('privacyUrl')}
-                                            />
-                                            <p className="text-[0.8rem] text-muted-foreground">Si se llena, el enlace llevará a esta dirección.</p>
+                                <CardContent className="p-3 sm:p-5 space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+                                        {/* Aviso de Privacidad */}
+                                        <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
+                                            <h4 className="text-xs font-semibold text-foreground">Aviso de Privacidad</h4>
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
+                                                <Input
+                                                    placeholder="https://vatosalfa.com/privacidad"
+                                                    className="h-8 text-xs font-sans"
+                                                    {...form.register('privacyUrl')}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-muted-foreground">O redacta el texto</Label>
+                                                <Textarea
+                                                    placeholder="Escribe aquí tu aviso de privacidad..."
+                                                    rows={3}
+                                                    className="text-xs resize-none"
+                                                    {...form.register('privacyText')}
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>O Texto del Aviso (para mostrar en ventana emergente)</Label>
-                                            <Textarea
-                                                placeholder="Escribe aquí tu aviso de privacidad..."
-                                                className="min-h-[100px]"
-                                                {...form.register('privacyText')}
-                                            />
-                                        </div>
-                                    </div>
 
-                                    <div className="space-y-4 border-l-2 pl-4 border-slate-200 my-4">
-                                        <h4 className="font-semibold text-sm">Términos y Condiciones</h4>
-                                        <div className="space-y-2">
-                                            <Label>URL Externa (opcional)</Label>
-                                            <Input
-                                                placeholder="https://vatosalfa.com/terminos"
-                                                {...form.register('termsUrl')}
-                                            />
-                                            <p className="text-[0.8rem] text-muted-foreground">Si se llena, el enlace llevará a esta dirección.</p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>O Texto de Términos (para mostrar en ventana emergente)</Label>
-                                            <Textarea
-                                                placeholder="Escribe aquí tus términos y condiciones..."
-                                                className="min-h-[100px]"
-                                                {...form.register('termsText')}
-                                            />
+                                        {/* Términos y Condiciones */}
+                                        <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
+                                            <h4 className="text-xs font-semibold text-foreground">Términos y Condiciones</h4>
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
+                                                <Input
+                                                    placeholder="https://vatosalfa.com/terminos"
+                                                    className="h-8 text-xs font-sans"
+                                                    {...form.register('termsUrl')}
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-[11px] text-muted-foreground">O redacta el texto</Label>
+                                                <Textarea
+                                                    placeholder="Escribe aquí tus términos y condiciones..."
+                                                    rows={3}
+                                                    className="text-xs resize-none"
+                                                    {...form.register('termsText')}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </>
+                                </CardContent>
                             )}
-                        </AccordionContent>
-                    </AccordionItem>
+                        </Card>
+                    </TabsContent>
 
-                    <AccordionItem value="item-4" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Configuración de Tiempos y Preferencias</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-6">
-                            <div className="space-y-2">
-                                <Label>Tiempo mínimo de reserva</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Horas mínimas requeridas para que un cliente reserve. No se podrá reservar con menos anticipación.
-                                </p>
-                                <div className="flex w-full items-center gap-2">
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        {...form.register('minReservationTime')}
-                                        className="flex-1"
-                                    />
-                                    <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
-                                        Horas
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Tiempo máximo futuro</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Tiempo máximo que una persona puede reservar a futuro. No se permiten citas para más de 365 días a futuro.
-                                </p>
-                                <div className="flex w-full items-center gap-2">
-                                    <Input
-                                        type="number"
-                                        min={0}
-                                        max={365}
-                                        {...form.register('maxFutureTime')}
-                                        className="flex-1"
-                                    />
-                                    <div className="flex items-center justify-center border rounded-md px-4 h-10 bg-muted text-muted-foreground min-w-[80px]">
-                                        Días
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Intervalo de horarios de cita</Label>
-                                <p className="text-sm text-muted-foreground">
-                                    Elige la separación entre los horarios disponibles.
-                                </p>
-                                <Controller
-                                    control={form.control}
-                                    name="slotInterval"
-                                    render={({ field }) => (
-                                        <Select
-                                            value={String(field.value)}
-                                            onValueChange={(val) => field.onChange(Number(val))}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Selecciona un intervalo" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="15">15 minutos</SelectItem>
-                                                <SelectItem value="30">30 minutos</SelectItem>
-                                                <SelectItem value="45">45 minutos</SelectItem>
-                                                <SelectItem value="60">1 hora</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    )}
-                                />
-                            </div>
+                    {/* 3. GALERÍA DE CORTES (ESPEJO CON APP MÓVIL) */}
+                    <TabsContent value="galeria" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                        <GaleriaCortesManager />
+                    </TabsContent>
 
+                    {/* 4. PASE ALFA (ESPEJO CON APP MÓVIL) */}
+                    <TabsContent value="pase_alfa" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                        <PaseAlfaManager />
+                    </TabsContent>
 
-                        </AccordionContent>
-                    </AccordionItem>
+                    {/* 5. PROMOCIONES (ESPEJO CON APP MÓVIL) */}
+                    <TabsContent value="promociones" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                        <PromotionsManager hideHeader />
+                    </TabsContent>
+                </Tabs>
 
-                    <AccordionItem value="item-5" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Datos requeridos para agendar</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Datos del cliente</TableHead>
-                                        <TableHead className="text-center">Usar al agendar online</TableHead>
-                                        <TableHead className="text-center">Obligatorio al agendar online</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {customerFields.map(field => (
-                                        <TableRow key={field.id}>
-                                            <TableCell className="font-medium">{field.label}</TableCell>
-                                            <TableCell className="text-center">
-                                                <Switch
-                                                    checked={form.watch(`customerFields.${field.id}.use`)}
-                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.use`, checked)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Switch
-                                                    checked={form.watch(`customerFields.${field.id}.required`)}
-                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.required`, checked)}
-                                                />
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </AccordionContent>
-                    </AccordionItem>
-
-                    <AccordionItem value="gallery" className="border rounded-lg bg-card">
-                        <AccordionTrigger className="p-6">Galería de Inspiración</AccordionTrigger>
-                        <AccordionContent className="p-6 pt-0 space-y-6">
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>Título de la Galería</Label>
-                                        <Input {...form.register('galleryTitle')} placeholder="GALERÍA ESTELAR" />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Subtítulo de la Galería</Label>
-                                        <Input {...form.register('gallerySubtitle')} placeholder="Explora • Zoom • Inspírate" />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4 pt-4 border-t">
-                                    <div className="flex items-center justify-between">
-                                        <h4 className="font-semibold">Tarjetas de la Galería</h4>
-                                        <Button 
-                                            type="button" 
-                                            size="sm" 
-                                            onClick={() => {
-                                                const currentCards = form.getValues('galleryCards') || [];
-                                                form.setValue('galleryCards', [
-                                                    ...currentCards,
-                                                    { id: Math.random().toString(36).substr(2, 9), imageUrl: '', title: '', alt: '' }
-                                                ]);
-                                            }}
-                                        >
-                                            <Plus className="w-4 h-4 mr-2" /> Agregar Imagen
-                                        </Button>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                                        {(form.watch('galleryCards') || []).map((card: any, index: number) => (
-                                            <Card key={card.id} className="bg-muted/30 border-dashed relative group overflow-hidden">
-                                                <Button 
-                                                    variant="destructive" 
-                                                    size="icon" 
-                                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
-                                                    onClick={() => {
-                                                        const currentCards = form.getValues('galleryCards');
-                                                        form.setValue('galleryCards', currentCards.filter((_: any, i: number) => i !== index));
-                                                    }}
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </Button>
-                                                <CardContent className="p-2 space-y-2">
-                                                    <Controller
-                                                        name={`galleryCards.${index}.imageUrl`}
-                                                        control={form.control}
-                                                        render={({ field }) => (
-                                                            <div className="h-32 bg-black/5 rounded-md overflow-hidden relative border border-dashed border-primary/20 flex items-center justify-center">
-                                                                <ImageUploader
-                                                                    folder="gallery"
-                                                                    currentImageUrl={field.value}
-                                                                    onUpload={(url) => field.onChange(url)}
-                                                                    onRemove={() => field.onChange('')}
-                                                                    className="w-full h-full border-none bg-transparent"
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    />
-                                                    <div className="space-y-1">
-                                                        <Input 
-                                                            placeholder="Título..." 
-                                                            className="h-7 text-xs font-medium"
-                                                            {...form.register(`galleryCards.${index}.title` as any)}
-                                                        />
-                                                        <Input 
-                                                            placeholder="Alt..." 
-                                                            className="h-6 text-[9px] opacity-60"
-                                                            {...form.register(`galleryCards.${index}.alt` as any)}
-                                                        />
-                                                    </div>
-                                                </CardContent>
-                                            </Card>
-                                        ))}
-                                    </div>
-
-                                    {(form.watch('galleryCards') || []).length === 0 && (
-                                        <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg bg-muted/20 text-muted-foreground">
-                                            <ImageIcon className="w-12 h-12 mb-2 opacity-20" />
-                                            <p>No hay imágenes en la galería.</p>
-                                            <p className="text-xs">Agrega fotos de tus mejores trabajos para inspirar a tus clientes.</p>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </AccordionContent>
-                    </AccordionItem>
-                </Accordion>
-
-                <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-                    <Button type="submit" disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Guardar Cambios
-                    </Button>
-                </div>
-
+                {/* Botón Guardar Cambios (Alfa) - Solo visible en General y Políticas */}
+                {['general', 'politicas'].includes(activeTab) && (
+                    <div className="sticky bottom-0 z-10 py-3 bg-background/90 backdrop-blur-md border-t border-border/40 flex justify-end">
+                        <Button
+                            type="submit"
+                            variant="alfa"
+                            disabled={isSubmitting}
+                            className="h-9 px-6 text-xs font-semibold"
+                        >
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                    Guardando...
+                                </>
+                            ) : (
+                                "Guardar Cambios"
+                            )}
+                        </Button>
+                    </div>
+                )}
             </form>
         </div>
     );

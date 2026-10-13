@@ -72,9 +72,13 @@ export function reservationMatchesPhone(reservation: any, phone: string): boolea
 
 export function isUpcomingReservation(reservation: any, now = new Date()): boolean {
   const state = cleanSearchStr(reservation.estado || '');
-  if (['cancelado', 'cancelada', 'completado', 'completada', 'finalizado', 'finalizada', 'no asiste', 'atendido', 'atendida', 'pagado', 'pagada'].includes(state)) return false;
+  if (['cancelado', 'cancelada', 'completado', 'completada', 'finalizado', 'finalizada', 'no asiste', 'atendido', 'atendida'].includes(state)) return false;
   const { todayIso, localTime } = getMexicoDateInfo(now);
-  return isValidBookingDate(reservation.fecha || '') && (reservation.fecha > todayIso || (reservation.fecha === todayIso && reservation.hora_inicio > localTime));
+  const endTime = reservation.hora_fin || reservation.hora_inicio || reservation.time || '';
+  return isValidBookingDate(reservation.fecha || '') && (
+    reservation.fecha > todayIso ||
+    (reservation.fecha === todayIso && (endTime >= localTime || (reservation.hora_inicio || '') >= localTime))
+  );
 }
 
 export function hasPendingDeposit(reservation: any): boolean {

@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/inspiracion' || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname.startsWith('/reserva') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
   const isAuthPage = pathname === '/login';
 
   // Helper function to validate user against Firestore

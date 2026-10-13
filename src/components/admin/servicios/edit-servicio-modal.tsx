@@ -14,10 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, Plus, Upload, Info, ImagePlus } from 'lucide-react';
+import { Loader2, Plus, Upload, Info, ImagePlus, Scissors, X, HelpCircle, Users, CreditCard, Camera, Check, Globe } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { collection, addDoc, updateDoc, doc, Timestamp, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -61,6 +66,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const { db } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('general');
   const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ServiceCategory>('categorias_servicios');
   const { data: allProfessionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
   const professionals = allProfessionals.filter(p => !p.deleted);
@@ -80,6 +86,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   });
 
   useEffect(() => {
+    setActiveTab('general');
     if (service) {
       reset({
         ...service,
@@ -118,6 +125,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose(); // Call the parent onClose (which updates parent state)
+      setActiveTab('general');
       // Safety hack: Force unlock body after animation to prevent freezing
       setTimeout(() => {
         document.body.style.removeProperty('pointer-events');
@@ -128,7 +136,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   };
 
 
-  const selectedProfessionals = watch('professionals', []);
+  const selectedProfessionals = watch('professionals') || [];
 
   const handleSelectAll = (checked: boolean | string) => {
     if (checked) {
@@ -258,6 +266,9 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
 
   const onErrors = (errors: FieldErrors<ServiceFormData>) => {
     console.log("Validation errors:", errors);
+    if (errors.name || errors.price || errors.duration || errors.category || errors.commission_value) {
+      setActiveTab('general');
+    }
     const missingFields: string[] = [];
     if (errors.name) missingFields.push('Nombre del servicio');
     if (errors.price) missingFields.push('Precio');
@@ -283,336 +294,484 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-4xl h-[90vh] flex flex-col" onCloseAutoFocus={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle>{service ? 'Editar Servicio' : 'Nuevo Servicio'}</DialogTitle>
-            <DialogDescription>
-              Configura un nuevo servicio para tu negocio.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          hideCloseButton={true}
+          className="max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          {/* Cabecera Oficial VATOS ALFA */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-border/60 shrink-0">
+            <div className="header-light-beam" />
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Scissors className="h-5 w-5 text-slate-300" />
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                    {service ? 'Editar Servicio' : 'Nuevo Servicio'}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    Configura los detalles, duración, comisión y profesionales del servicio.
+                  </DialogDescription>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
           <Form {...form}>
             <form onSubmit={handleSubmit(onSubmit, onErrors)} className="flex-grow flex flex-col overflow-hidden">
-              <div className="flex-grow overflow-hidden">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-6">
-                    <div className="space-y-2">
-                      <FormField
-                        control={control}
-                        name="name"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nombre del servicio *</FormLabel>
-                            <FormControl>
-                              <Input placeholder="El nombre aparecerá en el Sitio Web" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <FormField
-                        control={control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descripción detallada</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Textarea placeholder="Describe el servicio, qué incluye, recomendaciones, etc." {...field} maxLength={200} />
-                                <div className="absolute bottom-2 right-2 text-xs text-muted-foreground bg-background/80 px-1 rounded">
-                                  {field.value?.length || 0}/200
-                                </div>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-grow flex flex-col overflow-hidden">
+                {/* Navegación de Pestañas Compacta */}
+                <div className="px-4 sm:px-6 pt-3 shrink-0">
+                  <TabsList className="grid grid-cols-3 p-1 bg-muted/30 rounded-xl border border-border/60 h-10 w-full">
+                    <TabsTrigger 
+                      value="general" 
+                      className="rounded-lg text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all gap-1.5"
+                    >
+                      <Scissors className="h-3.5 w-3.5" />
+                      <span className="truncate">Datos y Precios</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="professionals" 
+                      className="rounded-lg text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all gap-1.5"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span className="truncate">Profesionales</span>
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-medium">
+                        {selectedProfessionals.length}
+                      </span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="payment-photo" 
+                      className="rounded-lg text-xs font-semibold data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-sm transition-all gap-1.5"
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      <span className="truncate">Pago y Foto</span>
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
+
+                {/* Contenido scrolleable optimizado */}
+                <div className="flex-grow overflow-hidden p-4 sm:p-6 pt-3">
+                  <ScrollArea className="h-full pr-2">
+                    {/* TAB 1: DATOS Y PRECIOS */}
+                    <TabsContent value="general" className="space-y-3.5 mt-0 pr-1">
+                      {/* Nombre y Categoría en 2 columnas simétricas */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <FormField
+                          control={control}
+                          name="name"
+                          render={({ field }) => (
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-xs font-semibold text-foreground">Nombre del servicio *</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Ej. Corte Tradicional, Afeitado Clásico..." className="h-9 text-xs bg-background border-border/60" {...field} />
+                              </FormControl>
+                              <FormMessage className="text-[11px]" />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={control}
+                          name="category"
+                          render={({ field }) => (
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-xs font-semibold text-foreground">Categoría *</FormLabel>
+                              <div className="flex gap-2">
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger className="h-9 text-xs border-border/60 bg-background"><SelectValue placeholder="Selecciona categoría" /></SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                    {categories.map(cat => (
+                                      <SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button variant="outline" size="sm" type="button" onClick={() => setIsCategoryModalOpen(true)} className="h-9 text-xs shrink-0 border-border/60 hover:bg-muted/20 gap-1 px-2.5">
+                                  <Plus className="h-3.5 w-3.5 text-slate-400" />
+                                  <span>Categorías</span>
+                                </Button>
                               </div>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                              <FormMessage className="text-[11px]" />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      {/* Precio, Duración y Comisión en 3 columnas en PC */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         <FormField
                           control={control}
                           name="price"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Precio *</FormLabel>
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-xs font-semibold text-foreground">Precio ($ MXN) *</FormLabel>
                               <FormControl>
-                                <Input type="number" placeholder="0" {...field} />
+                                <Input type="number" step="0.5" placeholder="0.00" className="h-9 text-xs bg-background border-border/60 font-medium" {...field} />
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage className="text-[11px]" />
                             </FormItem>
                           )}
                         />
-                      </div>
-                      <div className="space-y-2">
+
                         <FormField
                           control={control}
                           name="duration"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Duración (min) *</FormLabel>
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-xs font-semibold text-foreground">Duración estándar (min) *</FormLabel>
                               <FormControl>
-                                <Input type="number" placeholder="0" {...field} />
+                                <Input type="number" placeholder="30" className="h-9 text-xs bg-background border-border/60" {...field} />
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage className="text-[11px]" />
                             </FormItem>
                           )}
                         />
-                      </div>
-                    </div>
-                    <div className="space-y-4 rounded-lg border p-4">
 
-                      <div className="flex items-center space-x-2">
-                        <Controller name="visible_en_web" control={control} render={({ field }) => (
-                          <Checkbox id="visible-en-web" checked={field.value} onCheckedChange={field.onChange} />
-                        )} />
-                        <Label htmlFor="visible-en-web" className="font-normal">Mostrar en sitio web</Label>
-                      </div>
-                      <div className="space-y-2">
                         <FormField
                           control={control}
                           name="commission_value"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Comisión *</FormLabel>
-                              <div className="flex items-center gap-2">
+                            <FormItem className="space-y-1.5">
+                              <FormLabel className="text-xs font-semibold text-foreground">Comisión por defecto *</FormLabel>
+                              <div className="flex items-center gap-1.5">
                                 <FormControl>
-                                  <Input type="number" placeholder="Porcentaje" className="flex-grow" {...field} />
+                                  <Input type="number" placeholder="50" className="h-9 text-xs bg-background border-border/60 flex-grow" {...field} />
                                 </FormControl>
-                                <Controller name="commission_type" control={control} render={({ field: typeField }) => (
-                                  <Select onValueChange={typeField.onChange} value={typeField.value || '%'}>
-                                    <SelectTrigger className="w-[80px]"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="%">%</SelectItem>
-                                      <SelectItem value="$">$</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                )} />
+                                <Controller 
+                                  name="commission_type" 
+                                  control={control} 
+                                  render={({ field: typeField }) => (
+                                    <Select onValueChange={typeField.onChange} value={typeField.value || '%'}>
+                                      <SelectTrigger className="w-[82px] h-9 text-xs border-border/60 px-2 shrink-0 font-medium"><SelectValue /></SelectTrigger>
+                                      <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                        <SelectItem value="%" className="text-xs">% Porc.</SelectItem>
+                                        <SelectItem value="$" className="text-xs">$ Fijo</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  )} 
+                                />
                               </div>
-                              <FormMessage />
+                              <FormMessage className="text-[11px]" />
                             </FormItem>
                           )}
                         />
                       </div>
-                    </div>
-                    <div className="space-y-2">
+
+                      {/* Tarjeta de Reservas Online */}
+                      <div 
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none",
+                          watch('visible_en_web') 
+                            ? "border-blue-500/40 bg-blue-500/5 text-foreground shadow-xs" 
+                            : "border-border/60 bg-muted/10 text-muted-foreground"
+                        )}
+                        onClick={() => setValue('visible_en_web', !watch('visible_en_web'), { shouldDirty: true })}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Globe className={cn("h-4 w-4 shrink-0", watch('visible_en_web') ? "text-blue-400" : "text-slate-400")} />
+                          <div>
+                            <p className="text-xs font-semibold text-foreground">Mostrar en sitio web para reservas online</p>
+                            <p className="text-[11px] text-muted-foreground">Permite a los clientes seleccionar y apartar este servicio desde el catálogo web y app móvil.</p>
+                          </div>
+                        </div>
+                        <Switch 
+                          checked={watch('visible_en_web')} 
+                          onCheckedChange={(val) => setValue('visible_en_web', val, { shouldDirty: true })} 
+                          onClick={(e) => e.stopPropagation()} 
+                          className="scale-90"
+                        />
+                      </div>
+
+                      {/* Descripción */}
                       <FormField
                         control={control}
-                        name="category"
+                        name="description"
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Categoría *</FormLabel>
-                            <div className="flex gap-2">
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger><SelectValue placeholder="Selecciona una categoría" /></SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {categories.map(cat => (
-                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button variant="outline" type="button" onClick={() => setIsCategoryModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Nueva categoría</Button>
+                          <FormItem className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <FormLabel className="text-xs font-semibold text-foreground">Descripción del servicio (opcional)</FormLabel>
+                              <span className="text-[10px] text-muted-foreground">{field.value?.length || 0}/200 caracteres</span>
                             </div>
-                            <FormMessage />
+                            <FormControl>
+                              <Textarea 
+                                placeholder="Describe el servicio, técnica, recomendaciones o qué incluye..." 
+                                rows={3} 
+                                maxLength={200} 
+                                className="text-xs font-sans leading-relaxed text-foreground bg-background border-border/60 min-h-[64px]" 
+                                {...field} 
+                              />
+                            </FormControl>
+                            <FormMessage className="text-[11px]" />
                           </FormItem>
                         )}
                       />
-                    </div>
-                    <div className="space-y-4 pt-4 border-t">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-lg font-semibold">Selecciona que profesionales realizarán el servicio</h4>
+                    </TabsContent>
+
+                    {/* TAB 2: PROFESIONALES ASIGNADOS */}
+                    <TabsContent value="professionals" className="space-y-3 mt-0 pr-1">
+                      <div className="p-3 bg-muted/10 rounded-xl border border-border/60 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="select-all-professionals"
-                            checked={professionals.length > 0 && professionals.every(p => selectedProfessionals?.includes(p.id))}
-                            onCheckedChange={handleSelectAll}
-                          />
-                          <Label htmlFor="select-all-professionals">Seleccionar todos</Label>
+                          <Users className="h-4 w-4 text-blue-400 shrink-0" />
+                          <div>
+                            <h4 className="text-xs sm:text-sm font-bold text-foreground">Profesionales Asignados</h4>
+                            <p className="text-[11px] text-muted-foreground">Selecciona qué barberos realizan este servicio y ajusta su duración individual.</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 text-[11px] font-medium">
+                            {selectedProfessionals.length} de {professionals.length} asignados
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            type="button"
+                            className="h-7 text-[11px] border-border/60 text-foreground hover:bg-muted/20 gap-1.5 px-2.5"
+                            onClick={() => handleSelectAll(selectedProfessionals.length !== professionals.length)}
+                          >
+                            <Check className={cn("h-3 w-3", selectedProfessionals.length === professionals.length ? "text-blue-400" : "text-slate-400")} />
+                            {selectedProfessionals.length === professionals.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                          </Button>
                         </div>
                       </div>
-                      <Accordion type="single" collapsible className="w-full" defaultValue="item-1">
-                        <AccordionItem value="item-1">
-                          <AccordionTrigger>Ver/Ocultar lista de profesionales</AccordionTrigger>
-                          <AccordionContent>
-                            <Controller
-                              name="professionals"
-                              control={control}
-                              render={({ field }) => (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-                                  {professionals.map(prof => {
-                                    const isChecked = field.value?.includes(prof.id);
-                                    return (
-                                      <div key={prof.id} className="flex flex-col space-y-2 border p-3 rounded-md bg-slate-50/50">
-                                        <div className="flex items-center space-x-2">
-                                          <Checkbox
-                                            id={prof.id}
-                                            checked={isChecked}
-                                            onCheckedChange={(checked) => {
-                                              const currentValue = field.value || [];
-                                              const newValue = checked
-                                                ? [...currentValue, prof.id]
-                                                : currentValue.filter((id) => id !== prof.id);
-                                              field.onChange(newValue);
-                                              // Remove specific duration when unchecked
-                                              if (!checked) {
-                                                const currentDurations = { ...watch('durationPorProfesional') };
-                                                delete currentDurations[prof.id];
-                                                setValue('durationPorProfesional', currentDurations);
-                                              }
-                                            }}
-                                          />
-                                          <Label htmlFor={prof.id} className="font-medium cursor-pointer">{prof.name}</Label>
-                                        </div>
-                                        {isChecked && (
-                                          <div className="flex items-center justify-between pl-6 mt-1 border-t pt-2 border-slate-200">
-                                            <Label className="text-xs text-muted-foreground mr-2 whitespace-nowrap">Duración (min)</Label>
-                                            <Controller
-                                              name={`durationPorProfesional.${prof.id}`}
-                                              control={control}
-                                              render={({ field: durField }) => (
-                                                <Input 
-                                                  type="number" 
-                                                  placeholder={watch('duration') ? watch('duration').toString() : 'Global'} 
-                                                  className="h-7 text-xs w-20 text-center" 
-                                                  value={durField.value === undefined || durField.value === null ? '' : durField.value}
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    durField.onChange(val === '' ? '' : Number(val));
-                                                  }}
-                                                />
-                                              )}
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            />
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    </div>
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Pago en línea</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <Controller
-                          name="payment_type"
-                          control={control}
-                          render={({ field }) => (
-                            <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-4">
-                              <div className="flex items-start space-x-3 rounded-md border p-4">
-                                <RadioGroupItem value="online-deposit" id="online-deposit" />
-                                <div className="grid gap-1.5 leading-none w-full">
-                                  <Label htmlFor="online-deposit">Abono en línea</Label>
-                                  <p className="text-sm text-muted-foreground">Tus clientes deberán pagar una parte del servicio al agendar. Podrás cobrar con POS de AgendaPro el monto restante.</p>
-                                  {(watch('payment_type') === 'online-deposit') && (
-                                    <div className="pt-2">
-                                      <Label className="text-xs">Monto del anticipo</Label>
-                                      <div className="flex gap-2">
-                                        <div className="flex-grow">
-                                          <Controller
-                                            control={control}
-                                            name="payment_amount_value"
-                                            render={({ field }) => (
-                                              <Input type="number" placeholder="50" className="h-9" {...field} />
-                                            )}
-                                          />
-                                        </div>
-                                        <div className="w-[80px]">
-                                          <Controller
-                                            control={control}
-                                            name="payment_amount_type"
-                                            render={({ field }) => (
-                                              <Select onValueChange={field.onChange} value={field.value || '%'}>
-                                                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                  <SelectItem value="%">%</SelectItem>
-                                                  <SelectItem value="$">$</SelectItem>
-                                                </SelectContent>
-                                              </Select>
-                                            )}
-                                          />
-                                        </div>
+                      <Controller
+                        name="professionals"
+                        control={control}
+                        render={({ field }) => (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                            {professionals.map(prof => {
+                              const isChecked = field.value?.includes(prof.id);
+                              return (
+                                <div
+                                  key={prof.id}
+                                  className={cn(
+                                    "flex flex-col justify-between p-2.5 rounded-xl border transition-all text-xs select-none",
+                                    isChecked
+                                      ? "border-blue-500/40 bg-blue-500/5 text-foreground shadow-xs"
+                                      : "border-border/60 bg-muted/10 text-muted-foreground hover:border-border/80"
+                                  )}
+                                >
+                                  <div 
+                                    className="flex items-center space-x-2.5 cursor-pointer"
+                                    onClick={() => {
+                                      const currentValue = field.value || [];
+                                      const newValue = isChecked
+                                        ? currentValue.filter((id: string) => id !== prof.id)
+                                        : [...currentValue, prof.id];
+                                      field.onChange(newValue);
+                                      if (isChecked) {
+                                        const currentDurations = { ...watch('durationPorProfesional') };
+                                        delete currentDurations[prof.id];
+                                        setValue('durationPorProfesional', currentDurations);
+                                      }
+                                    }}
+                                  >
+                                    <Checkbox
+                                      id={prof.id}
+                                      checked={isChecked}
+                                      onCheckedChange={(checked) => {
+                                        const currentValue = field.value || [];
+                                        const newValue = checked
+                                          ? [...currentValue, prof.id]
+                                          : currentValue.filter((id: string) => id !== prof.id);
+                                        field.onChange(newValue);
+                                        if (!checked) {
+                                          const currentDurations = { ...watch('durationPorProfesional') };
+                                          delete currentDurations[prof.id];
+                                          setValue('durationPorProfesional', currentDurations);
+                                        }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <Label htmlFor={prof.id} className="text-xs font-semibold cursor-pointer truncate text-foreground">
+                                      {prof.name}
+                                    </Label>
+                                  </div>
+
+                                  {isChecked && (
+                                    <div className="flex items-center justify-between pl-6 mt-2 pt-1.5 border-t border-border/40">
+                                      <span className="text-[11px] text-muted-foreground">Duración en cabina:</span>
+                                      <div className="flex items-center gap-1">
+                                        <Controller
+                                          name={`durationPorProfesional.${prof.id}`}
+                                          control={control}
+                                          render={({ field: durField }) => (
+                                            <Input
+                                              type="number"
+                                              placeholder={watch('duration') ? watch('duration').toString() : '30'}
+                                              className="h-6.5 text-xs w-16 text-center bg-background border-border/60 font-medium px-1"
+                                              value={durField.value === undefined || durField.value === null ? '' : durField.value}
+                                              onChange={(e) => {
+                                                const val = e.target.value;
+                                                durField.onChange(val === '' ? '' : Number(val));
+                                              }}
+                                            />
+                                          )}
+                                        />
+                                        <span className="text-[11px] text-muted-foreground">min</span>
                                       </div>
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 rounded-md border p-4">
-                                <RadioGroupItem value="full-payment" id="full-payment" />
-                                <div className="grid gap-1.5 leading-none">
-                                  <Label htmlFor="full-payment">Se debe pagar en línea</Label>
-                                  <p className="text-sm text-muted-foreground">Tus clientes deberán realizar el pago completo de este servicio en línea.</p>
-                                  <div className="pt-2">
-                                    <Label className="text-xs">Descuento sólo para pago en línea</Label>
-                                    <div className="relative">
-                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-                                      <Input placeholder="Incentiva el pago en línea" className="pl-6 h-9" />
-                                    </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      />
+                    </TabsContent>
+
+                    {/* TAB 3: PAGO EN LÍNEA Y FOTO */}
+                    <TabsContent value="payment-photo" className="space-y-4 mt-0 pr-1">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Política de Pago en Línea */}
+                        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 sm:p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CreditCard className="h-4 w-4 text-blue-400 shrink-0" />
+                              <h4 className="text-xs sm:text-sm font-bold text-foreground">Política de Pago en Línea</h4>
+                            </div>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button type="button" className="text-slate-400 hover:text-white transition-colors p-1">
+                                  <HelpCircle className="h-3.5 w-3.5" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-3 text-xs border-2 border-blue-500 rounded-xl bg-card shadow-xl">
+                                Define si el cliente debe abonar un anticipo de garantía al agendar por la web, liquidar el total o pagar directo en el local.
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+
+                          <Controller
+                            name="payment_type"
+                            control={control}
+                            render={({ field }) => (
+                              <RadioGroup onValueChange={field.onChange} value={field.value} className="space-y-2">
+                                {/* Opción 1: Sin cobro */}
+                                <div className={cn(
+                                  "flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer select-none",
+                                  field.value === 'no-payment' ? "border-blue-500/50 bg-blue-500/5" : "border-border/60 hover:bg-muted/10"
+                                )}>
+                                  <RadioGroupItem value="no-payment" id="no-payment" className="mt-0.5" />
+                                  <div className="grid gap-0.5 leading-none">
+                                    <Label htmlFor="no-payment" className="text-xs font-semibold cursor-pointer text-foreground">Sin cobro anticipado</Label>
+                                    <p className="text-[11px] text-muted-foreground">El cliente aparta gratis y paga el total al presentarse en sucursal.</p>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="flex items-start space-x-3 rounded-md border p-4">
-                                <RadioGroupItem value="no-payment" id="no-payment" />
-                                <div className="grid gap-1.5 leading-none">
-                                  <Label htmlFor="no-payment">No se puede pagar en línea</Label>
-                                  <p className="text-sm text-muted-foreground">Tus clientes no podrán pagar este servicio en línea pero si agendarlo.</p>
-                                </div>
-                              </div>
-                            </RadioGroup>
-                          )}
-                        />
-                      </CardContent>
-                    </Card>
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Agregar imágenes</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          ¡Carga hasta 3 imágenes de tu servicio! Te recomendamos que tengan un tamaño mínimo de 200x200px y un peso máximo de 3MB.
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 gap-4">
-                          <ImageUploader
-                            key={fields[0]?.id || `placeholder-0`}
-                            folder="servicios"
-                            currentImageUrl={fields[0]?.value}
-                            onUpload={(url) => {
-                              if (fields[0]) {
-                                update(0, { value: url });
-                              } else {
-                                append({ value: url });
-                              }
-                            }}
-                            onRemove={() => {
-                              if (fields[0]) {
-                                remove(0);
-                              }
-                            }}
+                                {/* Opción 2: Anticipo */}
+                                <div className={cn(
+                                  "flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer select-none",
+                                  field.value === 'online-deposit' ? "border-blue-500/50 bg-blue-500/5" : "border-border/60 hover:bg-muted/10"
+                                )}>
+                                  <RadioGroupItem value="online-deposit" id="online-deposit" className="mt-0.5" />
+                                  <div className="grid gap-1 leading-none w-full">
+                                    <Label htmlFor="online-deposit" className="text-xs font-semibold cursor-pointer text-foreground">Abono en línea (Anticipo de Garantía)</Label>
+                                    <p className="text-[11px] text-muted-foreground">Paga un anticipo para apartar su lugar y liquida el resto en el local.</p>
+                                    {field.value === 'online-deposit' && (
+                                      <div className="pt-2">
+                                        <Label className="text-[11px] font-medium text-foreground mb-1 block">Monto o porcentaje del anticipo</Label>
+                                        <div className="flex gap-2">
+                                          <div className="flex-grow">
+                                            <Controller
+                                              control={control}
+                                              name="payment_amount_value"
+                                              render={({ field: subField }) => (
+                                                <Input type="number" placeholder="50" className="h-8 text-xs bg-background border-border/60 font-medium" {...subField} />
+                                              )}
+                                            />
+                                          </div>
+                                          <div className="w-[80px]">
+                                            <Controller
+                                              control={control}
+                                              name="payment_amount_type"
+                                              render={({ field: subType }) => (
+                                                <Select onValueChange={subType.onChange} value={subType.value || '%'}>
+                                                  <SelectTrigger className="h-8 text-xs border-border/60 font-medium px-2"><SelectValue /></SelectTrigger>
+                                                  <SelectContent className="border-2 border-blue-500 rounded-xl">
+                                                    <SelectItem value="%" className="text-xs">% Porc.</SelectItem>
+                                                    <SelectItem value="$" className="text-xs">$ Fijo</SelectItem>
+                                                  </SelectContent>
+                                                </Select>
+                                              )}
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Opción 3: Pago completo */}
+                                <div className={cn(
+                                  "flex items-start space-x-2.5 rounded-lg border p-2.5 transition-colors cursor-pointer select-none",
+                                  field.value === 'full-payment' ? "border-blue-500/50 bg-blue-500/5" : "border-border/60 hover:bg-muted/10"
+                                )}>
+                                  <RadioGroupItem value="full-payment" id="full-payment" className="mt-0.5" />
+                                  <div className="grid gap-0.5 leading-none">
+                                    <Label htmlFor="full-payment" className="text-xs font-semibold cursor-pointer text-foreground">Pago completo en línea (100%)</Label>
+                                    <p className="text-[11px] text-muted-foreground">El cliente liquida el valor total del servicio al reservar en la web.</p>
+                                  </div>
+                                </div>
+                              </RadioGroup>
+                            )}
                           />
                         </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </ScrollArea>
-              </div>
-              <DialogFooter className="pt-6 border-t flex-shrink-0">
-                <Button variant="ghost" type="button" onClick={() => handleOpenChange(false)}>Cerrar</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar
+
+                        {/* Fotografía del Servicio */}
+                        <div className="rounded-xl border border-border/60 bg-card/60 p-3.5 sm:p-4 space-y-3 flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <Camera className="h-4 w-4 text-blue-400 shrink-0" />
+                            <div>
+                              <h4 className="text-xs sm:text-sm font-bold text-foreground">Fotografía del Servicio</h4>
+                              <p className="text-[11px] text-muted-foreground">Imagen cuadrada de mínimo 200x200px (máx. 3MB).</p>
+                            </div>
+                          </div>
+                          <div className="flex-grow flex items-center justify-center pt-1">
+                            <ImageUploader
+                              key={fields[0]?.id || `placeholder-0`}
+                              folder="servicios"
+                              currentImageUrl={fields[0]?.value}
+                              onUpload={(url) => {
+                                if (fields[0]) {
+                                  update(0, { value: url });
+                                } else {
+                                  append({ value: url });
+                                }
+                              }}
+                              onRemove={() => {
+                                if (fields[0]) {
+                                  remove(0);
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </ScrollArea>
+                </div>
+              </Tabs>
+
+              {/* Footer */}
+              <div className="p-3 sm:p-4 border-t border-border/60 flex items-center justify-end gap-2 bg-muted/20 shrink-0">
+                <Button variant="ghost" size="sm" type="button" onClick={() => handleOpenChange(false)} className="text-xs border-border/60">
+                  Cancelar
                 </Button>
-              </DialogFooter>
+                <Button variant="alfa" size="sm" type="submit" disabled={isSubmitting} className="text-xs px-5">
+                  {isSubmitting && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  {service ? 'Guardar Cambios' : 'Crear Servicio'}
+                </Button>
+              </div>
             </form>
           </Form>
         </DialogContent>

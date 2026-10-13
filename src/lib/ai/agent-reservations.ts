@@ -10,20 +10,51 @@ export function assertLiveAgentMutation() {
 // Identity comes from the conversation, never from a model-supplied reservation ID.
 export async function getClientReservations(phone?: string) {
   const context = chatContextStorage.getStore();
-  const trustedPhone = context?.clientPhone || phone || '';
-  const normalized = normalizeClientPhone(trustedPhone);
-  if (!normalized) throw new Error('No hay un teléfono válido para identificar al cliente. Solicita apoyo de recepción.');
+  const candidatePhones = [phone, context?.clientPhone].filter((p): p is string => Boolean(p && p.trim()));
+  const isWebOrSimPhone = candidatePhones.some(p => p.startsWith('web') || p.startsWith('sim'));
+  const normalizedPhones = candidatePhones.map(normalizeClientPhone).filter(Boolean);
+
+  if (normalizedPhones.length === 0 && !isWebOrSimPhone) {
+    throw new Error('No hay un teléfono válido para identificar al cliente. Solicita apoyo de recepción.');
+  }
+
   const db = getDb();
   const ids = new Set<string>();
-  for (const value of new Set([trustedPhone, normalized, `52${normalized}`, `521${normalized}`])) {
-    const clients = await db.collection('clientes').where('telefono', '==', value).get();
-    clients.docs.forEach(doc => ids.add(doc.id));
+  if (context?.clientId) {
+    ids.add(context.clientId);
   }
-  const snapshot = await db.collection('reservas').where('fecha', '>=', getMexicoDateInfo().todayIso).get();
-  return snapshot.docs.filter(doc => {
+
+  for (const norm of normalizedPhones) {
+    for (const val of new Set([norm, `52${norm}`, `521${norm}`])) {
+      const clients = await db.collection('clientes').where('telefono', '==', val).get();
+      clients.docs.forEach(doc => ids.add(doc.id));
+    }
+  }
+
+  const { todayIso } = getMexicoDateInfo();
+  // Consultar concurrentemente reservas reales y reservas_sandbox para soporte completo en simulador y localhost
+  const [realSnap, sandboxSnap] = await Promise.all([
+    db.collection('reservas').where('fecha', '>=', todayIso).get(),
+    db.collection('reservas_sandbox').where('fecha', '>=', todayIso).get(),
+  ]);
+
+  const allDocs = [...realSnap.docs, ...sandboxSnap.docs];
+
+  return allDocs.filter(doc => {
     const data = doc.data();
-    return isUpcomingReservation(data) && (reservationMatchesPhone(data, trustedPhone) || ids.has(data.cliente_id));
-  }).sort((a, b) => `${a.data().fecha} ${a.data().hora_inicio}`.localeCompare(`${b.data().fecha} ${b.data().hora_inicio}`));
+    const phoneMatches = candidatePhones.some(p => reservationMatchesPhone(data, p)) ||
+      (isWebOrSimPhone && [
+        data.cliente_telefono,
+        data.customerPhone,
+        data.clientPhone,
+        data.customer?.telefono,
+        data.customer?.phone,
+      ].some(val => candidatePhones.includes(val)));
+
+    const clientIdMatches = ids.size > 0 && Boolean(data.cliente_id && ids.has(data.cliente_id));
+
+    return isUpcomingReservation(data) && (phoneMatches || clientIdMatches);
+  }).sort((a, b) => `${a.data().fecha} ${a.data().hora_inicio || a.data().time || ''}`.localeCompare(`${b.data().fecha} ${b.data().hora_inicio || b.data().time || ''}`));
 }
 
 export async function getClientReservation(id?: string, phone?: string) {

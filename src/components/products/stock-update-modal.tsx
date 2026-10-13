@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X, Package } from 'lucide-react';
 import type { Product, StockMovement } from '@/lib/types';
 
 interface StockUpdateModalProps {
@@ -171,33 +171,56 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+        {/* Official Vatos Alfa Header */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 text-white border-b border-blue-900/40">
+          <div className="header-light-beam" />
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Package className="h-5 w-5 text-slate-300" />
+              <div>
+                <DialogTitle className="font-bold text-base sm:text-lg text-white leading-tight">
+                  Ajustar Stock
+                </DialogTitle>
+                <p className="text-xs text-slate-300 truncate max-w-[280px]">
+                  {product.nombre} • Stock actual: <strong className="text-white">{product.stock}</strong>
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>Actualizar Stock: {product.nombre}</DialogTitle>
-              <DialogDescription>Stock actual: {product.stock}</DialogDescription>
-            </DialogHeader>
-            <div className="py-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <FormField
                 control={form.control}
                 name="changeType"
                 render={({ field }) => (
-                  <FormItem className="space-y-3">
-                    <FormLabel>Acción</FormLabel>
+                  <FormItem className="space-y-2">
+                    <FormLabel className="text-xs font-semibold">Tipo de Ajuste</FormLabel>
                     <FormControl>
                       <RadioGroup
                         onValueChange={field.onChange}
                         defaultValue={field.value}
-                        className="flex space-x-4"
+                        className="grid grid-cols-2 gap-3"
                       >
-                        <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormItem className="flex items-center space-x-2 space-y-0 rounded-xl border border-border/60 p-3 hover:bg-muted/20 cursor-pointer">
                           <FormControl><RadioGroupItem value="add" /></FormControl>
-                          <FormLabel className="font-normal">Aumentar</FormLabel>
+                          <FormLabel className="font-medium text-xs cursor-pointer">Aumentar (+)</FormLabel>
                         </FormItem>
-                        <FormItem className="flex items-center space-x-2 space-y-0">
+                        <FormItem className="flex items-center space-x-2 space-y-0 rounded-xl border border-border/60 p-3 hover:bg-muted/20 cursor-pointer">
                           <FormControl><RadioGroupItem value="subtract" /></FormControl>
-                          <FormLabel className="font-normal">Disminuir</FormLabel>
+                          <FormLabel className="font-medium text-xs cursor-pointer">Disminuir (-)</FormLabel>
                         </FormItem>
                       </RadioGroup>
                     </FormControl>
@@ -210,9 +233,9 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
                 name="quantity"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cantidad</FormLabel>
+                    <FormLabel className="text-xs font-semibold">Cantidad de unidades</FormLabel>
                     <FormControl>
-                      <Input type="number" min="1" {...field} />
+                      <Input type="number" min="1" className="rounded-xl h-10" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -223,11 +246,12 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
                 name="comment"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Comentarios (Opcional)</FormLabel>
+                    <FormLabel className="text-xs font-semibold">Comentarios (Opcional)</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Razón del ajuste..."
-                        className="resize-none"
+                        placeholder="Razón del ajuste (ej: recepción de proveedor, merma, rotura)..."
+                        className="resize-none rounded-xl"
+                        rows={3}
                         {...field}
                       />
                     </FormControl>
@@ -236,11 +260,11 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
                 )}
               />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>
+            <DialogFooter className="p-4 sm:p-5 border-t border-border/60 flex items-center justify-end gap-3 bg-muted/10">
+              <Button type="button" variant="outline" className="rounded-xl border-border/60 hover:bg-white/5 font-medium" onClick={onClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" variant="alfa" className="rounded-xl font-bold shadow-md px-5" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Actualizar Stock
               </Button>

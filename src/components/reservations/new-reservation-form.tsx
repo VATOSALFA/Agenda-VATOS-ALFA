@@ -6,10 +6,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 import { parse, format, set, getDay, addMinutes, getHours, getMinutes, isToday as dateFnsIsToday, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -35,15 +35,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown, AlertTriangle, CalendarPlus, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, CreditCard, DollarSign } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { sendManualBookingConfirmation } from '@/lib/actions/booking';
+import { isShortNoticeAppointment, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
-import { Avatar, AvatarFallback } from '../ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
@@ -132,22 +134,35 @@ const createReservationSchema = (isEditMode: boolean) => z.object({
 type ReservationFormData = z.infer<ReturnType<typeof createReservationSchema>>;
 
 interface NewReservationFormProps {
-  onFormSubmit: () => void;
+  onFormSubmit: (newReservation?: any) => void;
   isOpen?: boolean; // For standalone dialog usage
   onOpenChange?: (isOpen: boolean) => void; // For standalone dialog usage
   isEditMode?: boolean;
   initialData?: Partial<Reservation> & { id?: string };
   isDialogChild?: boolean;
+  isSandboxMode?: boolean;
 }
 
 const statusOptions = [
-  { value: 'Reservado', label: 'Reservado', color: 'bg-blue-500' },
-  { value: 'Confirmado', label: 'Confirmado', color: 'bg-yellow-500' },
-  { value: 'Asiste', label: 'Asiste', color: 'bg-pink-500' },
-  { value: 'No asiste', label: 'No Asistió', color: 'bg-orange-500' },
-  { value: 'Pendiente', label: 'Pendiente', color: 'bg-red-500' },
-  { value: 'En espera', label: 'En Espera', color: 'bg-green-500' },
+  { value: 'Reservado', label: 'Reservado', color: 'bg-blue-500', hex: '#3b82f6' },
+  { value: 'Confirmado', label: 'Confirmado', color: 'bg-yellow-400', hex: '#facc15' },
+  { value: 'En espera', label: 'En Espera', color: 'bg-emerald-500', hex: '#22c55e' },
+  { value: 'Asiste', label: 'Asiste', color: 'bg-pink-400', hex: '#ec4899' },
+  { value: 'No asiste', label: 'No Asistió', color: 'bg-orange-400', hex: '#f97316' },
+  { value: 'Pendiente', label: 'Pendiente de Pago', color: 'bg-red-500', hex: '#ef4444' },
+  { value: 'Cancelado', label: 'Cancelado', color: 'bg-slate-400', hex: '#94a3b8' },
 ];
+
+const getStatusInfo = (status?: string) => {
+  const norm = (status || '').toLowerCase().trim();
+  if (norm.includes('confirm')) return { label: 'Confirmado', hex: '#facc15', color: 'bg-yellow-400' };
+  if (norm.includes('espera')) return { label: 'En Espera', hex: '#22c55e', color: 'bg-emerald-500' };
+  if (norm.includes('asist') && !norm.includes('no')) return { label: 'Asiste', hex: '#ec4899', color: 'bg-pink-400' };
+  if (norm.includes('no asist') || norm.includes('no_asist') || norm.includes('inasist')) return { label: 'No Asistió', hex: '#f97316', color: 'bg-orange-400' };
+  if (norm.includes('pend') || norm.includes('adeudo')) return { label: 'Pendiente', hex: '#ef4444', color: 'bg-red-500' };
+  if (norm.includes('cancel')) return { label: 'Cancelado', hex: '#94a3b8', color: 'bg-slate-400' };
+  return { label: 'Reservado', hex: '#3b82f6', color: 'bg-blue-500' };
+};
 
 const ClientCombobox = React.memo(({ clients, loading, value, onChange, onSearchChange }: { clients: Client[], loading: boolean, value: string, onChange: (value: string) => void, onSearchChange?: (val: string) => void }) => {
   return (
@@ -175,7 +190,16 @@ const safeParseDate = (rawDate: any): Date | null => {
   return null;
 }
 
-export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initialData, isEditMode = false, isDialogChild = false }: NewReservationFormProps) {
+export function NewReservationForm({
+  isOpen,
+  onOpenChange,
+  onFormSubmit,
+  initialData,
+  isEditMode = false,
+  isDialogChild = false,
+  isSandboxMode: propSandboxMode = false
+}: NewReservationFormProps) {
+  const isTargetSandbox = Boolean((initialData as any)?.isSandbox || propSandboxMode);
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -189,6 +213,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const [confirmedLocks, setConfirmedLocks] = useState<Record<string, boolean>>({});
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [depositPaid, setDepositPaid] = useState<boolean>(false);
+  const [depositMethod, setDepositMethod] = useState<string>('efectivo');
+  const [showDepositWarningModal, setShowDepositWarningModal] = useState<boolean>(false);
+  const [pendingSaveData, setPendingSaveData] = useState<any>(null);
   const { user, db } = useAuth();
   const { selectedLocalId } = useLocal();
 
@@ -205,6 +233,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     resolver: zodResolver(formSchema),
     mode: 'onBlur',
     defaultValues: {
+      fecha: new Date(),
       notas: '',
       nota_interna: '',
       estado: 'Reservado',
@@ -233,6 +262,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   const { data: clients, loading: clientsLoading, setKey: setClientQueryKey } = useFirestoreQuery<Client>('clientes');
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', where('active', '==', true));
   const { data: services, loading: servicesLoading } = useFirestoreQuery<ServiceType>('servicios', where('active', '==', true));
+  const { data: locales } = useFirestoreQuery<Local>('locales');
   const { data: serviceCategories } = useFirestoreQuery<any>('categorias_servicios');
   const { data: products } = useFirestoreQuery<Product>('productos');
   const { data: allReservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
@@ -245,13 +275,21 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     `blocks-form-${selectedDateStr}-${selectedLocalId}`,
     where('fecha', '==', selectedDateStr)
   );
-  const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales');
   const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', undefined, where('__name__', '==', 'recordatorios'));
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', undefined, where('__name__', '==', 'agenda'));
+  const { data: bookingRulesData } = useFirestoreQuery<ReglasReservasConfig>('configuracion', undefined, where('__name__', '==', 'reglas_reservas'));
   const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales');
 
   const reminderSettings = reminderSettingsData?.[0];
   const agendaSettings = agendaSettingsData?.[0];
+  const currentLocal = useMemo(() => {
+    const locId = form.watch('local_id') || selectedLocalId;
+    return locales?.find(l => l.id === locId);
+  }, [locales, form, selectedLocalId]);
+  const bookingRules = bookingRulesData?.[0] || DEFAULT_BOOKING_RULES;
+  const maxInasistenciasPermitidas = Math.max(1, Number(bookingRules.max_inasistencias_permitidas) || 2);
+  const penalizacionPorcentaje = Number(bookingRules.penalizacion_anticipo_porcentaje) || 50;
+  const isPenalizacionActive = bookingRules.penalizacion_inasistencias_activa !== false;
 
   const filteredProfessionals = useMemo(() => {
     let pros = professionals;
@@ -273,34 +311,210 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     return clients.find(c => c.id === selectedClientId)
   }, [selectedClientId, clients]);
 
-  const [unattendedCount, setUnattendedCount] = useState<number>(0);
+  const [selectedClientReservations, setSelectedClientReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
-    if (!selectedClient) {
-      setUnattendedCount(0);
+    if (!selectedClient || !db) {
+      setSelectedClientReservations([]);
       return;
     }
-    if (selectedClient.citas_no_asistidas !== undefined && selectedClient.citas_no_asistidas !== null) {
-      setUnattendedCount(selectedClient.citas_no_asistidas);
-      return;
-    }
-    if (!db) return;
-    const checkNoShows = async () => {
+    let isSubscribed = true;
+    const fetchReservations = async () => {
       try {
-        const q = query(collection(db, 'reservas'), where('cliente_id', '==', selectedClient.id), where('estado', '==', 'No asiste'));
+        const q = query(collection(db, 'reservas'), where('cliente_id', '==', selectedClient.id));
         const snap = await getDocs(q);
-        setUnattendedCount(snap.size);
+        if (isSubscribed) {
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
+          setSelectedClientReservations(list);
+        }
       } catch (err) {
-        console.error("Error checking unattended reservations:", err);
+        console.error("Error checking client reservations in form:", err);
       }
     };
-    checkNoShows();
+    fetchReservations();
+    return () => { isSubscribed = false; };
   }, [selectedClient, db]);
 
   const servicesMap = useMemo(() => {
     if (!services) return new Map<string, ServiceType>();
     return new Map(services.map(s => [s.id, s]));
   }, [services]);
+
+  const clientStats = useMemo(() => {
+    if (!selectedClient) {
+      return { totalCitas: 0, asistidasCount: 0, inasistenciasCount: 0, canceladasCount: 0 };
+    }
+    if (selectedClientReservations.length > 0) {
+      const total = selectedClientReservations.length;
+      const asistidas = selectedClientReservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado' || r.pago_estado === 'Pagado').length;
+      const inasistencias = selectedClientReservations.filter(r => r.estado === 'No asiste').length;
+      const canceladas = selectedClientReservations.filter(r => r.estado === 'Cancelado').length;
+      return {
+        totalCitas: Math.max(total, Number(selectedClient.citas_totales) || 0),
+        asistidasCount: Math.max(asistidas, Number(selectedClient.citas_asistidas) || 0),
+        inasistenciasCount: Math.max(inasistencias, Number(selectedClient.citas_no_asistidas) || 0),
+        canceladasCount: Math.max(canceladas, Number(selectedClient.citas_canceladas) || 0),
+      };
+    }
+    return {
+      totalCitas: Number(selectedClient.citas_totales) || 0,
+      asistidasCount: Number(selectedClient.citas_asistidas) || 0,
+      inasistenciasCount: Number(selectedClient.citas_no_asistidas) || 0,
+      canceladasCount: Number(selectedClient.citas_canceladas) || 0,
+    };
+  }, [selectedClient, selectedClientReservations]);
+
+  const unattendedCount = clientStats.inasistenciasCount;
+
+  const isAnticipoRequiredDueToHistory = isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
+
+  const isMontoMinimoActive = bookingRules.anticipo_monto_minimo_activo !== false;
+  const montoMinimoThreshold = Number(bookingRules.anticipo_monto_minimo) || 190;
+  const anticipoPorcentajeDefecto = Number(bookingRules.anticipo_porcentaje_defecto) || 50;
+
+  const isNewClient = useMemo(() => {
+    if (!selectedClient) return false;
+    return clientStats.totalCitas === 0;
+  }, [selectedClient, clientStats.totalCitas]);
+
+  const currentTotal = useMemo(() => {
+    const rawPrice = form.watch('precio');
+    if (rawPrice !== undefined && Number(rawPrice) > 0) return Number(rawPrice);
+    let sum = 0;
+    (watchedItems || []).forEach(item => {
+      if (item.servicio) {
+        const s = servicesMap.get(item.servicio);
+        if (s && s.price) sum += Number(s.price);
+      }
+    });
+    return sum;
+  }, [form, watchedItems, servicesMap]);
+
+  const isAnticipoRequiredDueToAmount = isMontoMinimoActive && montoMinimoThreshold > 0 && currentTotal >= montoMinimoThreshold;
+  const isAnticipoRequired = isAnticipoRequiredDueToHistory || isAnticipoRequiredDueToAmount;
+
+  const depositAmountCalculated = useMemo(() => {
+    const pct = isAnticipoRequiredDueToHistory ? penalizacionPorcentaje : anticipoPorcentajeDefecto;
+    return Math.round(currentTotal * (pct / 100));
+  }, [currentTotal, isAnticipoRequiredDueToHistory, penalizacionPorcentaje, anticipoPorcentajeDefecto]);
+
+  // Popular / Most sold services calculation
+  const [popularCounts, setPopularCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!db) return;
+    let isSubscribed = true;
+
+    const fetchPopularServices = async () => {
+      try {
+        const qReservas = query(collection(db, 'reservas'), limit(300));
+        const qVentas = query(collection(db, 'ventas'), limit(300));
+
+        const [snapReservas, snapVentas] = await Promise.allSettled([
+          getDocs(qReservas),
+          getDocs(qVentas),
+        ]);
+
+        const counts: Record<string, number> = {};
+
+        if (snapReservas.status === 'fulfilled') {
+          snapReservas.value.forEach(docSnap => {
+            const data = docSnap.data();
+            if (Array.isArray(data.items)) {
+              data.items.forEach((item: any) => {
+                if (item.id) {
+                  counts[item.id] = (counts[item.id] || 0) + (Number(item.cantidad) || 1);
+                }
+                if (item.servicio || item.nombre) {
+                  const norm = (item.servicio || item.nombre).toLowerCase().trim();
+                  counts[norm] = (counts[norm] || 0) + (Number(item.cantidad) || 1);
+                }
+              });
+            } else if (typeof data.servicio === 'string') {
+              const names = data.servicio.split(',').map((s: string) => s.toLowerCase().trim());
+              names.forEach((name: string) => {
+                if (name) counts[name] = (counts[name] || 0) + 1;
+              });
+            }
+          });
+        }
+
+        if (snapVentas.status === 'fulfilled') {
+          snapVentas.value.forEach(docSnap => {
+            const data = docSnap.data();
+            if (Array.isArray(data.items)) {
+              data.items.forEach((item: any) => {
+                if (item.id) {
+                  counts[item.id] = (counts[item.id] || 0) + (Number(item.cantidad) || 1);
+                }
+                if (item.servicio || item.nombre) {
+                  const norm = (item.servicio || item.nombre).toLowerCase().trim();
+                  counts[norm] = (counts[norm] || 0) + (Number(item.cantidad) || 1);
+                }
+              });
+            }
+          });
+        }
+
+        if (isSubscribed) {
+          setPopularCounts(counts);
+        }
+      } catch (err) {
+        console.warn('Error fetching popular services counts:', err);
+      }
+    };
+
+    fetchPopularServices();
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [db]);
+
+  const popularServices = useMemo(() => {
+    if (!services || services.length === 0) return [];
+
+    // Calculate score for each service
+    const scoredServices = services.map(service => {
+      const idCount = popularCounts[service.id] || 0;
+      const nameCount = popularCounts[service.name.toLowerCase().trim()] || 0;
+      let count = idCount + nameCount;
+
+      if ((service as any).is_popular || (service as any).popular || (service as any).destacado) {
+        count += 500;
+      }
+
+      return {
+        service,
+        count
+      };
+    });
+
+    // Sort descending by sales count
+    scoredServices.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return (a.service.order ?? 999) - (b.service.order ?? 999);
+    });
+
+    const topWithSales = scoredServices.filter(s => s.count > 0).slice(0, 5);
+    if (topWithSales.length >= 2) {
+      return topWithSales.map(s => s.service);
+    }
+
+    // Fallback heuristic for barber shop if no sales recorded yet
+    const fallbackKeywords = ['corte', 'barba', 'fade', 'ritual', 'perfilado', 'afeitado', 'express', 'arreglo'];
+    const fallbackSorted = [...services].sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+      const aMatch = fallbackKeywords.some(kw => aName.includes(kw));
+      const bMatch = fallbackKeywords.some(kw => bName.includes(kw));
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return (a.order ?? 999) - (b.order ?? 999);
+    });
+
+    return fallbackSorted.slice(0, 5);
+  }, [services, popularCounts]);
 
   const groupedServices = useMemo(() => {
     if (!services || !serviceCategories) return [];
@@ -323,13 +537,29 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     // 2. Sort categories by order
     const sortedCategories = [...serviceCategories].sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
 
-    // 3. Build the result array
-    const result = sortedCategories.map(cat => ({
-      name: cat.name,
-      items: (groups[cat.id] || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999))
-    })).filter(group => group.items.length > 0);
+    // 3. Build the result array with MÁS VENDIDOS at top
+    const result: Array<{ name: string; isPopular?: boolean; items: ServiceType[] }> = [];
 
-    // 4. Add uncategorized if any
+    if (popularServices.length > 0) {
+      result.push({
+        name: 'MÁS VENDIDOS',
+        isPopular: true,
+        items: popularServices,
+      });
+    }
+
+    // 4. Add standard categories
+    sortedCategories.forEach(cat => {
+      const items = (groups[cat.id] || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+      if (items.length > 0) {
+        result.push({
+          name: cat.name,
+          items,
+        });
+      }
+    });
+
+    // 5. Add uncategorized if any
     if (uncategorized.length > 0) {
       result.push({
         name: 'Otros',
@@ -338,7 +568,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     }
 
     return result;
-  }, [services, serviceCategories]);
+  }, [services, serviceCategories, popularServices]);
 
   const timeOptions = useMemo(() => {
     const hours = Array.from({ length: 12 }, (_, i) => 10 + i); // 10 AM to 9 PM
@@ -626,8 +856,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           ? initialData.professional_lock
           : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
       );
+      setDepositPaid(initialData.pago_estado === 'anticipo_pagado' || Boolean((initialData as any).anticipo_pagado));
+      setDepositMethod((initialData as any).metodo_pago_anticipo || 'efectivo');
     } else if (isOpen) {
       form.reset({
+        fecha: new Date(),
         notas: '',
         nota_interna: '',
         estado: 'Reservado',
@@ -639,6 +872,10 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         },
         local_id: selectedLocalId || '',
       });
+      setDepositPaid(false);
+      setDepositMethod('efectivo');
+      setShowDepositWarningModal(false);
+      setPendingSaveData(null);
     }
   }, [initialData, form, isOpen, services, isEditMode, selectedLocalId]);
 
@@ -786,6 +1023,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   async function executeSave(data: any) {
     setIsSubmitting(true);
     let success = false;
+    let createdReservationObj: any = null;
 
     try {
       if (!db) throw new Error("Database not available.");
@@ -875,8 +1113,17 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
-      const dataToSave: Partial<Reservation> & { hora_inicio?: string, hora_fin?: string } = {
+      const effectiveDepositPaid = data._depositPaidOverride !== undefined ? data._depositPaidOverride : depositPaid;
+      const targetDepositAmount = isAnticipoRequired
+        ? depositAmountCalculated
+        : (Number((data as any).monto_anticipo) || 0);
+
+      const selectedClient = clients.find(c => c.id === data.cliente_id);
+      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string } = {
         cliente_id: data.cliente_id,
+        cliente_nombre: selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : (data.cliente_nombre || ''),
+        cliente_telefono: selectedClient?.telefono || data.cliente_telefono || '',
+        cliente_email: selectedClient?.correo || (selectedClient as any)?.email || data.cliente_email || '',
         barbero_id: primaryBarberoId,
         items: itemsToSave,
         servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
@@ -890,26 +1137,83 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
+        requiere_anticipo: isAnticipoRequired || (data as any).requiere_anticipo || false,
+        monto_anticipo: targetDepositAmount,
+        ...(effectiveDepositPaid ? {
+          pago_estado: 'anticipo_pagado',
+          monto_pagado: targetDepositAmount,
+          anticipo_pagado: targetDepositAmount,
+          metodo_pago_anticipo: depositMethod,
+          deposit_paid_at: Timestamp.now(),
+        } : {
+          pago_estado: isAnticipoRequired ? 'pendiente_anticipo' : (data.pago_estado || 'Pendiente'),
+        }),
       };
 
       let reservationId = initialData?.id;
 
       if (isEditMode && initialData?.id) {
-        const resRef = doc(db, 'reservas', initialData.id);
+        const targetCollection = (initialData as any)?.isSandbox ? 'reservas_sandbox' : 'reservas';
+        const resRef = doc(db, targetCollection, initialData.id);
         await updateDoc(resRef, dataToSave);
       } else {
-        const newRef = await addDoc(collection(db, 'reservas'), {
-          ...dataToSave,
-          pago_estado: 'Pendiente',
-          canal_reserva: 'agenda',
-          creada_por: 'admin',
+        const isShortNotice = isShortNoticeAppointment({
+          fecha: formattedDate,
+          hora_inicio: hora_inicio,
           creado_en: Timestamp.now(),
         });
+
+        const activeCreatorName = (() => {
+          if (user?.displayName && user.displayName.trim() && user.displayName.toLowerCase() !== 'admin') {
+            return user.displayName.trim();
+          }
+          if ((user as any)?.name && (user as any).name.trim() && (user as any).name.toLowerCase() !== 'admin') {
+            return (user as any).name.trim();
+          }
+          if (user?.role === 'Administrador general') {
+            return 'José Alejandro Pacheco';
+          }
+          if (user?.role) {
+            return user.role;
+          }
+          if (user?.email) {
+            const prefix = user.email.split('@')[0];
+            return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+          }
+          return 'Recepción';
+        })();
+
+        const targetCollection = isTargetSandbox ? 'reservas_sandbox' : 'reservas';
+        const newRef = await addDoc(collection(db, targetCollection), {
+          ...dataToSave,
+          isSandbox: isTargetSandbox,
+          canal_reserva: isTargetSandbox ? 'agenda_sandbox' : 'agenda',
+          creada_por: activeCreatorName,
+          creado_en: Timestamp.now(),
+          whatsappReminderNotNeeded: isShortNotice,
+          whatsappReminderSent: isShortNotice ? true : false,
+        });
         reservationId = newRef.id;
+
+        const client = clients.find(c => c.id === data.cliente_id);
+        createdReservationObj = {
+          id: reservationId,
+          ...dataToSave,
+          isSandbox: isTargetSandbox,
+          canal_reserva: isTargetSandbox ? 'agenda_sandbox' : 'agenda',
+          creada_por: activeCreatorName,
+          whatsappReminderNotNeeded: isShortNotice,
+          whatsappReminderSent: isShortNotice ? true : false,
+          customer: client || {
+            nombre: data.cliente_nombre || '',
+            telefono: data.cliente_telefono || '',
+            correo: data.cliente_email || '',
+          },
+        };
       }
 
-      // Trigger Email Notification (Server Action)
-      if (reservationId && !isEditMode) {
+      // Trigger Email Notification (Server Action) - only for production real bookings
+      if (reservationId && !isEditMode && !isTargetSandbox) {
         sendManualBookingConfirmation(reservationId).then((res: any) => {
           if (res?.error) {
             console.error("Email sending failed:", res.error);
@@ -925,8 +1229,8 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
       success = true; // Mark as successful if we reach here
 
-      // Notification logic after successful save
-      if (data.notifications?.whatsapp_notification && !isEditMode) {
+      // Notification logic after successful save - only for production real bookings
+      if (data.notifications?.whatsapp_notification && !isEditMode && !isTargetSandbox) {
         const client = clients.find(c => c.id === data.cliente_id);
         const professional = filteredProfessionals.find(p => p.id === data.items[0]?.barbero_id);
         if (client?.telefono && professional) {
@@ -961,37 +1265,52 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     } finally {
       setIsSubmitting(false);
       if (success) {
-        toast({ title: '¡Éxito!', description: isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.' });
-        if (unattendedCount > 0 && !isEditMode) {
+        toast({
+          title: isTargetSandbox ? '¡Cita en Sandbox Registrada!' : '¡Éxito!',
+          description: isTargetSandbox
+            ? (isEditMode ? 'La reserva de prueba ha sido actualizada en Sandbox.' : 'La reserva de prueba se guardó en Sandbox (no afecta la operación real).')
+            : (isEditMode ? 'La reserva ha sido actualizada.' : 'La reserva ha sido creada.')
+        });
+        if (isAnticipoRequiredDueToHistory && !isEditMode) {
           toast({
-            title: '⚠️ Atención: Cliente con Inasistencias',
-            description: `Este cliente tiene ${unattendedCount} inasistencia(s) previa(s). Recuerda solicitarle el anticipo del 50%.`,
+            variant: 'destructive',
+            title: '🛡️ Escudo de Inasistencias Activo',
+            description: `Este cliente acumula ${unattendedCount} inasistencias previas (límite: ${maxInasistenciasPermitidas}). Recuerda cobrarle el anticipo del ${penalizacionPorcentaje}% ($${depositAmountCalculated} MXN).`,
+            duration: 10000,
+          });
+        } else if (isAnticipoRequiredDueToAmount && !isEditMode) {
+          toast({
+            title: '💳 Anticipo Requerido por Monto',
+            description: `Esta cita supera los $${montoMinimoThreshold} MXN. Requiere anticipo del ${anticipoPorcentajeDefecto}% ($${depositAmountCalculated} MXN).`,
+            duration: 10000,
+          });
+        } else if (isPenalizacionActive && unattendedCount === (maxInasistenciasPermitidas - 1) && !isEditMode) {
+          toast({
+            title: `⚠️ Atención: ${unattendedCount} Inasistencia Previa`,
+            description: `Este cliente tiene ${unattendedCount} falta previa registrada. Con ${maxInasistenciasPermitidas} faltas se le exigirá anticipo obligatorio del ${penalizacionPorcentaje}%.`,
             duration: 8000,
           });
         }
-        onFormSubmit();
+        onFormSubmit(createdReservationObj);
         if (onOpenChange) onOpenChange(false);
       }
     }
   }
 
-  async function onSubmit(data: any) {
-    if (!validateItemsAvailability(data)) {
-      toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado." });
-      return;
-    }
+  const proceedWithSubmission = async (dataToSubmit: any, forceDepositPaid?: boolean) => {
+    const isPaid = forceDepositPaid !== undefined ? forceDepositPaid : depositPaid;
 
     if (!isEditMode) {
       const uniqueBarberos = Array.from(
         new Set(
-          data.items
+          dataToSubmit.items
             .map((item: any) => item.barbero_id)
             .filter(Boolean)
         )
       ) as string[];
 
       if (uniqueBarberos.length > 0) {
-        setPendingSubmitData(data);
+        setPendingSubmitData({ ...dataToSubmit, _depositPaidOverride: isPaid });
         setPendingConfirmProfs(uniqueBarberos);
         setCurrentConfirmIdx(0);
         setConfirmedLocks({});
@@ -1000,7 +1319,23 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
       }
     }
 
-    await executeSave(data);
+    await executeSave({ ...dataToSubmit, _depositPaidOverride: isPaid });
+  };
+
+  async function onSubmit(data: any) {
+    if (!validateItemsAvailability(data)) {
+      toast({ variant: "destructive", title: "Conflicto de Horario", description: "Uno o más profesionales no están disponibles en el horario seleccionado." });
+      return;
+    }
+
+    // Alerta inteligente de anticipo por inasistencias o regla de monto (>= $190 MXN) antes de guardar
+    if (isAnticipoRequired && !depositPaid && !isEditMode) {
+      setPendingSaveData(data);
+      setShowDepositWarningModal(true);
+      return;
+    }
+
+    await proceedWithSubmission(data);
   }
 
   const handleClientCreated = (newClientId: string) => {
@@ -1010,8 +1345,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
   }
 
   const selectedStatus = form.watch('estado');
-  const statusColor = statusOptions.find(s => s.value === selectedStatus)?.color || 'bg-gray-500';
-  const selectedStatusLabel = statusOptions.find(s => s.value === selectedStatus)?.label;
+  const currentStatusInfo = getStatusInfo(selectedStatus);
 
   const isAppointmentNotificationEnabled = reminderSettings?.notifications?.['appointment_notification']?.enabled ?? false;
   const isReminderNotificationEnabled = reminderSettings?.notifications?.['appointment_reminder']?.enabled ?? false;
@@ -1023,38 +1357,101 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
     <>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 px-6 pt-6 pb-4 flex-row items-center justify-between border-b">
-            <FormField
-              control={form.control}
-              name="estado"
-              render={({ field }) => (
-                <FormItem>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className="w-[180px]">
-                        <SelectValue>
-                          <div className="flex items-center gap-2">
-                            <span className={cn('h-3 w-3 rounded-full', statusColor)} />
-                            <span>{selectedStatusLabel}</span>
-                          </div>
-                        </SelectValue>
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {statusOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          <div className="flex items-center gap-2">
-                            <span className={cn('h-2.5 w-2.5 rounded-full', opt.color)} />
-                            {opt.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          {/* CABECERA OFICIAL VATOS ALFA */}
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 flex-shrink-0 relative overflow-hidden">
+            {/* Haz de luz animado sutil */}
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <CalendarPlus className="h-6 w-6 text-white shrink-0" />
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      {isEditMode ? 'Editar Cita' : 'Nueva Cita en Agenda'}
+                    </DialogTitle>
+                    <Badge variant="outline" className="bg-white/10 text-slate-200 border-white/20 text-[10px] py-0 px-2 font-mono">
+                      {currentLocal?.name || 'Vatos Alfa'}
+                    </Badge>
+                    {isTargetSandbox && (
+                      <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-400/40 text-[10px] py-0 px-2 font-bold uppercase tracking-wider">
+                        Modo Sandbox (Prueba)
+                      </Badge>
+                    )}
+                  </div>
+                  <DialogDescription className="text-xs text-slate-300 font-normal mt-0.5">
+                    {isEditMode ? 'Modifica el horario, profesional o servicios de la reserva.' : 'Registra la cita en la agenda verificando historial del cliente.'}
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Selector de Estado Integrado */}
+                <FormField
+                  control={form.control}
+                  name="estado"
+                  render={({ field }) => (
+                    <FormItem className="space-y-0">
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-8.5 px-3 bg-white/10 border-white/20 text-white hover:bg-white/15 rounded-xl text-xs font-semibold focus:ring-0 gap-2 shrink-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span
+                                className="rounded-full shrink-0 shadow-xs"
+                                style={{
+                                  backgroundColor: currentStatusInfo.hex,
+                                  boxShadow: '0 0 0 2px rgba(255, 255, 255, 0.45)',
+                                  width: '10px',
+                                  height: '10px',
+                                  minWidth: '10px',
+                                  minHeight: '10px',
+                                  borderRadius: '9999px',
+                                  display: 'inline-block'
+                                }}
+                              />
+                              <SelectValue placeholder={currentStatusInfo.label}>
+                                {currentStatusInfo.label}
+                              </SelectValue>
+                            </div>
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                          {statusOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value} textValue={opt.label} className="cursor-pointer py-1.5">
+                              <div className="flex items-center gap-2.5">
+                                <span
+                                  className="rounded-full shrink-0 shadow-xs"
+                                  style={{
+                                    backgroundColor: opt.hex,
+                                    width: '10px',
+                                    height: '10px',
+                                    minWidth: '10px',
+                                    minHeight: '10px',
+                                    borderRadius: '9999px',
+                                    display: 'inline-block'
+                                  }}
+                                />
+                                <span className="font-semibold text-xs text-inherit">{opt.label}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
+
+                {/* Botón Cerrar (X) de Alto Contraste */}
+                <button
+                  type="button"
+                  onClick={() => onOpenChange && onOpenChange(false)}
+                  className="p-2 rounded-xl text-slate-200 hover:text-white hover:bg-white/15 transition-all focus:outline-hidden"
+                  title="Cerrar modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <ScrollArea className="flex-grow">
@@ -1070,17 +1467,27 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                         <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
                           <PopoverTrigger asChild>
                             <FormControl>
-                              <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}>
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : <span>Selecciona una fecha</span>}
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full h-10 justify-start text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 hover:border-blue-500/50 capitalize transition-all shadow-xs",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                                {field.value ? (
+                                  format(field.value, "EEEE dd 'de' MMMM", { locale: es })
+                                ) : (
+                                  format(new Date(), "EEEE dd 'de' MMMM", { locale: es })
+                                )}
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+                          <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
                             <Calendar
                               locale={es}
                               mode="single"
-                              selected={field.value}
+                              selected={field.value || new Date()}
                               onSelect={(date) => {
                                 if (date) {
                                   field.onChange(date);
@@ -1091,6 +1498,35 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                               required
                               initialFocus
                             />
+                            {/* Botones de selección rápida Vatos Alfa */}
+                            <div className="p-2 border-t border-border/40 flex items-center justify-between gap-2 bg-muted/15">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1"
+                                onClick={() => {
+                                  field.onChange(new Date());
+                                  setIsCalendarOpen(false);
+                                }}
+                              >
+                                Hoy
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1"
+                                onClick={() => {
+                                  const tomorrow = new Date();
+                                  tomorrow.setDate(tomorrow.getDate() + 1);
+                                  field.onChange(tomorrow);
+                                  setIsCalendarOpen(false);
+                                }}
+                              >
+                                Mañana
+                              </Button>
+                            </div>
                           </PopoverContent>
                         </Popover>
                         <FormMessage />
@@ -1098,23 +1534,121 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                     )}
                   />
                   <div className="space-y-2">
-                    <FormLabel>Hora</FormLabel>
+                    <FormLabel>Horario</FormLabel>
                     <div className="flex items-center gap-2">
-                      <div className="flex-grow space-y-1">
-                        <p className="text-xs text-muted-foreground text-center">Inicio</p>
-                        <div className="flex items-center gap-1">
-                          <FormField control={form.control} name="hora_inicio_hora" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={(value) => { field.onChange(value); form.setValue('hora_inicio_minuto', '00'); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={h} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                          <span>:</span>
-                          <FormField control={form.control} name="hora_inicio_minuto" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                      {/* Horario Inicio */}
+                      <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-1">Inicio</p>
+                        <div className="flex items-center justify-center gap-1">
+                          <FormField
+                            control={form.control}
+                            name="hora_inicio_hora"
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  onValueChange={(value) => {
+                                    field.onChange(value);
+                                    form.setValue('hora_inicio_minuto', '00');
+                                  }}
+                                  value={field.value}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                      <SelectValue placeholder="HH" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                    {timeOptions.hours.map(h => (
+                                      <SelectItem key={h} value={String(h).padStart(2, '0')}>
+                                        {String(h).padStart(2, '0')}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
+                          <span className="font-bold text-muted-foreground text-xs">:</span>
+                          <FormField
+                            control={form.control}
+                            name="hora_inicio_minuto"
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                      <SelectValue placeholder="MM" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                    {timeOptions.minutes.map(m => (
+                                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
                         </div>
                       </div>
-                      <span className="pt-6 px-1">a</span>
-                      <div className="flex-grow space-y-1">
-                        <p className="text-xs text-muted-foreground text-center">Fin</p>
-                        <div className="flex items-center gap-1">
-                          <FormField control={form.control} name="hora_fin_hora" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value} disabled={!watchedItems?.some(item => !!item.servicio)}><FormControl><SelectTrigger><SelectValue placeholder="HH" /></SelectTrigger></FormControl><SelectContent>{timeOptions.hours.map(h => <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>{String(h).padStart(2, '0')}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                          <span>:</span>
-                          <FormField control={form.control} name="hora_fin_minuto" render={({ field }) => (<FormItem className="flex-grow"><Select onValueChange={field.onChange} value={field.value} disabled={!watchedItems?.some(item => !!item.servicio)}><FormControl><SelectTrigger><SelectValue placeholder="MM" /></SelectTrigger></FormControl><SelectContent>{timeOptions.minutes.map(m => <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+
+                      <span className="text-xs font-semibold text-muted-foreground px-0.5">a</span>
+
+                      {/* Horario Fin */}
+                      <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-1">Fin</p>
+                        <div className="flex items-center justify-center gap-1">
+                          <FormField
+                            control={form.control}
+                            name="hora_fin_hora"
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  onValueChange={field.onChange}
+                                  value={field.value}
+                                  disabled={!watchedItems?.some(item => !!item.servicio)}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                      <SelectValue placeholder="HH" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                    {timeOptions.hours.map(h => (
+                                      <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>
+                                        {String(h).padStart(2, '0')}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
+                          <span className="font-bold text-muted-foreground text-xs">:</span>
+                          <FormField
+                            control={form.control}
+                            name="hora_fin_minuto"
+                            render={({ field }) => (
+                              <FormItem className="flex-1">
+                                <Select
+                                  onValueChange={field.onChange}
+                                  value={field.value}
+                                  disabled={!watchedItems?.some(item => !!item.servicio)}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                      <SelectValue placeholder="MM" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                    {timeOptions.minutes.map(m => (
+                                      <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
                         </div>
                       </div>
                     </div>
@@ -1125,55 +1659,244 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                 </div>
 
                 {selectedClient ? (
-                  <div className="space-y-2">
-                    <Card>
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarFallback>{selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-semibold text-sm">{selectedClient.nombre} {selectedClient.apellido}</p>
-                              <p className="text-xs text-muted-foreground">{selectedClient.telefono}</p>
+                  <div className="space-y-3">
+                    {/* Tarjeta de Cliente Estilizada Vatos Alfa */}
+                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 border border-border shrink-0">
+                            <AvatarFallback className="bg-[#1a233a] text-white font-bold text-xs">
+                              {selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-bold text-sm text-foreground">
+                                {selectedClient.nombre} {selectedClient.apellido}
+                              </p>
+                              {isNewClient ? (
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                                  Nuevo
+                                </Badge>
+                              ) : isAnticipoRequired ? (
+                                <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
+                                  🚨 Anticipo Requerido
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                                  ✓ Frecuente
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono">
+                              <span>{selectedClient.telefono}</span>
+                              {selectedClient.correo && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate max-w-[200px]">{selectedClient.correo}</span>
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+                            onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                            title="Editar datos del cliente"
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
+                            onClick={() => {
+                              form.setValue('cliente_id', '');
+                              setDepositPaid(false);
+                            }}
+                            title="Cambiar cliente"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Mini-Métricas de Asistencia y Fidelidad para Recepción */}
+                      <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-border/60 text-center">
+                        <div className="bg-muted/30 rounded-lg p-1.5">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase">Citas</p>
+                          <p className="text-xs font-bold text-foreground">{clientStats.totalCitas}</p>
+                        </div>
+                        <div className="bg-blue-500/5 rounded-lg p-1.5 border border-blue-500/15">
+                          <p className="text-[10px] text-blue-400/80 font-medium uppercase">Asistidas</p>
+                          <p className="text-xs font-bold text-blue-400">{clientStats.asistidasCount}</p>
+                        </div>
+                        <div className={cn(
+                          "rounded-lg p-1.5 border transition-colors",
+                          unattendedCount >= maxInasistenciasPermitidas
+                            ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
+                            : unattendedCount > 0
+                            ? "bg-slate-500/10 border-slate-500/20 text-slate-700 dark:text-slate-300"
+                            : "bg-muted/30 border-transparent text-muted-foreground"
+                        )}>
+                          <p className="text-[10px] font-medium uppercase">Inasistencias</p>
+                          <p className={cn("text-xs font-black", unattendedCount >= maxInasistenciasPermitidas && "animate-pulse")}>
+                            {unattendedCount}
+                          </p>
+                        </div>
+                        <div className="bg-muted/30 rounded-lg p-1.5">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase">Canceladas</p>
+                          <p className="text-xs font-bold text-muted-foreground">{clientStats.canceladasCount}</p>
+                        </div>
+                      </div>
+
+                      {/* Nota del perfil si existe */}
+                      {selectedClient.notas && (
+                        <div className="mt-2.5 pt-2 border-t border-border/40 text-[11px] text-muted-foreground flex items-start gap-1.5">
+                          <span className="font-semibold text-foreground shrink-0">Nota del perfil:</span>
+                          <span className="italic truncate">{selectedClient.notas}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BANNERS INTELIGENTES DE ACCIÓN PARA RECEPCIÓN */}
+                    {isAnticipoRequired ? (
+                      <div className={cn(
+                        "p-4 rounded-xl border-2 shadow-sm space-y-3",
+                        isAnticipoRequiredDueToHistory
+                          ? "border-red-500/50 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10"
+                          : "border-blue-500/50 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-blue-500/10"
+                      )}>
+                        <div className="flex items-start gap-3">
+                          {isAnticipoRequiredDueToHistory ? (
+                            <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                          ) : (
+                            <CreditCard className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <span className={cn(
+                                "font-black text-xs uppercase tracking-wide flex items-center gap-1.5",
+                                isAnticipoRequiredDueToHistory ? "text-red-800 dark:text-red-200" : "text-blue-800 dark:text-blue-200"
+                              )}>
+                                {isAnticipoRequiredDueToHistory ? "🛡️ Escudo Antifraude: Anticipo Obligatorio" : "💳 Regla de Reserva: Anticipo por Monto (+$190 MXN)"}
+                              </span>
+                              <Badge className={cn(
+                                "text-white font-bold text-[10px] px-2 py-0.5 shadow-xs",
+                                isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
+                              )}>
+                                {isAnticipoRequiredDueToHistory ? `${penalizacionPorcentaje}% Anticipo` : `${anticipoPorcentajeDefecto}% Anticipo`}
+                              </Badge>
+                            </div>
+                            <p className={cn(
+                              "text-xs leading-snug",
+                              isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200"
+                            )}>
+                              {isAnticipoRequiredDueToHistory ? (
+                                <>Este cliente acumula <strong>{unattendedCount} inasistencias previas</strong> (límite permitido: {maxInasistenciasPermitidas}). Por regla oficial de Vatos Alfa, <strong>debe pagar anticipo para apartar su cita</strong>.</>
+                              ) : (
+                                <>El total de la cita es de <strong>${currentTotal} MXN</strong> (alcanza o supera el mínimo de ${montoMinimoThreshold} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
+                              )}
+                            </p>
+                            <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-foreground pt-1 flex-wrap">
+                              <span>Total Cita: <strong>${currentTotal} MXN</strong></span>
+                              <span>•</span>
+                              <span className={isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}>
+                                Anticipo Requerido: <strong>${depositAmountCalculated} MXN</strong>
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}><Edit className="h-4 w-4" /></Button>
-                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => form.setValue('cliente_id', '')}><X className="h-4 w-4" /></Button>
-                          </div>
                         </div>
-                      </CardContent>
-                    </Card>
 
-                    {unattendedCount > 0 && (
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2.5">
-                        <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                        <div className="space-y-0.5">
-                          <p className="font-bold text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                            ⚠️ Cliente con {unattendedCount} {unattendedCount === 1 ? 'cita no asistida' : 'citas no asistidas'} previa{unattendedCount === 1 ? '' : 's'}
+                        {/* Control de cobro en recepción */}
+                        <div className={cn("pt-2 border-t flex flex-wrap items-center justify-between gap-2", isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20")}>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={depositPaid}
+                              onChange={(e) => setDepositPaid(e.target.checked)}
+                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span className="text-xs font-bold text-foreground">
+                              {depositPaid ? '✓ Anticipo marcado como PAGADO en recepción' : 'Marcar Anticipo como PAGADO en recepción'}
+                            </span>
+                          </label>
+
+                          {depositPaid && (
+                            <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
+                              <span className="text-[11px] text-muted-foreground font-medium">Método:</span>
+                              <Select value={depositMethod} onValueChange={setDepositMethod}>
+                                <SelectTrigger className="h-7 text-xs w-32 bg-background border-border">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                                  <SelectItem value="tarjeta">Tarjeta (Terminal)</SelectItem>
+                                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : isPenalizacionActive && unattendedCount === (maxInasistenciasPermitidas - 1) && unattendedCount > 0 ? (
+                      <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex items-start gap-2.5">
+                        <AlertTriangle className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                        <div className="space-y-0.5 text-xs">
+                          <p className="font-bold text-foreground flex items-center gap-1.5">
+                            ⚠️ Atención: 1 Inasistencia Previa Registrada
                           </p>
-                          <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-tight">
-                            Este cliente tiene historial de inasistencia. <strong>Al guardar la reserva se recomienda cobrar un anticipo del 50%</strong> para asegurar su espacio.
+                          <p className="text-[11px] text-muted-foreground leading-tight">
+                            Si este cliente acumula una falta más ({maxInasistenciasPermitidas} en total), el sistema le exigirá anticipo obligatorio del {penalizacionPorcentaje}% en todas sus próximas reservas. Recuerda confirmarle su asistencia por WhatsApp.
                           </p>
                         </div>
+                      </div>
+                    ) : isNewClient ? (
+                      <div className="p-2.5 px-3 bg-blue-500/10 border border-blue-500/25 rounded-xl flex items-center gap-2.5 text-xs">
+                        <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
+                        <p className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
+                          <strong>Primera visita del cliente:</strong> Asegúrate de verificar su teléfono para el envío automático de confirmaciones.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 px-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex items-center gap-2 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
+                        <p className="text-[11px] text-blue-400 font-medium">
+                          Cliente confiable sin inasistencias previas ({clientStats.totalCitas} citas registradas).
+                        </p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <FormField control={form.control} name="cliente_id" render={({ field }) => (
                     <FormItem>
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center mb-1">
                         <FormLabel>Cliente</FormLabel>
-                        <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
-                          <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/30 transition-colors"
+                          onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}
+                          title="Registrar nuevo cliente"
+                        >
+                          <UserPlus className="h-4 w-4" />
                         </Button>
                       </div>
                       <ClientCombobox
                         clients={clients}
                         loading={clientsLoading}
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(val) => {
+                          field.onChange(val);
+                          setDepositPaid(false);
+                        }}
                         onSearchChange={setClientSearchTerm}
                       />
                       <FormMessage />
@@ -1215,12 +1938,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
                     return (
                       <Card key={field.id} className="p-4 relative bg-muted/50">
-                        <div className={cn("grid grid-cols-1 gap-4 items-start", fields.length > 1 ? "md:grid-cols-[1fr_1fr_120px]" : "md:grid-cols-2")}>
+                        <div className={cn("grid grid-cols-1 gap-3 items-start", fields.length > 1 ? "md:grid-cols-[1fr_1fr_110px]" : "md:grid-cols-2")}>
                           <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
                             <FormItem>
-                              <div className="flex items-center justify-between min-h-[24px] gap-2">
-                                <FormLabel>{isProduct ? 'Producto' : 'Servicios'}</FormLabel>
-                              </div>
                               <ServiceInput
                                 value={field.value}
                                 onChange={(val) => {
@@ -1247,67 +1967,91 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                             const itemLock = form.watch(`items.${index}.professional_lock`) ?? false;
                             return (
                               <FormItem>
-                                <div className="flex items-center min-h-[24px] gap-2">
-                                  <FormLabel>Profesional</FormLabel>
+                                <div className="flex items-center gap-2">
+                                  <Select 
+                                    onValueChange={(val) => {
+                                      field.onChange(val);
+                                      const srv = servicesMap.get(currentItemId);
+                                      if (srv) {
+                                        const customDur = srv.durationPorProfesional?.[val];
+                                        form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                      }
+                                    }} 
+                                    value={field.value} 
+                                    disabled={itemLock}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger className={cn(
+                                        "h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm flex-1",
+                                        availabilityErrors[index] && 'border-destructive'
+                                      )}>
+                                        <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent className="max-h-60 p-1.5 min-w-[210px]">
+                                      {rowProfessionals.length > 0 ? (
+                                        rowProfessionals.map((barber) => (
+                                          <SelectItem
+                                            key={barber.id}
+                                            value={barber.id}
+                                            textValue={barber.publicName || barber.name}
+                                            className="py-1.5 px-2 rounded-lg cursor-pointer my-0.5"
+                                          >
+                                            <div className="flex items-center gap-2.5">
+                                              <Avatar className="h-6 w-6 border border-border/60 shrink-0">
+                                                <AvatarImage src={barber.avatarUrl} alt={barber.publicName || barber.name} />
+                                                <AvatarFallback className="bg-[#202A49] text-white font-bold text-[9px]">
+                                                  {(barber.publicName || barber.name || 'P').substring(0, 2).toUpperCase()}
+                                                </AvatarFallback>
+                                              </Avatar>
+                                              <div className="flex flex-col text-left">
+                                                <span className="font-semibold text-xs text-inherit leading-tight">
+                                                  {barber.publicName || barber.name}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="p-3 text-xs text-muted-foreground text-center">
+                                          No hay profesionales disponibles para este servicio.
+                                        </div>
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+
+                                  {/* Icono de candado a la derecha de Selecciona un profesional */}
                                   <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="h-5 w-5 p-0 hover:bg-transparent"
+                                    className={cn(
+                                      "h-10 w-10 shrink-0 rounded-xl border bg-card transition-all",
+                                      itemLock
+                                        ? "border-blue-500/40 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20"
+                                        : "border-border/80 text-slate-400 hover:text-foreground hover:bg-muted/30"
+                                    )}
                                     onClick={() => form.setValue(`items.${index}.professional_lock`, !itemLock, { shouldValidate: true })}
-                                    title={itemLock ? "Desbloquear selección" : "Bloquear selección"}
+                                    title={itemLock ? "Desbloquear selección de profesional" : "Bloquear profesional para que no se reasigne"}
                                   >
-                                    {itemLock ? <Lock className="w-3 h-3 text-red-500" /> : <Unlock className="w-3 h-3 text-green-500" />}
+                                    {itemLock ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                                   </Button>
                                 </div>
-                                <Select 
-                                  onValueChange={(val) => {
-                                    field.onChange(val);
-                                    const srv = servicesMap.get(currentItemId);
-                                    if (srv) {
-                                      const customDur = srv.durationPorProfesional?.[val];
-                                      form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
-                                    }
-                                  }} 
-                                  value={field.value} 
-                                  disabled={itemLock}
-                                >
-                                <FormControl>
-                                  <SelectTrigger className={cn(availabilityErrors[index] && 'border-destructive')}>
-                                    <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {rowProfessionals.length > 0 ? (
-                                    rowProfessionals.map((barber) => (
-                                      <SelectItem key={barber.id} value={barber.id}>
-                                        {barber.publicName || barber.name}
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <div className="p-2 text-sm text-muted-foreground text-center">
-                                      No hay profesionales disponibles para este servicio.
-                                    </div>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                              {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
-                            </FormItem>
+                                <FormMessage />
+                                {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
+                              </FormItem>
                             );
                           }} />
 
                           {!isProduct && fields.length > 1 && (
                             <FormField control={form.control} name={`items.${index}.duracion`} render={({ field }) => (
                               <FormItem>
-                                <div className="flex items-center min-h-[24px] gap-2">
-                                  <FormLabel>Duración</FormLabel>
-                                </div>
                                 <FormControl>
                                   <div className="relative">
                                     <Input
                                       type="number"
-                                      className="pr-8"
+                                      className="h-10 rounded-xl pr-8 font-semibold"
+                                      placeholder="Duración"
                                       value={field.value || 0}
                                       onChange={(e) => field.onChange(Number(e.target.value))}
                                       min={0}
@@ -1342,11 +2086,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                       value={field.value || "default"}
                                     >
                                       <FormControl>
-                                        <SelectTrigger>
+                                        <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
                                           <SelectValue placeholder="Global / Por defecto" />
                                         </SelectTrigger>
                                       </FormControl>
-                                      <SelectContent>
+                                      <SelectContent className="max-h-48 p-1">
                                         <SelectItem value="default">Global / Por defecto</SelectItem>
                                         {timeOptions.hours.map(h => {
                                           const val = String(h).padStart(2, '0');
@@ -1354,7 +2098,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                         })}
                                       </SelectContent>
                                     </Select>
-                                    <span>:</span>
+                                    <span className="font-bold text-muted-foreground text-xs">:</span>
                                     <FormField
                                       control={form.control}
                                       name={`items.${index}.hora_inicio_minuto`}
@@ -1368,11 +2112,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                                           disabled={!field.value}
                                         >
                                           <FormControl>
-                                            <SelectTrigger>
+                                            <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
                                               <SelectValue placeholder="MM" />
                                             </SelectTrigger>
                                           </FormControl>
-                                          <SelectContent>
+                                          <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
                                             <SelectItem value="default">MM</SelectItem>
                                             {timeOptions.minutes.map(m => (
                                               <SelectItem key={`item-m-${index}-${m}`} value={m}>{m}</SelectItem>
@@ -1440,14 +2184,36 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             </div>
           </ScrollArea>
 
-          <DialogFooter className="flex-shrink-0 p-6 border-t mt-auto">
-            <Button type="button" variant="outline" onClick={() => onOpenChange && onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Guardar Reserva'}
-            </Button>
-          </DialogFooter>
+          {/* BARRA INFERIOR DE ACCIONES VATOS ALFA */}
+          <div className="flex-shrink-0 p-4 sm:p-5 border-t bg-muted/10 mt-auto flex items-center justify-between">
+            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 flex-wrap">
+              <span>Total:</span>
+              <span className="text-sm font-bold text-foreground">${formatMoney(currentTotal)} MXN</span>
+              {isAnticipoRequired && (
+                <Badge variant="outline" className={cn("text-[10px] font-bold py-0 ml-1.5", depositPaid ? "bg-blue-500/10 text-blue-400 border-blue-500/30" : "bg-red-500/10 text-red-400 border-red-500/30")}>
+                  {depositPaid ? `Anticipo $${formatMoney(depositAmountCalculated)} Pagado` : `Anticipo $${formatMoney(depositAmountCalculated)} Pendiente`}
+                </Badge>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-xl h-10 px-4 text-xs font-semibold"
+                onClick={() => onOpenChange && onOpenChange(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="rounded-xl h-10 px-6 text-xs font-bold btn-vatos-alfa"
+              >
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Reserva')}
+              </Button>
+            </div>
+          </div>
         </form>
       </Form>
       <Dialog open={isClientModalOpen} onOpenChange={(open) => {
@@ -1457,16 +2223,40 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           setClientSearchTerm('');
         }
       }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}</DialogTitle>
-            <DialogDescription>
-              {isEditingClient && selectedClient ? 'Completa la información para actualizar al cliente en el sistema.' : 'Completa la información para registrar un nuevo cliente en el sistema.'}
-            </DialogDescription>
-          </DialogHeader>
-          {isClientModalOpen && (
-            <NewClientForm onFormSubmit={(clientId) => { handleClientCreated(clientId); setIsEditingClient(false); }} client={isEditingClient ? selectedClient : null} initialName="" />
-          )}
+        <DialogContent hideCloseButton={true} className="sm:max-w-lg p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background flex flex-col">
+          {/* CABECERA OFICIAL VATOS ALFA */}
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 sm:px-5 py-3 border-b border-blue-900/40 flex items-center justify-between shrink-0 relative overflow-hidden">
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5">
+                <User className="h-4 w-4 text-slate-300 shrink-0" />
+                <div>
+                  <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
+                    {isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    {isEditingClient && selectedClient ? 'Completa la información para actualizar al cliente.' : 'Completa la información para registrar al cliente.'}
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsClientModalOpen(false)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {isClientModalOpen && (
+              <NewClientForm onFormSubmit={(clientId) => { handleClientCreated(clientId); setIsEditingClient(false); }} client={isEditingClient ? selectedClient : null} initialName="" />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1477,10 +2267,41 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           setPendingConfirmProfs([]);
         }
       }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmación de Reserva</DialogTitle>
-            <DialogDescription className="text-base text-foreground mt-2">
+        <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col">
+          {/* CABECERA OFICIAL VATOS ALFA */}
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
+                <Scissors className="h-5 w-5 text-slate-300 shrink-0" />
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                    Confirmación de Barbero
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                    Preferencia exclusiva de profesional
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirmLockModal(false);
+                  setCurrentConfirmIdx(-1);
+                  setPendingConfirmProfs([]);
+                }}
+                className="p-1 text-slate-300 hover:text-white transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <p className="text-sm font-semibold text-foreground">
               {(() => {
                 const currentProfId = pendingConfirmProfs[currentConfirmIdx];
                 const professionalName = professionals.find(p => p.id === currentProfId)?.name;
@@ -1488,9 +2309,9 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
                   ? `¿El cliente pidió exclusivamente con ${professionalName}?`
                   : '¿El cliente pidió exclusivamente con el barbero?';
               })()}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex justify-end gap-3 sm:space-x-0 mt-4">
+            </p>
+          </div>
+          <DialogFooter className="px-5 pb-5 pt-0 flex justify-end gap-3 sm:space-x-0">
             <Button
               type="button"
               variant="outline"
@@ -1520,6 +2341,7 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
             </Button>
             <Button
               type="button"
+              className="btn-vatos-alfa rounded-xl font-bold text-xs"
               onClick={async () => {
                 const currentProfId = pendingConfirmProfs[currentConfirmIdx];
                 const newLocks = { ...confirmedLocks, [currentProfId]: true };
@@ -1547,6 +2369,128 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL PREVENTIVO DE ANTICIPO POR INASISTENCIAS */}
+      <Dialog open={showDepositWarningModal} onOpenChange={setShowDepositWarningModal}>
+        <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 rounded-2xl overflow-hidden shadow-2xl border border-border">
+          <div className={cn(
+            "p-4 sm:p-5 text-white border-b flex items-center justify-between relative overflow-hidden",
+            isAnticipoRequiredDueToHistory
+              ? "bg-gradient-to-r from-red-950 via-slate-900 to-red-950 border-red-900/50"
+              : "bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-[#2d3a60]/60"
+          )}>
+            {/* Haz de luz animado en diagonal */}
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-2.5">
+              {isAnticipoRequiredDueToHistory ? (
+                <ShieldAlert className="h-5 w-5 text-red-400 shrink-0" />
+              ) : (
+                <CreditCard className="h-5 w-5 text-slate-300 shrink-0" />
+              )}
+              <div>
+                <DialogTitle className="text-base font-bold text-white tracking-tight">
+                  {isAnticipoRequiredDueToHistory
+                    ? 'Escudo Antifraude • Anticipo Requerido'
+                    : 'Regla de Reserva • Anticipo Requerido'}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300">
+                  {isAnticipoRequiredDueToHistory
+                    ? 'Regla de reserva para clientes con historial de inasistencias'
+                    : `Cita a partir de $${montoMinimoThreshold} MXN requiere anticipo de garantía`}
+                </DialogDescription>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDepositWarningModal(false)}
+              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4 text-xs">
+            <div className={cn(
+              "p-3.5 border rounded-xl space-y-1.5",
+              isAnticipoRequiredDueToHistory ? "bg-red-500/10 border-red-500/30" : "bg-blue-500/10 border-blue-500/30"
+            )}>
+              <p className={cn("font-bold text-sm", isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200")}>
+                {isAnticipoRequiredDueToHistory
+                  ? `Este cliente tiene ${unattendedCount} inasistencias registradas.`
+                  : `Cita con total de $${currentTotal} MXN (alcanza o supera los $${montoMinimoThreshold} MXN).`}
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                {isAnticipoRequiredDueToHistory
+                  ? `Para proteger el tiempo del barbero y los costos operativos, la política de Vatos Alfa exige un anticipo del ${penalizacionPorcentaje}% ($${depositAmountCalculated} MXN).`
+                  : `Según las reglas de reserva de Vatos Alfa, citas de $${montoMinimoThreshold} MXN o más exigen un anticipo del ${anticipoPorcentajeDefecto}% ($${depositAmountCalculated} MXN) para confirmar el lugar.`}
+              </p>
+            </div>
+
+            <p className="text-muted-foreground font-medium">
+              ¿Cómo deseas proceder con esta reserva en el sistema?
+            </p>
+
+            <div className="space-y-2 pt-1">
+              <Button
+                type="button"
+                className="w-full btn-vatos-alfa font-bold h-10 rounded-xl justify-center text-xs shadow-sm"
+                onClick={async () => {
+                  setDepositPaid(true);
+                  setShowDepositWarningModal(false);
+                  if (pendingSaveData) {
+                    await proceedWithSubmission(pendingSaveData, true);
+                  }
+                }}
+              >
+                ✓ Ya cobré el anticipo (${depositAmountCalculated} MXN)
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-10 rounded-xl justify-center text-xs font-bold border-border/80 hover:bg-muted text-foreground shadow-xs flex items-center gap-2"
+                onClick={async () => {
+                  setDepositPaid(false);
+                  setShowDepositWarningModal(false);
+                  if (pendingSaveData) {
+                    await proceedWithSubmission(pendingSaveData, false);
+                  }
+                }}
+              >
+                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+                <span>Enviar Enlace Mercado Pago (SPEI / Tarjeta)</span>
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-9 rounded-xl justify-center text-xs font-medium text-muted-foreground border-border hover:bg-muted"
+                onClick={async () => {
+                  setDepositPaid(false);
+                  setShowDepositWarningModal(false);
+                  if (pendingSaveData) {
+                    await proceedWithSubmission(pendingSaveData, false);
+                  }
+                }}
+              >
+                Dejar como Pendiente de Anticipo (Cobrar después)
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full h-9 rounded-xl justify-center text-xs text-muted-foreground"
+                onClick={() => setShowDepositWarningModal(false)}
+              >
+                Volver a revisar datos de la cita
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 
@@ -1556,10 +2500,11 @@ export function NewReservationForm({ isOpen, onOpenChange, onFormSubmit, initial
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader className="sr-only">
-          <DialogTitle>{isEditMode ? 'Editar Reserva' : 'Nueva Reserva'}</DialogTitle>
-        </DialogHeader>
+      <DialogContent
+        hideCloseButton={true}
+        className="max-w-2xl h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden shadow-2xl border border-border bg-background"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         {formContent}
       </DialogContent>
     </Dialog>

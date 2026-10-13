@@ -94,14 +94,14 @@ export function AddDepositoModal({ isOpen, onOpenChange }: AddDepositoModalProps
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
-                          <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                            {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          <Button variant={"outline"} className={cn("w-full h-10 pl-3 text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 shadow-xs", !field.value && "text-muted-foreground")}>
+                            <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                            {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : format(new Date(), "EEEE dd 'de' MMMM", { locale: es })}
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar locale={es} mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                      <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start">
+                        <Calendar locale={es} mode="single" selected={field.value || new Date()} onSelect={field.onChange} initialFocus />
                       </PopoverContent>
                     </Popover>
                     <FormMessage />

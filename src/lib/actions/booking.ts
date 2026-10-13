@@ -13,9 +13,10 @@ interface GetAvailabilityParams {
     professionalId: string;
     durationMinutes: number;
     minReservationBufferMinutes?: number;
+    isSandbox?: boolean;
 }
 
-export async function getAvailableSlots({ date, professionalId, durationMinutes, minReservationBufferMinutes }: GetAvailabilityParams) {
+export async function getAvailableSlots({ date, professionalId, durationMinutes, minReservationBufferMinutes, isSandbox }: GetAvailabilityParams) {
     // 0. Strict Input Validation
     if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return { error: 'Formato de fecha inválido. Se requiere AAAA-MM-DD.' };
@@ -222,7 +223,19 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             .where('fecha', '==', date)
             .get();
 
-        reservationsSnapshot.forEach(doc => {
+        const allResDocs = [...reservationsSnapshot.docs];
+        if (isSandbox) {
+            try {
+                const sandboxSnapshot = await db.collection('reservas_sandbox')
+                    .where('fecha', '==', date)
+                    .get();
+                allResDocs.push(...sandboxSnapshot.docs);
+            } catch (err) {
+                console.warn('[Booking] Error al consultar reservas_sandbox en getAvailableSlots:', err);
+            }
+        }
+
+        allResDocs.forEach(doc => {
             const data = doc.data();
             if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
 
@@ -259,26 +272,44 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         // Minimum standalone viable gap in barbershop (no standalone haircut/service is < 30m)
         const MIN_VIABLE_GAP = 30;
 
-        // Fetch settings
-        let minReservationBuffer = minReservationBufferMinutes !== undefined ? minReservationBufferMinutes : 60; // Minutes
+        // Fetch booking rules and settings
+        let minReservationBuffer = minReservationBufferMinutes !== undefined ? minReservationBufferMinutes : 30; // Minutes
+        let maxDaysFuture = 14;
         let GRID_INTERVAL = 30; // Minutes
 
         try {
-            const settingsSnap = await db.collection('settings').doc('website').get();
-            if (settingsSnap.exists) {
-                const data = settingsSnap.data();
-                if (data) {
-                    if (minReservationBufferMinutes === undefined && data.minReservationTime !== undefined) {
-                        minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+            const rulesSnap = await db.collection('configuracion').doc('reglas_reservas').get();
+            if (rulesSnap.exists) {
+                const rData = rulesSnap.data();
+                if (rData) {
+                    if (minReservationBufferMinutes === undefined && rData.tiempo_minimo_anticipacion_minutos !== undefined) {
+                        minReservationBuffer = Number(rData.tiempo_minimo_anticipacion_minutos) || 30;
                     }
-                    if (data.slotInterval) {
-                        const parsedInterval = Number(data.slotInterval);
+                    if (rData.dias_maximos_futuro !== undefined) {
+                        maxDaysFuture = Number(rData.dias_maximos_futuro) || 14;
+                    }
+                    if (rData.intervalo_horarios_minutos !== undefined) {
+                        const parsedInterval = Number(rData.intervalo_horarios_minutos);
                         if (!isNaN(parsedInterval) && parsedInterval > 0) GRID_INTERVAL = parsedInterval;
+                    }
+                }
+            } else {
+                const settingsSnap = await db.collection('settings').doc('website').get();
+                if (settingsSnap.exists) {
+                    const data = settingsSnap.data();
+                    if (data) {
+                        if (minReservationBufferMinutes === undefined && data.minReservationTime !== undefined) {
+                            minReservationBuffer = (Number(data.minReservationTime) || 1) * 60;
+                        }
+                        if (data.slotInterval) {
+                            const parsedInterval = Number(data.slotInterval);
+                            if (!isNaN(parsedInterval) && parsedInterval > 0) GRID_INTERVAL = parsedInterval;
+                        }
                     }
                 }
             }
         } catch (settingsError) {
-            console.warn("Could not load setting, using defaults.", settingsError);
+            console.warn("Could not load booking rules, using defaults.", settingsError);
         }
 
         // Timezone Logic (compare against Now in Mexico City time)
@@ -290,6 +321,14 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             month: '2-digit',
             day: '2-digit'
         }).format(nowRaw);
+
+        // Validation against maximum booking window into future
+        const queryDateObj = parse(date, 'yyyy-MM-dd', new Date());
+        const nowDateObj = parse(mexicoDateStr, 'yyyy-MM-dd', new Date());
+        const daysDiff = Math.round((queryDateObj.getTime() - nowDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysDiff < 0 || daysDiff > maxDaysFuture) {
+            return { slots: [] };
+        }
 
         const isQueryDateToday = (date === mexicoDateStr);
         let currentMinutes = -1;
@@ -488,32 +527,37 @@ export async function createPublicReservation(data: any) {
         if (existingDoc) {
             clientId = existingDoc.id;
             
-            // Progressive Enrichment: Update email or phone if missing/placeholder
-            const existingData = existingDoc.data();
-            const updates: any = {};
-            
-            // Check and update Email
-            const currentEmail = existingData.correo || existingData.email || '';
-            const isInvalidEmail = !currentEmail || currentEmail.toLowerCase() === 'no registrado' || currentEmail.trim() === '' || !currentEmail.includes('@');
-            const providedEmail = data.client.email;
-            
-            if (validateEmail && providedEmail && isInvalidEmail && providedEmail.includes('@')) {
-                updates.correo = providedEmail;
+            // Progressive Enrichment: Update email or phone if missing/placeholder (omit in sandbox mode)
+            if (!data.isSandbox) {
+                const existingData = existingDoc.data();
+                const updates: any = {};
+                
+                // Check and update Email
+                const currentEmail = existingData.correo || existingData.email || '';
+                const isInvalidEmail = !currentEmail || currentEmail.toLowerCase() === 'no registrado' || currentEmail.trim() === '' || !currentEmail.includes('@');
+                const providedEmail = data.client.email;
+                
+                if (validateEmail && providedEmail && isInvalidEmail && providedEmail.includes('@')) {
+                    updates.correo = providedEmail;
+                }
+                
+                // Check and update Phone
+                const currentPhone = existingData.telefono || '';
+                const isInvalidPhone = !currentPhone || currentPhone.toLowerCase() === 'no registrado' || currentPhone.trim() === '';
+                const providedPhone = data.client.phone;
+                
+                if (validatePhone && providedPhone && isInvalidPhone && providedPhone.length >= 10) {
+                    updates.telefono = providedPhone;
+                }
+                
+                if (Object.keys(updates).length > 0) {
+                    await db.collection('clientes').doc(clientId).update(updates);
+                    console.log(`[Booking] Enriched existing client ${clientId}:`, updates);
+                }
             }
-            
-            // Check and update Phone
-            const currentPhone = existingData.telefono || '';
-            const isInvalidPhone = !currentPhone || currentPhone.toLowerCase() === 'no registrado' || currentPhone.trim() === '';
-            const providedPhone = data.client.phone;
-            
-            if (validatePhone && providedPhone && isInvalidPhone && providedPhone.length >= 10) {
-                updates.telefono = providedPhone;
-            }
-            
-            if (Object.keys(updates).length > 0) {
-                await db.collection('clientes').doc(clientId).update(updates);
-                console.log(`[Booking] Enriched existing client ${clientId}:`, updates);
-            }
+        } else if (data.isSandbox) {
+            // In Sandbox Mode, do not create mock client records in production 'clientes' collection
+            clientId = `sandbox_cli_${randomUUID().substring(0, 8)}`;
         } else {
             // Determine Custom Client ID (Auto-increment)
             let nextClientNumber = undefined;
@@ -767,12 +811,24 @@ export async function createPublicReservation(data: any) {
             if (isBreak) return { error: 'El horario coincide con el descanso del profesional.' };
         }
 
-        // Check Existing Reservations
+        // Check Existing Reservations (In sandbox mode, checks both production and sandbox reservations)
         const reservationsSnapshot = await db.collection('reservas')
             .where('fecha', '==', data.date)
             .get(); // Filter by professional in memory to avoid index issues if not exists
 
-        const hasReservationConflict = reservationsSnapshot.docs.some(doc => {
+        const allReservationsToCheck = [...reservationsSnapshot.docs];
+        if (data.isSandbox) {
+            try {
+                const sandboxSnapshot = await db.collection('reservas_sandbox')
+                    .where('fecha', '==', data.date)
+                    .get();
+                allReservationsToCheck.push(...sandboxSnapshot.docs);
+            } catch (sandboxFetchErr) {
+                console.warn('[Booking] Error al consultar reservas_sandbox para conflictos:', sandboxFetchErr);
+            }
+        }
+
+        const hasReservationConflict = allReservationsToCheck.some(doc => {
             const res = doc.data();
             if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
 
@@ -849,17 +905,113 @@ export async function createPublicReservation(data: any) {
             console.error("Error reading booking rules in createPublicReservation:", e);
         }
 
-        // Historial de inasistencias y cancelaciones del cliente
-        const clientHistory = existingDoc ? {
-            citas_canceladas: Number(existingDoc.data()?.citas_canceladas) || 0,
-            citas_no_asistidas: Number(existingDoc.data()?.citas_no_asistidas) || 0,
-        } : null;
+        // Validación estricta de ventana máxima a futuro
+        try {
+            const timeZone = 'America/Mexico_City';
+            const nowRaw = new Date();
+            const mexicoDateStr = new Intl.DateTimeFormat('en-CA', {
+                timeZone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(nowRaw);
+            const queryDateObj = parse(data.date, 'yyyy-MM-dd', new Date());
+            const nowDateObj = parse(mexicoDateStr, 'yyyy-MM-dd', new Date());
+            const daysDiff = Math.round((queryDateObj.getTime() - nowDateObj.getTime()) / (1000 * 60 * 60 * 24));
+            const maxDaysFuture = Number(bookingRules.dias_maximos_futuro) || 14;
+            if (daysDiff < 0) {
+                return { error: 'No es posible agendar en fechas u horarios pasados.' };
+            }
+            if (daysDiff > maxDaysFuture) {
+                return { error: `La fecha seleccionada supera la ventana máxima de reserva permitida (${maxDaysFuture} días a futuro).` };
+            }
+        } catch (dateErr) {
+            console.warn("Error validando ventana máxima de fecha:", dateErr);
+        }
 
-        // Evaluación jerárquica: Prioridad 1 (Cliente) -> Prioridad 2 (Servicio) -> Prioridad 3 (Global)
+        // Historial de inasistencias y cancelaciones del cliente (Escudo Antifraude)
+        let clientHistory = null;
+        const targetClientId = clientId || existingDoc?.id;
+        const rawPhone = data.client?.phone || (existingDoc?.data()?.telefono);
+        const cleanPhoneDigits = (rawPhone || '').replace(/\D/g, '').slice(-10);
+
+        if (existingDoc || targetClientId || cleanPhoneDigits.length === 10) {
+            const cData = existingDoc ? (existingDoc.data() || {}) : {};
+            const canceladas = Number(cData.citas_canceladas) || 0;
+            let noAsistidas = Number(cData.citas_no_asistidas) || 0;
+
+            let realReservationsNoShows = 0;
+            try {
+                if (targetClientId) {
+                    const snapId = await db.collection('reservas')
+                        .where('cliente_id', '==', targetClientId)
+                        .where('estado', '==', 'No asiste')
+                        .get();
+                    realReservationsNoShows = Math.max(realReservationsNoShows, snapId.size);
+                }
+                if (cleanPhoneDigits && cleanPhoneDigits.length === 10) {
+                    const snapPhone = await db.collection('reservas')
+                        .where('cliente_telefono', '==', cleanPhoneDigits)
+                        .where('estado', '==', 'No asiste')
+                        .get();
+                    realReservationsNoShows = Math.max(realReservationsNoShows, snapPhone.size);
+                }
+            } catch (err) {
+                console.warn("[Booking] Error comprobando inasistencias en reservas:", err);
+            }
+
+            const trueNoShows = Math.max(noAsistidas, realReservationsNoShows);
+
+            // Sincronizar documento del cliente si estaba desactualizado
+            if (existingDoc && trueNoShows > (Number(cData.citas_no_asistidas) || 0)) {
+                existingDoc.ref.update({
+                    citas_no_asistidas: trueNoShows,
+                    actualizado_el: new Date()
+                }).catch(() => {});
+            }
+
+            clientHistory = {
+                citas_canceladas: canceladas,
+                citas_no_asistidas: trueNoShows,
+            };
+        }
+
+        // Escudo Anti-Fragmentación y Acumulado Diario en la Misma Fecha
+        let sameDayActiveCount = 0;
+        let sameDayActiveTotal = 0;
+        try {
+            const cleanPhoneDigits = (data.client?.phone || '').replace(/\D/g, '');
+            const phone10 = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : '';
+
+            allReservationsToCheck.forEach(doc => {
+                const r = doc.data();
+                if (r.estado === 'Cancelado' || r.estado === 'Cancelada' || r.estado === 'No asiste') return;
+
+                const matchesId = clientId && r.cliente_id === clientId;
+                const resPhone = (r.cliente_telefono || '').replace(/\D/g, '');
+                const resPhone10 = resPhone.length >= 10 ? resPhone.slice(-10) : '';
+                const matchesPhone = phone10 && resPhone10 && phone10 === resPhone10;
+
+                if (matchesId || matchesPhone) {
+                    sameDayActiveCount += 1;
+                    sameDayActiveTotal += Number(r.total || 0);
+                }
+            });
+        } catch (sameDayCheckErr) {
+            console.warn("[Booking] Error calculando acumulado diario de citas:", sameDayCheckErr);
+        }
+
+        // Evaluación jerárquica: Prioridad 1 (Cliente) -> Prioridad 2 (Servicio) -> Prioridad 3 (Reglas Personalizadas) -> Prioridad 3.5 (Escudo Anti-Fragmentación) -> Prioridad 4 (Global)
         const evalResult = evaluateDepositRequirement({
             totalPrice,
             services: validServices as any,
             clientHistory,
+            date: data.date,
+            time: data.time,
+            totalDurationMinutes: totalDuration,
+            isNewClient: !existingDoc,
+            sameDayActiveCount,
+            sameDayActiveTotal,
             rules: bookingRules,
         });
 
@@ -867,14 +1019,26 @@ export async function createPublicReservation(data: any) {
         const requiresDeposit = evalResult.requiresDeposit;
         const depositPercentage = evalResult.depositPercentage;
 
-        // 3. Si la reserva proviene de la web pública (flujo directo sin pasarela) y requiere anticipo:
-        // No permitir creación gratuita sin haber pasado por Mercado Pago.
+        // 3. Si la reserva proviene de la web pública (flujo directo sin pasarela):
         const originChannel = data.canal_reserva || data.origin || 'web_publica';
         const isPaid = data.paymentStatus === 'deposit_paid' || data.paymentStatus === 'paid';
 
-        if (originChannel === 'web_publica' && requiresDeposit && !isPaid) {
+        // Bloqueo de reserva online por regla personalizada
+        if (originChannel === 'web_publica' && evalResult.blockedOnline) {
             return {
-                error: `Esta reserva suma $${grandTotal} MXN y requiere un anticipo del ${depositPercentage}% ($${calculatedDeposit} MXN). Por favor realiza el pago en línea para confirmar tu cita.`,
+                error: evalResult.blockedReason || 'Esta cita no está disponible para reserva online. Favor de comunicarse directamente a la sucursal.',
+                blockedOnline: true
+            };
+        }
+
+        if (originChannel === 'web_publica' && requiresDeposit && !isPaid) {
+            const ruleDetail = evalResult.reason === 'client_history'
+                ? ` debido a que registras ${evalResult.clientNoShowsCount} inasistencia(s) previa(s)`
+                : (evalResult.reason === 'same_day_accumulation'
+                    ? ` (Escudo Anti-Fragmentación: ya cuentas con ${evalResult.sameDayActiveCount} cita(s) activa(s) en esta fecha y tu total acumulado diario alcanza $${(evalResult.sameDayAccumulatedTotal || grandTotal).toFixed(2)} MXN)`
+                    : (evalResult.customRuleMessage ? ` (${evalResult.customRuleMessage})` : ''));
+            return {
+                error: `Esta reserva requiere un anticipo del ${depositPercentage}% ($${calculatedDeposit} MXN)${ruleDetail}. Por favor realiza el pago en línea para confirmar tu cita.`,
                 requiresPayment: true,
                 depositAmount: calculatedDeposit
             };
@@ -909,6 +1073,31 @@ export async function createPublicReservation(data: any) {
             saldo_pendiente: Math.max(0, grandTotal - finalAmountDue),
             requiere_pago_anticipado: finalRequiresDeposit
         };
+
+        // MODO SANDBOX / PRUEBAS LOCAL:
+        // No altera la agenda real de la barbería ni envía correos reales.
+        if (data.isSandbox) {
+            let sandboxId = `SANDBOX-${Math.floor(100000 + Math.random() * 900000)}`;
+            try {
+                const sRef = await db.collection('reservas_sandbox').add({
+                    ...reservationData,
+                    isSandbox: true,
+                    creado_en: FieldValue.serverTimestamp(),
+                    simulatedAt: FieldValue.serverTimestamp()
+                });
+                sandboxId = sRef.id;
+            } catch (sandboxErr) {
+                console.warn('[SANDBOX] Guardado en reservas_sandbox omitido:', sandboxErr);
+            }
+
+            console.log(`[SANDBOX BOOKING] Reserva de prueba completada exitosamente sin afectar la agenda real (ID: ${sandboxId})`);
+            return {
+                success: true,
+                reservationId: sandboxId,
+                isSandbox: true,
+                warning: 'Modo Pruebas: Cita simulada correctamente (no afectó la agenda de la barbería ni envió correos).'
+            };
+        }
 
         const resRef = await db.collection('reservas').add(reservationData);
 
@@ -966,6 +1155,7 @@ export async function getPublicServiciosConfig() {
                 tiempo_minimo_anticipacion_minutos: Number(data.tiempo_minimo_anticipacion_minutos) || 30,
                 dias_maximos_futuro: Number(data.dias_maximos_futuro) || 14,
                 tolerancia_puntualidad_minutos: Number(data.tolerancia_puntualidad_minutos) || 10,
+                reglas_personalizadas: Array.isArray(data.reglas_personalizadas) ? data.reglas_personalizadas : [],
             };
         }
 
@@ -1003,12 +1193,22 @@ export async function getPublicServiciosConfig() {
 }
 
 // --- CLIENT BOOKING ELIGIBILITY CHECK (SERVER ACTION) ---
-export async function checkClientBookingEligibility(identifier: string): Promise<{
+export async function checkClientBookingEligibility(
+    identifier: string,
+    targetDate?: string,
+    newBookingTotal?: number
+): Promise<{
     requiresDepositDueToHistory: boolean;
     citas_canceladas: number;
     citas_no_asistidas: number;
     totalFaltas: number;
     penalizacion_anticipo_porcentaje: number;
+    sameDayActiveCount: number;
+    sameDayActiveTotal: number;
+    sameDayAccumulatedTotal: number;
+    requiresDepositDueToSameDay: boolean;
+    sameDayDepositReason?: string;
+    sameDayDepositPercent: number;
 }> {
     const defaultRes = {
         requiresDepositDueToHistory: false,
@@ -1016,6 +1216,12 @@ export async function checkClientBookingEligibility(identifier: string): Promise
         citas_no_asistidas: 0,
         totalFaltas: 0,
         penalizacion_anticipo_porcentaje: 50,
+        sameDayActiveCount: 0,
+        sameDayActiveTotal: 0,
+        sameDayAccumulatedTotal: Number(newBookingTotal) || 0,
+        requiresDepositDueToSameDay: false,
+        sameDayDepositReason: '',
+        sameDayDepositPercent: 50,
     };
 
     if (!identifier || typeof identifier !== 'string' || identifier.trim().length < 4) {
@@ -1027,20 +1233,28 @@ export async function checkClientBookingEligibility(identifier: string): Promise
         if (!db) return defaultRes;
 
         const config = await getPublicServiciosConfig();
-        if (!config.penalizacion_inasistencias_activa) {
-            return defaultRes;
-        }
 
         const clean = identifier.trim();
+        const cleanDigits = clean.replace(/\D/g, '');
+        const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : '';
+
         const clientsRef = db.collection('clientes');
         let clientDoc: any = null;
 
-        // 1. Búsqueda por teléfono
-        const phoneSnap = await clientsRef.where('telefono', '==', clean).limit(1).get();
-        if (!phoneSnap.empty) {
-            clientDoc = phoneSnap.docs[0];
-        } else if (clean.includes('@')) {
-            // 2. Búsqueda por correo (estándar y legacy)
+        // 1. Búsqueda por teléfono (buscando variantes comunes de formato)
+        if (last10) {
+            const phoneVariants = [last10, `+52${last10}`, `+52 ${last10}`, `52${last10}`, clean];
+            for (const variant of phoneVariants) {
+                const phoneSnap = await clientsRef.where('telefono', '==', variant).limit(1).get();
+                if (!phoneSnap.empty) {
+                    clientDoc = phoneSnap.docs[0];
+                    break;
+                }
+            }
+        }
+
+        // 2. Búsqueda por correo (estándar y legacy) si no se encontró por teléfono
+        if (!clientDoc && clean.includes('@')) {
             const emailSnap = await clientsRef.where('correo', '==', clean).limit(1).get();
             if (!emailSnap.empty) {
                 clientDoc = emailSnap.docs[0];
@@ -1050,24 +1264,104 @@ export async function checkClientBookingEligibility(identifier: string): Promise
             }
         }
 
-        if (!clientDoc) {
-            return defaultRes;
+        const data = clientDoc ? (clientDoc.data() || {}) : {};
+        const canceladas = Number(data.citas_canceladas) || 0;
+        let noAsistidas = Number(data.citas_no_asistidas) || 0;
+
+        // 3. Verificación cruzada en la colección 'reservas' para inasistencias reales
+        let reservasNoShows = 0;
+        if (config.penalizacion_inasistencias_activa) {
+            try {
+                if (clientDoc) {
+                    const snapById = await db.collection('reservas')
+                        .where('cliente_id', '==', clientDoc.id)
+                        .where('estado', '==', 'No asiste')
+                        .get();
+                    reservasNoShows = Math.max(reservasNoShows, snapById.size);
+                }
+                if (last10) {
+                    const snapByPhone = await db.collection('reservas')
+                        .where('cliente_telefono', '==', last10)
+                        .where('estado', '==', 'No asiste')
+                        .get();
+                    reservasNoShows = Math.max(reservasNoShows, snapByPhone.size);
+                }
+            } catch (resErr) {
+                console.warn("[checkClientBookingEligibility] Error comprobando inasistencias en reservas:", resErr);
+            }
         }
 
-        const data = clientDoc.data() || {};
-        const canceladas = Number(data.citas_canceladas) || 0;
-        const noAsistidas = Number(data.citas_no_asistidas) || 0;
-        const totalFaltas = canceladas + noAsistidas;
-        const maxPermitidas = Number(config.max_inasistencias_permitidas) || 2;
+        const realNoShows = Math.max(noAsistidas, reservasNoShows);
 
-        const requiresDeposit = totalFaltas >= maxPermitidas;
+        // Auto-sincronizar el documento del cliente en Firestore si estaba en 0 o desactualizado
+        if (clientDoc && realNoShows > (Number(data.citas_no_asistidas) || 0)) {
+            clientDoc.ref.update({
+                citas_no_asistidas: realNoShows,
+                actualizado_el: new Date()
+            }).catch(() => {});
+        }
+
+        const totalFaltas = canceladas + realNoShows;
+        const maxPermitidas = Number(config.max_inasistencias_permitidas) || 2;
+        const requiresDeposit = config.penalizacion_inasistencias_activa && ((realNoShows >= maxPermitidas) || (totalFaltas >= maxPermitidas));
+
+        // 4. Verificación de Citas Activas en la Misma Fecha (Escudo Anti-Fragmentación y Acumulado Diario)
+        let sameDayActiveCount = 0;
+        let sameDayActiveTotal = 0;
+
+        if (targetDate && targetDate.trim().length === 10) {
+            try {
+                const dateClean = targetDate.trim();
+                const sameDaySnap = await db.collection('reservas')
+                    .where('fecha', '==', dateClean)
+                    .get();
+
+                const validDocs = sameDaySnap.docs.filter(doc => {
+                    const r = doc.data();
+                    if (r.estado === 'Cancelado' || r.estado === 'Cancelada' || r.estado === 'No asiste') return false;
+
+                    const matchesId = clientDoc && r.cliente_id === clientDoc.id;
+                    const resPhone = (r.cliente_telefono || '').replace(/\D/g, '');
+                    const resLast10 = resPhone.length >= 10 ? resPhone.slice(-10) : '';
+                    const matchesPhone = last10 && resLast10 && last10 === resLast10;
+
+                    return matchesId || matchesPhone;
+                });
+
+                sameDayActiveCount = validDocs.length;
+                sameDayActiveTotal = validDocs.reduce((sum, doc) => sum + (Number(doc.data().total) || 0), 0);
+            } catch (sameDayErr) {
+                console.warn("[checkClientBookingEligibility] Error comprobando citas activas del mismo día:", sameDayErr);
+            }
+        }
+
+        const safeNewBookingTotal = Number(newBookingTotal) || 0;
+        const sameDayAccumulatedTotal = sameDayActiveTotal + safeNewBookingTotal;
+        const minThreshold = Number(config.anticipo_monto_minimo) || 190;
+        const defaultPercent = Number(config.anticipo_porcentaje_defecto) || 50;
+
+        let requiresDepositDueToSameDay = false;
+        let sameDayDepositReason = '';
+
+        if (config.anticipo_monto_minimo_activo && sameDayActiveCount > 0) {
+            if (sameDayAccumulatedTotal >= minThreshold || sameDayActiveCount >= 1) {
+                requiresDepositDueToSameDay = true;
+                sameDayDepositReason = `Detectamos que ya cuentas con ${sameDayActiveCount} cita(s) programada(s) para este día ($${sameDayActiveTotal.toFixed(2)} MXN). Al reservar este horario adicional y acumular $${sameDayAccumulatedTotal.toFixed(2)} MXN en la fecha, se requiere un anticipo del ${defaultPercent}% de garantía.`;
+            }
+        }
 
         return {
             requiresDepositDueToHistory: requiresDeposit,
             citas_canceladas: canceladas,
-            citas_no_asistidas: noAsistidas,
+            citas_no_asistidas: realNoShows,
             totalFaltas,
             penalizacion_anticipo_porcentaje: Number(config.penalizacion_anticipo_porcentaje) || 50,
+            sameDayActiveCount,
+            sameDayActiveTotal,
+            sameDayAccumulatedTotal,
+            requiresDepositDueToSameDay,
+            sameDayDepositReason,
+            sameDayDepositPercent: defaultPercent,
         };
     } catch (err) {
         console.error("Error in checkClientBookingEligibility:", err);
@@ -1472,3 +1766,295 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
         console.log(`[Email] Skipping Professional Email. Email: ${professional.email}, Enabled: ${profConfig.enabled}`);
     }
 }
+
+// --- CANCELLATION EMAIL HELPER ---
+export interface SendBookingCancellationParams {
+    reservationId?: string;
+    reservation?: any;
+    reason?: string;
+    clientEmail?: string;
+    forceSend?: boolean;
+}
+
+export async function sendBookingCancellation(params: SendBookingCancellationParams) {
+    const resendApiKey = process.env.RESEND_API_KEY;
+    if (!resendApiKey) {
+        console.error("[Email Cancellation] RESEND_API_KEY is missing in server environment.");
+        return { error: "RESEND_API_KEY missing" };
+    }
+    const resend = new Resend(resendApiKey);
+
+    const db = getDb();
+    if (!db) {
+        return { error: "Database not available" };
+    }
+
+    try {
+        let reservation = params.reservation || null;
+        const reservationId = params.reservationId || (reservation ? reservation.id : null);
+
+        if (reservationId && (!reservation || !reservation.fecha)) {
+            const resDoc = await db.collection('reservas').doc(reservationId).get();
+            if (resDoc.exists) {
+                reservation = { ...resDoc.data(), id: resDoc.id };
+            }
+        }
+
+        if (!reservation) {
+            return { error: "Reserva no encontrada para enviar correo de cancelación" };
+        }
+
+        // Check if already sent
+        if (!params.forceSend && reservation.notifications?.email_cancellation_sent) {
+            console.log(`[Email Cancellation] Already sent for reservation ${reservation.id || reservationId}`);
+            return { success: true, skipped: true, reason: 'Already sent' };
+        }
+
+        // Fetch configs in parallel
+        const [emailConfigDoc, websiteSettingsDoc, empresaSnap] = await Promise.all([
+            db.collection('configuracion').doc('emails').get(),
+            db.collection('settings').doc('website').get(),
+            db.collection('empresa').limit(1).get()
+        ]);
+
+        const emailConfig: any = emailConfigDoc.exists ? emailConfigDoc.data() : {};
+        const websiteSettings: any = websiteSettingsDoc.exists ? websiteSettingsDoc.data() : {};
+        const empresaConfig: any = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
+
+        const cancelConfig = websiteSettings.cancellationEmailConfig || {};
+        if (cancelConfig.enabled === false && !params.forceSend) {
+            console.log("[Email Cancellation] Cancellation emails are disabled in configuration.");
+            return { success: true, skipped: true, reason: 'Disabled in config' };
+        }
+
+        // Resolve client email and client name
+        let clientEmail = params.clientEmail || reservation.cliente_email || reservation.customer?.correo || reservation.customer?.email || '';
+        let clientName = reservation.cliente_nombre || reservation.customer?.nombre || '';
+
+        if (!clientEmail && reservation.cliente_id) {
+            try {
+                const clientDoc = await db.collection('clientes').doc(reservation.cliente_id).get();
+                if (clientDoc.exists) {
+                    const cData = clientDoc.data() || {};
+                    clientEmail = cData.correo || cData.email || '';
+                    if (!clientName) clientName = cData.nombre || '';
+                }
+            } catch (err) {
+                console.error("[Email Cancellation] Error fetching client doc:", err);
+            }
+        }
+
+        if (!clientEmail) {
+            console.log(`[Email Cancellation] No client email found for reservation ${reservation.id || reservationId}. Skipping.`);
+            return { success: true, skipped: true, reason: 'No client email' };
+        }
+
+        // Resolve professional and location
+        const professionalId = reservation.barbero_id || (reservation.items && reservation.items[0] ? reservation.items[0].barbero_id : '');
+        const [profDoc, locDoc] = await Promise.all([
+            professionalId ? db.collection('profesionales').doc(professionalId).get() : Promise.resolve({ exists: false, data: () => ({}) }),
+            reservation.local_id ? db.collection('locales').doc(reservation.local_id).get() : Promise.resolve({ exists: false, data: () => ({}) })
+        ]);
+        const professional: any = profDoc.exists ? profDoc.data() : {};
+        const localData: any = locDoc.exists ? locDoc.data() : {};
+
+        const professionalName = professional.name || reservation.barbero_nombre || 'Profesional';
+        const localAddress = localData.address || localData.direccion || 'Sucursal Principal';
+        const localPhone = localData.phone || localData.telefono || '';
+        const whatsappLink = localPhone ? `https://wa.me/${localPhone.replace(/\D/g, '')}` : '#';
+
+        // Sender setup
+        const senderName = empresaConfig.name || 'VATOS ALFA Barber Shop';
+        const defaultSenderEmail = 'contacto@vatosalfa.com';
+        let fromEmail = `${senderName} <${defaultSenderEmail}>`;
+
+        if (emailConfig.senders && Array.isArray(emailConfig.senders)) {
+            const primary = emailConfig.senders.find((s: any) => s.isPrimary && s.confirmed);
+            const anyConfirmed = emailConfig.senders.find((s: any) => s.confirmed);
+            const sender = primary || anyConfirmed;
+            if (sender) fromEmail = `${senderName} <${sender.email}>`;
+        }
+
+        const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
+        const secondaryColor = empresaConfig.theme?.secondaryColor || '#314177';
+
+        // Date & Time formatting
+        let dateStr = reservation.fecha || '';
+        try {
+            if (dateStr && typeof dateStr === 'string' && dateStr.includes('-')) {
+                const dateObj = parse(dateStr, 'yyyy-MM-dd', new Date());
+                dateStr = format(dateObj, "EEEE, d 'de' MMMM, yyyy", { locale: es });
+            }
+        } catch (e) {
+            console.log("Date parsing skipped:", e);
+        }
+        const timeStr = reservation.hora_inicio || '00:00';
+
+        // Services formatting
+        const itemsList = reservation.items || [{ servicio: reservation.servicio || 'Servicio' }];
+        const itemsListHtml = itemsList.map((i: any) =>
+            `<div style="margin-bottom: 4px; font-family: 'Roboto', Arial, sans-serif; font-size: 1.35em; font-weight: 700; color: #1e293b;">${i.nombre || i.servicio || 'Servicio'}</div>`
+        ).join('');
+
+        // Template strings
+        const tpl = websiteSettings.cancellationEmailTemplate || {};
+        const subject = `${tpl.subject || 'Cancelación de Cita'} - ${senderName}`;
+        let headline = tpl.headline || '¡Hola {nombre}, tu cita ha sido cancelada!';
+        headline = headline.replace('{nombre}', clientName || 'Estimado(a) Cliente').replace(/  +/g, ' ');
+
+        const cancellationNote = tpl.note || 'Lamentamos informarte que tu cita ha sido cancelada. Si deseas volver a agendar con nosotros, puedes reservar una nueva cita en línea cuando gustes.';
+        const buttonText = tpl.buttonText || 'AGENDAR NUEVA CITA';
+        const buttonUrl = tpl.buttonUrl || 'https://vatosalfa.com/reservar';
+        const whatsappText = tpl.whatsappText || 'Contáctanos por WhatsApp';
+
+        const showDate = cancelConfig.showDate !== false;
+        const showTime = cancelConfig.showTime !== false;
+        const showProfessional = cancelConfig.showProfessional !== false;
+        const showLocation = cancelConfig.showLocation !== false;
+        const showServices = cancelConfig.showServices !== false;
+        const showReason = cancelConfig.showReason !== false;
+        const showButton = cancelConfig.showButton !== false;
+
+        const cancellationReason = params.reason || reservation.motivo_cancelacion || '';
+
+        const html = `
+        <div style="font-family: 'Roboto', Arial, sans-serif; color: #1e293b; max-width: 100%; padding: 25px 12px; background-color: #f1f5f9;">
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;600;700&display=swap" rel="stylesheet">
+            
+            <div style="max-width: 420px; margin: 0 auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e2e8f0;">
+                <div style="background-color: #ffffff; padding: 25px 25px 12px 25px; text-align: center;">
+                    <img src="${logoUrl}" alt="${senderName}" style="display: block; margin: 0 auto; width: 100%; max-width: 250px; height: auto; object-fit: contain;" />
+                </div>
+
+                <div style="padding: 10px 26px 26px 26px;">
+                    <div style="text-align: center; margin-bottom: 12px;">
+                        <span style="display: inline-block; background-color: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; padding: 4px 12px; border-radius: 9999px;">CITA CANCELADA</span>
+                    </div>
+
+                    <h2 style="color: #0f172a; text-align: center; margin-top: 0px; margin-bottom: 8px; font-family: 'Roboto', Arial, sans-serif; font-weight: 700; font-size: 22px; line-height: 1.25;">
+                        ${headline}
+                    </h2>
+                    
+                    ${showServices ? `<div style="margin-bottom: 20px; text-align: center;">${itemsListHtml}</div>` : ''}
+
+                    <table style="width: 100%; border-collapse: separate; border-spacing: 0 10px; margin-bottom: 15px;">
+                        ${showDate ? `<tr>
+                            <td style="width: 26px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2693/2693507.png" width="20" height="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td> 
+                            <td style="font-weight: 600; font-size: 0.98em; color: #334155; vertical-align: middle; padding-left: 12px;">${dateStr}</td>
+                        </tr>` : ''}
+                        
+                        ${showTime ? `<tr>
+                            <td style="width: 26px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/2972/2972531.png" width="20" height="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 0.98em; color: #334155; vertical-align: middle; padding-left: 12px;">${timeStr}</td>
+                        </tr>` : ''}
+
+                        ${showProfessional ? `<tr>
+                            <td style="width: 26px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" height="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 0.98em; color: #334155; vertical-align: middle; padding-left: 12px;">${professionalName}</td>
+                        </tr>` : ''}
+
+                        ${showLocation ? `<tr>
+                            <td style="width: 26px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" width="20" height="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
+                            <td style="font-weight: 600; font-size: 0.98em; color: #334155; vertical-align: middle; padding-left: 12px;">${localAddress}</td>
+                        </tr>` : ''}
+                    </table>
+
+                    <div style="background-color: #f8fafc; color: #334155; padding: 16px; border-radius: 10px; font-size: 0.9em; margin-top: 18px; text-align: center; border: 1px solid #e2e8f0; line-height: 1.45;">
+                        ${showReason && cancellationReason ? `
+                        <div style="font-weight: 700; color: #b91c1c; margin-bottom: 6px; font-size: 0.95em;">
+                            Motivo: <span style="font-weight: 500; color: #475569;">${cancellationReason}</span>
+                        </div>` : ''}
+                        <div style="color: #475569;">
+                            ${cancellationNote.replace(/\n/g, '<br/>')}
+                        </div>
+                    </div>
+
+                    ${showButton ? `
+                    <div style="margin-top: 24px; text-align: center;">
+                        <a href="${buttonUrl}" style="display: inline-block; background-color: ${secondaryColor}; color: #ffffff; padding: 13px 26px; border-radius: 8px; text-decoration: none; font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; font-family: 'Roboto', Arial, sans-serif;">
+                            ${buttonText}
+                        </a>
+                    </div>` : ''}
+
+                    <div style="margin-top: 24px; text-align: left; padding-top: 18px; border-top: 1px solid #f1f5f9;">
+                        <div style="margin-bottom: 12px; padding-left: 2px;">
+                            <a href="${whatsappLink}" style="text-decoration: none; color: #1e293b; display: inline-flex; align-items: center;">
+                                <img src="https://cdn-icons-png.flaticon.com/512/3670/3670051.png" width="20" height="20" style="margin-right: 12px; display: inline-block; vertical-align: middle;" alt="WhatsApp" />
+                                <span style="font-weight: 700; font-size: 0.95em;">${whatsappText}</span>
+                            </a>
+                        </div>
+                        ${localPhone ? `
+                        <div style="display: flex; align-items: center; color: #1e293b; padding-left: 2px;">
+                            <img src="https://cdn-icons-png.flaticon.com/512/724/724664.png" width="20" height="20" style="margin-right: 12px; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%); display: inline-block; vertical-align: middle;" alt="Teléfono" />
+                            <span style="font-weight: 700; font-size: 0.95em;">${localPhone}</span>
+                        </div>` : ''}
+                    </div>
+                </div>
+                
+                <div style="background-color: #fbfbfc; padding: 18px; text-align: center; font-size: 0.75em; color: #94a3b8; border-top: 1px solid #f1f5f9;">
+                    ${emailConfig.signature ? emailConfig.signature.replace(/\n/g, '<br/>') : senderName}
+                </div>
+            </div>
+        </div>
+        `;
+
+        const resendResponse = await resend.emails.send({
+            from: fromEmail,
+            to: clientEmail,
+            subject: subject,
+            html: html
+        });
+
+        if (resendResponse.error) {
+            console.error("[Email Cancellation] Resend error:", resendResponse.error);
+            return { error: resendResponse.error.message };
+        }
+
+        // Track email status in Firestore
+        const finalResId = reservation.id || reservationId;
+        if (finalResId && !params.forceSend) {
+            try {
+                await db.collection('reservas').doc(finalResId).update({
+                    'notifications.email_cancellation_sent': true,
+                    'notifications.email_cancellation_sent_at': Timestamp.now()
+                });
+            } catch (err) {
+                console.error("[Email Cancellation] Failed to update reservation flags:", err);
+            }
+        }
+
+        console.log(`[Email Cancellation] Successfully sent to ${clientEmail}. Resend ID: ${resendResponse.data?.id}`);
+        return { success: true, id: resendResponse.data?.id };
+
+    } catch (error: any) {
+        console.error("[Email Cancellation] Unhandled error:", error);
+        return { error: error.message || "Error al enviar correo de cancelación" };
+    }
+}
+
+export async function sendBookingCancellationAction(reservationId: string, reason?: string) {
+    return sendBookingCancellation({ reservationId, reason });
+}
+
+export async function sendTestCancellationEmail(targetEmail: string) {
+    const today = new Date();
+    const formattedDate = format(today, 'yyyy-MM-dd');
+    const mockReservation = {
+        id: 'test-cancellation-' + Date.now(),
+        cliente_nombre: 'Alejandro',
+        cliente_email: targetEmail,
+        servicio: 'Corte de cabello',
+        items: [{ nombre: 'Corte de cabello' }],
+        fecha: formattedDate,
+        hora_inicio: '16:00',
+        barbero_nombre: 'Beatriz',
+        motivo_cancelacion: 'Cancelación solicitada por el cliente',
+    };
+    return sendBookingCancellation({
+        reservation: mockReservation,
+        clientEmail: targetEmail,
+        reason: 'Cancelación de prueba del sistema',
+        forceSend: true
+    });
+}
+

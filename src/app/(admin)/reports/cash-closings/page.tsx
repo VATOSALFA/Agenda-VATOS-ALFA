@@ -1,11 +1,9 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
@@ -16,13 +14,28 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar as CalendarIcon, Search, Download, Eye, Loader2, ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+    Calendar as CalendarIcon, 
+    Search, 
+    Download, 
+    Eye, 
+    Loader2, 
+    ArrowUpDown, 
+    ArrowUp, 
+    ArrowDown, 
+    ChevronLeft, 
+    ChevronRight,
+    Receipt,
+    X,
+    Filter
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { CashClosing, User as AppUser } from '@/lib/types';
+import type { CashClosing, User as AppUser, Role } from '@/lib/types';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { where, Timestamp, QueryConstraint } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -43,44 +56,66 @@ const denominations = [
 const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashClosing | null, isOpen: boolean, onOpenChange: (open: boolean) => void }) => {
     if (!closing) return null;
 
-    // Helper to safely get count; handle potential missing keys if structure changed
     const getCount = (val: number) => {
         if (!closing.detalle_conteo) return 0;
-        // Try exact number key, or string key
         return closing.detalle_conteo[val] || closing.detalle_conteo[String(val)] || 0;
     };
 
-    const totalEntregadoneto = closing.total_calculado - closing.fondo_base;
+    const totalEntregadoneto = (closing.total_calculado || 0) - (closing.fondo_base || 0);
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-5xl max-h-[95vh] flex flex-col">
-                <DialogHeader>
-                    <DialogTitle>Detalle del Cierre de Caja #{closing.id.slice(0, 6)}</DialogTitle>
-                    <DialogDescription>
-                        Realizado el {format(closing.fecha_corte.toDate(), "dd 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent 
+                hideCloseButton={true}
+                className="sm:max-w-4xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card"
+            >
+                {/* Cabecera Oficial Vatos Alfa */}
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 shrink-0">
+                    <div className="header-light-beam" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Receipt className="h-5 w-5 text-slate-300 shrink-0" />
+                            <div>
+                                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+                                    Detalle del Cierre de Caja #{closing.id.slice(0, 6)}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                    Realizado el {format(closing.fecha_corte.toDate(), "dd 'de' MMMM, yyyy 'a las' HH:mm", { locale: es })}
+                                </DialogDescription>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg"
+                            title="Cerrar modal"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
 
-                <div className="flex-grow overflow-y-auto py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Column Left: Calculator */}
-                        <div className="space-y-4 flex flex-col">
-                            <h3 className="font-semibold">Calculadora de Efectivo</h3>
-                            <div className="h-[300px] border rounded-lg overflow-hidden flex flex-col">
+                <div className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Columna Izquierda: Calculadora de Efectivo */}
+                        <div className="space-y-3 flex flex-col">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Calculadora de Efectivo</h4>
+                            <div className="h-[320px] border border-border/60 rounded-xl overflow-hidden flex flex-col bg-muted/10">
                                 <ScrollArea className="h-full">
-                                    <div className="p-4 space-y-3">
+                                    <div className="p-3 sm:p-4 space-y-2.5">
                                         {denominations.map(d => {
                                             const count = getCount(d.value);
                                             return (
-                                                <div key={d.value} className="grid grid-cols-3 gap-2 items-center">
-                                                    <Label className="text-right">{d.label}</Label>
+                                                <div key={d.value} className="grid grid-cols-3 gap-2 items-center text-xs">
+                                                    <Label className="text-right text-xs font-medium text-muted-foreground">{d.label}</Label>
                                                     <Input
                                                         readOnly
                                                         value={count}
-                                                        className="h-8 text-center bg-muted/20"
+                                                        className="h-8 text-center bg-card border-border/60 text-xs rounded-lg font-semibold"
                                                     />
-                                                    <p className="font-medium text-sm text-center">= ${(d.value * count).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</p>
+                                                    <p className="font-semibold text-xs text-center text-foreground">
+                                                        = ${(d.value * count).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </p>
                                                 </div>
                                             );
                                         })}
@@ -89,47 +124,48 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                             </div>
                         </div>
 
-                        {/* Column Right: Details */}
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>Fondo base en caja</Label>
+                        {/* Columna Derecha: Detalles del Corte */}
+                        <div className="space-y-3.5">
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Fondo base en caja</Label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <Input readOnly value={closing.fondo_base} className="pl-6 bg-muted/20" />
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <Input readOnly value={(closing.fondo_base || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="pl-6 bg-muted/20 border-border/60 text-xs rounded-lg" />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Total contado</Label>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Total contado</Label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <Input readOnly value={closing.total_calculado} className="pl-6 font-bold bg-muted/20" />
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <Input readOnly value={(closing.total_calculado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="pl-6 font-bold bg-muted/20 border-border/60 text-xs rounded-lg" />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Efectivo en caja (Sistema)</Label>
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Efectivo en caja (Sistema)</Label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                                    <Input readOnly value={closing.total_sistema} className="pl-6 bg-muted/20" />
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+                                    <Input readOnly value={(closing.total_sistema || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} className="pl-6 bg-muted/20 border-border/60 text-xs rounded-lg" />
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Nombre de quien recibe</Label>
-                                <Input readOnly value={closing.persona_recibe} className="bg-muted/20" />
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Nombre de quien recibe</Label>
+                                <Input readOnly value={closing.persona_recibe || 'N/A'} className="bg-muted/20 border-border/60 text-xs rounded-lg" />
                             </div>
 
-                            <div className="space-y-2">
-                                <Label>Comentarios</Label>
-                                <Input readOnly value={closing.comentarios || 'Sin comentarios'} className="bg-muted/20" />
+                            <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Comentarios</Label>
+                                <Input readOnly value={closing.comentarios || 'Sin comentarios'} className="bg-muted/20 border-border/60 text-xs rounded-lg" />
                             </div>
 
-                            <div className="space-y-2 pt-4 border-t">
-                                <div className="p-4 bg-primary rounded-lg text-primary-foreground text-center shadow-md">
-                                    <p className="text-sm font-medium opacity-90 uppercase tracking-widest">Total entregado</p>
-                                    <p className="text-4xl font-extrabold mt-1">
-                                        ${totalEntregadoneto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                            {/* Tarjeta de Total Entregado */}
+                            <div className="pt-2">
+                                <div className="p-4 rounded-xl bg-gradient-to-br from-[#18223c] to-[#0d1424] border border-blue-500/30 text-center shadow-lg">
+                                    <p className="text-xs font-semibold text-slate-300 uppercase tracking-widest">Total entregado</p>
+                                    <p className={cn("text-3xl sm:text-4xl font-extrabold mt-1 tracking-tight", totalEntregadoneto < 0 ? "text-red-400" : "text-white")}>
+                                        ${totalEntregadoneto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </p>
                                 </div>
                             </div>
@@ -137,9 +173,11 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
                     </div>
                 </div>
 
-                <DialogFooter>
-                    <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
-                </DialogFooter>
+                <div className="border-t border-border/40 p-4 bg-muted/10 flex justify-end shrink-0">
+                    <Button variant="outline" className="rounded-xl px-4 text-xs font-semibold" onClick={() => onOpenChange(false)}>
+                        Cerrar
+                    </Button>
+                </div>
             </DialogContent>
         </Dialog>
     );
@@ -147,6 +185,8 @@ const ClosingDetailModal = ({ closing, isOpen, onOpenChange }: { closing: CashCl
 
 
 export default function CashClosingsPage() {
+    const { toast } = useToast();
+    const { user } = useAuth();
     const [dateRange, setDateRange] = useState<DateRange | undefined>({
         from: new Date(),
         to: new Date(),
@@ -154,36 +194,56 @@ export default function CashClosingsPage() {
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [deliveredByFilter, setDeliveredByFilter] = useState('todos');
     const [receivedByFilter, setReceivedByFilter] = useState('todos');
-    const [queryKey, setQueryKey] = useState(0);
+
+    const [activeFilters, setActiveFilters] = useState({
+        dateRange: { from: new Date(), to: new Date() } as DateRange | undefined,
+        deliveredBy: 'todos',
+        receivedBy: 'todos'
+    });
+
     const [selectedClosing, setSelectedClosing] = useState<CashClosing | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
-    const { toast } = useToast();
 
-    const { data: users, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
+    const { data: usersRaw, loading: usersLoading } = useFirestoreQuery<AppUser>('usuarios');
+    const { data: roles } = useFirestoreQuery<Role>('roles');
+    const userRole = roles?.find(r => r.title === user?.role);
+    const historyLimit = userRole?.historyRestrictionDays;
+
+    const users = useMemo(() => {
+        return [...(usersRaw || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }, [usersRaw]);
 
     const queryConstraints = useMemo(() => {
         const constraints: QueryConstraint[] = [];
-        if (dateRange?.from) {
-            constraints.push(where('fecha_corte', '>=', Timestamp.fromDate(startOfDay(dateRange.from))));
+        if (activeFilters.dateRange?.from) {
+            constraints.push(where('fecha_corte', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
         }
-        if (dateRange?.to) {
-            constraints.push(where('fecha_corte', '<=', Timestamp.fromDate(endOfDay(dateRange.to))));
+        if (activeFilters.dateRange?.to) {
+            constraints.push(where('fecha_corte', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
         }
-        if (deliveredByFilter !== 'todos') {
-            constraints.push(where('persona_entrega_id', '==', deliveredByFilter));
+        if (activeFilters.deliveredBy !== 'todos') {
+            constraints.push(where('persona_entrega_id', '==', activeFilters.deliveredBy));
         }
-        if (receivedByFilter !== 'todos') {
-            constraints.push(where('persona_recibe', '==', receivedByFilter));
+        if (activeFilters.receivedBy !== 'todos') {
+            constraints.push(where('persona_recibe', '==', activeFilters.receivedBy));
         }
         return constraints;
-    }, [dateRange, deliveredByFilter, receivedByFilter]);
+    }, [activeFilters]);
 
-    const { data: closings, loading: closingsLoading } = useFirestoreQuery<CashClosing>('cortes_caja', queryKey, ...queryConstraints);
+    const { data: closings, loading: closingsLoading } = useFirestoreQuery<CashClosing>('cortes_caja', JSON.stringify(activeFilters), ...queryConstraints);
+
+    const handleSearch = () => {
+        setActiveFilters({
+            dateRange,
+            deliveredBy: deliveredByFilter,
+            receivedBy: receivedByFilter
+        });
+    };
 
     const sortedClosings = useMemo(() => {
-        let sortableItems = [...closings];
+        let sortableItems = [...(closings || [])];
         if (sortConfig !== null) {
             sortableItems.sort((a, b) => {
                 let aValue: any;
@@ -227,8 +287,6 @@ export default function CashClosingsPage() {
                 return 0;
             });
         } else {
-            // Default sort by date desc if no sort is applied (usually firestore does this but good to enforce in UI if mixing/matching)
-            // Actually firestore query doesn't have orderBy here, so we should probably add default sort.
             sortableItems.sort((a, b) => (b.fecha_corte?.seconds || 0) - (a.fecha_corte?.seconds || 0));
         }
         return sortableItems;
@@ -236,7 +294,7 @@ export default function CashClosingsPage() {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [dateRange, deliveredByFilter, receivedByFilter]);
+    }, [activeFilters]);
 
     const totalPages = Math.ceil(sortedClosings.length / itemsPerPage) || 1;
     const paginatedClosings = sortedClosings.slice(
@@ -253,13 +311,17 @@ export default function CashClosingsPage() {
     };
 
     const SortIcon = ({ field }: { field: string }) => {
-        if (!sortConfig || sortConfig.key !== field) return <ArrowUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />;
-        if (sortConfig.direction === 'asc') return <ArrowUp className="ml-1 h-3.5 w-3.5 text-primary" />;
-        return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
+        if (!sortConfig || sortConfig.key !== field) {
+            return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-500 opacity-60 group-hover:opacity-100" />;
+        }
+        if (sortConfig.direction === 'asc') {
+            return <ArrowUp className="ml-1 h-3 w-3 text-blue-400" />;
+        }
+        return <ArrowDown className="ml-1 h-3 w-3 text-blue-400" />;
     };
 
     const handleDownload = () => {
-        if (sortedClosings.length === 0) {
+        if (!sortedClosings || sortedClosings.length === 0) {
             toast({
                 title: "No hay datos para exportar",
                 description: "No hay cierres de caja en el período seleccionado.",
@@ -268,21 +330,43 @@ export default function CashClosingsPage() {
             return;
         }
 
-        const dataForExcel = sortedClosings.map((closing: CashClosing) => ({
-            'Fecha': format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm'),
-            'Entrega': closing.persona_entrega_nombre,
-            'Recibe': closing.persona_recibe,
-            'Fondo Base': closing.fondo_base,
-            'Total Contado': closing.total_calculado,
-            'Total Entregado': closing.total_calculado - closing.fondo_base,
-            'Total Sistema': closing.total_sistema,
-            'Diferencia (Contado - Sistema - Fondo)': closing.total_calculado - closing.fondo_base - closing.total_sistema,
-            'Comentarios': closing.comentarios || 'N/A'
-        }));
+        const dataForExcel = sortedClosings.map((closing: CashClosing) => {
+            const totalEntregado = (closing.total_calculado || 0) - (closing.fondo_base || 0);
+            const diferencia = totalEntregado - (closing.total_sistema || 0);
+            const dateObj = closing.fecha_corte?.toDate ? closing.fecha_corte.toDate() : new Date();
 
-        const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
+            return {
+                'ID Corte': closing.id,
+                'Fecha': format(dateObj, 'yyyy-MM-dd'),
+                'Hora': format(dateObj, 'HH:mm'),
+                'Entrega': closing.persona_entrega_nombre || 'N/A',
+                'Recibe': closing.persona_recibe || 'N/A',
+                'Fondo Base': closing.fondo_base || 0,
+                'Total Contado': closing.total_calculado || 0,
+                'Total Sistema': closing.total_sistema || 0,
+                'Total Entregado': totalEntregado,
+                'Diferencia': diferencia,
+                'Comentarios': closing.comentarios || 'N/A'
+            };
+        });
+
+        const totalEntregadoSum = sortedClosings.reduce((acc, c) => acc + ((c.total_calculado || 0) - (c.fondo_base || 0)), 0);
+        const totalSistemaSum = sortedClosings.reduce((acc, c) => acc + (c.total_sistema || 0), 0);
+        const totalContadoSum = sortedClosings.reduce((acc, c) => acc + (c.total_calculado || 0), 0);
+        const totalFondoBaseSum = sortedClosings.reduce((acc, c) => acc + (c.fondo_base || 0), 0);
+
+        const summaryData = [
+            { 'Concepto': 'Cortes Registrados', 'Valor': sortedClosings.length },
+            { 'Concepto': 'Total Entregado Acumulado', 'Valor': `$${totalEntregadoSum.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+            { 'Concepto': 'Total Sistema Acumulado', 'Valor': `$${totalSistemaSum.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+            { 'Concepto': 'Total Contado Acumulado', 'Valor': `$${totalContadoSum.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+            { 'Concepto': 'Fondo Base Promedio', 'Valor': `$${(totalFondoBaseSum / (sortedClosings.length || 1)).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+            { 'Concepto': 'Diferencia Neta Acumulada', 'Valor': `$${(totalEntregadoSum - totalSistemaSum).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
+        ];
+
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Cierres de Caja");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dataForExcel), "Cierres de Caja");
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), "Resumen");
 
         XLSX.writeFile(workbook, `Reporte_Cierres_Caja_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 
@@ -295,39 +379,151 @@ export default function CashClosingsPage() {
     const isLoading = usersLoading || closingsLoading;
 
     return (
-        <>
-            <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-3xl font-bold tracking-tight">Reporte de cierres de caja</h2>
+        <div className="flex-1 space-y-4 p-3 sm:p-6 md:p-8 pt-4 sm:pt-6">
+            {/* Header Oficial con Bare Icon de Descarga */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
+                        Reporte de cierres de caja
+                    </h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 hidden sm:block">
+                        Historial y auditoría de cortes de caja, efectivo entregado y diferencias.
+                    </p>
                 </div>
+                <button 
+                    type="button"
+                    className="text-slate-400 hover:text-white transition-colors p-1" 
+                    onClick={handleDownload}
+                    title="Descargar reporte en Excel"
+                >
+                    <Download className="h-4 w-4" />
+                </button>
+            </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Filtros de búsqueda</CardTitle>
-                        <CardDescription>Busca cierres de caja por fecha o por personas involucradas.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+            {/* FILTROS ESCRITORIO (hidden sm:block) */}
+            <Card className="hidden sm:block rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/40">
+                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-slate-400" /> Filtros de búsqueda
+                    </CardTitle>
+                    <CardDescription className="text-xs">Busca cierres de caja por fecha o por personas involucradas.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 sm:p-5">
+                    <div className="flex flex-col lg:flex-row lg:items-end gap-3 sm:gap-4">
+                        {/* Periodo de tiempo */}
+                        <div className="flex-1 min-w-[200px] space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Periodo de tiempo</label>
+                            <Popover open={isCalendarOpen} onOpenChange={(open) => {
+                                setIsCalendarOpen(open);
+                                if (open) setDateRange(undefined);
+                            }}>
+                                <PopoverTrigger asChild>
+                                    <Button id="date" variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl h-10 border-border/60 text-xs sm:text-sm", !dateRange && "text-muted-foreground")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-400 shrink-0" />
+                                        {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                <>{format(dateRange.from, "dd MMM, y", { locale: es })} - {format(dateRange.to, "dd MMM, y", { locale: es })}</>
+                                            ) : (
+                                                format(dateRange.from, "dd MMM, y", { locale: es })
+                                            )
+                                        ) : (
+                                            <span>Periodo de tiempo</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="start">
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={(range) => {
+                                            setDateRange(range);
+                                            if (range?.from && range?.to) {
+                                                setIsCalendarOpen(false);
+                                            }
+                                        }}
+                                        numberOfMonths={1}
+                                        locale={es}
+                                        disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        {/* Entregado por */}
+                        <div className="flex-1 min-w-[180px] space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Entregado por</label>
+                            <Select value={deliveredByFilter} onValueChange={setDeliveredByFilter} disabled={usersLoading}>
+                                <SelectTrigger className="w-full rounded-xl h-10 border-border/60 text-xs sm:text-sm">
+                                    <SelectValue placeholder="Entregado por..." />
+                                </SelectTrigger>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1 max-h-64">
+                                    <SelectItem value="todos" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Todos</SelectItem>
+                                    {users.map(u => (
+                                        <SelectItem key={u.id} value={u.id} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">{u.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Recibido por */}
+                        <div className="flex-1 min-w-[180px] space-y-1.5">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recibido por</label>
+                            <Select value={receivedByFilter} onValueChange={setReceivedByFilter} disabled={usersLoading}>
+                                <SelectTrigger className="w-full rounded-xl h-10 border-border/60 text-xs sm:text-sm">
+                                    <SelectValue placeholder="Recibido por..." />
+                                </SelectTrigger>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1 max-h-64">
+                                    <SelectItem value="todos" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Todos</SelectItem>
+                                    {users.map(u => (
+                                        <SelectItem key={u.id} value={u.name} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">{u.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Botón Buscar Vatos Alfa */}
+                        <div className="shrink-0">
+                            <Button 
+                                variant="alfa" 
+                                className="h-10 rounded-xl px-4 text-xs sm:text-sm font-bold text-white shadow-md w-auto" 
+                                onClick={handleSearch} 
+                                disabled={isLoading}
+                            >
+                                {isLoading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+                                Buscar
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* FILTROS MÓVIL COMPACTO (sm:hidden) */}
+            <Card className="sm:hidden rounded-2xl border border-border/60 shadow-sm overflow-hidden bg-card/60 backdrop-blur-sm">
+                <CardContent className="p-2.5 space-y-2">
+                    <div className="flex items-center gap-1.5">
                         <Popover open={isCalendarOpen} onOpenChange={(open) => {
                             setIsCalendarOpen(open);
-                            if (open) {
-                                setDateRange(undefined);
-                            }
+                            if (open) setDateRange(undefined);
                         }}>
                             <PopoverTrigger asChild>
-                                <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {dateRange?.from ? (
-                                        dateRange.to ? (
-                                            <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                                <Button variant="outline" className="flex-1 justify-start text-left font-normal rounded-xl h-9 text-xs border-border/60 px-2.5 truncate">
+                                    <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className="truncate">
+                                        {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                `${format(dateRange.from, "dd MMM", { locale: es })} - ${format(dateRange.to, "dd MMM", { locale: es })}`
+                                            ) : (
+                                                format(dateRange.from, "dd MMM, y", { locale: es })
+                                            )
                                         ) : (
-                                            format(dateRange.from, "LLL dd, y", { locale: es })
-                                        )
-                                    ) : (
-                                        <span>Periodo de tiempo</span>
-                                    )}
+                                            'Periodo'
+                                        )}
+                                    </span>
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="start">
                                 <Calendar
                                     initialFocus
                                     mode="range"
@@ -341,154 +537,281 @@ export default function CashClosingsPage() {
                                     }}
                                     numberOfMonths={1}
                                     locale={es}
+                                    disabled={historyLimit !== undefined && historyLimit !== null ? (date) => date > new Date() || date < subDays(new Date(), historyLimit) : undefined}
                                 />
                             </PopoverContent>
                         </Popover>
-                        <Select value={deliveredByFilter} onValueChange={setDeliveredByFilter} disabled={usersLoading}>
-                            <SelectTrigger><SelectValue placeholder="Entregado por..." /></SelectTrigger>
-                            <SelectContent><SelectItem value="todos">Todos</SelectItem>{users.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Select value={receivedByFilter} onValueChange={setReceivedByFilter} disabled={usersLoading}>
-                            <SelectTrigger><SelectValue placeholder="Recibido por..." /></SelectTrigger>
-                            <SelectContent><SelectItem value="todos">Todos</SelectItem>{users.map(u => <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button onClick={() => setQueryKey(k => k + 1)} disabled={isLoading}>
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+
+                        <Button 
+                            variant="alfa" 
+                            size="sm" 
+                            className="h-9 px-3 rounded-xl text-xs font-bold text-white shadow-sm shrink-0" 
+                            onClick={handleSearch} 
+                            disabled={isLoading}
+                        >
+                            {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5 mr-1" />}
                             Buscar
                         </Button>
-                    </CardContent>
-                </Card >
+                    </div>
 
-                <Card>
-                    <CardHeader className="flex-row items-center justify-between">
-                        <CardTitle>Historial de cierres</CardTitle>
-                        <Button variant="outline" onClick={handleDownload} disabled={isLoading || sortedClosings.length === 0}><Download className="mr-2 h-4 w-4" /> Descargar</Button>
-                    </CardHeader>
-                    <CardContent>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <Select value={deliveredByFilter} onValueChange={setDeliveredByFilter} disabled={usersLoading}>
+                            <SelectTrigger className="rounded-xl h-9 text-xs border-border/60">
+                                <SelectValue placeholder="Entrega" />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1 max-h-64">
+                                <SelectItem value="todos" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Todos</SelectItem>
+                                {users.map(u => (
+                                    <SelectItem key={u.id} value={u.id} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">{u.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={receivedByFilter} onValueChange={setReceivedByFilter} disabled={usersLoading}>
+                            <SelectTrigger className="rounded-xl h-9 text-xs border-border/60">
+                                <SelectValue placeholder="Recibe" />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1 max-h-64">
+                                <SelectItem value="todos" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Todos</SelectItem>
+                                {users.map(u => (
+                                    <SelectItem key={u.id} value={u.name} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">{u.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Tabla Historial de Cierres (Estándar Compacto Alta Densidad) */}
+            <Card className="rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="p-4 sm:p-5 pb-3 border-b border-border/40">
+                    <CardTitle className="text-base font-semibold">Historial de cierres</CardTitle>
+                    <CardDescription className="text-xs">Registro detallado de los cortes de caja realizados en el sistema.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {/* Tabla Desktop (hidden sm:block) */}
+                    <div className="hidden sm:block overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('fecha')}>
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('fecha')}>
                                         <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Fecha
                                             <SortIcon field="fecha" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('entrega')}>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('entrega')}>
                                         <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Entrega
                                             <SortIcon field="entrega" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('recibe')}>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group" onClick={() => requestSort('recibe')}>
                                         <div className="flex items-center gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Recibe
                                             <SortIcon field="recibe" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_sistema')}>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_sistema')}>
                                         <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Total sistema
                                             <SortIcon field="total_sistema" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_contado')}>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_contado')}>
                                         <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Total contado
                                             <SortIcon field="total_contado" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_entregado')}>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold cursor-pointer select-none hover:bg-muted/50 transition-colors group text-right" onClick={() => requestSort('total_entregado')}>
                                         <div className="flex items-center justify-end gap-1 font-semibold text-foreground/70 group-hover:text-foreground">
                                             Total entregado
                                             <SortIcon field="total_entregado" />
                                         </div>
                                     </TableHead>
-                                    <TableHead className="text-right">Acciones</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-right w-12">
+                                        <span className="sr-only">Acciones</span>
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
                                     Array.from({ length: 5 }).map((_, i) => (
-                                        <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
-                                    ))
-                                ) : sortedClosings.length === 0 ? (
-                                    <TableRow><TableCell colSpan={7} className="text-center h-24">No se encontraron cierres de caja.</TableCell></TableRow>
-                                ) : (
-                                    paginatedClosings.map(closing => (
-                                        <TableRow key={closing.id}>
-                                            <TableCell>{format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}</TableCell>
-                                            <TableCell>{closing.persona_entrega_nombre}</TableCell>
-                                            <TableCell>{closing.persona_recibe}</TableCell>
-                                            <TableCell className="text-right">${closing.total_sistema.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right">${closing.total_calculado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right font-bold">
-                                                ${(closing.total_calculado - closing.fondo_base).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button variant="outline" size="sm" onClick={() => setSelectedClosing(closing)}><Eye className="mr-2 h-4 w-4" /> Ver Detalle</Button>
-                                            </TableCell>
+                                        <TableRow key={i} className="h-9 border-b border-border/40">
+                                            <TableCell colSpan={7} className="py-1.5 px-3"><Skeleton className="h-5 w-full" /></TableCell>
                                         </TableRow>
                                     ))
+                                ) : sortedClosings.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center h-20 text-xs text-muted-foreground">
+                                            No se encontraron cierres de caja en el período seleccionado.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    paginatedClosings.map(closing => {
+                                        const totalEntregado = (closing.total_calculado || 0) - (closing.fondo_base || 0);
+                                        return (
+                                            <TableRow key={closing.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground">
+                                                    {format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-foreground">
+                                                    {closing.persona_entrega_nombre || 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-foreground">
+                                                    {closing.persona_recibe || 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right text-muted-foreground">
+                                                    ${(closing.total_sistema || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right text-foreground">
+                                                    ${(closing.total_calculado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                                <TableCell className={cn("py-1.5 px-3 text-xs text-right font-semibold", totalEntregado < 0 ? "text-red-400" : "text-foreground")}>
+                                                    ${totalEntregado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setSelectedClosing(closing)} 
+                                                        className="text-slate-400 hover:text-white transition-colors p-1"
+                                                        title="Ver detalle del cierre"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </button>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
                                 )}
                             </TableBody>
                         </Table>
-                    </CardContent>
-                </Card>
+                    </div>
 
-                {!isLoading && sortedClosings.length > 0 && (
-                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
-                        <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium">Resultados por página</p>
-                            <Select
-                                value={`${itemsPerPage}`}
-                                onValueChange={(value) => {
-                                    setItemsPerPage(Number(value));
-                                    setCurrentPage(1);
-                                }}
-                            >
-                                <SelectTrigger className="h-8 w-[70px]">
-                                    <SelectValue placeholder={itemsPerPage} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="10">10</SelectItem>
-                                    <SelectItem value="20">20</SelectItem>
-                                    <SelectItem value="50">50</SelectItem>
-                                    <SelectItem value="100">100</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="text-sm font-medium">
+                    {/* Vista Móvil Compacta (sm:hidden) */}
+                    <div className="sm:hidden space-y-2.5 p-3">
+                        {isLoading ? (
+                            Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="p-3 rounded-xl border border-border/60 bg-card/60 space-y-2">
+                                    <Skeleton className="h-4 w-1/2" />
+                                    <Skeleton className="h-4 w-full" />
+                                </div>
+                            ))
+                        ) : sortedClosings.length === 0 ? (
+                            <div className="text-center py-6 text-xs text-muted-foreground">
+                                No se encontraron cierres de caja en el período seleccionado.
+                            </div>
+                        ) : (
+                            paginatedClosings.map(closing => {
+                                const totalEntregado = (closing.total_calculado || 0) - (closing.fondo_base || 0);
+                                return (
+                                    <div key={closing.id} className="p-3 rounded-xl border border-border/60 bg-card/60 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                                                <CalendarIcon className="h-3.5 w-3.5 text-slate-400" />
+                                                {format(closing.fecha_corte.toDate(), 'dd/MM/yyyy HH:mm')}
+                                            </div>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setSelectedClosing(closing)} 
+                                                className="text-slate-400 hover:text-white transition-colors p-1"
+                                                title="Ver detalle del cierre"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/40">
+                                            <div>
+                                                <span className="text-muted-foreground block text-[11px]">Entrega:</span>
+                                                <span className="font-medium text-foreground">{closing.persona_entrega_nombre || 'N/A'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground block text-[11px]">Recibe:</span>
+                                                <span className="font-medium text-foreground">{closing.persona_recibe || 'N/A'}</span>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-border/40">
+                                            <div>
+                                                <span className="text-muted-foreground block text-[11px]">Sistema:</span>
+                                                <span className="font-medium text-foreground">${(closing.total_sistema || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground block text-[11px]">Contado:</span>
+                                                <span className="font-medium text-foreground">${(closing.total_calculado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground block text-[11px]">Entregado:</span>
+                                                <span className={cn("font-bold", totalEntregado < 0 ? "text-red-400" : "text-foreground")}>
+                                                    ${totalEntregado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Paginación */}
+            {!isLoading && sortedClosings.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-muted-foreground">
+                    <div className="flex items-center space-x-2">
+                        <span className="text-xs font-medium">Resultados por página</span>
+                        <Select
+                            value={`${itemsPerPage}`}
+                            onValueChange={(value) => {
+                                setItemsPerPage(Number(value));
+                                setCurrentPage(1);
+                            }}
+                        >
+                            <SelectTrigger className="h-8 w-[70px] rounded-xl border-border/60 text-xs">
+                                <SelectValue placeholder={itemsPerPage} />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                <SelectItem value="10" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">10</SelectItem>
+                                <SelectItem value="20" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">20</SelectItem>
+                                <SelectItem value="50" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">50</SelectItem>
+                                <SelectItem value="100" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">100</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-4">
+                        <span className="text-xs font-medium text-foreground">
                             Página {currentPage} de {totalPages}
-                        </div>
-                        <div className="flex items-center space-x-2">
+                        </span>
+                        <div className="flex items-center space-x-1.5">
                             <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-8 px-2.5 rounded-xl border-border/60 text-xs"
                                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                                 disabled={currentPage === 1}
                             >
-                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Anterior
                             </Button>
                             <Button
                                 variant="outline"
                                 size="sm"
+                                className="h-8 px-2.5 rounded-xl border-border/60 text-xs"
                                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                                 disabled={currentPage === totalPages}
                             >
-                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                Siguiente <ChevronRight className="h-3.5 w-3.5 ml-1" />
                             </Button>
                         </div>
                     </div>
-                )}
-            </div >
+                </div>
+            )}
 
             <ClosingDetailModal
                 isOpen={!!selectedClosing}
                 onOpenChange={() => setSelectedClosing(null)}
                 closing={selectedClosing}
             />
-        </>
+        </div>
     );
 }
-

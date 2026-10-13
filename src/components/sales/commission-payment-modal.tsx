@@ -27,9 +27,10 @@ import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnaps
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
-import { Info, Loader2 } from 'lucide-react';
+import { Info, Loader2, X, Percent } from 'lucide-react';
 import type { Sale, Profesional, Service, Product, Egreso, SaleItem } from '@/lib/types';
 import { Checkbox } from '../ui/checkbox';
+import { cn } from '@/lib/utils';
 import { startOfDay, endOfDay, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -337,15 +338,32 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle>Pago de Comisiones y Propinas</DialogTitle>
-                    <DialogDescription>
-                        Calcula y registra el pago para los profesionales en el periodo seleccionado.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-2 sm:py-4 flex-1 overflow-y-auto">
-                    <Alert className="mb-4">
+            <DialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 sm:max-w-4xl max-h-[90vh] flex flex-col" hideCloseButton={true}>
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-slate-800 text-white shrink-0">
+                    <div className="header-light-beam" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Percent className="h-5 w-5 text-[#C5A880]" />
+                            <div>
+                                <DialogTitle className="text-base font-semibold text-white tracking-tight">
+                                    Pago de Comisiones y Propinas
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-300">
+                                    Calcula y registra el pago para los profesionales en el periodo seleccionado
+                                </DialogDescription>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+                <div className="p-3 sm:p-6 flex-1 overflow-y-auto min-h-0">
+                    <Alert className="mb-3 hidden sm:flex">
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Pagos</AlertTitle>
                         <AlertDescription>
@@ -353,8 +371,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         </AlertDescription>
                     </Alert>
 
-                    <div className="max-h-[50vh] sm:max-h-96 w-full">
-                        <div className="overflow-x-auto w-full border rounded-md">
+                    {/* VISTA ESCRITORIO: TABLA */}
+                    <div className="hidden sm:block max-h-[50vh] sm:max-h-96 w-full">
+                        <div className="overflow-x-auto w-full border rounded-xl">
                             <Table className="min-w-[600px] sm:min-w-full">
                                 <TableHeader>
                                     <TableRow>
@@ -373,9 +392,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" /></TableCell></TableRow>
                                     ) : commissionData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24">No hay comisiones ni propinas pendientes para el periodo seleccionado.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground">No hay comisiones ni propinas pendientes para el periodo seleccionado.</TableCell></TableRow>
                                     ) : commissionData.map((row) => (
                                         <TableRow key={row.professionalId}>
                                             <TableCell>
@@ -394,21 +413,106 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                 </TableBody>
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-right font-bold text-lg whitespace-nowrap">Total a Pagar Seleccionado</TableCell>
-                                        <TableCell className="text-right font-bold text-lg text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        <TableCell colSpan={5} className="text-right font-bold text-base whitespace-nowrap">Total a Pagar Seleccionado</TableCell>
+                                        <TableCell className="text-right font-bold text-base text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
                         </div>
                     </div>
+
+                    {/* VISTA MÓVIL: TARJETAS TOUCH */}
+                    <div className="sm:hidden space-y-2.5">
+                        <div className="flex items-center justify-between p-2.5 bg-muted/20 border border-border/40 rounded-xl">
+                            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
+                                <Checkbox
+                                    checked={commissionData.length > 0 && selectedProfessionals.length === commissionData.length}
+                                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                                />
+                                <span>Seleccionar todos ({selectedProfessionals.length}/{commissionData.length})</span>
+                            </label>
+                        </div>
+
+                        {isLoading ? (
+                            <div className="flex flex-col items-center justify-center py-10">
+                                <Loader2 className="h-6 w-6 animate-spin text-slate-400 mb-2" />
+                                <span className="text-xs text-muted-foreground">Calculando comisiones...</span>
+                            </div>
+                        ) : commissionData.length === 0 ? (
+                            <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-xl p-4">
+                                No hay comisiones ni propinas pendientes para el periodo seleccionado.
+                            </div>
+                        ) : (
+                            commissionData.map((row) => {
+                                const isSelected = selectedProfessionals.includes(row.professionalId);
+                                const totalStaff = row.totalCommission + row.totalTips;
+                                return (
+                                    <div
+                                        key={row.professionalId}
+                                        onClick={() => handleSelectProfessional(row.professionalId, !isSelected)}
+                                        className={cn(
+                                            "p-3 rounded-xl border transition-all cursor-pointer",
+                                            isSelected
+                                                ? "border-blue-500/60 bg-blue-500/5 shadow-sm"
+                                                : "border-border/60 bg-card/60 hover:bg-muted/10"
+                                        )}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                <Checkbox
+                                                    checked={isSelected}
+                                                    onCheckedChange={(checked) => handleSelectProfessional(row.professionalId, checked)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <span className="font-semibold text-sm text-foreground truncate">{row.professionalName}</span>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <span className="text-[10px] text-muted-foreground block leading-tight">Total</span>
+                                                <span className="text-sm font-bold text-foreground">
+                                                    ${totalStaff.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2.5 pt-2 border-t border-border/40 grid grid-cols-3 gap-1 text-[11px]">
+                                            <div>
+                                                <span className="text-muted-foreground text-[10px] block">Servicios</span>
+                                                <span className="font-medium text-foreground">${row.totalServiceCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground text-[10px] block">Productos</span>
+                                                <span className="font-medium text-foreground">${row.totalProductCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground text-[10px] block">Propinas</span>
+                                                <span className="font-medium text-foreground">${row.totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
                 </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                    <Button onClick={handlePayCommissions} disabled={isLoading || isProcessing || selectedProfessionals.length === 0}>
-                        {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Pagar
-                    </Button>
-                </DialogFooter>
+                <div className="p-3 sm:p-4 bg-muted/20 border-t border-border/40 flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                    <div className="sm:hidden flex flex-col">
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold">Total a Pagar</span>
+                        <span className="text-sm font-black text-foreground">
+                            ${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl h-9 text-xs sm:text-sm">Cancelar</Button>
+                        <Button
+                            variant="alfa"
+                            onClick={handlePayCommissions}
+                            disabled={isLoading || isProcessing || selectedProfessionals.length === 0}
+                            className="px-4 sm:px-6 font-semibold h-9 text-xs sm:text-sm"
+                        >
+                            {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Pagar ({selectedProfessionals.length})
+                        </Button>
+                    </div>
+                </div>
             </DialogContent>
         </Dialog>
     )

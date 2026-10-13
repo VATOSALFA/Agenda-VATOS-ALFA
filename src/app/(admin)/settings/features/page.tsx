@@ -2,15 +2,14 @@
 
 import { useForm, Controller } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { Loader2, Sparkles, Megaphone, Award, TrendingUp, WifiOff, Percent } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
-import { Separator } from "@/components/ui/separator";
 
 interface FeaturesSettings {
     enableMarketing: boolean;
@@ -87,95 +86,178 @@ export default function FeaturesSettingsPage() {
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-8 w-8 animate-spin" />
+            <div className="flex items-center justify-center p-12">
+                <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-lg font-medium">Funcionalidades Avanzadas</h3>
-                <p className="text-sm text-muted-foreground">
-                    Activa o desactiva módulos adicionales para potenciar tu negocio.
-                </p>
+        <div className="flex-1 space-y-5 max-w-5xl pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/60">
+                <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">Funcionalidades Avanzadas</h2>
+                    <p className="text-xs text-muted-foreground">
+                        Activa o personaliza módulos inteligentes para potenciar las operaciones y fidelización de tu negocio.
+                    </p>
+                </div>
             </div>
-            <Separator />
 
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-
-                {/* Marketing */}
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                    <div className="space-y-0.5">
-                        <Label className="text-base">Módulo de Marketing CRM</Label>
-                        <p className="text-sm text-muted-foreground">Activa opciones para enviar mensajes masivos o individuales a clientes inactivos.</p>
-                    </div>
-                    <Controller name="enableMarketing" control={form.control} render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    )} />
-                </div>
-
-                {/* Loyalty */}
-                <div className="flex flex-col gap-4 rounded-lg border p-4 shadow-sm">
-                    <div className="flex flex-row items-center justify-between">
-                        <div className="space-y-0.5">
-                            <Label className="text-base">Programa de Puntos (Lealtad)</Label>
-                            <p className="text-sm text-muted-foreground">Permite acumular puntos por venta y pagar con ellos.</p>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardHeader className="py-3 px-4 sm:px-5 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-slate-400 shrink-0" />
+                            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                Módulos de la Plataforma
+                            </CardTitle>
                         </div>
-                        <Controller name="enableLoyaltyPoints" control={form.control} render={({ field }) => (
-                            <Switch checked={field.value} onCheckedChange={field.onChange} />
-                        )} />
-                    </div>
-
-                    {form.watch('enableLoyaltyPoints') && (
-                        <div className="pl-0 pt-2 border-t mt-2">
-                            <div className="flex items-center gap-4">
-                                <div className="space-y-0.5 flex-1">
-                                    <Label className="text-sm">Porcentaje de Cashback (%)</Label>
-                                    <p className="text-xs text-muted-foreground">Porcentaje de la venta que se devuelve en puntos (Ej: 10% de $100 = 10 puntos).</p>
+                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                            Habilita o ajusta el comportamiento de las herramientas del sistema según las necesidades de tu barbería.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0 divide-y divide-border/50 bg-card">
+                        {/* 1. Marketing CRM */}
+                        <div className="flex items-center justify-between p-3.5 sm:p-4 hover:bg-muted/20 transition-colors">
+                            <div className="space-y-0.5 pr-4">
+                                <div className="flex items-center gap-2">
+                                    <Megaphone className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                        Módulo de Marketing CRM
+                                    </span>
                                 </div>
-                                <Controller name="loyaltyCashbackPercentage" control={form.control} render={({ field }) => (
-                                    <Input
-                                        type="number"
-                                        min="1"
-                                        max="100"
-                                        className="w-24 text-right"
-                                        {...field}
-                                        onChange={e => field.onChange(Number(e.target.value))}
-                                    />
-                                )} />
+                                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                                    Envía mensajes de reactivación y promociones masivas o personalizadas a clientes inactivos.
+                                </p>
                             </div>
+                            <Controller
+                                name="enableMarketing"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                )}
+                            />
                         </div>
-                    )}
-                </div>
 
-                {/* Barber Dashboard */}
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                    <div className="space-y-0.5">
-                        <Label className="text-base">Dashboard de Metas y Gamificación</Label>
-                        <p className="text-sm text-muted-foreground">Muestra gráficas de rendimiento individual a los barberos.</p>
-                    </div>
-                    <Controller name="enableBarberDashboard" control={form.control} render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    )} />
-                </div>
+                        {/* 2. Loyalty Points (Matte Gold #C5A880) */}
+                        <div className="transition-colors">
+                            <div className="flex items-center justify-between p-3.5 sm:p-4 hover:bg-muted/20 transition-colors">
+                                <div className="space-y-0.5 pr-4">
+                                    <div className="flex items-center gap-2">
+                                        <Award className="h-4 w-4 text-[#C5A880] shrink-0" />
+                                        <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                            Programa de Puntos y Lealtad (Cashback)
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] sm:text-xs text-muted-foreground">
+                                        Permite a tus clientes acumular saldo en puntos en cada visita para pagar futuros servicios.
+                                    </p>
+                                </div>
+                                <Controller
+                                    name="enableLoyaltyPoints"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
 
-                {/* Offline Mode */}
-                <div className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                    <div className="space-y-0.5">
-                        <Label className="text-base">Modo Offline (Básico)</Label>
-                        <p className="text-sm text-muted-foreground">Mantiene una copia de la agenda y clientes para verlos sin internet.</p>
-                    </div>
-                    <Controller name="enableOfflineMode" control={form.control} render={({ field }) => (
-                        <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    )} />
-                </div>
+                            {form.watch('enableLoyaltyPoints') && (
+                                <div className="p-3.5 sm:p-4 bg-muted/20 border-t border-border/50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div className="space-y-0.5">
+                                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                            <Percent className="h-3.5 w-3.5 text-[#C5A880]" />
+                                            Porcentaje de Recompensa (Cashback)
+                                        </span>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            Porcentaje de la venta que se abona en puntos (Ej: 10% de $100 = 10 puntos Alfa).
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <Controller
+                                            name="loyaltyCashbackPercentage"
+                                            control={form.control}
+                                            render={({ field }) => (
+                                                <div className="relative flex items-center">
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        max="100"
+                                                        className="w-24 h-8 pr-7 text-right font-sans font-medium text-xs sm:text-sm"
+                                                        {...field}
+                                                        onChange={e => field.onChange(Number(e.target.value))}
+                                                    />
+                                                    <span className="absolute right-2.5 text-xs text-muted-foreground pointer-events-none font-medium">%</span>
+                                                </div>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
-                <div className="flex justify-end">
-                    <Button type="submit" disabled={isSubmitting || isLoading}>
-                        {(isSubmitting || isLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Guardar Cambios
+                        {/* 3. Barber Dashboard */}
+                        <div className="flex items-center justify-between p-3.5 sm:p-4 hover:bg-muted/20 transition-colors">
+                            <div className="space-y-0.5 pr-4">
+                                <div className="flex items-center gap-2">
+                                    <TrendingUp className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                        Dashboard de Metas y Gamificación
+                                    </span>
+                                </div>
+                                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                                    Despliega métricas individuales de productividad y progreso hacia metas para los barberos.
+                                </p>
+                            </div>
+                            <Controller
+                                name="enableBarberDashboard"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                )}
+                            />
+                        </div>
+
+                        {/* 4. Offline Mode */}
+                        <div className="flex items-center justify-between p-3.5 sm:p-4 hover:bg-muted/20 transition-colors">
+                            <div className="space-y-0.5 pr-4">
+                                <div className="flex items-center gap-2">
+                                    <WifiOff className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span className="text-xs sm:text-sm font-semibold text-foreground">
+                                        Modo Offline de Emergencia
+                                    </span>
+                                </div>
+                                <p className="text-[11px] sm:text-xs text-muted-foreground">
+                                    Mantiene una copia de lectura en caché de la agenda y clientes para consultar sin internet.
+                                </p>
+                            </div>
+                            <Controller
+                                name="enableOfflineMode"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                )}
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Botón Guardar Cambios (Alfa) */}
+                <div className="sticky bottom-0 z-10 py-3 bg-background/90 backdrop-blur-md border-t border-border/40 flex justify-end">
+                    <Button
+                        type="submit"
+                        variant="alfa"
+                        disabled={isSubmitting || isLoading}
+                        className="h-9 px-6 text-xs font-semibold"
+                    >
+                        {(isSubmitting || isLoading) ? (
+                            <>
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                Guardando...
+                            </>
+                        ) : (
+                            "Guardar Cambios"
+                        )}
                     </Button>
                 </div>
             </form>

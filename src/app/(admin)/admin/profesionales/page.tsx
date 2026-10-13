@@ -104,54 +104,60 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex flex-col md:flex-row items-start md:items-center justify-between p-4 bg-card hover:bg-muted/50 list-none gap-4 transition-colors",
-        isDragging ? "shadow-xl ring-2 ring-primary ring-opacity-50 rounded-md bg-accent z-20" : ""
+        "flex flex-col sm:flex-row items-start sm:items-center justify-between p-2.5 sm:p-3.5 bg-card hover:bg-muted/30 list-none gap-3 transition-colors border-b border-border/40 last:border-b-0",
+        isDragging ? "shadow-xl ring-2 ring-blue-500 rounded-xl bg-accent z-20" : ""
       )}
     >
-      <div className="flex items-center gap-3 w-full md:w-auto">
+      <div className="flex items-center gap-2.5 min-w-0">
         <div 
           {...attributes}
           {...listeners}
-          className="p-2 -ml-2 cursor-grab active:cursor-grabbing touch-none text-muted-foreground hover:text-foreground shrink-0"
+          className="p-1 -ml-1 cursor-grab active:cursor-grabbing touch-none text-slate-400 hover:text-foreground shrink-0"
+          title="Arrastrar para ordenar"
         >
-          <GripVertical className="h-5 w-5" />
+          <GripVertical className="h-4 w-4" />
         </div>
-        <Avatar className="h-10 w-10 shrink-0">
+        <Avatar className="h-8 w-8 sm:h-9 sm:w-9 shrink-0 border border-border/60">
           <AvatarImage src={prof.avatarUrl} alt={prof.name} />
-          <AvatarFallback>{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
+          <AvatarFallback className="text-xs">{prof.name ? prof.name.substring(0, 2).toUpperCase() : '??'}</AvatarFallback>
         </Avatar>
         <div className="flex flex-col min-w-0">
-          <span className="font-medium truncate">{prof.name}</span>
+          <span className="font-semibold text-xs sm:text-sm text-foreground truncate">{prof.name}</span>
           {prof.publicName && prof.publicName !== prof.name && (
-            <span className="text-xs text-muted-foreground truncate">Público: {prof.publicName}</span>
+            <span className="text-[11px] text-muted-foreground truncate">Web: {prof.publicName}</span>
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 w-full md:w-auto md:justify-end">
+      <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0">
-              <Clock className="mr-2 h-4 w-4" />
-              <span>Ver horario</span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-7 w-7 p-0 text-slate-400 hover:text-foreground hover:bg-muted/30 shrink-0"
+              title="Ver horario"
+              aria-label="Ver horario"
+            >
+              <Clock className="h-3.5 w-3.5" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80" align="end">
-            <div className="p-1 px-2 text-sm">
-              <div className="grid grid-cols-3 gap-x-4 gap-y-1 font-bold mb-3 border-b pb-2">
+          <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white text-xs" align="end">
+            <div className="text-xs">
+              <div className="grid grid-cols-3 gap-x-3 gap-y-1 font-bold mb-2 pb-1.5 border-b border-border/40 text-blue-300">
                 <span>Día</span>
                 <span className="text-right">Apertura</span>
                 <span className="text-right">Cierre</span>
               </div>
-              <ul className="space-y-2">
+              <ul className="space-y-1.5">
                 {daysOfWeek.map(day => (
-                  <li key={day} className="grid grid-cols-3 gap-x-4 gap-y-1">
-                    <span className="capitalize text-muted-foreground">{day.substring(0, 3)}</span>
+                  <li key={day} className="grid grid-cols-3 gap-x-3 gap-y-0.5">
+                    <span className="capitalize text-slate-400">{day.substring(0, 3)}</span>
                     {prof.schedule && prof.schedule[day as keyof Schedule]?.enabled
                       ? <>
-                        <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].start}</span>
-                        <span className="font-mono text-right">{prof.schedule[day as keyof Schedule].end}</span>
+                        <span className="font-mono text-right text-slate-200">{prof.schedule[day as keyof Schedule].start}</span>
+                        <span className="font-mono text-right text-slate-200">{prof.schedule[day as keyof Schedule].end}</span>
                       </>
-                      : <span className="col-span-2 text-right text-muted-foreground">Descanso</span>
+                      : <span className="col-span-2 text-right text-slate-500">Descanso</span>
                     }
                   </li>
                 ))}
@@ -160,30 +166,48 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
           </PopoverContent>
         </Popover>
 
-        <Badge variant={prof.active ? 'default' : 'destructive'} className={cn(
-          prof.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50',
-          "shrink-0"
-        )}>
-          <Circle className={cn("mr-2 h-2 w-2 fill-current", prof.active ? 'text-primary' : 'text-accent-foreground')} />
+        <Badge 
+          variant="outline" 
+          className={cn(
+            "text-[10px] h-6 py-0 px-2 shrink-0 font-medium",
+            prof.active 
+              ? 'border-blue-500/40 text-blue-400 bg-blue-500/10' 
+              : 'border-border/60 text-muted-foreground bg-muted/20'
+          )}
+        >
           {prof.active ? 'Activo' : 'Inactivo'}
         </Badge>
+
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => onEdit(prof)} 
+          className="h-7 w-7 p-0 border-border/60 text-slate-400 hover:text-foreground hover:bg-muted/20 shrink-0"
+          title="Editar profesional"
+          aria-label="Editar profesional"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0">
-              <span className="hidden sm:inline">Opciones</span> <ChevronDown className="ml-0 sm:ml-2 h-4 w-4" />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-7 w-7 p-0 border-border/60 text-slate-400 hover:text-foreground hover:bg-muted/20 shrink-0"
+              title="Opciones"
+              aria-label="Opciones"
+            >
+              <ChevronDown className="h-3.5 w-3.5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
             <DropdownMenuItem onSelect={() => onOpenSpecialDay(prof)}>Habilitar jornada especial</DropdownMenuItem>
             <DropdownMenuItem onClick={() => onToggleActive(prof.id, !prof.active)}>
               {prof.active ? 'Desactivar profesional' : 'Activar profesional'}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button variant="outline" size="sm" onClick={() => onEdit(prof)} className="shrink-0">
-          <Pencil className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Editar</span>
-        </Button>
       </div>
     </li>
   );
@@ -405,51 +429,60 @@ export default function ProfesionalesPage() {
 
   return (
     <TooltipProvider>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <h2 className="text-3xl font-bold tracking-tight">Profesionales</h2>
-          <Button onClick={() => handleOpenModal('new')}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Profesional
+      <div className="flex-1 space-y-4 p-3 sm:p-6 pt-4 sm:pt-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Profesionales</h2>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              Gestiona el equipo de trabajo, turnos y servicios asignados
+            </p>
+          </div>
+          <Button 
+            variant="alfa" 
+            size="sm" 
+            onClick={() => handleOpenModal('new')}
+            className="h-9 px-4 text-xs gap-1.5 shrink-0"
+          >
+            <PlusCircle className="h-4 w-4" /> Nuevo Profesional
           </Button>
         </div>
 
-        <div className="space-y-4">
-          <div className="py-2">
-            {/* Filter Popover content remains same, just ensuring parent spacing */}
+        <div className="space-y-3.5">
+          <div className="flex items-center justify-between gap-2">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline">
-                  <Filter className="mr-2 h-4 w-4" /> Filtrar por
+                <Button variant="outline" size="sm" className="h-8 text-xs border-border/60 text-foreground hover:bg-muted/20 gap-1.5">
+                  <Filter className="h-3.5 w-3.5 text-slate-400" /> Filtrar por
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80">
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium leading-none">Filtros</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Aplica filtros para encontrar profesionales.
+              <PopoverContent className="w-80 p-4 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                <div className="grid gap-3">
+                  <div className="space-y-1">
+                    <h4 className="font-semibold text-xs text-foreground">Filtros de Profesionales</h4>
+                    <p className="text-[11px] text-muted-foreground">
+                      Aplica filtros por estado o sucursal.
                     </p>
                   </div>
-                  <div className="grid gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Estado</Label>
+                  <div className="grid gap-2.5">
+                    <div className="space-y-1">
+                      <Label htmlFor="status" className="text-xs">Estado</Label>
                       <Select>
-                        <SelectTrigger id="status">
+                        <SelectTrigger id="status" className="h-8 text-xs">
                           <SelectValue placeholder="Seleccionar estado" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                           <SelectItem value="activo">Activo</SelectItem>
                           <SelectItem value="inactivo">Inactivo</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="local">Locales</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="local" className="text-xs">Sucursales</Label>
                       <Select>
-                        <SelectTrigger id="local">
-                          <SelectValue placeholder="Todos" />
+                        <SelectTrigger id="local" className="h-8 text-xs">
+                          <SelectValue placeholder="Todos los locales" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                           {locales.map(local => (
                             <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
                           ))}
@@ -457,9 +490,9 @@ export default function ProfesionalesPage() {
                       </Select>
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost">Restablecer</Button>
-                    <Button>Buscar</Button>
+                  <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs">Restablecer</Button>
+                    <Button variant="alfa" size="sm" className="h-7 text-xs px-3">Buscar</Button>
                   </div>
                 </div>
               </PopoverContent>
@@ -475,13 +508,14 @@ export default function ProfesionalesPage() {
           >
             {professionalsByLocal.map(localGroup => (
               localGroup.professionals.length > 0 && (
-                <Card key={localGroup.id}>
-                  <CardHeader>
-                    <CardTitle>{localGroup.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
+                <div key={localGroup.id} className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden shadow-sm">
+                  <div className="py-2.5 px-3.5 bg-muted/20 border-b border-border/40 flex items-center justify-between">
+                    <h3 className="text-xs sm:text-sm font-bold text-foreground">{localGroup.name}</h3>
+                    <span className="text-[11px] text-muted-foreground">{localGroup.professionals.length} profesional{localGroup.professionals.length !== 1 ? 'es' : ''}</span>
+                  </div>
+                  <div className="p-0">
                     <SortableContext items={localGroup.professionals} strategy={verticalListSortingStrategy}>
-                      <ul className="divide-y">
+                      <ul className="divide-y divide-border/40">
                         {localGroup.professionals.map((prof) => (
                           <SortableProfesionalItem
                             key={prof.id}
@@ -493,21 +527,23 @@ export default function ProfesionalesPage() {
                         ))}
                       </ul>
                     </SortableContext>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               )
             ))}
             <DragOverlay>
               {activeProfessional ? (
-                <ul className="divide-y bg-background border rounded-md shadow-xl"><SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} /></ul>
+                <ul className="divide-y bg-background border rounded-xl shadow-xl">
+                  <SortableProfesionalItem prof={activeProfessional} onToggleActive={() => { }} onEdit={() => { }} onOpenSpecialDay={() => { }} />
+                </ul>
               ) : null}
             </DragOverlay>
           </DndContext>
 
           {localProfessionals.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-2">
-              <div className="flex items-center space-x-2">
-                <p className="text-sm font-medium">Resultados por página</p>
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-2 border-t border-border/40 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-foreground">Por página:</span>
                 <Select
                   value={`${itemsPerPage}`}
                   onValueChange={(value) => {
@@ -515,36 +551,38 @@ export default function ProfesionalesPage() {
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="h-8 w-[70px]">
+                  <SelectTrigger className="h-7 w-[60px] text-xs bg-background border-border/60">
                     <SelectValue placeholder={itemsPerPage} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                     <SelectItem value="10">10</SelectItem>
                     <SelectItem value="20">20</SelectItem>
                     <SelectItem value="50">50</SelectItem>
                     <SelectItem value="100">100</SelectItem>
                   </SelectContent>
                 </Select>
+                <span className="text-[11px] text-muted-foreground ml-1">
+                  Pág. {currentPage} de {totalPages} ({localProfessionals.length} totales)
+                </span>
               </div>
-              <div className="text-sm font-medium">
-                Página {currentPage} de {totalPages}
-              </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-7 px-2.5 text-xs border-border/60 text-foreground hover:bg-muted/20"
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
                 >
-                  <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                  <ChevronLeft className="h-3.5 w-3.5 mr-0.5" /> Ant.
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-7 px-2.5 text-xs border-border/60 text-foreground hover:bg-muted/20"
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
                 >
-                  Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                  Sig. <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
                 </Button>
               </div>
             </div>

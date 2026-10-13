@@ -617,9 +617,13 @@ export default function InvoicedSalesPage() {
                                             </Button>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="outline" size="sm">
-                                                        Acciones <ChevronDown className="ml-2 h-4 w-4" />
-                                                    </Button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-slate-400 hover:text-white transition-colors p-1"
+                                                        title="Acciones"
+                                                    >
+                                                        <ChevronDown className="h-4 w-4" />
+                                                    </button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onSelect={() => toast({ title: "Funcionalidad no implementada", description: "El envío de comprobantes estará disponible próximamente." })}>
@@ -627,8 +631,8 @@ export default function InvoicedSalesPage() {
                                                         <span className="text-blue-500">Enviar Comprobante</span>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => window.print()}>
-                                                        <Printer className="mr-2 h-4 w-4 text-yellow-500" />
-                                                        <span className="text-yellow-500">Imprimir</span>
+                                                        <Printer className="mr-2 h-4 w-4 text-muted-foreground" />
+                                                        <span>Imprimir</span>
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onSelect={() => handleOpenDeleteModal(sale)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                                                         <Trash2 className="mr-2 h-4 w-4" />
@@ -758,7 +762,7 @@ export default function InvoicedSalesPage() {
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    <AlertTriangle className="h-5 w-5 text-slate-400" />
                     Requiere Autorización
                 </AlertDialogTitle>
                 <AlertDialogDescription>
@@ -780,7 +784,7 @@ export default function InvoicedSalesPage() {
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                    <AlertTriangle className="h-5 w-5 text-slate-400" />
                     Requiere Autorización
                 </AlertDialogTitle>
                 <AlertDialogDescription>

@@ -19,8 +19,8 @@ export function NetworkStatusIndicator() {
             toast({
                 title: "Conexión restaurada",
                 description: "Estás de nuevo en línea.",
-                className: "bg-green-500 text-white border-green-600",
-                action: <Wifi className="h-4 w-4" />,
+                className: "bg-[#18223c] text-white border-blue-500/40",
+                action: <Wifi className="h-4 w-4 text-blue-400" />,
                 duration: 3000,
             });
         };

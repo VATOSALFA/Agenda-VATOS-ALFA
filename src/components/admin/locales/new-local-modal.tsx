@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -9,17 +7,16 @@ import { z } from 'zod';
 import { addDoc, updateDoc, collection, doc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, UploadCloud, MapPin } from 'lucide-react';
-import { Textarea } from '@/components/ui/textarea';
-import type { Schedule, Local } from '@/lib/types';
+import { Loader2, MapPin, Clock, X, Globe } from 'lucide-react';
+import type { Local } from '@/lib/types';
 import { db } from '@/firebase';
+import { cn } from '@/lib/utils';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -52,7 +49,6 @@ const localSchema = z.object({
 });
 
 type LocalFormData = z.infer<typeof localSchema>;
-
 
 interface NewLocalModalProps {
   isOpen: boolean;
@@ -148,7 +144,6 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
       }
 
       onLocalCreated();
-
     } catch (error) {
       console.error("Error saving local: ", error);
       toast({
@@ -163,73 +158,268 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>{isEditMode ? 'Editar Local' : 'Nuevo Local'}</DialogTitle>
-          <DialogDescription>
-            {isEditMode ? 'Modifica los datos de la sucursal.' : 'Agrega una nueva sucursal a tu negocio.'}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-          <ScrollArea className="flex-grow pr-4">
-            <div className="space-y-6 mt-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2"><Label htmlFor="name">Nombre del local</Label><Input id="name" {...form.register('name')} /></div>
-                <div className="space-y-2"><Label htmlFor="address">Dirección</Label><Input id="address" {...form.register('address')} /></div>
-                <div className="space-y-2"><Label htmlFor="timezone">Zona horaria</Label>
-                  <Controller name="timezone" control={form.control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="America/Mexico_City">America/Mexico_City</SelectItem></SelectContent></Select>
-                  )} />
+      <DialogContent
+        hideCloseButton={true}
+        className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-card"
+      >
+        {/* Cabecera Oficial de Modal con Haz de Luz Oblicuo */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div className="header-light-beam absolute inset-0 pointer-events-none" />
+          <div className="flex items-center gap-3 relative z-10">
+            <MapPin className="h-5 w-5 text-slate-300 shrink-0" />
+            <div>
+              <DialogTitle className="text-base font-bold text-white tracking-tight">
+                {isEditMode ? 'Editar Sucursal' : 'Nueva Sucursal'}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-300">
+                {isEditMode ? 'Modifica los datos y horario de atención de la sucursal.' : 'Ingresa la información general y horarios de la nueva sucursal.'}
+              </DialogDescription>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="h-8 w-8 p-0 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 relative z-10"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Cerrar</span>
+          </Button>
+        </div>
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
+          <ScrollArea className="flex-1 overflow-y-auto p-4 sm:p-5">
+            <div className="space-y-4">
+              {/* Información General */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <Label htmlFor="name" className="text-xs font-semibold text-foreground">
+                    Nombre de la sucursal *
+                  </Label>
+                  <Input
+                    id="name"
+                    {...form.register('name')}
+                    placeholder="Ej. Sucursal Matriz"
+                    className="h-8 text-xs sm:text-sm"
+                  />
+                  {form.formState.errors.name && (
+                    <p className="text-[11px] text-destructive">{form.formState.errors.name.message}</p>
+                  )}
                 </div>
-                <div className="space-y-2"><Label htmlFor="phone">Teléfono</Label><Input id="phone" {...form.register('phone')} /></div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" {...form.register('email')} />
+
+                <div className="space-y-1">
+                  <Label htmlFor="address" className="text-xs font-semibold text-foreground">
+                    Dirección *
+                  </Label>
+                  <Input
+                    id="address"
+                    {...form.register('address')}
+                    placeholder="Calle, Número, Colonia, Ciudad"
+                    className="h-8 text-xs sm:text-sm"
+                  />
+                  {form.formState.errors.address && (
+                    <p className="text-[11px] text-destructive">{form.formState.errors.address.message}</p>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="googleMapsReviewUrl" className="flex items-center gap-1.5 font-medium">
-                    <MapPin className="h-4 w-4 text-primary" />
-                    Link para calificar en Google Maps
+
+                <div className="space-y-1">
+                  <Label htmlFor="phone" className="text-xs font-semibold text-foreground">
+                    Teléfono de contacto *
+                  </Label>
+                  <Input
+                    id="phone"
+                    {...form.register('phone')}
+                    placeholder="10 dígitos"
+                    className="h-8 text-xs sm:text-sm"
+                  />
+                  {form.formState.errors.phone && (
+                    <p className="text-[11px] text-destructive">{form.formState.errors.phone.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="email" className="text-xs font-semibold text-foreground">
+                    Email de la sucursal *
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    {...form.register('email')}
+                    placeholder="sucursal@vatosalfa.com"
+                    className="h-8 text-xs sm:text-sm"
+                  />
+                  {form.formState.errors.email && (
+                    <p className="text-[11px] text-destructive">{form.formState.errors.email.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="timezone" className="text-xs font-semibold text-foreground">
+                    Zona horaria *
+                  </Label>
+                  <Controller
+                    name="timezone"
+                    control={form.control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="America/Mexico_City" className="text-xs">
+                            Ciudad de México (America/Mexico_City)
+                          </SelectItem>
+                          <SelectItem value="America/Tijuana" className="text-xs">
+                            Tijuana / Pacífico (America/Tijuana)
+                          </SelectItem>
+                          <SelectItem value="America/Cancun" className="text-xs">
+                            Cancún / Quintana Roo (America/Cancun)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="googleMapsReviewUrl" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-slate-400" />
+                    Enlace de Google Maps (Reseñas)
                   </Label>
                   <Input
                     id="googleMapsReviewUrl"
                     type="url"
-                    placeholder="https://g.page/r/... o https://maps.app.goo.gl/..."
+                    placeholder="https://maps.app.goo.gl/..."
                     {...form.register('googleMapsReviewUrl')}
+                    className="h-8 text-xs font-sans"
                   />
-                  <p className="text-[11px] text-muted-foreground">
-                    La app móvil utilizará este enlace para que los clientes califiquen esta sucursal.
-                  </p>
                 </div>
               </div>
-              <div className="space-y-4 pt-6 border-t">
-                <h4 className="font-semibold">Horario de atención</h4>
-                {daysOfWeek.map((day) => (
-                  <div key={day.id} className="grid grid-cols-6 items-center gap-4">
-                    <Controller name={`schedule.${day.id}.enabled` as any} control={form.control} render={({ field }) => (
-                      <div className="flex items-center space-x-2 col-span-2">
-                        <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
-                        <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold">{day.label}</Label>
+
+              {/* Configurador de Horario Semanal Unificado (Regla 2 AGENTS.md) */}
+              <div className="space-y-2 pt-3 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-slate-400" />
+                    Horario de Atención Semanal
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    Define los días y horas de servicio
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-border/70 divide-y divide-border/50 bg-card overflow-hidden">
+                  {daysOfWeek.map((day) => {
+                    const isDayEnabled = form.watch(`schedule.${day.id}.enabled`);
+                    return (
+                      <div
+                        key={day.id}
+                        className={cn(
+                          "flex flex-col sm:flex-row sm:items-center justify-between py-2 px-3.5 gap-2 transition-colors",
+                          isDayEnabled ? "bg-card" : "bg-muted/20 opacity-75"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-[130px]">
+                          <Controller
+                            name={`schedule.${day.id}.enabled` as any}
+                            control={form.control}
+                            render={({ field }) => (
+                              <Switch
+                                id={`switch-${day.id}`}
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                className="scale-90"
+                              />
+                            )}
+                          />
+                          <Label
+                            htmlFor={`switch-${day.id}`}
+                            className="text-xs font-semibold cursor-pointer capitalize text-foreground"
+                          >
+                            {day.label}
+                          </Label>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground">De</span>
+                          <Controller
+                            name={`schedule.${day.id}.start` as any}
+                            control={form.control}
+                            render={({ field }) => (
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!isDayEnabled}
+                              >
+                                <SelectTrigger className="h-7 w-[85px] text-xs font-sans">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-56">
+                                  {timeOptions.map((time) => (
+                                    <SelectItem key={time} value={time} className="text-xs font-sans">
+                                      {time}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          <span className="text-[11px] text-muted-foreground">a</span>
+                          <Controller
+                            name={`schedule.${day.id}.end` as any}
+                            control={form.control}
+                            render={({ field }) => (
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!isDayEnabled}
+                              >
+                                <SelectTrigger className="h-7 w-[85px] text-xs font-sans">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-56">
+                                  {timeOptions.map((time) => (
+                                    <SelectItem key={time} value={time} className="text-xs font-sans">
+                                      {time}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
                       </div>
-                    )} />
-                    <div className="col-span-4 grid grid-cols-2 gap-2 items-center">
-                      <Controller name={`schedule.${day.id}.start` as any} control={form.control} render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled`)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}</SelectContent></Select>
-                      )} />
-                      <Controller name={`schedule.${day.id}.end` as any} control={form.control} render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value} disabled={!form.watch(`schedule.${day.id}.enabled`)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{timeOptions.map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}</SelectContent></Select>
-                      )} />
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </ScrollArea>
-          <DialogFooter className="pt-6 border-t flex-shrink-0">
-            <Button variant="ghost" type="button" onClick={onClose}>Cerrar</Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Guardar
+
+          <DialogFooter className="px-5 py-3 border-t border-border/50 bg-muted/10 flex items-center justify-end gap-2 shrink-0">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={onClose}
+              className="h-8 px-3 text-xs rounded-lg"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="alfa"
+              disabled={isSubmitting}
+              className="h-8 px-4 text-xs font-semibold"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                isEditMode ? 'Guardar Cambios' : 'Crear Sucursal'
+              )}
             </Button>
           </DialogFooter>
         </form>

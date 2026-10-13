@@ -11,10 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
 import { CustomLoader } from '@/components/ui/custom-loader';
-import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO } from 'date-fns';
+import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info, ShieldCheck, Phone, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig, checkClientBookingEligibility } from '@/lib/actions/booking';
@@ -63,7 +63,7 @@ export default function BookingPage() {
     const toast = Object.assign(
         (props: any) => shadToast(props),
         {
-            success: (msg: string) => shadToast({ description: msg, className: "bg-green-500 text-white border-green-600" }),
+            success: (msg: string) => shadToast({ description: msg, className: "bg-[#18223c] text-white border-blue-500/40" }),
             error: (msg: string) => shadToast({ variant: "destructive", description: msg }),
         }
     );
@@ -144,39 +144,90 @@ export default function BookingPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [historyRequiresDeposit, setHistoryRequiresDeposit] = useState(false);
     const [historyPenaltyPercent, setHistoryPenaltyPercent] = useState(50);
+    const [historyPenaltyCount, setHistoryPenaltyCount] = useState(0);
 
-    // Verificación silenciosa de historial de cliente (Escudo Antifraude No-Shows)
+    // Escudo Anti-Fragmentación (Acumulado Diario y Citas Múltiples)
+    const [sameDayRequiresDeposit, setSameDayRequiresDeposit] = useState(false);
+    const [sameDayActiveCount, setSameDayActiveCount] = useState(0);
+    const [sameDayActiveTotal, setSameDayActiveTotal] = useState(0);
+    const [sameDayAccumulatedTotal, setSameDayAccumulatedTotal] = useState(0);
+    const [sameDayDepositMessage, setSameDayDepositMessage] = useState('');
+    const [sameDayDepositPercent, setSameDayDepositPercent] = useState(50);
+
+    // MODO SANDBOX / PRUEBAS LOCALES (Aislamiento de Agenda)
+    const [isLocalhost, setIsLocalhost] = useState(false);
+    const [isSandboxMode, setIsSandboxMode] = useState(false);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const isLocal = window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1' || 
+                            window.location.search.includes('sandbox=true') ||
+                            window.location.search.includes('test=true');
+            setIsLocalhost(isLocal);
+            setIsSandboxMode(isLocal); // Activo por defecto al estar en entorno local
+        }
+    }, []);
+
+    // Determinar la fecha objetivo seleccionada para la reserva
+    const selectedBookingDateStr = useMemo(() => {
+        if (bookingMode === 'combined' && configs['combined']?.date) {
+            return format(configs['combined'].date, 'yyyy-MM-dd');
+        }
+        for (const item of cart) {
+            if (configs[item.uniqueId]?.date) {
+                return format(configs[item.uniqueId].date, 'yyyy-MM-dd');
+            }
+        }
+        if (tempDate) {
+            return format(tempDate, 'yyyy-MM-dd');
+        }
+        return '';
+    }, [bookingMode, configs, cart, tempDate]);
+
+    const currentCartTotal = useMemo(() => {
+        return cart.reduce((acc, item) => acc + Number(item.service?.price || 0), 0);
+    }, [cart]);
+
+    // Verificación de historial de cliente y citas del mismo día (Escudo Antifraude + Anti-Fragmentación)
     useEffect(() => {
         let active = true;
         const phone = clientDetails.phone?.trim();
         const email = clientDetails.email?.trim();
+        const identifier = (phone && phone.length === 10) ? phone : (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '');
 
-        if (phone && phone.length === 10) {
-            checkClientBookingEligibility(phone).then((res) => {
+        if (identifier) {
+            checkClientBookingEligibility(identifier, selectedBookingDateStr, currentCartTotal).then((res) => {
                 if (active) {
                     setHistoryRequiresDeposit(res.requiresDepositDueToHistory);
+                    setHistoryPenaltyCount(res.citas_no_asistidas || res.totalFaltas || 0);
                     if (res.penalizacion_anticipo_porcentaje) {
                         setHistoryPenaltyPercent(res.penalizacion_anticipo_porcentaje);
                     }
-                }
-            }).catch(() => {});
-        } else if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            checkClientBookingEligibility(email).then((res) => {
-                if (active) {
-                    setHistoryRequiresDeposit(res.requiresDepositDueToHistory);
-                    if (res.penalizacion_anticipo_porcentaje) {
-                        setHistoryPenaltyPercent(res.penalizacion_anticipo_porcentaje);
+                    setSameDayRequiresDeposit(res.requiresDepositDueToSameDay);
+                    setSameDayActiveCount(res.sameDayActiveCount || 0);
+                    setSameDayActiveTotal(res.sameDayActiveTotal || 0);
+                    setSameDayAccumulatedTotal(res.sameDayAccumulatedTotal || 0);
+                    setSameDayDepositMessage(res.sameDayDepositReason || '');
+                    if (res.sameDayDepositPercent) {
+                        setSameDayDepositPercent(res.sameDayDepositPercent);
                     }
                 }
             }).catch(() => {});
         } else {
             setHistoryRequiresDeposit(false);
+            setHistoryPenaltyCount(0);
+            setSameDayRequiresDeposit(false);
+            setSameDayActiveCount(0);
+            setSameDayActiveTotal(0);
+            setSameDayAccumulatedTotal(0);
+            setSameDayDepositMessage('');
         }
 
         return () => {
             active = false;
         };
-    }, [clientDetails.phone, clientDetails.email]);
+    }, [clientDetails.phone, clientDetails.email, selectedBookingDateStr, currentCartTotal]);
 
     // --- INITIALIZATION ---
     useEffect(() => {
@@ -336,6 +387,17 @@ export default function BookingPage() {
             }
         }
 
+        // Regla 1.5: Escudo Anti-Fragmentación y Acumulado Diario (Citas previas activas en la misma fecha)
+        let sameDayApplied = false;
+        if (sameDayRequiresDeposit && total > 0) {
+            const pct = (Number(sameDayDepositPercent) || 50) / 100;
+            const requiredSameDayDeposit = total * pct;
+            if (upfront < requiredSameDayDeposit) {
+                upfront = requiredSameDayDeposit;
+                sameDayApplied = true;
+            }
+        }
+
         // Regla 3: Anticipo global automático si el monto total de servicios alcanza o supera el umbral configurado
         let thresholdApplied = false;
         const isThresholdActive = serviciosConfig?.anticipo_monto_minimo_activo !== false;
@@ -383,9 +445,10 @@ export default function BookingPage() {
         return {
             totalPrice: total + productTotal,
             upfrontTotal: upfront + productUpfront,
-            isThresholdDepositApplied: thresholdApplied
+            isThresholdDepositApplied: thresholdApplied,
+            isSameDayDepositApplied: sameDayApplied
         };
-    }, [cart, productCart, serviciosConfig, historyRequiresDeposit, historyPenaltyPercent]);
+    }, [cart, productCart, serviciosConfig, historyRequiresDeposit, historyPenaltyPercent, sameDayRequiresDeposit, sameDayDepositPercent]);
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- SORTED SERVICES ---
@@ -647,9 +710,6 @@ export default function BookingPage() {
         return cart.every(item => !!configs[item.uniqueId]);
     }, [cart, configs, bookingMode]);
 
-
-
-
     const confirmBooking = async () => {
         setIsSubmitting(true);
         const createdReservationIds: string[] = [];
@@ -739,10 +799,12 @@ export default function BookingPage() {
                     const itemPrice = Number(item.service.price || 0);
                     const pType = item.service.payment_type || 'no-payment';
                     let itemUpfront = (pType === 'online-deposit' ? itemPrice * 0.5 : (pType === 'full-payment' ? itemPrice : 0));
-                    if ((isThresholdDepositApplied || historyRequiresDeposit) && itemUpfront === 0) {
+                    if ((isThresholdDepositApplied || historyRequiresDeposit || sameDayRequiresDeposit) && itemUpfront === 0) {
                         const pct = historyRequiresDeposit 
                             ? ((Number(historyPenaltyPercent) || 50) / 100) 
-                            : ((Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100);
+                            : (sameDayRequiresDeposit
+                                ? ((Number(sameDayDepositPercent) || 50) / 100)
+                                : ((Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100));
                         itemUpfront = itemPrice * pct;
                     }
 
@@ -781,7 +843,7 @@ export default function BookingPage() {
                 }
             }
 
-            if (upfrontTotal > 0) {
+            if (upfrontTotal > 0 && !isSandboxMode) {
                 // PAYMENT FLOW - DO NOT CREATE RESERVATION YET
                 try {
                     const response = await fetch('/api/mercadopago/preference', {
@@ -829,11 +891,12 @@ export default function BookingPage() {
                     setIsSubmitting(false);
                 }
             } else {
-                // FREE FLOW - CREATE IMMEDIATELY
+                // FREE FLOW O SIMULACIÓN EN MODO SANDBOX (NO AFECTA LA AGENDA REAL)
                 for (const booking of bookingsPayload) {
                     const res = await createPublicReservation({
                         ...booking,
-                        paymentStatus: 'pending',
+                        paymentStatus: (upfrontTotal > 0 && isSandboxMode) ? 'deposit_paid' : 'pending',
+                        isSandbox: isSandboxMode,
                         recaptchaToken: token
                     });
 
@@ -841,7 +904,9 @@ export default function BookingPage() {
                         createdReservationIds.push(res.reservationId);
                         if (res.warning) {
                             console.warn("SERVER WARNING:", res.warning);
-                            toast({ variant: "destructive", title: "Aviso del Sistema", description: res.warning, duration: 10000 });
+                            if (!isSandboxMode) {
+                                toast({ variant: "destructive", title: "Aviso del Sistema", description: res.warning, duration: 10000 });
+                            }
                         }
                     } else {
                         errorCount++;
@@ -851,15 +916,17 @@ export default function BookingPage() {
                 }
 
                 if (errorCount === 0 && createdReservationIds.length > 0) {
-                    // Trigger isolated Google Ads conversion tracking for each confirmed reservation ID
-                    createdReservationIds.forEach((resId) => {
-                        trackGoogleAdsReservation({
-                            reservationId: resId,
-                            value: totalPrice,
-                            currency: 'MXN',
+                    if (!isSandboxMode) {
+                        // Trigger isolated Google Ads conversion tracking for each confirmed reservation ID
+                        createdReservationIds.forEach((resId) => {
+                            trackGoogleAdsReservation({
+                                reservationId: resId,
+                                value: totalPrice,
+                                currency: 'MXN',
+                            });
                         });
-                    });
-                    setStep(4);
+                    }
+                    setStep(5);
                     setIsSubmitting(false);
                 } else {
                     toast({ variant: 'destructive', title: 'Error', description: lastError || 'Hubo un problema al crear la reserva.' });
@@ -922,6 +989,20 @@ export default function BookingPage() {
         return baseConfig;
     };
 
+    const isStep3Valid = useMemo(() => {
+        if (!clientDetails.name?.trim() || !clientDetails.lastName?.trim()) return false;
+        if (getFieldConfig('phone').use && getFieldConfig('phone').required) {
+            if (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone)) return false;
+        }
+        if (getFieldConfig('email').use && getFieldConfig('email').required) {
+            if (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email)) return false;
+        }
+        if (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address?.trim()) return false;
+        if (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes?.trim()) return false;
+        if (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday) return false;
+        return true;
+    }, [clientDetails, getFieldConfig]);
+
     const formatPrice = (price: any) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
 
     if (loadingServices || loadingProfessionals || loadingSettings) return (
@@ -972,23 +1053,152 @@ export default function BookingPage() {
         );
     }
 
-    return (
-        <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
-            <div className="w-full max-w-5xl bg-white rounded-2xl shadow-xl flex flex-col min-h-[50vh] mb-24">
+    const handleTopBack = () => {
+        if (step <= 0 || step === 5) {
+            router.push('/');
+        } else if (step === 4) {
+            setStep(3);
+        } else if (step === 3) {
+            if (cart.length === 0) {
+                router.push('/');
+                return;
+            }
+            if (bookingMode === 'combined') {
+                setActiveConfigId('combined');
+            }
+            setStep(2);
+        } else if (step === 2) {
+            if (configStep > 0) {
+                setConfigStep(prev => prev - 1);
+            } else {
+                if (bookingMode === 'combined' && cart.length > 1) {
+                    setActiveConfigId(null);
+                    setStep(1);
+                } else {
+                    setActiveConfigId(null);
+                    setStep(0);
+                }
+            }
+        } else if (step === 1) {
+            setStep(0);
+        }
+    };
 
-                {/* HEADERS */}
-                <div className="bg-primary p-6 text-primary-foreground">
-                    <h1 className="text-2xl font-bold mb-2">Reservar Cita</h1>
-                    <div className="flex items-center gap-2 text-sm opacity-90 overflow-x-auto whitespace-nowrap">
-                        <span className={step >= 0 ? 'font-bold' : ''}>1. Servicios</span>
-                        <ChevronRight className="h-4 w-4" />
-                        <span className={step >= 2 ? 'font-bold' : ''}>2. Agenda</span>
-                        <ChevronRight className="h-4 w-4" />
-                        <span className={step >= 3 ? 'font-bold' : ''}>3. Datos</span>
+    return (
+        <div className="min-h-screen bg-gradient-to-b from-[#0b0f19] via-[#0f172a] to-[#0b0f19] text-foreground p-3 sm:p-6 md:p-8 flex flex-col items-center selection:bg-blue-500/20">
+            <div className={cn("w-full max-w-4xl bg-white dark:bg-slate-900 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-200 dark:border-slate-800 flex flex-col min-h-[50vh] overflow-hidden", step === 0 ? "mb-28" : "mb-8 sm:mb-12")}>
+
+                {/* CABECERA OFICIAL VATOS ALFA CON HAZ DE LUZ Y LOGO */}
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-6 text-white border-b border-[#2d3a60]/60 shrink-0">
+                    <div className="header-light-beam" aria-hidden="true" />
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                        {/* Fila 1 en móvil / Lado izquierdo en desktop */}
+                        <div className="flex items-center justify-between gap-3 w-full sm:w-auto">
+                            <div className="flex items-center gap-3">
+                                <div className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-full overflow-hidden border-2 border-[#C5A880]/60 shadow-[0_0_15px_rgba(197,168,128,0.25)] shrink-0">
+                                    <Image
+                                        src="/logo-v-400x400.webp"
+                                        alt="VATOS ALFA"
+                                        fill
+                                        className="object-cover"
+                                        priority
+                                    />
+                                </div>
+                                <div>
+                                    <span className="text-[10px] uppercase font-bold tracking-widest text-[#C5A880]">VATOS ALFA Barber Shop</span>
+                                    <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">Reservar Cita</h1>
+                                </div>
+                            </div>
+
+                            {/* Botón Regresar en móvil (arriba a la derecha) */}
+                            <button
+                                type="button"
+                                onClick={handleTopBack}
+                                className="sm:hidden inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                                title={step === 0 ? "Volver al inicio" : "Regresar al paso anterior"}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                <span>Regresar</span>
+                            </button>
+                        </div>
+
+                        {/* Fila 2 en móvil / Lado derecho en desktop: Stepper + Botón Regresar (en desktop) */}
+                        <div className="flex items-center justify-between sm:justify-end gap-2.5 w-full sm:w-auto overflow-x-auto max-w-full">
+                            {/* Stepper oficial Vatos Alfa con 4 pasos */}
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-xs font-semibold overflow-x-auto whitespace-nowrap bg-black/40 backdrop-blur-md px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border border-white/10">
+                                <div className={cn("flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg transition-all", step >= 0 && step <= 1 ? "bg-blue-600 text-white shadow-sm font-bold" : step > 1 ? "text-blue-300 font-medium" : "text-slate-400")}>
+                                    <span className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", step >= 0 && step <= 1 ? "bg-white text-blue-900 font-bold" : "bg-white/20 text-white")}>1</span>
+                                    <span>Servicios</span>
+                                </div>
+                                <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 shrink-0" />
+                                <div className={cn("flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg transition-all", step === 2 ? "bg-blue-600 text-white shadow-sm font-bold" : step > 2 ? "text-blue-300 font-medium" : "text-slate-400")}>
+                                    <span className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", step === 2 ? "bg-white text-blue-900 font-bold" : "bg-white/20 text-white")}>2</span>
+                                    <span>Agenda</span>
+                                </div>
+                                <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 shrink-0" />
+                                <div className={cn("flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg transition-all", step === 3 ? "bg-blue-600 text-white shadow-sm font-bold" : step > 3 ? "text-blue-300 font-medium" : "text-slate-400")}>
+                                    <span className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", step === 3 ? "bg-white text-blue-900 font-bold" : "bg-white/20 text-white")}>3</span>
+                                    <span>Datos</span>
+                                </div>
+                                <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-slate-500 shrink-0" />
+                                <div className={cn("flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg transition-all", step === 4 ? "bg-blue-600 text-white shadow-sm font-bold" : step > 4 ? "text-blue-300 font-medium" : "text-slate-400")}>
+                                    <span className={cn("w-4 h-4 rounded-full flex items-center justify-center text-[10px]", step === 4 ? "bg-white text-blue-900 font-bold" : "bg-white/20 text-white")}>4</span>
+                                    <span>Pago</span>
+                                </div>
+                            </div>
+
+                            {/* Botón Regresar en desktop (arriba al extremo derecho) */}
+                            <button
+                                type="button"
+                                onClick={handleTopBack}
+                                className="hidden sm:inline-flex items-center gap-1 text-xs font-semibold text-slate-300 hover:text-white bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl border border-white/10 transition-colors cursor-pointer shrink-0"
+                                title={step === 0 ? "Volver al inicio" : "Regresar al paso anterior"}
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                                <span>Regresar</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex-1 p-6 relative flex flex-col">
+                <div className="flex-1 p-4 sm:p-6 md:p-8 relative flex flex-col">
+                    {/* BANNER MODO PRUEBAS / SANDBOX (Solo visible en localhost / ?sandbox=true) */}
+                    {isLocalhost && (
+                        <div className="mb-5 p-3 sm:p-3.5 rounded-2xl border-2 border-blue-500/40 bg-blue-950/70 text-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_4px_20px_rgba(59,130,246,0.15)] animate-in fade-in slide-in-from-top-2">
+                            <div className="flex items-center gap-2.5">
+                                <ShieldCheck className="h-5 w-5 text-blue-400 shrink-0" />
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-xs font-bold text-white tracking-tight">Modo Sandbox / Pruebas Local</p>
+                                        <span className={cn(
+                                            "text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider",
+                                            isSandboxMode ? "bg-blue-500/20 text-blue-300 border border-blue-500/40" : "bg-slate-700/50 text-slate-400 border border-slate-600"
+                                        )}>
+                                            {isSandboxMode ? 'Activo' : 'Inactivo'}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300 mt-0.5">
+                                        {isSandboxMode
+                                            ? 'Las citas se validan de forma real pero NO se guardan en la agenda de la barbería ni envían correos a clientes.'
+                                            : 'Atención: El modo prueba está apagado. Las citas se registrarán directamente en la agenda en vivo.'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsSandboxMode(!isSandboxMode)}
+                                className={cn(
+                                    "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 border",
+                                    isSandboxMode
+                                        ? "bg-blue-600 text-white border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.6)]"
+                                        : "bg-slate-800 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700"
+                                )}
+                            >
+                                {isSandboxMode ? 'Desactivar Modo Prueba' : 'Activar Modo Prueba'}
+                            </button>
+                        </div>
+                    )}
+
                     <AnimatePresence mode="wait">
 
                         {/* STEP 0: SERVICE SELECTION (CART) */}
@@ -996,65 +1206,63 @@ export default function BookingPage() {
                             <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex flex-col h-full relative">
 
                                 <div className="flex-1 pb-32 px-1">
-                                    <VatosButton variant="ghost" onClick={() => router.push('/')} className="mb-2 -ml-2 text-muted-foreground w-fit">
-                                        <ChevronLeft className="mr-1 h-4 w-4" /> Volver al inicio
-                                    </VatosButton>
+
                                     {/* Pre-selected Pro Banner */}
                                     {preSelectedProId && (() => {
                                         const pro = professionals.find(p => p.id === preSelectedProId);
                                         return pro ? (
-                                            <div className="bg-primary/10 border border-primary/20 text-primary p-3 rounded-lg mb-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                                                <div className="h-10 w-10 rounded-full bg-white border border-primary/20 overflow-hidden shrink-0">
+                                            <div className="bg-blue-50/60 dark:bg-blue-950/20 border-2 border-blue-500/40 p-3.5 rounded-xl mb-5 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="h-11 w-11 rounded-full bg-white dark:bg-slate-800 border-2 border-blue-500 overflow-hidden shrink-0 shadow-sm relative">
                                                     {pro.avatarUrl ? (
                                                         <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="h-full w-full object-cover" loading="lazy" />
                                                     ) : (
-                                                        <User className="h-full w-full p-2 text-primary" />
+                                                        <User className="h-full w-full p-2 text-blue-500" />
                                                     )}
                                                 </div>
                                                 <div className="flex-1">
-                                                    <p className="text-sm font-medium text-muted-foreground">Reservando con:</p>
-                                                    <p className="font-bold text-lg leading-tight">{pro.publicName || pro.name}</p>
+                                                    <p className="text-xs font-semibold text-muted-foreground">Reservando con:</p>
+                                                    <p className="font-bold text-base sm:text-lg leading-tight text-foreground">{pro.publicName || pro.name}</p>
                                                 </div>
-                                                <VatosButton variant="ghost" size="sm" className="h-8 text-xs hover:bg-white/50" onClick={() => {
+                                                <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold hover:bg-white/50 dark:hover:bg-slate-800 cursor-pointer" onClick={() => {
                                                     setPreSelectedProId(null);
                                                     const url = new URL(window.location.href);
                                                     url.searchParams.delete('professionalId');
                                                     window.history.replaceState({}, '', url.toString());
                                                 }}>
                                                     Cambiar
-                                                </VatosButton>
+                                                </Button>
                                             </div>
                                         ) : null;
                                     })()}
-                                    <h2 id="servicios" className="text-xl font-semibold mb-2 scroll-mt-24">Selecciona tus servicios</h2>
-                                    <div className="grid grid-cols-1 gap-4 mb-4">
+                                    <h2 id="servicios" className="text-xl font-bold tracking-tight text-foreground mb-3 scroll-mt-24">Selecciona tus servicios</h2>
+                                    <div className="grid grid-cols-1 gap-3.5 sm:gap-4 mb-4">
                                         {/* Regular Services */}
                                         {visibleRegularServices.map((service: any) => {
                                             const count = getCount(service.id);
                                             return (
-                                                <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
-                                                    <CardContent className="p-4 flex items-center gap-4">
+                                                <Card key={service.id} className={cn("rounded-2xl border transition-all duration-200 hover:shadow-md", count > 0 ? "border-blue-500 bg-blue-500/5 shadow-xs" : "border-border/70 hover:border-blue-500/50")}>
+                                                    <CardContent className="p-3.5 sm:p-4 flex items-center gap-3.5 sm:gap-4">
                                                         {(service.images && service.images.length > 0) && (
-                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
+                                                            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-800 border border-border/50 relative shadow-xs">
                                                                 <Image 
-                                                                    src={getServiceLocalImage(service.name, service.images) || service.images[0]}
+                                                                    src={service.images[0] || getServiceLocalImage(service.name, service.images) || '/services/corte-de-cabello.webp'}
                                                                     alt={service.name} 
                                                                     fill
                                                                     className="object-cover" 
-                                                                    sizes="64px"
+                                                                    unoptimized
                                                                 />
                                                             </div>
                                                         )}
-                                                        <div className="flex-1">
-                                                            <h3 className="font-bold text-base">{service.name}</h3>
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex gap-2 text-sm text-muted-foreground">
-                                                                    <span>{formatPrice(service.price)}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className="font-bold text-sm sm:text-base text-foreground leading-snug">{service.name}</h3>
+                                                            <div className="flex flex-col gap-1 mt-0.5">
+                                                                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                                                                    <span className="font-sans font-bold text-foreground">{formatPrice(service.price)}</span>
                                                                     <span>•</span>
                                                                     <span>{service.duration} min</span>
                                                                 </div>
                                                                 {service.payment_type === 'online-deposit' && (
-                                                                    <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                    <span className="text-[11px] text-[#C5A880] font-semibold bg-[#C5A880]/10 border border-[#C5A880]/30 px-2 py-0.5 rounded-md w-fit">
                                                                         {(() => {
                                                                             const type = service.payment_amount_type || '%';
                                                                             const val = service.payment_amount_value;
@@ -1066,22 +1274,22 @@ export default function BookingPage() {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                                             {count > 0 && (
-                                                                <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
+                                                                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-border/50">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer" onClick={() => removeFromCart(service.id)}>
                                                                         {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                                                                     </Button>
-                                                                    <span className="font-bold w-4 text-center">{count}</span>
+                                                                    <span className="font-bold font-sans w-4 text-center text-sm">{count}</span>
                                                                 </div>
                                                             )}
                                                             <Button
                                                                 variant={count > 0 ? "default" : "outline"}
                                                                 size="icon"
-                                                                className="h-10 w-10 rounded-lg"
+                                                                className={cn("h-9 w-9 sm:h-10 sm:w-10 rounded-xl cursor-pointer transition-all", count > 0 ? "bg-[#202A49] hover:bg-[#18223c] text-white shadow-sm" : "border-border hover:border-blue-500 hover:bg-blue-500/10")}
                                                                 onClick={() => addToCart(service)}
                                                             >
-                                                                <Plus className="h-5 w-5" />
+                                                                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                                                             </Button>
                                                         </div>
                                                     </CardContent>
@@ -1091,34 +1299,34 @@ export default function BookingPage() {
 
                                         {/* Package Services */}
                                         {visiblePackageServices.length > 0 && (
-                                            <h3 id="paquetes" className="text-lg font-semibold mt-4 mb-2 scroll-mt-24">Paquetes</h3>
+                                            <h3 id="paquetes" className="text-lg font-bold tracking-tight text-foreground mt-6 mb-2 scroll-mt-24">Paquetes</h3>
                                         )}
                                         {visiblePackageServices.map((service: any) => {
                                             const count = getCount(service.id);
                                             return (
-                                                <Card key={service.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
-                                                    <CardContent className="p-4 flex items-center gap-4">
+                                                <Card key={service.id} className={cn("rounded-2xl border transition-all duration-200 hover:shadow-md", count > 0 ? "border-blue-500 bg-blue-500/5 shadow-xs" : "border-border/70 hover:border-blue-500/50")}>
+                                                    <CardContent className="p-3.5 sm:p-4 flex items-center gap-3.5 sm:gap-4">
                                                         {(service.images && service.images.length > 0) && (
-                                                            <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
+                                                            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-800 border border-border/50 relative shadow-xs">
                                                                 <Image 
-                                                                    src={getServiceLocalImage(service.name, service.images) || service.images[0]}
+                                                                    src={service.images[0] || getServiceLocalImage(service.name, service.images) || '/services/corte-de-cabello.webp'}
                                                                     alt={service.name} 
                                                                     fill
                                                                     className="object-cover" 
-                                                                    sizes="64px"
+                                                                    unoptimized
                                                                 />
                                                             </div>
                                                         )}
-                                                        <div className="flex-1">
-                                                            <h3 className="font-bold text-base">{service.name}</h3>
-                                                            <div className="flex flex-col gap-1">
-                                                                <div className="flex gap-2 text-sm text-muted-foreground">
-                                                                    <span>{formatPrice(service.price)}</span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h3 className="font-bold text-sm sm:text-base text-foreground leading-snug">{service.name}</h3>
+                                                            <div className="flex flex-col gap-1 mt-0.5">
+                                                                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+                                                                    <span className="font-sans font-bold text-foreground">{formatPrice(service.price)}</span>
                                                                     <span>•</span>
                                                                     <span>{service.duration} min</span>
                                                                 </div>
                                                                 {service.payment_type === 'online-deposit' && (
-                                                                    <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                    <span className="text-[11px] text-[#C5A880] font-semibold bg-[#C5A880]/10 border border-[#C5A880]/30 px-2 py-0.5 rounded-md w-fit">
                                                                         {(() => {
                                                                             const type = service.payment_amount_type || '%';
                                                                             const val = service.payment_amount_value;
@@ -1130,22 +1338,22 @@ export default function BookingPage() {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                                             {count > 0 && (
-                                                                <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromCart(service.id)}>
+                                                                <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-border/50">
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer" onClick={() => removeFromCart(service.id)}>
                                                                         {count === 1 ? <Trash2 className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
                                                                     </Button>
-                                                                    <span className="font-bold w-4 text-center">{count}</span>
+                                                                    <span className="font-bold font-sans w-4 text-center text-sm">{count}</span>
                                                                 </div>
                                                             )}
                                                             <Button
                                                                 variant={count > 0 ? "default" : "outline"}
                                                                 size="icon"
-                                                                className="h-10 w-10 rounded-lg"
+                                                                className={cn("h-9 w-9 sm:h-10 sm:w-10 rounded-xl cursor-pointer transition-all", count > 0 ? "bg-[#202A49] hover:bg-[#18223c] text-white shadow-sm" : "border-border hover:border-blue-500 hover:bg-blue-500/10")}
                                                                 onClick={() => addToCart(service)}
                                                             >
-                                                                <Plus className="h-5 w-5" />
+                                                                <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                                                             </Button>
                                                         </div>
                                                     </CardContent>
@@ -1155,31 +1363,37 @@ export default function BookingPage() {
                                     </div>
 
                                     {/* PRODUCTS SECTION */}
-                                    <h2 id="productos" className="text-xl font-semibold mb-2 mt-8 pt-4 border-t scroll-mt-24">Selecciona tus productos</h2>
-                                    <div className="grid grid-cols-1 gap-4 mb-4">
+                                    <h2 id="productos" className="text-xl font-bold tracking-tight text-foreground mb-3 mt-8 pt-4 border-t border-border/60 scroll-mt-24">Selecciona tus productos</h2>
+                                    <div className="grid grid-cols-1 gap-3.5 sm:gap-4 mb-4">
                                         {productsData && productsData.length > 0 ? (
                                             productsData.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
                                                 const count = getProductCount(product.id);
                                                 return (
-                                                    <Card key={product.id} className={cn("border-l-4 transition-all hover:shadow-md", count > 0 ? "border-l-primary" : "border-l-transparent")}>
-                                                        <CardContent className="p-4 flex items-center gap-4">
+                                                    <Card key={product.id} className={cn("rounded-2xl border transition-all duration-200 hover:shadow-md", count > 0 ? "border-blue-500 bg-blue-500/5 shadow-xs" : "border-border/70 hover:border-blue-500/50")}>
+                                                        <CardContent className="p-3.5 sm:p-4 flex items-center gap-3.5 sm:gap-4">
                                                             {(product.images && product.images.length > 0) ? (
-                                                                <div className="h-16 w-16 rounded-md overflow-hidden flex-shrink-0 bg-slate-100 border relative">
-                                                                    <Image src={product.images[0]} alt={product.nombre} fill className="object-cover" sizes="64px" />
+                                                                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-800 border border-border/50 relative shadow-xs">
+                                                                    <Image 
+                                                                        src={product.images[0]} 
+                                                                        alt={product.nombre} 
+                                                                        fill 
+                                                                        className="object-cover" 
+                                                                        unoptimized
+                                                                    />
                                                                 </div>
                                                             ) : (
-                                                                <div className="h-16 w-16 rounded-md bg-slate-100 flex items-center justify-center border text-muted-foreground">
+                                                                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-border/50 text-muted-foreground">
                                                                     <ShoppingBag className="h-6 w-6" />
                                                                 </div>
                                                             )}
-                                                            <div className="flex-1">
-                                                                <h3 className="font-bold text-base">{product.nombre}</h3>
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="text-sm text-muted-foreground">
-                                                                        <span>{formatPrice(product.public_price)}</span>
+                                                            <div className="flex-1 min-w-0">
+                                                                <h3 className="font-bold text-sm sm:text-base text-foreground leading-snug">{product.nombre}</h3>
+                                                                <div className="flex flex-col gap-1 mt-0.5">
+                                                                    <div className="text-xs sm:text-sm text-muted-foreground">
+                                                                        <span className="font-sans font-bold text-foreground">{formatPrice(product.public_price)}</span>
                                                                     </div>
                                                                     {product.payment_type === 'deposit' && (
-                                                                        <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full w-fit">
+                                                                        <span className="text-[11px] text-[#C5A880] font-semibold bg-[#C5A880]/10 border border-[#C5A880]/30 px-2 py-0.5 rounded-md w-fit">
                                                                             {(() => {
                                                                                 const type = product.payment_amount_type || '%';
                                                                                 const val = product.payment_amount_value;
@@ -1191,22 +1405,22 @@ export default function BookingPage() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                                                                 {count > 0 && (
-                                                                    <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
-                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeFromProductCart(product.id)}>
+                                                                    <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-border/50">
+                                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer" onClick={() => removeFromProductCart(product.id)}>
                                                                             <Minus className="h-4 w-4" />
                                                                         </Button>
-                                                                        <span className="font-bold w-4 text-center">{count}</span>
+                                                                        <span className="font-bold font-sans w-4 text-center text-sm">{count}</span>
                                                                     </div>
                                                                 )}
                                                                 <Button
                                                                     variant={count > 0 ? "default" : "outline"}
                                                                     size="icon"
-                                                                    className={cn("h-10 w-10 rounded-lg", count > 0 ? "bg-primary hover:bg-primary/90" : "")}
+                                                                    className={cn("h-9 w-9 sm:h-10 sm:w-10 rounded-xl cursor-pointer transition-all", count > 0 ? "bg-[#202A49] hover:bg-[#18223c] text-white shadow-sm" : "border-border hover:border-blue-500 hover:bg-blue-500/10")}
                                                                     onClick={() => addToProductCart(product)}
                                                                 >
-                                                                    <Plus className="h-5 w-5" />
+                                                                    <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
                                                                 </Button>
                                                             </div>
                                                         </CardContent>
@@ -1223,12 +1437,12 @@ export default function BookingPage() {
                                 {/* PROMOTIONS SECTION */}
                                 {activePromotions.length > 0 && (
                                     <>
-                                        <h2 id="promociones" className="text-xl font-semibold mb-2 mt-8 pt-4 border-t scroll-mt-24">Promociones Activas</h2>
+                                        <h2 id="promociones" className="text-xl font-bold tracking-tight text-foreground mb-3 mt-8 pt-4 border-t border-border/60 scroll-mt-24">Promociones Activas</h2>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                             {activePromotions.map((promo: any) => (
-                                                <Card key={promo.id} className="overflow-hidden border-2 border-primary/10 shadow-sm hover:shadow-md transition-all">
+                                                <Card key={promo.id} className="overflow-hidden border-2 border-blue-500/20 hover:border-blue-500/60 shadow-xs hover:shadow-md transition-all rounded-2xl bg-card">
                                                     <div className="flex h-full flex-col sm:flex-row">
-                                                        <div className="w-full sm:w-1/3 bg-slate-100 relative min-h-[120px]">
+                                                        <div className="w-full sm:w-1/3 bg-slate-100 dark:bg-slate-800 relative min-h-[120px]">
                                                             {promo.imageUrl ? (
                                                                 <Image 
                                                                     src={promo.imageUrl} 
@@ -1242,15 +1456,15 @@ export default function BookingPage() {
                                                                     <ShoppingBag className="h-8 w-8 opacity-20" />
                                                                 </div>
                                                             )}
-                                                            <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                                                            <div className="absolute top-2 left-2 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
                                                                 OFERTA
                                                             </div>
                                                         </div>
                                                         <CardContent className="flex-1 p-4 flex flex-col justify-between">
                                                             <div>
-                                                                <h3 className="font-bold text-base mb-1 text-primary">{promo.name}</h3>
+                                                                <h3 className="font-bold text-base mb-1 text-foreground">{promo.name}</h3>
                                                                 <div className="flex items-center text-xs text-muted-foreground mb-2">
-                                                                    <Clock className="w-3 h-3 mr-1" />
+                                                                    <Clock className="w-3.5 h-3.5 mr-1 text-blue-400" />
                                                                     <span>
                                                                         {(() => {
                                                                             const formatDate = (date: any) => {
@@ -1272,7 +1486,7 @@ export default function BookingPage() {
                                                                         })()}
                                                                     </span>
                                                                 </div>
-                                                                <p className="text-sm text-slate-600 line-clamp-2 mb-2">
+                                                                <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-2 leading-relaxed">
                                                                     {promo.description}
                                                                 </p>
                                                             </div>
@@ -1281,9 +1495,9 @@ export default function BookingPage() {
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        window.open(`/promociones/${promo.id}/terminos`, '_blank');
+                                                                        setSelectedPromotion(promo);
                                                                     }}
-                                                                    className="text-xs text-blue-600 underline hover:text-blue-800 w-fit"
+                                                                    className="text-xs text-blue-500 hover:text-blue-400 font-semibold underline underline-offset-4 w-fit cursor-pointer"
                                                                 >
                                                                     Ver términos y condiciones
                                                                 </button>
@@ -1295,23 +1509,35 @@ export default function BookingPage() {
                                         </div>
                                     </>
                                 )}
-                                <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t flex justify-between items-center shadow-upper z-50 animate-in slide-in-from-bottom-5">
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">
+
+                                {/* BARRA FLOTANTE INFERIOR OFICIAL CON EFECTO LÁSER */}
+                                <div className="fixed bottom-0 left-0 w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white border-t-2 border-blue-500/60 flex justify-between items-center shadow-[0_-10px_35px_rgba(0,0,0,0.6)] z-50 animate-in slide-in-from-bottom-5 overflow-hidden">
+                                    <div className="header-light-beam pointer-events-none" aria-hidden="true" />
+                                    <div className="relative z-10">
+                                        <p className="text-xs text-slate-300 font-medium">
                                             {cart.length > 0 ? `${cart.length} servicio${cart.length !== 1 ? 's' : ''}` : ''}
                                             {cart.length > 0 && productCart.length > 0 ? ', ' : ''}
                                             {productCart.length > 0 ? `${productCart.length} producto${productCart.length !== 1 ? 's' : ''}` : ''}
                                             {cart.length === 0 && productCart.length === 0 ? 'Nada seleccionado' : ''}
                                         </p>
-                                        <p className="font-bold text-lg">{formatPrice(totalPrice)}</p>
+                                        <p className="font-sans font-black text-lg sm:text-xl text-white tracking-tight">{formatPrice(totalPrice)}</p>
                                     </div>
-                                    <VatosButton onClick={handleServicesConfirmed} disabled={cart.length === 0} size="lg" className="shadow-lg">
-                                        Continuar <ChevronRight className="ml-2 h-4 w-4" />
-                                    </VatosButton>
+                                    <div className="relative z-10">
+                                        <Button
+                                            variant="alfa"
+                                            size="lg"
+                                            onClick={handleServicesConfirmed}
+                                            disabled={cart.length === 0}
+                                            className="shadow-[0_4px_20px_rgba(32,42,73,0.8)] px-5 sm:px-7 h-11 text-sm sm:text-base font-bold rounded-xl cursor-pointer"
+                                        >
+                                            <span>Continuar</span>
+                                            <ChevronRight className="ml-1.5 h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
 
-                                 {/* Floating Navigation Menu (Radial) */}
-                                <div className="fixed bottom-24 right-8 z-[60]">
+                                {/* Floating Navigation Menu (Radial) */}
+                                <div className="fixed bottom-24 right-4 sm:right-8 z-40">
                                     <div className="relative">
                                         {/* Action Buttons (Radial) */}
                                         <AnimatePresence>
@@ -1401,35 +1627,36 @@ export default function BookingPage() {
                         {/* STEP 1: MODE SELECTION */}
                         {step === 1 && (
                             <motion.div key="step1" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, x: -20 }} className="space-y-6">
-                                <VatosButton variant="ghost" onClick={() => setStep(0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</VatosButton>
-                                <h2 className="text-xl font-bold text-center mb-6">¿Cómo quieres agendar?</h2>
+                                <button 
+                                    onClick={() => setStep(0)} 
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-foreground transition-colors py-1.5 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 mb-2 -ml-1 cursor-pointer"
+                                >
+                                    <ChevronLeft className="h-4 w-4" /> Volver
+                                </button>
+                                <h2 className="text-xl sm:text-2xl font-black text-center mb-6 tracking-tight text-foreground">¿Cómo quieres agendar?</h2>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div
-                                        className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
+                                        className="border-2 border-border/80 hover:border-blue-500 rounded-2xl p-6 sm:p-8 cursor-pointer hover:bg-blue-500/5 hover:shadow-[0_10px_30px_rgba(59,130,246,0.18)] transition-all flex flex-col items-center text-center gap-4 bg-card group"
                                         onClick={() => handleModeSelection('combined')}
                                     >
-                                        <div className="h-16 w-16 bg-primary/10 text-primary rounded-full flex items-center justify-center">
-                                            <Layers className="h-8 w-8" />
-                                        </div>
+                                        <Layers className="h-12 w-12 text-blue-400 group-hover:scale-110 transition-transform" />
                                         <div>
-                                            <h3 className="font-bold text-lg">Uno tras otro</h3>
-                                            <p className="text-sm text-muted-foreground mt-2">
+                                            <h3 className="font-bold text-lg text-foreground">Uno tras otro</h3>
+                                            <p className="text-xs sm:text-sm text-muted-foreground mt-2 leading-relaxed">
                                                 Para una sola persona. Todos los servicios se realizan seguidos en una sola cita.
                                             </p>
                                         </div>
                                     </div>
 
                                     <div
-                                        className="border-2 rounded-xl p-6 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all flex flex-col items-center text-center gap-4"
+                                        className="border-2 border-border/80 hover:border-blue-500 rounded-2xl p-6 sm:p-8 cursor-pointer hover:bg-blue-500/5 hover:shadow-[0_10px_30px_rgba(59,130,246,0.18)] transition-all flex flex-col items-center text-center gap-4 bg-card group"
                                         onClick={() => handleModeSelection('individual')}
                                     >
-                                        <div className="h-16 w-16 bg-primary/10 text-primary rounded-full flex items-center justify-center">
-                                            <CalendarDays className="h-8 w-8" />
-                                        </div>
+                                        <CalendarDays className="h-12 w-12 text-blue-400 group-hover:scale-110 transition-transform" />
                                         <div>
-                                            <h3 className="font-bold text-lg">Por separado</h3>
-                                            <p className="text-sm text-muted-foreground mt-2">
+                                            <h3 className="font-bold text-lg text-foreground">Por separado</h3>
+                                            <p className="text-xs sm:text-sm text-muted-foreground mt-2 leading-relaxed">
                                                 Para varias personas o diferentes horarios. Configura cada servicio individualmente.
                                             </p>
                                         </div>
@@ -1441,9 +1668,14 @@ export default function BookingPage() {
                         {/* STEP 2: CONFIGURATION (DASHBOARD OR SUB-FLOW) */}
                         {step === 2 && !activeConfigId && bookingMode === 'individual' && (
                             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-                                <VatosButton variant="ghost" onClick={() => setStep(cart.length > 1 ? 1 : 0)} className="mb-2 -ml-2 text-muted-foreground"><ChevronLeft className="mr-1 h-4 w-4" /> Volver</VatosButton>
-                                <h2 className="text-xl font-semibold mb-4">Configura tus citas</h2>
-                                <p className="text-sm text-muted-foreground mb-4">Selecciona cada servicio para asignar fecha, hora y profesional.</p>
+                                <button 
+                                    onClick={() => setStep(cart.length > 1 ? 1 : 0)} 
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-foreground transition-colors py-1.5 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 mb-2 -ml-1 cursor-pointer"
+                                >
+                                    <ChevronLeft className="h-4 w-4" /> Volver
+                                </button>
+                                <h2 className="text-xl font-bold tracking-tight text-foreground mb-1">Configura tus citas</h2>
+                                <p className="text-xs sm:text-sm text-muted-foreground mb-4">Selecciona cada servicio para asignar fecha, hora y profesional.</p>
 
                                 <div className="space-y-3">
                                     {cart.map((item, idx) => {
@@ -1451,26 +1683,26 @@ export default function BookingPage() {
                                         return (
                                             <Card
                                                 key={item.uniqueId}
-                                                className={cn("cursor-pointer border hover:border-primary transition-all", cfg ? "bg-slate-50 border-green-200" : "border-dashed")}
+                                                className={cn("cursor-pointer border-2 transition-all rounded-xl", cfg ? "bg-blue-500/5 border-blue-500/50 shadow-xs" : "border-dashed border-border/80 hover:border-blue-500/60")}
                                                 onClick={() => startConfiguration(item.uniqueId)}
                                             >
                                                 <CardContent className="p-4 flex items-center justify-between">
                                                     <div>
-                                                        <div className="font-bold flex items-center gap-2">
-                                                            <span className="bg-slate-200 text-slate-700 text-xs w-5 h-5 rounded-full flex items-center justify-center">{idx + 1}</span>
+                                                        <div className="font-bold text-sm sm:text-base flex items-center gap-2">
+                                                            <span className="bg-slate-200 dark:bg-slate-800 text-foreground text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">{idx + 1}</span>
                                                             {item.service.name}
                                                         </div>
                                                         {cfg ? (
-                                                            <div className="text-sm text-green-700 mt-1 flex flex-col sm:flex-row sm:gap-3">
+                                                            <div className="text-xs sm:text-sm text-blue-500 mt-1 flex flex-col sm:flex-row sm:gap-3 font-medium">
                                                                 <span className="capitalize">{format(cfg.date, 'EEE d, MMM', { locale: es })} - {cfg.time}</span>
-                                                                <span className="font-medium flex items-center gap-1"><User className="h-3 w-3" /> {cfg.professional.name}</span>
+                                                                <span className="flex items-center gap-1"><User className="h-3 w-3" /> {cfg.professional.name}</span>
                                                             </div>
                                                         ) : (
-                                                            <span className="text-sm text-amber-600 font-medium mt-1 block">Pendiente de agendar</span>
+                                                            <span className="text-xs text-muted-foreground font-medium mt-1 block">Pendiente de agendar</span>
                                                         )}
                                                     </div>
                                                     <div className="ml-2">
-                                                        {cfg ? <Edit2 className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
+                                                        {cfg ? <Edit2 className="h-4 w-4 text-blue-500" /> : <ChevronRight className="h-5 w-5 text-muted-foreground" />}
                                                     </div>
                                                 </CardContent>
                                             </Card>
@@ -1479,9 +1711,15 @@ export default function BookingPage() {
                                 </div>
 
                                 <div className="mt-8 flex justify-end">
-                                    <VatosButton onClick={() => setStep(3)} disabled={!isDashboardComplete} size="lg" className="w-full sm:w-auto">
+                                    <Button 
+                                        variant="alfa" 
+                                        onClick={() => setStep(3)} 
+                                        disabled={!isDashboardComplete} 
+                                        size="lg" 
+                                        className="w-full sm:w-auto px-8 h-11 font-bold rounded-xl shadow-[0_4px_20px_rgba(32,42,73,0.8)] cursor-pointer"
+                                    >
                                         Siguiente <ChevronRight className="ml-2 h-4 w-4" />
-                                    </VatosButton>
+                                    </Button>
                                 </div>
                             </motion.div>
                         )}
@@ -1490,86 +1728,142 @@ export default function BookingPage() {
                         {step === 2 && activeConfigId && (
                             <motion.div key="subflow" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col min-h-[400px]">
                                 <div className="flex items-center mb-4">
-                                    <VatosButton variant="ghost" size="icon" onClick={() => {
-                                        if (configStep > 0) {
-                                            setConfigStep(prev => prev - 1);
-                                        } else {
-                                            // Backing out of Date selection
-                                            if (preSelectedProId) {
-                                                router.push('/');
-                                            } else if (bookingMode === 'combined') {
-                                                if (cart.length > 1) {
-                                                    setActiveConfigId(null);
-                                                    setStep(1);
+                                    <button 
+                                        onClick={() => {
+                                            if (configStep > 0) {
+                                                setConfigStep(prev => prev - 1);
+                                            } else {
+                                                // Backing out of Date selection
+                                                if (preSelectedProId) {
+                                                    router.push('/');
+                                                } else if (bookingMode === 'combined') {
+                                                    if (cart.length > 1) {
+                                                        setActiveConfigId(null);
+                                                        setStep(1);
+                                                    } else {
+                                                        setActiveConfigId(null);
+                                                        setStep(0);
+                                                    }
                                                 } else {
                                                     setActiveConfigId(null);
-                                                    setStep(0);
                                                 }
-                                            } else {
-                                                setActiveConfigId(null);
                                             }
-                                        }
-                                    }} className="-ml-2 mr-2"><ChevronLeft /></VatosButton>
-                                    <h2 className="text-xl font-semibold">
+                                        }} 
+                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-foreground transition-colors py-1.5 px-2.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 -ml-1 mr-2 cursor-pointer"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                        <span>Volver</span>
+                                    </button>
+                                    <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
                                         {activeConfigId === 'combined' ? 'Elige fecha y hora' : cart.find(c => c.uniqueId === activeConfigId)?.service.name}
                                     </h2>
                                 </div>
 
                                 {/* SCENARIO 1: PICK DATE */}
                                 {configStep === 0 && (
-                                    <div className="flex flex-col items-center">
-                                        <Calendar
-                                            mode="single"
-                                            selected={tempDate}
-                                            onSelect={(d) => {
-                                                setTempDate(d);
-                                                if (d) setConfigStep(1);
-                                            }}
-                                            disabled={(date) => isBefore(date, startOfToday())}
-                                            className="rounded-md border p-4 bg-white shadow-sm mb-4"
-                                            locale={es}
-                                            initialFocus
-                                        />
-                                        <p className="text-sm text-muted-foreground">Selecciona un día para ver horarios.</p>
+                                    <div className="flex flex-col items-center animate-in fade-in-50 duration-200">
+                                        <div className="border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-white dark:bg-slate-900 mb-3 w-full max-w-[340px]">
+                                            {/* Header del Calendario Estilo Agenda */}
+                                            <div className="bg-slate-50 dark:bg-slate-850/80 px-4 py-2.5 border-b border-border/60 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <CalendarDays className="h-4 w-4 text-blue-500" />
+                                                    <span className="text-xs sm:text-sm font-bold text-foreground">Elige una fecha</span>
+                                                </div>
+                                                <span className="text-[11px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-md">
+                                                    {tempDate ? format(tempDate, "d 'de' MMM", { locale: es }) : 'Pendiente'}
+                                                </span>
+                                            </div>
+
+                                            <Calendar
+                                                mode="single"
+                                                selected={tempDate}
+                                                onSelect={(d) => {
+                                                    setTempDate(d);
+                                                    if (d) setConfigStep(1);
+                                                }}
+                                                disabled={(date) => 
+                                                    isBefore(date, startOfToday()) || 
+                                                    isAfter(date, addDays(startOfToday(), Number(serviciosConfig?.dias_maximos_futuro) || 14))
+                                                }
+                                                className="p-3 mx-auto"
+                                                locale={es}
+                                            />
+
+                                            {/* Accesos rápidos como en la agenda */}
+                                            <div className="p-2 border-t border-border/60 flex items-center gap-2 bg-slate-50/80 dark:bg-slate-850/60">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1 cursor-pointer transition-colors"
+                                                    onClick={() => {
+                                                        const today = startOfToday();
+                                                        setTempDate(today);
+                                                        setConfigStep(1);
+                                                    }}
+                                                >
+                                                    Hoy
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/40 rounded-lg flex-1 cursor-pointer transition-colors"
+                                                    onClick={() => {
+                                                        const tomorrow = addDays(startOfToday(), 1);
+                                                        setTempDate(tomorrow);
+                                                        setConfigStep(1);
+                                                    }}
+                                                >
+                                                    Mañana
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-muted-foreground font-medium text-center">Selecciona un día en el calendario o pulsa un acceso rápido para ver horarios disponibles.</p>
                                     </div>
                                 )}
 
                                 {/* SCENARIO 2: PICK TIME */}
                                 {configStep === 1 && (
                                     <div className="flex flex-col h-full">
-                                        <h3 className="font-medium mb-4 capitalize text-center border-b pb-2">
+                                        <h3 className="font-bold text-base sm:text-lg mb-4 capitalize text-center border-b border-border/60 pb-3 text-foreground">
                                             {tempDate ? format(tempDate, 'EEEE d, MMMM', { locale: es }) : ''}
                                         </h3>
 
                                         {loadingSlots ? (
                                             <div className="grid grid-cols-3 gap-3 p-1 w-full animate-pulse">
                                                 {[...Array(9)].map((_, i) => (
-                                                    <div key={i} className="h-10 w-full bg-slate-100 rounded-md border border-slate-200"></div>
+                                                    <div key={i} className="h-11 w-full bg-slate-100 dark:bg-slate-800 rounded-xl border border-border/50"></div>
                                                 ))}
                                             </div>
                                         ) : noCapablePros ? (
-                                            <div className="text-center p-8 border border-dashed rounded-lg bg-yellow-50 border-yellow-200">
-                                                <Users className="h-10 w-10 text-yellow-500 mx-auto mb-2" />
-                                                <p className="text-yellow-800 font-medium mb-1">Combinación no disponible</p>
-                                                <p className="text-sm text-muted-foreground mb-4">Ningún profesional disponible realiza todos estos servicios.</p>
+                                            <div className="text-center p-8 border border-dashed rounded-2xl bg-muted/20 border-border/60">
+                                                <Users className="h-10 w-10 text-blue-400 mx-auto mb-2" />
+                                                <p className="text-foreground font-semibold mb-1">Combinación no disponible</p>
+                                                <p className="text-xs sm:text-sm text-muted-foreground mb-4">Ningún profesional disponible realiza todos estos servicios.</p>
                                                 <div className="flex flex-col gap-2">
-                                                    <VatosButton variant="outline" onClick={() => setConfigStep(0)}>Cambiar Fecha</VatosButton>
+                                                    <Button variant="outline" className="rounded-xl font-bold cursor-pointer" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
                                                     {bookingMode === 'combined' && (
                                                         <p className="text-xs text-muted-foreground mt-2">Intenta la opción <span className="font-bold">"Por separado"</span> para asignar diferentes profesionales.</p>
                                                     )}
                                                 </div>
                                             </div>
                                         ) : tempAvailableSlots.length === 0 ? (
-                                            <div className="text-center p-8 border border-dashed rounded-lg bg-slate-50">
-                                                <p className="text-muted-foreground">No hay horarios disponibles para esta fecha.</p>
-                                                <Button variant="link" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
+                                            <div className="text-center p-8 border border-dashed rounded-2xl bg-muted/10 border-border/60">
+                                                <p className="text-muted-foreground text-sm">No hay horarios disponibles para esta fecha.</p>
+                                                <Button variant="link" className="text-blue-500 font-semibold cursor-pointer mt-2" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[300px] p-1">
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3 overflow-y-auto max-h-[320px] p-1">
                                                 {tempAvailableSlots.map(time => (
-                                                    <VatosButton key={time} variant="outline" onClick={() => handleTimeSelected(time)}>
+                                                    <Button 
+                                                        key={time} 
+                                                        variant="outline" 
+                                                        className="h-11 rounded-xl font-sans font-bold text-sm border-border/80 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-500/10 transition-all cursor-pointer"
+                                                        onClick={() => handleTimeSelected(time)}
+                                                    >
                                                         {time}
-                                                    </VatosButton>
+                                                    </Button>
                                                 ))}
                                             </div>
                                         )}
@@ -1580,15 +1874,15 @@ export default function BookingPage() {
                                 {configStep === 2 && (
                                     <div className="space-y-4">
                                         <div className="text-center mb-4">
-                                            <p className="text-lg font-bold">{tempTime}</p>
-                                            <p className="text-sm text-muted-foreground">¿Con quién te gustaría?</p>
+                                            <p className="text-lg sm:text-xl font-black font-sans text-foreground">{tempTime} hrs</p>
+                                            <p className="text-xs sm:text-sm text-muted-foreground font-medium">¿Con quién te gustaría atenderte?</p>
                                         </div>
 
                                         <div className="flex-1 pr-1">
                                             <div className="grid grid-cols-3 gap-3">
                                                 {/* OPTION: ANY PRO */}
                                                 <div
-                                                    className="flex flex-col items-center p-2 rounded-xl border-2 cursor-pointer border-dashed border-slate-300 hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                    className="flex flex-col items-center p-3 rounded-2xl border-2 cursor-pointer border-dashed border-border/80 hover:border-blue-500 hover:bg-blue-500/5 transition-all group"
                                                     onClick={() => {
                                                         const availableParams = tempSlotMap[tempTime || ''];
                                                         if (availableParams && availableParams.length > 0) {
@@ -1597,14 +1891,14 @@ export default function BookingPage() {
                                                         }
                                                     }}
                                                 >
-                                                    <div className="w-full aspect-square rounded-lg bg-slate-100 flex items-center justify-center mb-2 border overflow-hidden relative">
+                                                    <div className="w-full aspect-square rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2 border border-border/50 overflow-hidden relative shadow-xs">
                                                         {empresaData?.[0]?.icon_url ? (
                                                             <Image 
                                                                 src={empresaData[0].icon_url} 
                                                                 alt="Icon" 
                                                                 fill
                                                                 className="object-cover" 
-                                                                sizes="100px"
+                                                                unoptimized
                                                             />
                                                         ) : empresaData?.[0]?.logo_url ? (
                                                             <Image 
@@ -1612,13 +1906,13 @@ export default function BookingPage() {
                                                                 alt="Logo" 
                                                                 fill
                                                                 className="object-cover" 
-                                                                sizes="100px"
+                                                                unoptimized
                                                             />
                                                         ) : (
-                                                            <Users className="h-8 w-8 text-slate-500" />
+                                                            <Users className="h-8 w-8 text-blue-400" />
                                                         )}
                                                     </div>
-                                                    <h3 className="font-bold text-xs text-center leading-tight">Primero disponible</h3>
+                                                    <h3 className="font-bold text-xs text-center leading-tight text-foreground">Primero disponible</h3>
                                                     <p className="text-[10px] text-muted-foreground text-center line-clamp-1">Automático</p>
                                                 </div>
 
@@ -1629,23 +1923,23 @@ export default function BookingPage() {
                                                     return (
                                                         <div
                                                             key={pro.id}
-                                                            className="flex flex-col items-center p-2 rounded-xl border-2 cursor-pointer hover:border-primary/50 hover:bg-slate-50 transition-all"
+                                                            className="flex flex-col items-center p-3 rounded-2xl border-2 border-border/70 cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition-all group"
                                                             onClick={() => handleProSelected(pro.id)}
                                                         >
-                                                            <div className="w-full aspect-square rounded-lg bg-muted overflow-hidden mb-2 border relative">
+                                                            <div className="w-full aspect-square rounded-xl bg-muted overflow-hidden mb-2 border border-border/50 relative shadow-xs">
                                                                 {pro.avatarUrl ? (
                                                                     <Image 
                                                                         src={pro.avatarUrl} 
                                                                         alt={pro.publicName || pro.name} 
                                                                         fill
                                                                         className="object-cover" 
-                                                                        sizes="100px"
+                                                                        unoptimized
                                                                     />
                                                                 ) : (
                                                                     <User className="w-full h-full p-3 text-muted-foreground" />
                                                                 )}
                                                             </div>
-                                                            <h3 className="font-bold text-xs text-center leading-tight">{pro.publicName || pro.name}</h3>
+                                                            <h3 className="font-bold text-xs text-center leading-tight text-foreground">{pro.publicName || pro.name}</h3>
                                                         </div>
                                                     );
                                                 })}
@@ -1657,218 +1951,168 @@ export default function BookingPage() {
                         )}
 
 
-                        {/* STEP 3: DETAILS & CONFIRMATION */}
+                        {/* STEP 3: TUS DATOS */}
                         {step === 3 && (
-                            <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-                                <div className="flex items-center mb-2">
-                                    <VatosButton variant="ghost" size="icon" onClick={() => {
-                                        // If only products (no services), go back to HOME, not step 2
-                                        if (cart.length === 0) {
-                                            router.push('/');
-                                            return;
-                                        }
-
-                                        if (bookingMode === 'combined') {
-                                            setActiveConfigId('combined');
-                                        }
-                                        setStep(2);
-                                    }} className="-ml-2 mr-2"><ChevronLeft /></VatosButton>
-                                    <h2 className="text-xl font-semibold">Tus Datos</h2>
+                            <motion.div key="step3" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                                <div className="border-b border-border/60 pb-3">
+                                    <h2 className="text-xl font-bold tracking-tight text-foreground">Tus Datos de Contacto</h2>
+                                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Ingresa tus datos para registrar y confirmar tu cita</p>
                                 </div>
 
-                                {/* PRODUCTS LIST */}
-                                {productCart.length > 0 && (
-                                    <div className="space-y-3">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2">
-                                            <ShoppingBag className="h-5 w-5 text-purple-600" />
-                                            Productos
-                                        </h3>
-                                        {productCart.map((product) => (
-                                            <div key={product.id} className="flex justify-between items-center text-sm py-2 border-b border-slate-100 last:border-0 animate-in fade-in slide-in-from-top-1">
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full"
-                                                        onClick={() => setProductCart(prev => prev.filter(p => p.id !== product.id))}
-                                                    >
-                                                        <Trash2 className="h-3 w-3" />
-                                                    </Button>
-                                                    <div>
-                                                        <span className="font-medium block">{product.nombre}</span>
-                                                        <span className="text-muted-foreground text-[10px] uppercase">Producto</span>
-                                                    </div>
-                                                </div>
-                                                <span className="font-bold">{formatPrice(product.public_price)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                                    <h3 className="font-bold text-lg border-b pb-2">Resumen de Compra</h3>
-
-                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
-                                        {/* Services */}
-                                        {cart.map((item) => (
-                                            <div key={item.uniqueId} className="flex justify-between text-sm text-slate-700">
-                                                <span>{item.service.name}</span>
-                                                <span className="font-medium">{formatPrice(item.service.price)}</span>
-                                            </div>
-                                        ))}
-
-                                        {/* Products */}
-                                        {productCart.map((product) => (
-                                            <div key={product.id} className="flex justify-between text-sm text-slate-700">
-                                                <span>{product.nombre}</span>
-                                                <span className="font-medium">{formatPrice(product.public_price)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <div className="border-t border-slate-300 pt-3 space-y-1">
-                                        <div className="flex justify-between text-lg font-bold">
-                                            <span>Total</span>
-                                            <span>{formatPrice(totalPrice)}</span>
-                                        </div>
-                                        {upfrontTotal > 0 && (
-                                            <>
-                                                <div className="flex justify-between text-base font-semibold text-blue-600">
-                                                    <span>Pagar ahora en línea (Anticipo)</span>
-                                                    <span>{formatPrice(upfrontTotal)}</span>
-                                                </div>
-                                                <div className="flex justify-between text-sm text-muted-foreground">
-                                                    <span>Pendiente en local</span>
-                                                    <span>{formatPrice(totalPrice - upfrontTotal)}</span>
-                                                </div>
-                                                {isThresholdDepositApplied && (
-                                                    <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-2.5 rounded-lg flex items-start gap-2 mt-2">
-                                                        <Info className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
-                                                        <span>Por el monto acumulado de tus servicios (${totalPrice.toFixed(2)}), se requiere un anticipo del {serviciosConfig?.anticipo_porcentaje_defecto || 50}% para asegurar y confirmar tu espacio.</span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="name">Nombre <span className="text-red-500">*</span></Label>
+                                {/* FORMULARIO DE DATOS COMPACTO CON LABELS EN LÍNEA (DELANTE) */}
+                                <div className="bg-slate-50/70 dark:bg-slate-850/40 p-4 sm:p-5 rounded-2xl border border-border/80 space-y-3">
+                                    {/* Fila 1: Nombre y Apellido */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="name" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                Nombre <span className="text-red-500">*</span>
+                                            </Label>
                                             <Input
                                                 id="name"
                                                 placeholder="Juan"
                                                 value={clientDetails.name}
                                                 onChange={(e) => setClientDetails({ ...clientDetails, name: correctName(e.target.value) })}
+                                                className="flex-1 rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background"
                                             />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="lastname">Apellido <span className="text-red-500">*</span></Label>
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor="lastname" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                Apellido <span className="text-red-500">*</span>
+                                            </Label>
                                             <Input
                                                 id="lastname"
                                                 placeholder="Pérez"
                                                 value={clientDetails.lastName}
                                                 onChange={(e) => setClientDetails({ ...clientDetails, lastName: correctName(e.target.value) })}
+                                                className="flex-1 rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background"
                                             />
                                         </div>
                                     </div>
 
-                                    {/* Email (Optional/Required) */}
-                                    {getFieldConfig('email').use && (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="email">Email {getFieldConfig('email').required && <span className="text-red-500">*</span>}</Label>
-                                            <Input
-                                                id="email"
-                                                type="email"
-                                                placeholder="tu@email.com"
-                                                value={clientDetails.email}
-                                                onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
-                                                className={
-                                                    clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email)
-                                                        ? "border-red-500 bg-red-50"
-                                                        : ""
-                                                }
-                                            />
-                                            {clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) && (
-                                                <p className="text-[10px] text-red-500">Formato de email incorrecto.</p>
+                                    {/* Fila 2: Celular y Email */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                                        {/* Celular */}
+                                        {getFieldConfig('phone').use && (
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="phone" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                    Celular {getFieldConfig('phone').required && <span className="text-red-500">*</span>}
+                                                </Label>
+                                                <div className="flex-1">
+                                                    <Input
+                                                        id="phone"
+                                                        type="tel"
+                                                        placeholder="5512345678"
+                                                        value={clientDetails.phone}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                            setClientDetails({ ...clientDetails, phone: val });
+                                                        }}
+                                                        className={cn(
+                                                            "w-full rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background",
+                                                            (clientDetails.phone.length > 0 && clientDetails.phone.length < 10) || (clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone))
+                                                                ? "border-red-500 bg-red-50 dark:bg-red-950/20"
+                                                                : ""
+                                                        )}
+                                                    />
+                                                    {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
+                                                        <p className="text-[10px] text-red-500 mt-0.5">Número inválido.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Email */}
+                                        {getFieldConfig('email').use && (
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="email" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                    Email {getFieldConfig('email').required && <span className="text-red-500">*</span>}
+                                                </Label>
+                                                <div className="flex-1">
+                                                    <Input
+                                                        id="email"
+                                                        type="email"
+                                                        placeholder="tu@email.com"
+                                                        value={clientDetails.email}
+                                                        onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
+                                                        className={cn(
+                                                            "w-full rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background",
+                                                            clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email)
+                                                                ? "border-red-500 bg-red-50 dark:bg-red-950/20"
+                                                                : ""
+                                                        )}
+                                                    />
+                                                    {clientDetails.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email) && (
+                                                        <p className="text-[10px] text-red-500 mt-0.5">Formato de email incorrecto.</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Fila 3: Dirección y Notas (si aplican) */}
+                                    {(getFieldConfig('address').use || getFieldConfig('notes').use) && (
+                                        <div className={cn(
+                                            "grid gap-2.5 sm:gap-3",
+                                            getFieldConfig('address').use && getFieldConfig('notes').use ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"
+                                        )}>
+                                            {/* Dirección */}
+                                            {getFieldConfig('address').use && (
+                                                <div className="flex items-center gap-2">
+                                                    <Label htmlFor="address" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                        Dirección {getFieldConfig('address').required && <span className="text-red-500">*</span>}
+                                                    </Label>
+                                                    <Input
+                                                        id="address"
+                                                        placeholder="Calle 123..."
+                                                        value={clientDetails.address}
+                                                        onChange={(e) => setClientDetails({ ...clientDetails, address: e.target.value })}
+                                                        className="flex-1 rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background"
+                                                    />
+                                                </div>
                                             )}
-                                        </div>
-                                    )}
 
-                                    {/* Celular */}
-                                    {getFieldConfig('phone').use && (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="phone">Celular (10 dígitos) {getFieldConfig('phone').required && <span className="text-red-500">*</span>}</Label>
-                                            <Input
-                                                id="phone"
-                                                type="tel"
-                                                placeholder="5512345678"
-                                                value={clientDetails.phone}
-                                                onChange={(e) => {
-                                                    const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                    setClientDetails({ ...clientDetails, phone: val });
-                                                }}
-                                                className={
-                                                    (clientDetails.phone.length > 0 && clientDetails.phone.length < 10) || (clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone))
-                                                        ? "border-red-500 bg-red-50"
-                                                        : ""
-                                                }
-                                            />
-                                            {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
-                                                <p className="text-[10px] text-red-500">Número inválido.</p>
+                                            {/* Notas */}
+                                            {getFieldConfig('notes').use && (
+                                                <div className="flex items-center gap-2">
+                                                    <Label htmlFor="notes" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
+                                                        Notas {getFieldConfig('notes').required && <span className="text-red-500">*</span>}
+                                                    </Label>
+                                                    <Input
+                                                        id="notes"
+                                                        placeholder="Preferencias..."
+                                                        value={clientDetails.notes}
+                                                        onChange={(e) => setClientDetails({ ...clientDetails, notes: e.target.value })}
+                                                        className="flex-1 rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background"
+                                                    />
+                                                </div>
                                             )}
-                                        </div>
-                                    )}
-
-                                    {/* Dirección */}
-                                    {getFieldConfig('address').use && (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="address">Dirección {getFieldConfig('address').required && <span className="text-red-500">*</span>}</Label>
-                                            <Input
-                                                id="address"
-                                                placeholder="Calle 123, Colonia..."
-                                                value={clientDetails.address}
-                                                onChange={(e) => setClientDetails({ ...clientDetails, address: e.target.value })}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* Notas */}
-                                    {getFieldConfig('notes').use && (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="notes">Notas {getFieldConfig('notes').required && <span className="text-red-500">*</span>}</Label>
-                                            <Input
-                                                id="notes"
-                                                placeholder="Alergias, preferencias..."
-                                                value={clientDetails.notes}
-                                                onChange={(e) => setClientDetails({ ...clientDetails, notes: e.target.value })}
-                                            />
                                         </div>
                                     )}
 
                                     {/* Cumpleaños */}
                                     {getFieldConfig('dob').use && (
-                                        <div className="space-y-2">
-                                            <Label>Cumpleaños (¡Podrías recibir un regalo! 🎁) {getFieldConfig('dob').required && <span className="text-red-500">*</span>}</Label>
-                                            <div className="grid grid-cols-3 gap-2">
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 pt-0.5">
+                                            <Label className="w-full sm:w-24 text-xs font-semibold text-foreground/80 shrink-0">
+                                                Cumpleaños 🎁 {getFieldConfig('dob').required && <span className="text-red-500">*</span>}
+                                            </Label>
+                                            <div className="grid grid-cols-3 gap-2 flex-1">
                                                 <Select value={bDay} onValueChange={(v) => updateBirthday('day', v)}>
-                                                    <SelectTrigger><SelectValue placeholder="Día" /></SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectTrigger className="rounded-xl border-border/80 h-9 text-xs sm:text-sm bg-background"><SelectValue placeholder="Día" /></SelectTrigger>
+                                                    <SelectContent className="rounded-xl border-2 border-blue-500">
                                                         {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
 
                                                 <Select value={bMonth} onValueChange={(v) => updateBirthday('month', v)}>
-                                                    <SelectTrigger><SelectValue placeholder="Mes" /></SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectTrigger className="rounded-xl border-border/80 h-9 text-xs sm:text-sm bg-background"><SelectValue placeholder="Mes" /></SelectTrigger>
+                                                    <SelectContent className="rounded-xl border-2 border-blue-500">
                                                         {months.map(m => <SelectItem key={m.val} value={m.val}>{m.label}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
 
                                                 <Select value={bYear} onValueChange={(v) => updateBirthday('year', v)}>
-                                                    <SelectTrigger><SelectValue placeholder="Año" /></SelectTrigger>
-                                                    <SelectContent>
+                                                    <SelectTrigger className="rounded-xl border-border/80 h-9 text-xs sm:text-sm bg-background"><SelectValue placeholder="Año" /></SelectTrigger>
+                                                    <SelectContent className="rounded-xl border-2 border-blue-500">
                                                         {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
@@ -1877,81 +2121,326 @@ export default function BookingPage() {
                                     )}
                                 </div>
 
-                                <div className="h-24"></div> {/* Spacer for fixed button */}
-
-                                <div className="fixed bottom-0 left-0 w-full p-4 bg-white border-t z-50 shadow-upper flex flex-col items-center justify-center animate-in slide-in-from-bottom-5">
+                                {/* BOTÓN OFICIAL VATOS ALFA DENTRO DE LA TARJETA BLANCA: CONTINUAR AL RESUMEN */}
+                                <div className="mt-8 mb-6 flex justify-center animate-in slide-in-from-bottom-3">
                                     <div className="w-full max-w-md">
-                                        <VatosButton
-                                            className="w-full shadow-lg h-12 text-lg"
-                                            onClick={confirmBooking}
-                                            disabled={
-                                                !clientDetails.name ||
-                                                !clientDetails.lastName ||
-                                                isSubmitting ||
-                                                (getFieldConfig('phone').use && getFieldConfig('phone').required && (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone))) ||
-                                                (getFieldConfig('email').use && getFieldConfig('email').required && (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email))) ||
-                                                (getFieldConfig('address').use && getFieldConfig('address').required && !clientDetails.address) ||
-                                                (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes) ||
-                                                (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday)
-                                            }
+                                        <Button
+                                            variant="alfa"
+                                            className="w-full shadow-[0_10px_30px_rgba(32,42,73,0.3),0_0_20px_rgba(59,130,246,0.2)] hover:shadow-[0_14px_35px_rgba(32,42,73,0.4)] h-12 text-base font-bold rounded-xl cursor-pointer transition-all flex items-center justify-center gap-2"
+                                            onClick={() => setStep(4)}
+                                            disabled={!isStep3Valid}
                                         >
-                                            {isSubmitting ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Loader2 className="h-5 w-5 animate-spin" />
-                                                    <span>Procesando...</span>
-                                                </div>
-                                            ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
-                                        </VatosButton>
+                                            <span>Continuar al Resumen</span>
+                                            <ChevronRight className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                    <p className="text-[10px] text-center text-muted-foreground mt-2">
-                                        Al continuar, aceptas nuestros <Link href="/terminos" target="_blank" className="underline text-slate-700 hover:text-primary font-medium">Términos y Condiciones</Link>.
-                                        {upfrontTotal > 0 && " Tu pago de anticipo será procesado de forma segura por Mercado Pago."}
-                                    </p>
                                 </div>
                             </motion.div>
                         )}
 
-                        {/* STEP 4: SUCCESS */}
+                        {/* STEP 4: RESUMEN Y PAGO */}
                         {step === 4 && (
-                            <motion.div key="step4" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-10 text-center space-y-4">
-                                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4 animate-in zoom-in duration-500 shadow-xl shadow-primary/20 ring-1 ring-primary/20">
-                                    <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white shadow-inner">
-                                        <Check className="w-8 h-8" />
+                            <motion.div key="step4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                                <div className="border-b border-border/60 pb-3">
+                                    <h2 className="text-xl font-bold tracking-tight text-foreground">Resumen de tu Cita</h2>
+                                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Revisa todos los detalles antes de confirmar tu reserva</p>
+                                </div>
+
+                                {/* TARJETA DE DETALLES DE CITA Y CONTACTO */}
+                                <div className="bg-slate-50/80 dark:bg-slate-850/50 p-3.5 sm:p-4 rounded-2xl border border-border/80 shadow-xs space-y-2">
+                                    <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <CalendarDays className="h-4 w-4 text-blue-500" />
+                                            <h3 className="font-bold text-sm sm:text-base text-foreground">Detalles de la Cita</h3>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(3)}
+                                            className="text-xs font-semibold text-blue-500 hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer py-1 px-2 rounded-lg hover:bg-blue-500/10"
+                                            title="Editar tus datos"
+                                        >
+                                            <Edit2 className="h-3.5 w-3.5" />
+                                            <span>Editar datos</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Cliente */}
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                        <span className="font-bold text-foreground">{clientDetails.name} {clientDetails.lastName}</span>
+                                        {clientDetails.phone && (
+                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                <Phone className="h-3 w-3 text-slate-400 shrink-0" />
+                                                <span>{clientDetails.phone}</span>
+                                            </span>
+                                        )}
+                                        {clientDetails.email && (
+                                            <span className="text-muted-foreground flex items-center gap-1">
+                                                <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+                                                <span>{clientDetails.email}</span>
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Horarios y Profesionales */}
+                                    <div className="space-y-2 pt-1 border-t border-border/40">
+                                        {bookingMode === 'combined' || cart.length === 1 ? (
+                                            (() => {
+                                                const cfg = configs['combined'] || configs[cart[0]?.uniqueId];
+                                                if (!cfg) return null;
+                                                const rawDate = format(cfg.date, "EEEE d 'de' MMMM", { locale: es });
+                                                const formattedDate = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
+                                                return (
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-border/60">
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                                                            <div>
+                                                                <p className="text-xs font-bold text-foreground">
+                                                                    {formattedDate} a las {cfg.time} hrs
+                                                                </p>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Duración estimada: {totalDuration} min
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-xs text-foreground font-medium sm:self-center">
+                                                            <User className="h-3.5 w-3.5 text-slate-400" />
+                                                            <span>{cfg.professional?.name || 'Profesional asignado'}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()
+                                        ) : (
+                                            cart.map((item, idx) => {
+                                                const cfg = configs[item.uniqueId];
+                                                if (!cfg) return null;
+                                                return (
+                                                    <div key={item.uniqueId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-border/60 text-xs">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="bg-slate-200 dark:bg-slate-800 text-foreground text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{idx + 1}</span>
+                                                            <span className="font-semibold text-foreground">{item.service.name}</span>
+                                                        </div>
+                                                        <div className="flex flex-wrap items-center gap-3 text-muted-foreground text-[11px]">
+                                                            <span className="capitalize">{format(cfg.date, 'EEE d, MMM', { locale: es })} - {cfg.time}</span>
+                                                            <span className="flex items-center gap-1"><User className="h-3 w-3 text-slate-400" /> {cfg.professional?.name}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </div>
-                                <h2 className="text-2xl font-bold text-slate-800">¡Reserva Confirmada!</h2>
-                                <p className="text-muted-foreground max-w-sm">
-                                    Gracias <strong>{clientDetails.name}</strong>, tus citas han sido agendadas con éxito.
+
+                                {/* RESUMEN DE COMPRA INTEGRADO Y MINIMALISTA */}
+                                <div className="bg-slate-50/80 dark:bg-slate-850/50 p-3.5 sm:p-4 rounded-2xl border border-border/80 shadow-xs space-y-2">
+                                    <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-sm sm:text-base text-foreground">Resumen de Compra</h3>
+                                            <span className="text-xs font-normal text-muted-foreground font-sans">
+                                                ({cart.length + productCart.length} {cart.length + productCart.length === 1 ? 'ítem' : 'ítems'})
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(0)}
+                                            className="text-xs font-semibold text-blue-500 hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer py-1 px-2 rounded-lg hover:bg-blue-500/10"
+                                            title="Agregar más servicios o productos a tu compra"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" />
+                                            <span>Agregar más</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="max-h-48 overflow-y-auto pr-1 custom-scrollbar divide-y divide-border/20">
+                                        {/* Servicios */}
+                                        {cart.map((item) => (
+                                            <div key={item.uniqueId} className="flex items-center justify-between text-xs py-1 first:pt-0">
+                                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0 leading-none">
+                                                        Servicio
+                                                    </span>
+                                                    <span className="truncate font-medium text-foreground text-xs">{item.service.name}</span>
+                                                </div>
+                                                <span className="font-sans font-semibold text-foreground text-xs shrink-0">{formatPrice(item.service.price)}</span>
+                                            </div>
+                                        ))}
+
+                                        {/* Productos integrados con opción de eliminar */}
+                                        {productCart.map((product) => (
+                                            <div key={product.id} className="flex items-center justify-between text-xs py-1 group">
+                                                <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-400 border border-slate-500/20 shrink-0 leading-none">
+                                                        Producto
+                                                    </span>
+                                                    <span className="truncate font-medium text-foreground text-xs">{product.nombre}</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setProductCart(prev => prev.filter(p => p.id !== product.id))}
+                                                        className="text-slate-400 hover:text-red-400 p-0.5 rounded transition-colors cursor-pointer shrink-0"
+                                                        title="Quitar producto"
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                                <span className="font-sans font-semibold text-foreground text-xs shrink-0">{formatPrice(product.public_price)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Enlace sutil para agregar más */}
+                                    <div className="pt-0.5 flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setStep(0)}
+                                            className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-500 hover:text-blue-400 hover:underline transition-colors cursor-pointer"
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                            <span>¿Deseas agregar otro servicio o producto?</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="border-t border-border/60 pt-2 space-y-1">
+                                        <div className="flex justify-between text-base sm:text-lg font-bold text-foreground">
+                                            <span>Total</span>
+                                            <span className="font-sans font-black">{formatPrice(totalPrice)}</span>
+                                        </div>
+                                        {upfrontTotal > 0 && (
+                                            <>
+                                                <div className="flex justify-between text-xs sm:text-sm font-bold text-blue-500">
+                                                    <span>Pagar ahora en línea (Anticipo)</span>
+                                                    <span className="font-sans">{formatPrice(upfrontTotal)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
+                                                    <span>Pendiente en local</span>
+                                                    <span className="font-sans font-medium">{formatPrice(totalPrice - upfrontTotal)}</span>
+                                                </div>
+                                                {historyRequiresDeposit && (
+                                                    <div className="bg-red-500/10 border border-red-500/30 text-red-900 dark:text-red-300 text-xs p-3 rounded-xl flex items-start gap-2 mt-2">
+                                                        <ShieldCheck className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
+                                                        <div className="space-y-0.5">
+                                                            <p className="font-bold text-red-800 dark:text-red-200 text-xs">
+                                                                Anticipo obligatorio por inasistencias ({historyPenaltyPercent}%)
+                                                            </p>
+                                                            <p className="text-[11px] text-red-700 dark:text-red-300 leading-tight">
+                                                                Tu cuenta registra inasistencias previas. Para confirmar tu reserva, se requiere un anticipo de garantía del {historyPenaltyPercent}%.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!historyRequiresDeposit && sameDayRequiresDeposit && (
+                                                    <div className="bg-blue-500/10 border border-blue-500/30 text-foreground text-xs p-2.5 rounded-xl flex items-start gap-2 mt-2">
+                                                        <ShieldCheck className="h-4 w-4 shrink-0 text-blue-400 mt-0.5" />
+                                                        <div className="space-y-0.5">
+                                                            <p className="font-bold text-blue-400 text-xs">
+                                                                Escudo de Reserva: Cita activa para la misma fecha
+                                                            </p>
+                                                            <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                                {sameDayDepositMessage || `Detectamos que ya cuentas con una cita programada para esta fecha ($${sameDayActiveTotal.toFixed(2)} MXN). Al sumar esta reserva y alcanzar $${sameDayAccumulatedTotal.toFixed(2)} MXN en el día, se requiere un anticipo del ${sameDayDepositPercent}% de garantía.`}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {!historyRequiresDeposit && !sameDayRequiresDeposit && isThresholdDepositApplied && (
+                                                    <div className="bg-blue-500/10 border border-blue-500/30 text-foreground text-xs p-2.5 rounded-xl flex items-start gap-2 mt-1.5">
+                                                        <Info className="h-4 w-4 shrink-0 text-blue-400 mt-0.5" />
+                                                        <span className="text-muted-foreground text-[11px] leading-relaxed">Por el monto de los servicios (${totalPrice.toFixed(2)}), se requiere un anticipo del {serviciosConfig?.anticipo_porcentaje_defecto || 50}% para confirmar tu espacio.</span>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* BOTÓN OFICIAL VATOS ALFA DENTRO DE LA TARJETA BLANCA */}
+                                <div className="mt-8 mb-6 flex justify-center animate-in slide-in-from-bottom-3">
+                                    <div className="w-full max-w-md">
+                                        <Button
+                                            variant="alfa"
+                                            className="w-full shadow-[0_10px_30px_rgba(32,42,73,0.3),0_0_20px_rgba(59,130,246,0.2)] hover:shadow-[0_14px_35px_rgba(32,42,73,0.4)] h-12 text-base font-bold rounded-xl cursor-pointer transition-all"
+                                            onClick={confirmBooking}
+                                            disabled={isSubmitting}
+                                        >
+                                            {isSubmitting ? (
+                                                <div className="flex items-center gap-2 justify-center">
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                    <span>Procesando...</span>
+                                                </div>
+                                            ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* STEP 5: SUCCESS */}
+                        {step === 5 && (
+                            <motion.div key="step5" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-12 text-center space-y-4 max-w-md mx-auto">
+                                <CheckCircle className="w-16 h-16 text-blue-400 mb-2 animate-in zoom-in duration-300" />
+                                <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">¡Reserva Confirmada!</h2>
+                                <p className="text-muted-foreground text-sm leading-relaxed">
+                                    Gracias <strong className="text-foreground">{clientDetails.name}</strong>, tus citas han sido agendadas con éxito.
                                 </p>
                                 {websiteSettings.predefinedNotes && (
-                                    <div className="bg-muted border border-slate-200 text-foreground p-4 rounded-xl mt-4 max-w-md text-sm shadow-sm whitespace-pre-line">
+                                    <div className="bg-muted/40 border border-border/80 text-foreground p-4 rounded-2xl mt-4 text-xs sm:text-sm shadow-xs whitespace-pre-line text-left w-full">
                                         {websiteSettings.predefinedNotes.replace('3 horas antes. ', '3 horas antes.\n')}
                                     </div>
                                 )}
-                                <VatosButton className="mt-8 shadow-lg" size="lg" onClick={() => router.push('/')}>
+                                {isSandboxMode && (
+                                    <div className="bg-blue-50/80 dark:bg-blue-950/40 border-2 border-blue-500/40 text-blue-900 dark:text-blue-200 text-xs px-4 py-3 rounded-2xl flex items-center gap-3 mt-3 text-left w-full shadow-xs">
+                                        <ShieldCheck className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                                        <div className="text-xs leading-relaxed">
+                                            <p className="font-bold text-blue-950 dark:text-white text-xs">Simulación Exitosa en Modo Sandbox</p>
+                                            <p className="text-slate-600 dark:text-slate-300 text-[11px] mt-0.5">La reserva fue validada por completo. El barbero no fue bloqueado en la agenda real y no se enviaron correos al cliente.</p>
+                                        </div>
+                                    </div>
+                                )}
+                                <Button 
+                                    variant="alfa" 
+                                    size="lg" 
+                                    className="mt-8 px-8 h-12 text-base font-bold rounded-xl shadow-[0_4px_20px_rgba(32,42,73,0.8)] cursor-pointer"
+                                    onClick={() => router.push('/')}
+                                >
                                     Volver al Inicio
-                                </VatosButton>
+                                </Button>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
 
-                    {/* Promotion Terms Modal */}
+                    {/* Promotion Terms Modal con Cabecera Oficial Vatos Alfa */}
                     <Dialog open={!!selectedPromotion} onOpenChange={(open) => !open && setSelectedPromotion(null)}>
-                        <DialogContent className="max-w-md bg-white p-6 rounded-xl">
-                            <DialogHeader>
-                                <DialogTitle className="text-xl font-bold">{selectedPromotion?.name}</DialogTitle>
-                            </DialogHeader>
-                            <div className="mt-4">
-                                <h4 className="font-semibold text-sm mb-2 text-primary">Términos y Condiciones:</h4>
-                                <div className="max-h-[60vh] overflow-y-auto whitespace-pre-line text-sm text-slate-700 bg-slate-50 p-4 rounded-lg border">
-                                    {selectedPromotion?.termsAndConditions || 'No hay términos y condiciones específicos.'}
+                        <DialogContent hideCloseButton={true} className="max-w-md sm:max-w-lg p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-background max-h-[85vh] flex flex-col">
+                            {/* Cabecera Oficial */}
+                            <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 text-white border-b border-[#2d3a60]/60 shrink-0">
+                                <div className="header-light-beam" aria-hidden="true" />
+                                <div className="relative z-10 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Sparkles className="h-5 w-5 text-[#C5A880] shrink-0" />
+                                        <div>
+                                            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">{selectedPromotion?.name}</h3>
+                                            <p className="text-xs text-slate-300">Términos y condiciones de la promoción</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setSelectedPromotion(null)}
+                                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                                        aria-label="Cerrar modal"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
                                 </div>
                             </div>
-                            <div className="mt-6 flex gap-3">
+
+                            {/* Contenido con scrollbar estilizado */}
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-6 text-foreground/90 leading-relaxed text-xs sm:text-sm whitespace-pre-line">
+                                {selectedPromotion?.termsAndConditions || 'No hay términos y condiciones específicos para esta promoción.'}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-4 sm:p-5 border-t border-border/60 bg-muted/20 flex flex-row items-center justify-between gap-3 shrink-0">
                                 <Button 
                                     variant="outline" 
-                                    className="flex-1" 
+                                    size="sm"
+                                    className="text-xs font-semibold rounded-xl border-border/80 cursor-pointer"
                                     onClick={() => {
                                         const url = `${window.location.origin}/promociones/${selectedPromotion?.id}/terminos`;
                                         navigator.clipboard.writeText(url);
@@ -1961,11 +2450,16 @@ export default function BookingPage() {
                                         });
                                     }}
                                 >
-                                    <Share2 className="w-4 h-4 mr-2" /> Copiar Link
+                                    <Share2 className="w-3.5 h-3.5 mr-1.5" /> Copiar Link
                                 </Button>
-                                <VatosButton className="flex-1" onClick={() => setSelectedPromotion(null)}>
-                                    Cerrar
-                                </VatosButton>
+                                <Button 
+                                    variant="alfa" 
+                                    size="sm"
+                                    className="font-bold text-xs px-5 rounded-xl cursor-pointer"
+                                    onClick={() => setSelectedPromotion(null)}
+                                >
+                                    Entendido
+                                </Button>
                             </div>
                         </DialogContent>
                     </Dialog>
@@ -2026,6 +2520,8 @@ export default function BookingPage() {
                         <a href="https://policies.google.com/privacy" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Política de Privacidad</a> y los{' '}
                         <a href="https://policies.google.com/terms" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Términos de Servicio</a> de Google.
                     </div>
+
+                    {step === 0 && <div className="h-16 sm:h-20 shrink-0 pointer-events-none" />}
 
                 </div>
             </div>

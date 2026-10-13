@@ -13,9 +13,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import type { Profesional, Schedule, Service, ServiceCategory, Local } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, Plus, Trash2, UploadCloud } from 'lucide-react';
+import { Loader2, Copy, Plus, Trash2, UploadCloud, User, X, Clock, Camera, Globe, Check, AlertCircle } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { cn, formatMoney } from '@/lib/utils';
 import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import {
@@ -102,6 +104,13 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     }, [services, categories, servicesLoading, categoriesLoading]);
 
     const allServices = useMemo(() => services.map(s => s.id), [services]);
+    const [openCategories, setOpenCategories] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (servicesByCategory.length > 0 && openCategories.length === 0) {
+            setOpenCategories(servicesByCategory.map(c => c.category));
+        }
+    }, [servicesByCategory, openCategories.length]);
 
     const form = useForm({
         defaultValues: profesional || {
@@ -391,47 +400,108 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     return (
         <>
             <Dialog open={isOpen} onOpenChange={(open) => !open && handleCloseModal()}>
-                <DialogContent className="max-w-5xl h-[95vh] flex flex-col">
-                    <DialogHeader>
-                        <DialogTitle>{profesional ? `Editando ${profesional.name}` : 'Nuevo Profesional'}</DialogTitle>
-                        <DialogDescription>
-                            Modifica la información, servicios y horarios del profesional.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
-                        <Tabs defaultValue="basic" className="flex-grow flex flex-col overflow-hidden">
-                            <TabsList className="mb-4 flex-shrink-0">
-                                <TabsTrigger value="basic">Datos básicos</TabsTrigger>
-                                <TabsTrigger value="schedule">Horario</TabsTrigger>
-                                <TabsTrigger value="profile">Perfil</TabsTrigger>
+                <DialogContent hideCloseButton={true} className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-3.5 sm:p-4 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+                        <div className="header-light-beam absolute inset-0 pointer-events-none" />
+                        <div className="flex items-center gap-2.5 z-10">
+                            <User className="h-5 w-5 text-slate-300 shrink-0" />
+                            <div>
+                                <h2 className="text-sm sm:text-base font-bold text-white">
+                                    {profesional ? `Editando: ${profesional.name}` : 'Nuevo Profesional'}
+                                </h2>
+                                <p className="text-[11px] sm:text-xs text-slate-300">
+                                    Modifica la información, servicios y horarios del profesional
+                                </p>
+                            </div>
+                        </div>
+                        <button 
+                            type="button" 
+                            onClick={handleCloseModal}
+                            className="z-10 rounded-lg p-1 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                            title="Cerrar modal"
+                        >
+                            <X className="h-5 w-5" />
+                        </button>
+                    </div>
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden p-3.5 sm:p-5">
+                        <Tabs defaultValue="basic" className="flex-1 flex flex-col overflow-hidden">
+                            <TabsList className="mb-3.5 sm:mb-4 flex-shrink-0 bg-muted/20 border border-border/60 p-1 rounded-xl grid grid-cols-3 h-auto">
+                                <TabsTrigger 
+                                    value="basic" 
+                                    className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all font-medium"
+                                >
+                                    <User className="h-4 w-4 text-slate-400" />
+                                    <span>Datos básicos</span>
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="schedule" 
+                                    className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all font-medium"
+                                >
+                                    <Clock className="h-4 w-4 text-slate-400" />
+                                    <span>Horario</span>
+                                </TabsTrigger>
+                                <TabsTrigger 
+                                    value="profile" 
+                                    className="text-xs sm:text-sm py-2 px-3 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1.5 sm:gap-2 transition-all font-medium"
+                                >
+                                    <Camera className="h-4 w-4 text-slate-400" />
+                                    <span>Perfil y Foto</span>
+                                </TabsTrigger>
                             </TabsList>
-                            <ScrollArea className="flex-grow pr-4">
-                                <TabsContent value="basic" className="space-y-6 mt-0">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="name">Nombre Completo (Interno)</Label>
-                                            <Input id="name" {...form.register('name')} placeholder="Juan Pérez" />
+                            <ScrollArea className="flex-1 pr-2 sm:pr-4 overflow-y-auto">
+                                <TabsContent value="basic" className="space-y-4 sm:space-y-5 mt-0 pr-1">
+                                    {/* Grid de campos 2x2 simétricos */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="name" className="text-xs font-semibold text-foreground">
+                                                Nombre Completo (Interno) *
+                                            </Label>
+                                            <Input 
+                                                id="name" 
+                                                {...form.register('name', { required: true })} 
+                                                placeholder="Ej. Beatriz Martínez" 
+                                                className="h-9 text-xs sm:text-sm bg-background border-border/60"
+                                            />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="publicName">Nombre Público (Web)</Label>
-                                            <Input id="publicName" {...form.register('publicName')} placeholder="Juan P. (Opcional)" />
-                                            <p className="text-xs text-muted-foreground">Este nombre se mostrará en la página de reservas.</p>
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label htmlFor="publicName" className="text-xs font-semibold text-foreground">
+                                                    Nombre Público (Web)
+                                                </Label>
+                                                <span className="text-[10px] text-muted-foreground">Visible para clientes</span>
+                                            </div>
+                                            <Input 
+                                                id="publicName" 
+                                                {...form.register('publicName')} 
+                                                placeholder="Ej. Bety" 
+                                                className="h-9 text-xs sm:text-sm bg-background border-border/60"
+                                            />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="email">Email</Label>
-                                            <Input id="email" type="email" {...form.register('email')} />
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="email" className="text-xs font-semibold text-foreground">
+                                                Correo Electrónico *
+                                            </Label>
+                                            <Input 
+                                                id="email" 
+                                                type="email" 
+                                                {...form.register('email')} 
+                                                placeholder="profesional@vatosalfa.com" 
+                                                className="h-9 text-xs sm:text-sm bg-background border-border/60"
+                                            />
                                         </div>
-                                        <div className="space-y-2 md:col-span-2">
-                                            <Label htmlFor="local_id">Sucursal</Label>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="local_id" className="text-xs font-semibold text-foreground">
+                                                Sucursal Asignada
+                                            </Label>
                                             <Controller
                                                 control={form.control}
                                                 name="local_id"
                                                 render={({ field }) => (
                                                     <Select onValueChange={field.onChange} value={field.value} disabled={localesLoading}>
-                                                        <SelectTrigger id="local_id">
+                                                        <SelectTrigger id="local_id" className="h-9 text-xs sm:text-sm bg-background border-border/60">
                                                             <SelectValue placeholder="Seleccionar sucursal..." />
                                                         </SelectTrigger>
-                                                        <SelectContent>
+                                                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                                                             {locales.map(loc => (
                                                                 <SelectItem key={loc.id} value={loc.id}>{loc.name}</SelectItem>
                                                             ))}
@@ -441,7 +511,20 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex items-center space-x-2 pt-4">
+
+                                    {/* Tarjeta de Reservas en línea */}
+                                    <div className="rounded-xl border border-border/60 bg-muted/10 p-3 sm:p-3.5 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2.5">
+                                            <Globe className="h-4 w-4 text-blue-400 shrink-0" />
+                                            <div>
+                                                <Label htmlFor="acceptsOnline" className="text-xs sm:text-sm font-semibold cursor-pointer text-foreground block">
+                                                    Acepta reservas en línea
+                                                </Label>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Los clientes podrán agendar citas con este profesional desde la web de reservas.
+                                                </p>
+                                            </div>
+                                        </div>
                                         <Controller
                                             name="acceptsOnline"
                                             control={form.control}
@@ -449,195 +532,363 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                 <Switch id="acceptsOnline" checked={field.value} onCheckedChange={field.onChange} />
                                             )}
                                         />
-                                        <Label htmlFor="acceptsOnline">Este profesional acepta reservas en línea</Label>
                                     </div>
-                                    <div className="space-y-4 pt-6 border-t">
-                                        <div className="flex justify-between items-center">
-                                            <h4 className="text-lg font-semibold">Selecciona los servicios que realiza el profesional</h4>
-                                            <div className="flex items-center gap-2">
-                                                <Checkbox
-                                                    id="select-all"
-                                                    checked={selectedServices?.length === allServices.length}
-                                                    onCheckedChange={(checked) => {
-                                                        form.setValue('services', checked ? allServices : []);
+
+                                    {/* Sección de Servicios Asignados */}
+                                    <div className="space-y-3 pt-3 border-t border-border/40">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-xs sm:text-sm font-bold text-foreground">
+                                                        Servicios Asignados al Profesional
+                                                    </h4>
+                                                    <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 text-[11px] font-medium">
+                                                        {Array.isArray(selectedServices) ? selectedServices.length : 0} de {allServices.length}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    Marca los servicios que este profesional puede realizar en cabina.
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 text-[11px] border-border/60 text-foreground hover:bg-muted/20 gap-1.5 px-2.5"
+                                                    onClick={() => {
+                                                        const isAllSelected = selectedServices?.length === allServices.length;
+                                                        form.setValue('services', isAllSelected ? [] : allServices, { shouldDirty: true });
                                                     }}
-                                                />
-                                                <Label htmlFor="select-all">Seleccionar todos</Label>
+                                                >
+                                                    <Check className={cn("h-3 w-3", selectedServices?.length === allServices.length ? "text-blue-400" : "text-slate-400")} />
+                                                    {selectedServices?.length === allServices.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                                                </Button>
                                             </div>
                                         </div>
-                                        <Accordion type="multiple" defaultValue={servicesByCategory.map(s => s.category)}>
-                                            {servicesByCategory.map(category => (
-                                                <AccordionItem key={category.category} value={category.category}>
-                                                    <AccordionTrigger>{category.category}</AccordionTrigger>
-                                                    <AccordionContent className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                                        {category.services.map(service => (
-                                                            <Controller
-                                                                key={service.id}
-                                                                name="services"
-                                                                control={form.control}
-                                                                render={({ field }) => (
-                                                                    <div className="flex items-center space-x-2">
-                                                                        <Checkbox
-                                                                            id={service.id}
-                                                                            checked={Array.isArray(field.value) && field.value.includes(service.id)}
-                                                                            onCheckedChange={(checked) => {
-                                                                                const currentValue = field.value || [];
-                                                                                return checked
-                                                                                    ? field.onChange([...currentValue, service.id])
-                                                                                    : field.onChange(currentValue.filter((value: string) => value !== service.id))
+
+                                        <Accordion 
+                                            type="multiple" 
+                                            value={openCategories} 
+                                            onValueChange={setOpenCategories} 
+                                            className="space-y-2"
+                                        >
+                                            {servicesByCategory.map(category => {
+                                                const catSelectedCount = category.services.filter(s => Array.isArray(selectedServices) && selectedServices.includes(s.id)).length;
+                                                const catTotal = category.services.length;
+
+                                                return (
+                                                    <AccordionItem 
+                                                        key={category.category} 
+                                                        value={category.category}
+                                                        className="rounded-xl border border-border/60 bg-card/60 overflow-hidden"
+                                                    >
+                                                        <AccordionTrigger className="hover:no-underline py-2.5 px-3 hover:bg-muted/20 transition-colors">
+                                                            <div className="flex items-center justify-between w-full pr-2">
+                                                                <span className="font-semibold text-xs sm:text-sm text-foreground">
+                                                                    {category.category}
+                                                                </span>
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className={cn(
+                                                                        "text-[10px] h-5 py-0 px-2 font-medium",
+                                                                        catSelectedCount > 0 
+                                                                            ? "border-blue-500/40 text-blue-400 bg-blue-500/10" 
+                                                                            : "border-border/60 text-muted-foreground bg-muted/20"
+                                                                    )}
+                                                                >
+                                                                    {catSelectedCount} de {catTotal} seleccionados
+                                                                </Badge>
+                                                            </div>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="p-3 pt-1 border-t border-border/40">
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                                                                {category.services.map(service => {
+                                                                    const isChecked = Array.isArray(selectedServices) && selectedServices.includes(service.id);
+                                                                    return (
+                                                                        <div
+                                                                            key={service.id}
+                                                                            onClick={() => {
+                                                                                const currentVal = form.getValues('services') || [];
+                                                                                const newVal = isChecked
+                                                                                    ? currentVal.filter((id: string) => id !== service.id)
+                                                                                    : [...currentVal, service.id];
+                                                                                form.setValue('services', newVal, { shouldDirty: true });
                                                                             }}
-                                                                        />
-                                                                        <Label htmlFor={service.id} className="font-normal">{service.name}</Label>
-                                                                    </div>
-                                                                )}
-                                                            />
-                                                        ))}
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            ))}
+                                                                            className={cn(
+                                                                                "flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all select-none",
+                                                                                isChecked
+                                                                                    ? "border-blue-500/40 bg-blue-500/10 text-foreground font-medium shadow-sm"
+                                                                                    : "border-border/40 hover:border-border/80 bg-background/50 text-muted-foreground"
+                                                                            )}
+                                                                        >
+                                                                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                                                                                <Checkbox
+                                                                                    id={service.id}
+                                                                                    checked={isChecked}
+                                                                                    onCheckedChange={(checked) => {
+                                                                                        const currentVal = form.getValues('services') || [];
+                                                                                        const newVal = checked
+                                                                                            ? [...currentVal, service.id]
+                                                                                            : currentVal.filter((id: string) => id !== service.id);
+                                                                                        form.setValue('services', newVal, { shouldDirty: true });
+                                                                                    }}
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                />
+                                                                                <span className={cn("truncate", isChecked ? "text-foreground font-semibold" : "text-foreground/80")}>
+                                                                                    {service.name}
+                                                                                </span>
+                                                                            </div>
+                                                                            {service.price !== undefined && (
+                                                                                <span className={cn("text-xs font-semibold shrink-0", isChecked ? "text-foreground" : "text-foreground/80")}>
+                                                                                    ${formatMoney(Number(service.price))}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                );
+                                            })}
                                         </Accordion>
                                     </div>
                                 </TabsContent>
-                                <TabsContent value="schedule" className="space-y-6 mt-0">
-                                    {daysOfWeek.map((day) => {
-                                        const daySchedule = schedule?.[day.id as keyof Schedule];
-                                        const breaks = daySchedule?.breaks || [];
+                                <TabsContent value="schedule" className="space-y-2.5 mt-0 pr-1">
+                                    <div className="p-2 sm:p-2.5 bg-muted/10 rounded-xl border border-border/60 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                            <span className="font-semibold text-foreground">Horario Semanal y Descansos</span>
+                                        </div>
+                                        <span className="text-[11px] text-slate-400 hidden sm:inline">
+                                            💡 Usa "Copiar" en cualquier día para replicar su horario al resto de la semana.
+                                        </span>
+                                    </div>
 
-                                        return (
-                                            <div key={day.id} className="border-b pb-4 mb-4">
-                                                <div className="flex flex-col md:grid md:grid-cols-6 items-stretch md:items-center gap-3 md:gap-4 mb-2">
-                                                    <Controller
-                                                        name={`schedule.${day.id}.enabled` as any}
-                                                        control={form.control}
-                                                        render={({ field }) => (
-                                                            <div className="flex items-center justify-between md:justify-start space-x-2 md:col-span-1">
-                                                                <div className="flex items-center space-x-2">
-                                                                    <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} />
-                                                                    <Label htmlFor={`switch-${day.id}`} className="capitalize font-bold text-sm">{day.label}</Label>
+                                    <div className="rounded-xl border border-border/60 bg-card/60 divide-y divide-border/40 overflow-hidden shadow-xs">
+                                        {daysOfWeek.map((day) => {
+                                            const daySchedule = schedule?.[day.id as keyof Schedule];
+                                            const breaks = daySchedule?.breaks || [];
+                                            const isEnabled = !!daySchedule?.enabled;
+
+                                            return (
+                                                <div 
+                                                    key={day.id} 
+                                                    className={cn(
+                                                        "p-2 sm:px-3.5 sm:py-2 transition-colors",
+                                                        !isEnabled ? "bg-muted/5 opacity-75" : "hover:bg-muted/10"
+                                                    )}
+                                                >
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+                                                        {/* Left: Switch + Day Name + Badge */}
+                                                        <div className="flex items-center justify-between sm:justify-start gap-2.5 shrink-0 sm:w-48">
+                                                            <div className="flex items-center gap-2">
+                                                                <Controller
+                                                                    name={`schedule.${day.id}.enabled` as any}
+                                                                    control={form.control}
+                                                                    render={({ field }) => (
+                                                                        <Switch id={`switch-${day.id}`} checked={field.value} onCheckedChange={field.onChange} className="scale-90" />
+                                                                    )}
+                                                                />
+                                                                <Label htmlFor={`switch-${day.id}`} className="capitalize font-semibold text-xs sm:text-sm text-foreground cursor-pointer select-none">
+                                                                    {day.label}
+                                                                </Label>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 sm:hidden">
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className={cn(
+                                                                        "text-[10px] h-5 py-0 px-2 font-medium shrink-0",
+                                                                        isEnabled 
+                                                                            ? "border-blue-500/40 text-blue-400 bg-blue-500/10" 
+                                                                            : "border-border/60 text-muted-foreground bg-muted/20"
+                                                                    )}
+                                                                >
+                                                                    {isEnabled ? 'Laboral' : 'Descanso'}
+                                                                </Badge>
+                                                                {isEnabled && (
+                                                                    <>
+                                                                        <Button 
+                                                                            variant="outline" 
+                                                                            size="sm" 
+                                                                            type="button" 
+                                                                            className="h-6.5 text-[11px] border-border/60 text-foreground hover:bg-muted/20 gap-1 px-2"
+                                                                            onClick={() => addBreak(day.id)} 
+                                                                            title="Agregar descanso"
+                                                                        >
+                                                                            <Plus className="h-3 w-3 text-slate-400" />
+                                                                            <span>Descanso</span>
+                                                                        </Button>
+                                                                        <Button 
+                                                                            variant="outline" 
+                                                                            size="sm" 
+                                                                            type="button" 
+                                                                            className="h-6.5 text-[11px] border-border/60 text-foreground hover:bg-muted/20 px-2"
+                                                                            onClick={() => copySchedule(day.id)}
+                                                                            title="Copiar a todos"
+                                                                        >
+                                                                            <Copy className="h-3 w-3 text-slate-400" />
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            {/* Desktop Badge */}
+                                                            <Badge 
+                                                                variant="outline" 
+                                                                className={cn(
+                                                                    "hidden sm:inline-flex text-[10px] h-5 py-0 px-2 font-medium shrink-0 ml-auto mr-1",
+                                                                    isEnabled 
+                                                                        ? "border-blue-500/40 text-blue-400 bg-blue-500/10" 
+                                                                            : "border-border/60 text-muted-foreground bg-muted/20"
+                                                                )}
+                                                            >
+                                                                {isEnabled ? 'Laboral' : 'Descanso'}
+                                                            </Badge>
+                                                        </div>
+
+                                                        {/* Center: Hours Range or Descanso message */}
+                                                        <div className="flex-1 flex items-center justify-start gap-2">
+                                                            {isEnabled ? (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-[11px] text-muted-foreground shrink-0 hidden md:inline">Horario:</span>
+                                                                    <Controller
+                                                                        name={`schedule.${day.id}.start` as any}
+                                                                        control={form.control}
+                                                                        render={({ field }) => (
+                                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                                <SelectTrigger className="h-7 w-[82px] sm:w-[86px] text-xs bg-background border-border/60 font-medium px-2">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] max-h-56">
+                                                                                    {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        )}
+                                                                    />
+                                                                    <span className="text-xs text-muted-foreground font-medium px-0.5">a</span>
+                                                                    <Controller
+                                                                        name={`schedule.${day.id}.end` as any}
+                                                                        control={form.control}
+                                                                        render={({ field }) => (
+                                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                                <SelectTrigger className="h-7 w-[82px] sm:w-[86px] text-xs bg-background border-border/60 font-medium px-2">
+                                                                                    <SelectValue />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] max-h-56">
+                                                                                    {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        )}
+                                                                    />
                                                                 </div>
-                                                                {/* Mobile-only action buttons */}
-                                                                <div className="flex items-center gap-1.5 md:hidden">
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground/70 italic py-0.5 sm:py-0">
+                                                                    Día libre asignado para este profesional
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Right: Actions on Desktop */}
+                                                        <div className="hidden sm:flex items-center justify-end gap-1.5 shrink-0">
+                                                            {isEnabled && (
+                                                                <>
                                                                     <Button 
                                                                         variant="outline" 
                                                                         size="sm" 
-                                                                        className="h-8 text-xs px-2.5" 
                                                                         type="button" 
+                                                                        className="h-7 text-xs border-border/60 text-foreground hover:bg-muted/20 gap-1 px-2.5"
                                                                         onClick={() => addBreak(day.id)} 
-                                                                        disabled={!daySchedule?.enabled}
+                                                                        title="Agregar descanso intermedio"
                                                                     >
-                                                                        <Plus className="mr-1 h-3.5 w-3.5" />Descanso
+                                                                        <Plus className="h-3.5 w-3.5 text-slate-400" />
+                                                                        <span>Descanso</span>
                                                                     </Button>
                                                                     <Button 
-                                                                        variant="ghost" 
+                                                                        variant="outline" 
                                                                         size="sm" 
-                                                                        className="h-8 text-xs px-2.5" 
                                                                         type="button" 
+                                                                        className="h-7 text-xs border-border/60 text-foreground hover:bg-muted/20 gap-1 px-2.5"
                                                                         onClick={() => copySchedule(day.id)}
+                                                                        title="Copiar horario de este día a toda la semana"
                                                                     >
-                                                                        <Copy className="mr-1 h-3.5 w-3.5" />Copiar
+                                                                        <Copy className="h-3.5 w-3.5 text-slate-400" />
+                                                                        <span>Copiar a todos</span>
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Compact Breaks List */}
+                                                    {isEnabled && breaks.length > 0 && (
+                                                        <div className="space-y-1.5 pt-2 mt-2 border-t border-border/30 sm:pl-8">
+                                                            {breaks.map((_, index) => (
+                                                                <div key={index} className="flex items-center justify-between gap-2 p-1.5 px-2.5 rounded-lg bg-muted/20 border border-border/30 text-xs">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-[11px] text-muted-foreground font-medium shrink-0">
+                                                                            Descanso {index + 1}:
+                                                                        </span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Controller
+                                                                                name={`schedule.${day.id}.breaks.${index}.start` as any}
+                                                                                control={form.control}
+                                                                                render={({ field }) => (
+                                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                                        <SelectTrigger className="h-6.5 text-xs bg-background border-border/60 w-[80px] px-2 font-medium"><SelectValue /></SelectTrigger>
+                                                                                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] max-h-56">
+                                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-start-${time}`} value={time}>{time}</SelectItem>)}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                )}
+                                                                            />
+                                                                            <span className="text-slate-400 text-xs">—</span>
+                                                                            <Controller
+                                                                                name={`schedule.${day.id}.breaks.${index}.end` as any}
+                                                                                control={form.control}
+                                                                                render={({ field }) => (
+                                                                                    <Select onValueChange={field.onChange} value={field.value}>
+                                                                                        <SelectTrigger className="h-6.5 text-xs bg-background border-border/60 w-[80px] px-2 font-medium"><SelectValue /></SelectTrigger>
+                                                                                        <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] max-h-56">
+                                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-end-${time}`} value={time}>{time}</SelectItem>)}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                )}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        type="button"
+                                                                        className="h-6 w-6 p-0 text-slate-400 hover:text-red-400 hover:bg-red-500/10 shrink-0"
+                                                                        onClick={() => removeBreak(day.id, index)}
+                                                                        title="Eliminar descanso"
+                                                                    >
+                                                                        <Trash2 className="h-3.5 w-3.5" />
                                                                     </Button>
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    />
-                                                    <div className="md:col-span-3 grid grid-cols-2 gap-2 items-center">
-                                                        <Controller
-                                                            name={`schedule.${day.id}.start` as any}
-                                                            control={form.control}
-                                                            render={({ field }) => (
-                                                                <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                    <SelectTrigger className="h-9 md:h-10"><SelectValue /></SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            )}
-                                                        />
-                                                        <Controller
-                                                            name={`schedule.${day.id}.end` as any}
-                                                            control={form.control}
-                                                            render={({ field }) => (
-                                                                <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                    <SelectTrigger className="h-9 md:h-10"><SelectValue /></SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {getFilteredTimeOptions(day.id).map(time => <SelectItem key={time} value={time}>{time}</SelectItem>)}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            )}
-                                                        />
-                                                    </div>
-                                                    <div className="hidden md:flex md:col-span-2 items-center gap-2 justify-end">
-                                                        <Button variant="outline" size="sm" type="button" onClick={() => addBreak(day.id)} disabled={!daySchedule?.enabled}><Plus className="mr-2 h-4 w-4" />Descanso</Button>
-                                                        <Button variant="ghost" size="sm" type="button" onClick={() => copySchedule(day.id)}><Copy className="mr-2 h-4 w-4" />Copiar</Button>
-                                                    </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
-
-                                                {/* Breaks List */}
-                                                {breaks.map((_, index) => (
-                                                    <div key={index} className="flex flex-col md:grid md:grid-cols-6 items-stretch md:items-center gap-2 md:gap-4 mt-2 bg-slate-50/70 p-2.5 md:p-2 rounded-md border md:border-none">
-                                                        <div className="flex justify-between items-center md:justify-end md:col-span-1 text-xs font-semibold md:font-medium text-muted-foreground md:mr-2">
-                                                            <span>Descanso {index + 1}</span>
-                                                            {/* Mobile-only Delete Button */}
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                type="button"
-                                                                className="text-destructive hover:text-destructive h-8 px-2 md:hidden"
-                                                                onClick={() => removeBreak(day.id, index)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                        <div className="md:col-span-3 grid grid-cols-2 gap-2 items-center">
-                                                            <Controller
-                                                                name={`schedule.${day.id}.breaks.${index}.start` as any}
-                                                                control={form.control}
-                                                                render={({ field }) => (
-                                                                    <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                        <SelectTrigger className="h-8 md:h-8"><SelectValue /></SelectTrigger>
-                                                                        <SelectContent>
-                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-start-${time}`} value={time}>{time}</SelectItem>)}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                )}
-                                                            />
-                                                            <Controller
-                                                                name={`schedule.${day.id}.breaks.${index}.end` as any}
-                                                                control={form.control}
-                                                                render={({ field }) => (
-                                                                    <Select onValueChange={field.onChange} value={field.value} disabled={!daySchedule?.enabled}>
-                                                                        <SelectTrigger className="h-8 md:h-8"><SelectValue /></SelectTrigger>
-                                                                        <SelectContent>
-                                                                            {getFilteredTimeOptions(day.id).map(time => <SelectItem key={`break-end-${time}`} value={time}>{time}</SelectItem>)}
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                )}
-                                                            />
-                                                        </div>
-                                                        <div className="hidden md:block md:col-span-2">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                type="button"
-                                                                className="text-destructive hover:text-destructive h-8 px-2"
-                                                                onClick={() => removeBreak(day.id, index)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        );
-                                    })}
+                                            );
+                                        })}
+                                    </div>
                                 </TabsContent>
-                                <TabsContent value="profile" className="space-y-6 mt-0">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="biography">Biografía</Label>
-                                        <Textarea id="biography" rows={5} {...form.register('biography')} placeholder="Cuéntale a tus clientes sobre este profesional..." />
+                                <TabsContent value="profile" className="space-y-4 sm:space-y-5 mt-0 pr-1">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="biography" className="text-xs font-semibold text-foreground">Biografía o Presentación</Label>
+                                        <Textarea 
+                                            id="biography" 
+                                            rows={4} 
+                                            {...form.register('biography')} 
+                                            placeholder="Cuéntale a tus clientes sobre la experiencia, estilo y especialidades de este profesional..." 
+                                            className="text-xs font-sans leading-relaxed text-foreground bg-background border-border/60 focus-visible:ring-blue-500/30"
+                                        />
                                     </div>
                                     <div className="space-y-2">
-                                        <Label>Foto del profesional</Label>
+                                        <Label className="text-xs font-semibold text-foreground">Foto del profesional</Label>
                                         <Controller
                                             name="avatarUrl"
                                             control={form.control}
@@ -656,34 +907,39 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                         />
                                     </div>
                                     {profesional && (
-                                        <div className="pt-6 border-t">
-                                            <h4 className="text-lg font-semibold text-destructive">Zona de Peligro</h4>
-                                            <div className="flex flex-col gap-4 mt-2 p-4 border border-destructive/50 rounded-lg bg-destructive/5">
-                                                <div className="flex justify-between items-center">
+                                        <div className="pt-4 border-t border-border/40">
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-1.5">
+                                                <Trash2 className="h-3.5 w-3.5" /> Zona de Peligro
+                                            </h4>
+                                            <div className="mt-2 p-3 sm:p-3.5 rounded-xl border border-red-500/30 bg-red-500/5 space-y-3">
+                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                                     <div>
-                                                        <p className="font-medium text-destructive">Eliminar profesional</p>
-                                                        <p className="text-sm text-muted-foreground">Esta acción eliminará al profesional de listas y reservas futuras.</p>
+                                                        <p className="font-semibold text-xs sm:text-sm text-foreground">Desactivar o Eliminar Profesional</p>
+                                                        <p className="text-[11px] text-muted-foreground">Esta acción retirará al profesional de las listas y futuras reservas.</p>
                                                     </div>
 
                                                     {!showDeleteConfirm ? (
                                                         <Button
-                                                            variant="destructive"
+                                                            variant="outline"
+                                                            size="sm"
                                                             type="button"
+                                                            className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 h-8 text-xs shrink-0 gap-1.5"
                                                             onClick={() => setShowDeleteConfirm(true)}
                                                         >
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Eliminar
+                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                            Eliminar Profesional
                                                         </Button>
                                                     ) : null}
                                                 </div>
 
                                                 {showDeleteConfirm && (
-                                                    <div className="flex flex-col gap-2 p-3 bg-white rounded-md border border-destructive/30 animate-in fade-in slide-in-from-top-2">
-                                                        <p className="text-sm font-medium text-center mb-2">¿Estás seguro? Esta acción es irreversible.</p>
+                                                    <div className="p-3 bg-card rounded-lg border border-red-500/40 animate-in fade-in slide-in-from-top-2 space-y-2.5">
+                                                        <p className="text-xs font-medium text-foreground">¿Estás seguro de eliminar a <strong className="text-red-400">{profesional.name}</strong>? Esta acción no se puede deshacer.</p>
                                                         <div className="flex gap-2 justify-end">
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
+                                                                className="h-7 text-xs border-border/60"
                                                                 onClick={() => setShowDeleteConfirm(false)}
                                                                 disabled={isDeleting}
                                                             >
@@ -692,10 +948,11 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                             <Button
                                                                 variant="destructive"
                                                                 size="sm"
+                                                                className="h-7 text-xs gap-1.5 px-3"
                                                                 onClick={handleDelete}
                                                                 disabled={isDeleting}
                                                             >
-                                                                {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                                                {isDeleting && <Loader2 className="h-3 w-3 animate-spin" />}
                                                                 Sí, eliminar definitivamente
                                                             </Button>
                                                         </div>
@@ -707,11 +964,13 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                 </TabsContent>
                             </ScrollArea>
                         </Tabs>
-                        <DialogFooter className="pt-6 border-t flex-shrink-0">
-                            <Button variant="ghost" type="button" onClick={handleCloseModal}>Cerrar</Button>
-                            <Button type="submit" disabled={isSubmitting || isUploading}>
-                                {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Guardar
+                        <DialogFooter className="pt-3 border-t border-border/40 flex-shrink-0 flex items-center justify-end gap-2">
+                            <Button variant="outline" size="sm" type="button" onClick={handleCloseModal} className="h-8 text-xs border-border/60">
+                                Cancelar
+                            </Button>
+                            <Button variant="alfa" size="sm" type="submit" disabled={isSubmitting || isUploading} className="h-8 px-5 text-xs">
+                                {(isSubmitting || isUploading) && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                                Guardar Profesional
                             </Button>
                         </DialogFooter>
                     </form>

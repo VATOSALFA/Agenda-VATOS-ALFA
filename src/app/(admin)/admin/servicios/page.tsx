@@ -5,20 +5,18 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Filter, Circle, Search, Pencil, Trash2, GripVertical, ChevronDown, ArrowUp, ArrowDown, ShieldCheck, Loader2 } from 'lucide-react';
+import { Plus, Filter, Search, Pencil, Trash2, GripVertical, MoreVertical, Power, ArrowUp, ArrowDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EditServicioModal } from '@/components/admin/servicios/edit-servicio-modal';
 import { CategoryModal } from '@/components/admin/servicios/category-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, deleteDoc, writeBatch, getDocs, getDoc, setDoc, query, collection, where, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, writeBatch, getDocs, query, collection, where } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { logAuditAction } from '@/lib/audit-logger';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, DragOverlay, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -74,62 +72,65 @@ const SortableServiceItem = ({
   };
 
   return (
-    <TableRow ref={setNodeRef} style={style} className={isDragging ? 'bg-muted shadow-lg' : ''}>
-      <TableCell className="w-24 text-center">
+    <TableRow ref={setNodeRef} style={style} className={`h-9 hover:bg-muted/30 transition-colors border-b border-border/40 ${isDragging ? 'bg-muted/60 shadow-lg' : ''}`}>
+      <TableCell className="w-14 py-1.5 px-2 text-center">
         <div className="flex items-center justify-center gap-1">
-          <div {...attributes} {...listeners} className="cursor-grab p-1 text-muted-foreground hover:bg-accent rounded-md">
-            <GripVertical className="h-4 w-4" />
+          <div {...attributes} {...listeners} className="cursor-grab p-0.5 text-muted-foreground hover:text-foreground rounded transition-colors" title="Arrastrar para ordenar">
+            <GripVertical className="h-3.5 w-3.5" />
           </div>
           <div className="flex flex-col gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5"
+            <button
+              type="button"
+              className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:pointer-events-none transition-colors"
               onClick={(e) => { e.stopPropagation(); onMoveUp(service); }}
               disabled={isFirst}
+              title="Subir"
             >
-              <ArrowUp className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5"
+              <ArrowUp className="h-2.5 w-2.5" />
+            </button>
+            <button
+              type="button"
+              className="h-4 w-4 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-20 disabled:pointer-events-none transition-colors"
               onClick={(e) => { e.stopPropagation(); onMoveDown(service); }}
               disabled={isLast}
+              title="Bajar"
             >
-              <ArrowDown className="h-3 w-3" />
-            </Button>
+              <ArrowDown className="h-2.5 w-2.5" />
+            </button>
           </div>
         </div>
       </TableCell>
-      <TableCell className="font-medium">{service.name}</TableCell>
-      <TableCell>{categoryName}</TableCell>
-      <TableCell>{service.duration} min</TableCell>
-      <TableCell>${service.price.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-      <TableCell>
-        <Badge variant={service.active ? 'default' : 'secondary'} className={service.active ? 'bg-primary/10 text-primary border-primary/30' : 'bg-accent/20 text-accent-foreground border-accent/50'}>
-          <Circle className={`mr-2 h-2 w-2 fill-current ${service.active ? 'text-primary' : 'text-accent-foreground'}`} />
-          {service.active ? 'Activo' : 'Inactivo'}
-        </Badge>
+      <TableCell className="py-1.5 px-3 text-xs font-semibold text-foreground truncate max-w-[140px] sm:max-w-none">{service.name}</TableCell>
+      <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden sm:table-cell">{categoryName}</TableCell>
+      <TableCell className="py-1.5 px-3 text-xs text-muted-foreground hidden md:table-cell">{service.duration} min</TableCell>
+      <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground">${service.price.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+      <TableCell className="py-1.5 px-3 text-xs">
+        {service.active ? (
+          <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 text-[10px] font-normal py-0 px-2 h-5">
+            Activo
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-border/60 text-muted-foreground bg-muted/20 text-[10px] font-normal py-0 px-2 h-5">
+            Inactivo
+          </Badge>
+        )}
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell className="py-1.5 px-2 text-right">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="h-8 w-8 p-0">
-              <span className="sr-only">Abrir menú</span>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
+            <button type="button" className="h-7 w-7 rounded-md text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center transition-colors ml-auto">
+              <MoreVertical className="h-4 w-4" />
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onEdit(service)}>
-              <Pencil className="mr-2 h-4 w-4" /> Editar
+          <DropdownMenuContent align="end" className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card w-40">
+            <DropdownMenuItem onSelect={() => onEdit(service)} className="text-xs py-1.5 cursor-pointer">
+              <Pencil className="mr-2 h-3.5 w-3.5 text-slate-400" /> Editar
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onToggleActive(service)}>
-              <Circle className={`mr-2 h-4 w-4 ${!service.active ? 'text-primary' : 'text-gray-400'}`} />
-              {service.active ? 'Desactivar' : 'Activar'}
+            <DropdownMenuItem onSelect={() => onToggleActive(service)} className="text-xs py-1.5 cursor-pointer">
+              <Power className="mr-2 h-3.5 w-3.5 text-slate-400" /> {service.active ? 'Desactivar' : 'Activar'}
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onDelete(service)} className="text-destructive focus:text-destructive">
-              <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+            <DropdownMenuItem onSelect={() => onDelete(service)} className="text-xs py-1.5 text-destructive focus:text-destructive cursor-pointer">
+              <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -206,71 +207,6 @@ export default function ServiciosPage() {
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
-
-  const [depositSettings, setDepositSettings] = useState({
-    activo: false,
-    monto_minimo: 190,
-    porcentaje: 50
-  });
-  const [isSavingDepositSettings, setIsSavingDepositSettings] = useState(false);
-
-  useEffect(() => {
-    if (!db) return;
-    const fetchDepositSettings = async () => {
-      try {
-        const docRef = doc(db, 'configuracion', 'servicios');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setDepositSettings({
-            activo: data.anticipo_monto_minimo_activo ?? false,
-            monto_minimo: data.anticipo_monto_minimo ?? 190,
-            porcentaje: data.anticipo_porcentaje_defecto ?? 50
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching deposit settings:", err);
-      }
-    };
-    fetchDepositSettings();
-  }, [db]);
-
-  const handleSaveDepositSettings = async (overrideSettings?: typeof depositSettings) => {
-    if (!db) return;
-    const target = overrideSettings || depositSettings;
-    setIsSavingDepositSettings(true);
-    try {
-      const docRef = doc(db, 'configuracion', 'servicios');
-      await setDoc(docRef, {
-        anticipo_monto_minimo_activo: Boolean(target.activo),
-        anticipo_monto_minimo: Number(target.monto_minimo) || 0,
-        anticipo_porcentaje_defecto: Number(target.porcentaje) || 50,
-        actualizado_el: Timestamp.now(),
-        actualizado_por: user?.email || 'admin'
-      }, { merge: true });
-
-      toast({
-        title: "Configuración de Anticipo Guardada",
-        description: target.activo
-          ? `Se cobrará un anticipo del ${target.porcentaje}% en reservas en línea que sumen $${target.monto_minimo} o más.`
-          : "El cobro de anticipo automático por monto mínimo ha sido desactivado."
-      });
-
-      await logAuditAction({
-        action: 'Actualizar Regla de Anticipo',
-        details: `Regla de anticipo web actualizada: Activo=${target.activo}, Mínimo=$${target.monto_minimo}, Porcentaje=${target.porcentaje}%.`,
-        userId: user?.uid || 'unknown',
-        userName: user?.displayName || user?.email || 'Unknown',
-        userRole: user?.role,
-        severity: 'info'
-      });
-    } catch (err) {
-      console.error("Error saving deposit settings:", err);
-      toast({ variant: 'destructive', title: "Error", description: "No se pudo guardar la configuración." });
-    } finally {
-      setIsSavingDepositSettings(false);
-    }
-  };
 
   const handleDataUpdated = (newCategory?: ServiceCategory) => {
     setQueryKey(prev => prev + 1);
@@ -483,155 +419,66 @@ export default function ServiciosPage() {
   const isLoading = servicesLoading || categoriesLoading;
 
   return (
-    <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-      <div className="flex items-center justify-between">
+    <div className="flex-1 space-y-4 p-3 sm:p-6 pt-4 sm:pt-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Servicios</h2>
-          <p className="text-muted-foreground">
-            Administra los servicios que ofreces en tu negocio.
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Servicios</h2>
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            Administra los servicios, precios, tiempos y categorías de tu negocio.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsCategoryModalOpen(true)}>Administrar Categorías</Button>
-          <Button onClick={handleOpenNewService}><Plus className="mr-2 h-4 w-4" />Nuevo Servicio</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsCategoryModalOpen(true)} className="h-8 text-xs border-border/60">
+            Categorías
+          </Button>
+          <Button variant="alfa" size="sm" onClick={handleOpenNewService} className="h-8 text-xs">
+            <Plus className="mr-1.5 h-3.5 w-3.5" />Nuevo Servicio
+          </Button>
         </div>
       </div>
+
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}>
-        <div className="space-y-6">
-          {/* Card: Configuración de Anticipo por Monto Mínimo */}
-          <Card className="border border-border/70 bg-card shadow-xs">
-            <CardHeader className="pb-3">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="p-2.5 bg-blue-500/10 rounded-xl text-blue-600 border border-blue-500/20 shrink-0 mt-0.5">
-                    <ShieldCheck className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-base md:text-lg font-bold text-foreground">
-                      Anticipo Automático por Monto Mínimo (Reservas Web)
-                    </CardTitle>
-                    <CardDescription className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                      Exige automáticamente un cobro de anticipo en línea cuando la suma de los servicios seleccionados por el cliente alcance o supere el monto configurado.
-                    </CardDescription>
-                  </div>
+        <div className="space-y-4">
+          {/* Services Section */}
+          <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+            <CardHeader className="p-3 sm:p-4 border-b border-border/60">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
+                <div>
+                  <CardTitle className="text-sm font-semibold">Listado de Servicios</CardTitle>
+                  <CardDescription className="text-[11px] text-muted-foreground hidden sm:block">
+                    Estos servicios se muestran en la sección principal del sitio y agenda.
+                  </CardDescription>
                 </div>
-                <div className="flex items-center gap-3 self-end md:self-center bg-muted/40 px-3 py-1.5 rounded-lg border border-border/60 shadow-2xs">
-                  <span className="text-sm font-semibold text-foreground">
-                    {depositSettings.activo ? 'Activado' : 'Desactivado'}
-                  </span>
-                  <Switch
-                    checked={depositSettings.activo}
-                    onCheckedChange={(checked) => {
-                      const updated = { ...depositSettings, activo: checked };
-                      setDepositSettings(updated);
-                      handleSaveDepositSettings(updated);
-                    }}
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar servicio..."
+                    className="h-8 text-xs pl-8 bg-background border-border/60"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
-            </CardHeader>
-            {depositSettings.activo && (
-              <CardContent className="pt-0 pb-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-border/50">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-foreground">
-                      Monto mínimo acumulado ($ MXN)
-                    </Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="10"
-                        className="pl-7 bg-background font-medium h-10"
-                        value={depositSettings.monto_minimo}
-                        onChange={(e) => setDepositSettings(prev => ({ ...prev, monto_minimo: Number(e.target.value) || 0 }))}
-                      />
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Si el carrito suma este monto o más, se cobrará anticipo.
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-foreground">
-                      Porcentaje de anticipo (%)
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="100"
-                        className="pr-7 bg-background font-medium h-10"
-                        value={depositSettings.porcentaje}
-                        onChange={(e) => setDepositSettings(prev => ({ ...prev, porcentaje: Number(e.target.value) || 50 }))}
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Porcentaje a cobrar en línea (ej. 50%).
-                    </p>
-                  </div>
-
-                  <div className="space-y-1.5 sm:col-span-2 md:col-span-1">
-                    <Label className="text-xs font-semibold text-transparent select-none hidden md:block" aria-hidden="true">
-                      Acción
-                    </Label>
-                    <Button
-                      onClick={() => handleSaveDepositSettings()}
-                      disabled={isSavingDepositSettings}
-                      className="w-full h-10 font-semibold shadow-xs"
-                    >
-                      {isSavingDepositSettings ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...
-                        </>
-                      ) : (
-                        'Guardar Valores'
-                      )}
-                    </Button>
-                    <p className="text-[11px] text-transparent select-none hidden md:block" aria-hidden="true">
-                      &nbsp;
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
-          {/* Services Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Listado de Servicios</CardTitle>
-                <div className="flex gap-2">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input placeholder="Buscar servicio..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-              <CardDescription>Estos servicios aparecerán en la sección principal.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
               <SortableContext items={regularServices.map(s => s.id)} strategy={verticalListSortingStrategy}>
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12"></TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Categoría</TableHead>
-                      <TableHead>Duración</TableHead>
-                      <TableHead>Precio</TableHead>
-                      <TableHead>Estado</TableHead>
-                      <TableHead className="text-right">Opciones</TableHead>
+                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                      <TableHead className="w-14 py-1 px-2 text-center text-xs font-semibold"></TableHead>
+                      <TableHead className="py-1 px-3 text-xs font-semibold">Nombre</TableHead>
+                      <TableHead className="py-1 px-3 text-xs font-semibold hidden sm:table-cell">Categoría</TableHead>
+                      <TableHead className="py-1 px-3 text-xs font-semibold hidden md:table-cell">Duración</TableHead>
+                      <TableHead className="py-1 px-3 text-xs font-semibold">Precio</TableHead>
+                      <TableHead className="py-1 px-3 text-xs font-semibold">Estado</TableHead>
+                      <TableHead className="py-1 px-2 text-xs font-semibold text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <TableRow key={i}>
-                          <TableCell colSpan={7}><Skeleton className="h-10 w-full" /></TableCell>
+                        <TableRow key={i} className="h-9 border-b border-border/40">
+                          <TableCell colSpan={7} className="py-2 px-3"><Skeleton className="h-5 w-full" /></TableCell>
                         </TableRow>
                       ))
                     ) : regularServices.length > 0 ? (
@@ -651,7 +498,9 @@ export default function ServiciosPage() {
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">No hay servicios regulares.</TableCell>
+                        <TableCell colSpan={7} className="h-20 text-center text-xs text-muted-foreground">
+                          No hay servicios registrados.
+                        </TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -662,23 +511,25 @@ export default function ServiciosPage() {
 
           {/* Packages Section */}
           {packageServices.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Listado de Paquetes</CardTitle>
-                <CardDescription>Estos elementos aparecerán en la sección "Paquetes".</CardDescription>
+            <Card className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm overflow-hidden">
+              <CardHeader className="p-3 sm:p-4 border-b border-border/60">
+                <CardTitle className="text-sm font-semibold">Listado de Paquetes</CardTitle>
+                <CardDescription className="text-[11px] text-muted-foreground hidden sm:block">
+                  Estos elementos aparecerán en la sección "Paquetes".
+                </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
                 <SortableContext items={packageServices.map(s => s.id)} strategy={verticalListSortingStrategy}>
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12"></TableHead>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Categoría</TableHead>
-                        <TableHead>Duración</TableHead>
-                        <TableHead>Precio</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Opciones</TableHead>
+                      <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                        <TableHead className="w-14 py-1 px-2 text-center text-xs font-semibold"></TableHead>
+                        <TableHead className="py-1 px-3 text-xs font-semibold">Nombre</TableHead>
+                        <TableHead className="py-1 px-3 text-xs font-semibold hidden sm:table-cell">Categoría</TableHead>
+                        <TableHead className="py-1 px-3 text-xs font-semibold hidden md:table-cell">Duración</TableHead>
+                        <TableHead className="py-1 px-3 text-xs font-semibold">Precio</TableHead>
+                        <TableHead className="py-1 px-3 text-xs font-semibold">Estado</TableHead>
+                        <TableHead className="py-1 px-2 text-xs font-semibold text-right">Opciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -726,18 +577,19 @@ export default function ServiciosPage() {
 
       <EditServicioModal isOpen={isServiceModalOpen} onClose={() => setIsServiceModalOpen(false)} service={editingService} onDataSaved={handleDataUpdated} />
       <CategoryModal isOpen={isCategoryModalOpen} onClose={() => setIsCategoryModalOpen(false)} onDataSaved={handleDataUpdated} existingCategories={allCategories} />
+
       {serviceToDelete && (
         <AlertDialog open={!!serviceToDelete} onOpenChange={() => setServiceToDelete(null)}>
-          <AlertDialogContent>
+          <AlertDialogContent className="border-2 border-blue-500 rounded-2xl shadow-2xl bg-card max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-              <AlertDialogDescription>
+              <AlertDialogTitle className="text-base font-bold">¿Eliminar servicio?</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground">
                 Esta acción no se puede deshacer. Se eliminará permanentemente el servicio "{serviceToDelete.name}".
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90">
+            <AlertDialogFooter className="gap-2 sm:gap-0">
+              <AlertDialogCancel className="text-xs h-8">Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteService} className="bg-destructive hover:bg-destructive/90 text-xs h-8">
                 Sí, eliminar
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -746,19 +598,29 @@ export default function ServiciosPage() {
       )}
 
       <AlertDialog open={isAuthModalOpen} onOpenChange={setIsAuthModalOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="border-2 border-blue-500 rounded-2xl shadow-2xl bg-card max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Autorización Requerida</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción requiere confirmar con un código de autorización.
+            <AlertDialogTitle className="text-base font-bold">Autorización Requerida</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Esta acción requiere confirmar con un código de autorización administrativa.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4">
-            <Input type="password" placeholder="Ingrese el código secreto" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+          <div className="py-2">
+            <Input
+              type="password"
+              placeholder="Ingrese el código secreto"
+              className="h-9 text-xs sm:text-sm bg-background border-border/60"
+              value={authCode}
+              onChange={e => setAuthCode(e.target.value)}
+            />
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setAuthCode(''); setAuthAction(null); setIsAuthModalOpen(false); }}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleAuthCodeSubmit}>Autorizar</AlertDialogAction>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="text-xs h-8" onClick={() => { setAuthCode(''); setAuthAction(null); setIsAuthModalOpen(false); }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction className="text-xs h-8" onClick={handleAuthCodeSubmit}>
+              Autorizar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

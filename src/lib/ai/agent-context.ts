@@ -4,6 +4,7 @@ export interface ChatExecutionContext {
   conversationId: string;
   clientPhone: string;
   clientName?: string;
+  clientEmail?: string;
   clientNotes?: string;
   clientId?: string;
   humanHandoffRequested?: boolean;

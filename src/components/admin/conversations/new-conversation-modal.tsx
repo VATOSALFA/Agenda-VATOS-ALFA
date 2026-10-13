@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -7,14 +6,13 @@ import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageCircle, Search, X, Check, Phone, User, ChevronsUpDown } from 'lucide-react';
+import { Loader2, MessageCircle, Search, X, Check, Phone, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Client } from '@/lib/types';
@@ -35,10 +33,8 @@ export function NewConversationModal({
 
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
   const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -47,29 +43,17 @@ export function NewConversationModal({
     if (isOpen) {
       setSearchTerm('');
       setSelectedClient(null);
-      setIsDropdownOpen(false);
       setHighlightedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 80);
     }
   }, [isOpen]);
 
-  // Click outside to close dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   // Filter clients in real-time as user types
   const filteredClients = useMemo(() => {
     if (!clients || clients.length === 0) return [];
 
-    const clean = (str: string) =>
-      (str || '')
+    const clean = (val: any) =>
+      String(val ?? '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
@@ -77,8 +61,8 @@ export function NewConversationModal({
 
     const query = clean(searchTerm);
     if (!query) {
-      // Show first 30 clients when empty
-      return clients.slice(0, 30);
+      // Show first 50 clients when empty
+      return clients.slice(0, 50);
     }
 
     const terms = query.split(/\s+/).filter(Boolean);
@@ -86,23 +70,18 @@ export function NewConversationModal({
     return clients
       .filter((c) => {
         const fullName = clean(`${c.nombre || ''} ${c.apellido || ''}`);
-        const phone = (c.telefono || '').replace(/\D/g, '');
-        const rawPhone = clean(c.telefono || '');
-        const email = clean(c.correo || (c as any).email || '');
+        const phone = String(c.telefono ?? '').replace(/\D/g, '');
+        const rawPhone = clean(c.telefono);
+        const email = clean(c.correo || (c as any).email);
         const combined = `${fullName} ${rawPhone} ${phone} ${email}`;
 
         return terms.every((t) => combined.includes(t));
       })
-      .slice(0, 30);
+      .slice(0, 50);
   }, [clients, searchTerm]);
 
   // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!isDropdownOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-      setIsDropdownOpen(true);
-      return;
-    }
-
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       setHighlightedIndex((prev) => (prev + 1 < filteredClients.length ? prev + 1 : 0));
@@ -113,13 +92,14 @@ export function NewConversationModal({
       scrollHighlightedIntoView(highlightedIndex - 1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      if (isDropdownOpen && filteredClients[highlightedIndex]) {
+      if (filteredClients[highlightedIndex]) {
         handleSelectClient(filteredClients[highlightedIndex]);
+        onClientSelected(filteredClients[highlightedIndex]);
       } else if (selectedClient) {
         handleConfirm();
       }
     } else if (e.key === 'Escape') {
-      setIsDropdownOpen(false);
+      onOpenChange(false);
     }
   };
 
@@ -133,15 +113,6 @@ export function NewConversationModal({
 
   const handleSelectClient = (client: Client) => {
     setSelectedClient(client);
-    setSearchTerm(`${client.nombre || ''} ${client.apellido || ''}`.trim());
-    setIsDropdownOpen(false);
-  };
-
-  const handleClearSelection = () => {
-    setSelectedClient(null);
-    setSearchTerm('');
-    setIsDropdownOpen(true);
-    inputRef.current?.focus();
   };
 
   const handleConfirm = () => {
@@ -158,187 +129,204 @@ export function NewConversationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 overflow-visible gap-0">
-        <DialogHeader className="p-5 pb-3 border-b">
-          <DialogTitle className="text-base font-bold flex items-center gap-2">
-            <MessageCircle className="w-5 h-5 text-primary" />
-            Iniciar Conversación
-          </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Escribe el nombre o teléfono del cliente para buscarlo y abrir su chat.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent
+        hideCloseButton={true}
+        className="sm:max-w-lg w-full h-[600px] max-h-[90vh] p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background flex flex-col gap-0"
+      >
+        {/* Cabecera Oficial VATOS ALFA */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          <div className="header-light-beam" aria-hidden="true" />
 
-        <div className="p-5 space-y-4">
-          {/* Autocomplete Input Container */}
-          <div ref={containerRef} className="relative space-y-1.5">
-            <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-              <span>Cliente</span>
-              {selectedClient && (
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Seleccionado
-                </span>
-              )}
-            </label>
-
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground pointer-events-none" />
-              <Input
-                ref={inputRef}
-                type="text"
-                placeholder="Escribe para buscar (ej: Julio, 4423...)"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setSelectedClient(null);
-                  setIsDropdownOpen(true);
-                  setHighlightedIndex(0);
-                }}
-                onFocus={() => setIsDropdownOpen(true)}
-                onKeyDown={handleKeyDown}
-                className="pl-9 pr-16 h-10 text-sm bg-background border-border/80 focus-visible:ring-primary/20"
-                autoComplete="off"
-              />
-
-              <div className="absolute right-2 top-2 flex items-center gap-1">
-                {searchTerm && (
-                  <button
-                    type="button"
-                    onClick={handleClearSelection}
-                    className="h-6 w-6 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
-                    title="Limpiar búsqueda"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDropdownOpen(!isDropdownOpen);
-                    inputRef.current?.focus();
-                  }}
-                  className="h-6 w-6 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
-                >
-                  <ChevronsUpDown className="w-3.5 h-3.5" />
-                </button>
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <MessageCircle className="h-5 w-5 text-slate-300 shrink-0" />
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                  Iniciar Conversación
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                  Escribe el nombre o teléfono del cliente para abrir su chat.
+                </DialogDescription>
               </div>
             </div>
 
-            {/* Live Dropdown List */}
-            {isDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-border/80 bg-popover/95 backdrop-blur-md shadow-xl overflow-hidden animate-in fade-in-0 zoom-in-95 duration-150">
-                <div className="p-2 border-b bg-muted/30 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>
-                    {clientsLoading
-                      ? 'Cargando clientes...'
-                      : `${filteredClients.length} cliente${filteredClients.length === 1 ? '' : 's'} encontrado${filteredClients.length === 1 ? '' : 's'}`}
-                  </span>
-                  <span className="text-[10px]">Usa ↑ ↓ para navegar</span>
-                </div>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="p-1 text-slate-300 hover:text-white transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
 
-                <div ref={listRef} className="max-h-60 overflow-y-auto divide-y divide-border/30 p-1">
-                  {clientsLoading ? (
-                    <div className="p-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                      Cargando clientes...
-                    </div>
-                  ) : filteredClients.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-muted-foreground space-y-1">
-                      <User className="w-6 h-6 mx-auto text-muted-foreground/40 mb-1" />
-                      <p className="font-medium text-foreground">No se encontraron clientes</p>
-                      <p className="text-[11px]">
-                        No hay coincidencias para &quot;<span className="font-semibold">{searchTerm}</span>&quot;
-                      </p>
-                    </div>
-                  ) : (
-                    filteredClients.map((client, idx) => {
-                      const isSelected = selectedClient?.id === client.id;
-                      const isHighlighted = highlightedIndex === idx;
-                      const fullName = `${client.nombre || ''} ${client.apellido || ''}`.trim() || 'Cliente';
-                      const initials = (client.nombre?.slice(0, 1) || '') + (client.apellido?.slice(0, 1) || '');
-
-                      return (
-                        <button
-                          key={client.id}
-                          type="button"
-                          onClick={() => handleSelectClient(client)}
-                          onMouseEnter={() => setHighlightedIndex(idx)}
-                          className={`w-full text-left p-2.5 rounded-lg flex items-center justify-between gap-3 transition-colors ${
-                            isSelected
-                              ? 'bg-primary/15 text-primary'
-                              : isHighlighted
-                              ? 'bg-muted/80'
-                              : 'hover:bg-muted/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Avatar className="w-8 h-8 border border-border/50 shrink-0">
-                              <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
-                                {initials.toUpperCase() || 'CL'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-xs text-foreground truncate">
-                                {fullName}
-                              </p>
-                              <p className="text-[11px] text-muted-foreground flex items-center gap-1 font-mono">
-                                <Phone className="w-3 h-3 text-muted-foreground/70" />
-                                {client.telefono || 'Sin teléfono'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {isSelected && (
-                            <Check className="w-4 h-4 text-primary shrink-0 ml-2" />
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
+        {/* Buscador de Clientes */}
+        <div className="p-4 pb-2 border-b border-border/40 shrink-0 space-y-2">
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground pointer-events-none" />
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder="Buscar por nombre, apellido o teléfono (ej: Julio, 4423...)"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setHighlightedIndex(0);
+              }}
+              onKeyDown={handleKeyDown}
+              className="pl-9 pr-9 h-10 text-sm bg-muted/20 border-border/70 focus-visible:ring-blue-500"
+              autoComplete="off"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-2.5 top-2.5 h-5 w-5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground flex items-center justify-center transition-colors"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             )}
           </div>
 
-          {/* Selected Client Card Preview */}
-          {selectedClient && (
-            <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-3 animate-in fade-in-0 duration-200">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <Avatar className="w-9 h-9 border-2 border-primary/30 shrink-0">
-                  <AvatarFallback className="bg-primary/15 text-primary font-bold text-xs">
-                    {((selectedClient.nombre?.slice(0, 1) || '') + (selectedClient.apellido?.slice(0, 1) || '')).toUpperCase() || 'CL'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="font-bold text-xs text-foreground truncate">
-                    {selectedClient.nombre} {selectedClient.apellido || ''}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-muted-foreground" />
-                    {selectedClient.telefono || 'Sin teléfono registrado'}
-                  </p>
-                </div>
-              </div>
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
+            <span>
+              {clientsLoading
+                ? 'Cargando clientes...'
+                : `${filteredClients.length} cliente${filteredClients.length === 1 ? '' : 's'} disponible${filteredClients.length === 1 ? '' : 's'}`}
+            </span>
+            <span className="text-[10px]">Doble clic o Enter para abrir directo</span>
+          </div>
+        </div>
 
-              <Badge variant="secondary" className="text-[10px] shrink-0 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                Listo para chatear
-              </Badge>
+        {/* Lista de Clientes (Área principal scrolleable con altura amplia) */}
+        <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
+          {clientsLoading ? (
+            <div className="h-full flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+              <span>Cargando clientes...</span>
             </div>
+          ) : filteredClients.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-xs text-muted-foreground p-6 text-center space-y-2">
+              <User className="w-8 h-8 text-muted-foreground/30" />
+              <p className="font-semibold text-foreground text-sm">No se encontraron clientes</p>
+              <p className="text-xs max-w-xs">
+                No hay coincidencias para &quot;<span className="font-medium text-foreground">{searchTerm}</span>&quot;.
+              </p>
+            </div>
+          ) : (
+            filteredClients.map((client, idx) => {
+              const isSelected = selectedClient?.id === client.id;
+              const isHighlighted = highlightedIndex === idx;
+              const fullName = `${client.nombre || ''} ${client.apellido || ''}`.trim() || 'Cliente';
+              const initials = (client.nombre?.slice(0, 1) || '') + (client.apellido?.slice(0, 1) || '');
+
+              return (
+                <button
+                  key={client.id}
+                  type="button"
+                  onClick={() => handleSelectClient(client)}
+                  onDoubleClick={() => {
+                    handleSelectClient(client);
+                    onClientSelected(client);
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  className={`w-full text-left p-3 rounded-xl flex items-center justify-between gap-3 transition-colors border ${
+                    isSelected
+                      ? 'bg-blue-500/10 border-blue-500/40 text-foreground shadow-sm'
+                      : isHighlighted
+                      ? 'bg-muted/40 border-border/60'
+                      : 'border-transparent hover:bg-muted/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar className="w-9 h-9 border border-border/40 shrink-0">
+                      <AvatarFallback className="bg-muted text-foreground font-semibold text-xs">
+                        {initials.toUpperCase() || 'CL'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-foreground truncate">
+                        {fullName}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 font-sans mt-0.5">
+                        <Phone className="w-3 h-3 text-muted-foreground/70 shrink-0" />
+                        <span>{client.telefono || 'Sin teléfono'}</span>
+                        {client.numero_cliente && (
+                          <span className="text-[10px] text-slate-400">· #{client.numero_cliente}</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isSelected ? (
+                      <span className="flex items-center gap-1 text-[11px] text-blue-400 font-semibold">
+                        <Check className="w-4 h-4 text-blue-400" />
+                        Seleccionado
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Elegir
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
 
-        <DialogFooter className="p-4 border-t bg-muted/20 flex items-center justify-between sm:justify-between">
-          <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-xs">
+        {/* Vista Previa del Cliente Seleccionado (si hay uno elegido) */}
+        {selectedClient && (
+          <div className="px-4 py-2.5 bg-blue-500/5 border-t border-blue-500/20 flex items-center justify-between gap-3 shrink-0 animate-in fade-in-0 duration-150">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Avatar className="w-7 h-7 border border-blue-500/30 shrink-0">
+                <AvatarFallback className="bg-blue-500/10 text-blue-400 font-bold text-[10px]">
+                  {((selectedClient.nombre?.slice(0, 1) || '') + (selectedClient.apellido?.slice(0, 1) || '')).toUpperCase() || 'CL'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="font-bold text-xs text-foreground truncate">
+                  {selectedClient.nombre} {selectedClient.apellido || ''}
+                </p>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-sans">
+                  <Phone className="w-2.5 h-2.5 text-muted-foreground" />
+                  {selectedClient.telefono || 'Sin teléfono'}
+                </p>
+              </div>
+            </div>
+
+            <Badge variant="secondary" className="text-[10px] shrink-0 bg-blue-500/10 text-blue-400 border border-blue-500/30">
+              Listo para chatear
+            </Badge>
+          </div>
+        )}
+
+        {/* Footer de Acciones */}
+        <DialogFooter className="p-4 border-t border-border/50 bg-muted/20 flex items-center justify-between sm:justify-between shrink-0">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+            className="text-xs h-9 px-3 text-muted-foreground hover:text-foreground"
+          >
             Cancelar
           </Button>
           <Button
             type="button"
+            variant="alfa"
             size="sm"
             onClick={handleConfirm}
             disabled={!selectedClient || clientsLoading}
-            className="gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow text-xs"
+            className="rounded-xl h-9 px-4 text-xs font-bold text-white shadow-md"
           >
-            <MessageCircle className="w-3.5 h-3.5" />
+            <MessageCircle className="w-3.5 h-3.5 mr-1 text-slate-300" />
             Abrir Chat
           </Button>
         </DialogFooter>

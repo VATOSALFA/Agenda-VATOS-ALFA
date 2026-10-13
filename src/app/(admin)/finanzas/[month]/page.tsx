@@ -5,7 +5,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowRight, ChevronLeft, ChevronRight, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus, UserCircle, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus, UserCircle, ArrowUpRight, ArrowDownLeft, Download, Percent, Scissors } from "lucide-react";
+import * as XLSX from 'xlsx';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -67,33 +68,46 @@ const monthLabels = [
     { value: 'diciembre', label: 'Diciembre' },
 ];
 
+const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+
 const COLORS = {
     primary: '#202A49',
     secondary: '#314177',
     accent: '#C9C9C9'
 };
 
-const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, tooltipText }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, tooltipText?: string }) => (
-    <div className={cn("flex justify-between items-center text-lg py-2 border-b last:border-0", className)}>
-        <div className="flex items-center gap-2">
-            <span className={cn(isBold && 'font-semibold', isPrimary && 'text-primary')}>{label}</span>
-            {tooltipText && (
-                <Popover>
-                    
+const ResumenGeneralItem = ({ label, children, amount, isBold, isPrimary, className, tooltipText }: { label: string, children?: React.ReactNode, amount: number, isBold?: boolean, isPrimary?: boolean, className?: string, tooltipText?: string }) => {
+    const isNegative = amount < 0;
+    const formattedAmount = isNegative
+        ? `-$${Math.abs(amount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : `$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    return (
+        <div className={cn("flex justify-between items-center text-sm sm:text-base py-2 border-b border-border/40 last:border-0", className)}>
+            <div className="flex items-center gap-2">
+                <span className={cn(isBold && 'font-semibold', isPrimary && 'text-blue-400 font-medium')}>{label}</span>
+                {tooltipText && (
+                    <Popover>
                         <PopoverTrigger asChild>
                             <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                         </PopoverTrigger>
-                        <PopoverContent className="w-80 p-3">
-                            <p className="max-w-xs text-sm font-normal text-center">{tooltipText}</p>
+                        <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                            <p className="max-w-xs text-xs sm:text-sm font-normal text-slate-300 text-center">{tooltipText}</p>
                         </PopoverContent>
-                    
-                </Popover>
-            )}
-            {children}
+                    </Popover>
+                )}
+                {children}
+            </div>
+            <span className={cn(
+                isBold && 'font-bold',
+                isPrimary ? 'text-blue-400 font-bold text-base sm:text-lg' : 'font-semibold text-foreground',
+                isNegative && 'text-red-400 font-semibold'
+            )}>
+                {formattedAmount}
+            </span>
         </div>
-        <span className={cn(isBold && 'font-bold', isPrimary && 'text-primary font-extrabold')}>{`$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
-    </div>
-);
+    );
+};
 
 const CurrencyInput = ({ value, onChange, className }: { value: number, onChange: (val: number) => void, className?: string }) => {
     const [localValue, setLocalValue] = useState('');
@@ -160,24 +174,29 @@ const CurrencyInput = ({ value, onChange, className }: { value: number, onChange
 
 
 function ResumenEgresoItem({ label, amount, tooltip }: { label: string, amount: number, tooltip?: string }) {
+    const isNegative = amount < 0;
+    const formattedAmount = isNegative
+        ? `-$${Math.abs(amount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : `$${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
     return (
-        <div className="flex justify-between items-center text-sm py-1.5 border-b last:border-0 text-muted-foreground">
+        <div className="flex justify-between items-center text-xs sm:text-sm py-1.5 border-b border-border/40 last:border-0 text-muted-foreground">
             <span className="flex items-center">
                 {label}
                 {tooltip && (
                     <Popover>
-                        
-                            <PopoverTrigger asChild>
-                                <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-3">
-                                <p className="max-w-xs">{tooltip}</p>
-                            </PopoverContent>
-                        
+                        <PopoverTrigger asChild>
+                            <HelpCircle className="h-3.5 w-3.5 inline-block ml-1 cursor-help" />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                            <p className="max-w-xs text-xs text-slate-300">{tooltip}</p>
+                        </PopoverContent>
                     </Popover>
                 )}
             </span>
-            <span className="font-semibold text-foreground">${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className={cn(isNegative ? "font-semibold text-red-400" : "font-semibold text-foreground")}>
+                {formattedAmount}
+            </span>
         </div>
     );
 }
@@ -1280,21 +1299,86 @@ export default function FinanzasMensualesPage() {
         incomesPage * incomesPerPage
     );
 
+    const handleDownloadReport = () => {
+        // 1. Resumen General del Mes
+        const summaryRows = [
+            { 'Concepto': 'Mes', 'Valor': capitalize(monthName) },
+            { 'Concepto': 'Año', 'Valor': selectedYear },
+            { 'Concepto': 'Ingresos Totales (Mes)', 'Valor': display_ingresosTotalesMes },
+            { 'Concepto': 'Utilidad Neta Total', 'Valor': display_utilidadNetaTotal },
+            { 'Concepto': 'Margen Promedio', 'Valor': `${display_margen.toFixed(1)}%` },
+            { 'Concepto': 'Ingresos Servicios', 'Valor': display.servicios_ingreso },
+            { 'Concepto': 'Egresos Operativos Servicios', 'Valor': display.servicios_egreso },
+            { 'Concepto': 'Utilidad Servicios', 'Valor': display.servicios_utilidad },
+            { 'Concepto': 'Ingresos Productos', 'Valor': display.productos_ingreso },
+            { 'Concepto': 'Reinversión Productos', 'Valor': display.productos_reinversion },
+            { 'Concepto': 'Comisiones Barberos Productos', 'Valor': display.productos_comision_prof },
+            { 'Concepto': 'Utilidad Productos', 'Valor': display.productos_utilidad },
+            { 'Concepto': 'Egresos Operativos Totales', 'Valor': display_totalEgresos },
+        ];
+
+        // 2. Ingresos Diarios
+        const incomeRows = dailyIncome.map(item => ({
+            'Fecha': item.fecha,
+            'Efectivo': item.efectivo,
+            'Tarjeta': item.tarjeta,
+            'Transferencia': item.transferencia,
+            'En Línea': item.pagos_en_linea,
+            'Total': item.total
+        }));
+
+        // 3. Egresos
+        const egresosRows = calculatedEgresos.map((egreso: any) => ({
+            'Fecha': egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd/MM/yyyy HH:mm') : (egreso.fecha ? format(new Date(egreso.fecha), 'dd/MM/yyyy HH:mm') : ''),
+            'Concepto': egreso.concepto,
+            'A quién se entrega': getNameFromId(egreso.aQuien),
+            'Comisión Servicios': egreso.displayComS || 0,
+            'Comisión Productos': egreso.displayComP || 0,
+            'Propina': egreso.displayProp || 0,
+            'Comentarios': egreso.displayComment || '',
+            'Pagado por': egreso.quienPagaNombre || '',
+            'Total': egreso.monto
+        }));
+
+        // 4. Movimientos Flujo de Caja
+        const cashRows = cashMovements.map(mov => ({
+            'Fecha': safeFormatDate(mov.fecha),
+            'Tipo': mov.tipo,
+            'Concepto': mov.concepto,
+            'Responsable / Destino': mov.quien,
+            'Monto': mov.monto,
+            'Comentarios': mov.comentarios || ''
+        }));
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Resumen General");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incomeRows), "Ingresos Diarios");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(egresosRows), "Egresos");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cashRows), "Flujo de Caja");
+
+        XLSX.writeFile(wb, `Reporte_Financiero_${capitalize(monthName)}_${selectedYear}.xlsx`);
+
+        toast({
+            title: "Reporte generado",
+            description: `Se descargó el reporte financiero de ${capitalize(monthName)} ${selectedYear} en formato Excel.`,
+        });
+    };
+
     return (
         <>
-            <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
+            <div className="flex-1 space-y-4 sm:space-y-6 p-3 sm:p-6 md:p-8 pt-4 sm:pt-6">
                 <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-2">
                         <Button variant="outline" size="icon" onClick={goToPrevMonth} className="h-9 w-9">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <Select value={monthName.toLowerCase()} onValueChange={(val) => navigateToMonth(val)}>
-                            <SelectTrigger className="w-[160px] text-lg font-bold capitalize">
+                            <SelectTrigger className="w-[160px] text-base sm:text-lg font-bold capitalize">
                                 <SelectValue />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
                                 {monthLabels.map((m) => (
-                                    <SelectItem key={m.value} value={m.value}>
+                                    <SelectItem key={m.value} value={m.value} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">
                                         {m.label}
                                     </SelectItem>
                                 ))}
@@ -1304,75 +1388,97 @@ export default function FinanzasMensualesPage() {
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
-                    <Select value={String(selectedYear)} onValueChange={handleYearChange}>
-                        <SelectTrigger className="w-[120px]">
-                            <SelectValue placeholder="Año" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {years.map((y) => (
-                                <SelectItem key={y} value={String(y)}>
-                                    {y}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {hasOverride && (
-                        <Badge variant="outline" className="text-xs border-amber-500 text-amber-600 bg-amber-50">
-                            📋 Datos manuales
-                        </Badge>
-                    )}
-                    <Button variant="outline" size="sm" onClick={openOverrideModal}>
-                        <FileEdit className="h-4 w-4 mr-2" /> Editar datos
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Select value={String(selectedYear)} onValueChange={handleYearChange}>
+                            <SelectTrigger className="w-[105px] h-9 rounded-xl border-border/60 text-xs font-semibold bg-card">
+                                <SelectValue placeholder="Año" />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                {years.map((y) => (
+                                    <SelectItem key={y} value={String(y)} className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">
+                                        {y}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {hasOverride && (
+                            <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                📋 Datos manuales
+                            </Badge>
+                        )}
+                        <button 
+                            type="button" 
+                            className="text-slate-400 hover:text-foreground transition-colors p-1" 
+                            onClick={openOverrideModal} 
+                            title="Editar datos financieros"
+                        >
+                            <FileEdit className="h-4 w-4" />
+                        </button>
+                        <button 
+                            type="button"
+                            className="text-slate-400 hover:text-foreground transition-colors p-1" 
+                            onClick={handleDownloadReport}
+                            title="Descargar reporte mensual en Excel"
+                        >
+                            <Download className="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
 
-                {/* KPI Cards */}
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
-                    {/* Primary Color Card */}
-                    <Card style={{ backgroundColor: COLORS.primary }} className="text-white border-none shadow-lg">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-white/90">Ingresos Totales (Mes)</CardTitle>
-                            <DollarSign className="h-4 w-4 text-white/80" />
+                {/* KPI Cards Corporativas */}
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-3 mb-6">
+                    {/* Card 1: Ingresos Totales */}
+                    <Card className="rounded-2xl border border-border/60 shadow-sm bg-gradient-to-br from-[#10172b] via-[#18223c] to-[#0f1627] text-white overflow-hidden">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 border-b border-slate-800/80">
+                            <CardTitle className="text-xs sm:text-sm font-medium text-slate-300">Ingresos Totales (Mes)</CardTitle>
+                            <DollarSign className="h-4 w-4 text-[#C5A880]" />
                         </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">${display_ingresosTotalesMes.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            <p className="text-xs text-white/70">Productos + Servicios</p>
+                        <CardContent className="p-4 pt-3">
+                            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                                ${display_ingresosTotalesMes.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">Productos + Servicios</p>
                         </CardContent>
                     </Card>
 
-                    {/* Secondary Color Card */}
-                    <Card style={{ backgroundColor: COLORS.secondary }} className="text-white border-none shadow-lg">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-white/90">Utilidad Neta Total</CardTitle>
-                            <TrendingUp className="h-4 w-4 text-white/80" />
+                    {/* Card 2: Utilidad Neta Total */}
+                    <Card className="rounded-2xl border border-border/60 shadow-sm bg-gradient-to-br from-[#10172b] via-[#1c2847] to-[#12192d] text-white overflow-hidden">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 border-b border-slate-800/80">
+                            <CardTitle className="text-xs sm:text-sm font-medium text-slate-300">Utilidad Neta Total</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-blue-400" />
                         </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">${display_utilidadNetaTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                            <p className="text-xs text-white/70">Después de todos los gastos</p>
+                        <CardContent className="p-4 pt-3">
+                            <div className={cn("text-2xl sm:text-3xl font-bold tracking-tight", display_utilidadNetaTotal < 0 ? "text-red-400" : "text-blue-400")}>
+                                {display_utilidadNetaTotal < 0
+                                    ? `-$${Math.abs(display_utilidadNetaTotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : `$${display_utilidadNetaTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                }
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1">Después de todos los gastos</p>
                         </CardContent>
                     </Card>
 
-                    {/* Accent Color Card */}
-                    <Card style={{ backgroundColor: COLORS.accent }} className="text-slate-900 border-none shadow-lg">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-slate-800">Margen Promedio</CardTitle>
-                            <TrendingUp className="h-4 w-4 text-slate-700" />
+                    {/* Card 3: Margen Promedio */}
+                    <Card className="rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2 border-b border-border/40">
+                            <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground">Margen Promedio</CardTitle>
+                            <Percent className="h-4 w-4 text-slate-400" />
                         </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold text-slate-900">
+                        <CardContent className="p-4 pt-3">
+                            <div className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                                 {display_margen.toFixed(1)}%
                             </div>
-                            <p className="text-xs text-slate-700">Rendimiento mensual</p>
+                            <p className="text-xs text-muted-foreground mt-1">Rendimiento mensual</p>
                         </CardContent>
                     </Card>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-                    <Card className="lg:col-span-4">
-                        <CardHeader>
-                            <CardTitle>Resumen de servicios</CardTitle>
+                    <Card className="lg:col-span-4 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="p-4 pb-2 border-b border-border/40">
+                            <CardTitle className="text-base font-semibold">Resumen de servicios</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-1 text-sm">
+                        <CardContent className="space-y-1 text-sm p-4 pt-3">
                             {isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                                 <>
                                     <ResumenGeneralItem
@@ -1404,32 +1510,30 @@ export default function FinanzasMensualesPage() {
                                                 amount={commission?.amount || 0}
                                                 tooltipText="Si el dueño decide pagarle un porcentaje, se calcula del subtotal de la utilidad de servicios."
                                             >
-                                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'service')}>
+                                                <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'service')} title="Editar comisión">
                                                     <Edit className="h-3 w-3" />
-                                                </Button>
+                                                </button>
                                             </ResumenGeneralItem>
                                         );
                                     })}
-
-
 
                                     <ResumenGeneralItem
                                         label="Utilidad neta"
                                         amount={display.servicios_utilidad}
                                         isPrimary
                                         isBold
-                                        className="text-xl pt-2 border-t mt-2"
+                                        className="text-base sm:text-lg pt-2 border-t border-border/40 mt-2"
                                         tooltipText="Ganancia neta del mes tras restar todos los gastos operativos y comisiones administrativas sobre servicios."
                                     />
                                 </>
                             )}
                         </CardContent>
                     </Card>
-                    <Card className="lg:col-span-4">
-                        <CardHeader>
-                            <CardTitle>Resumen de productos</CardTitle>
+                    <Card className="lg:col-span-4 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="p-4 pb-2 border-b border-border/40">
+                            <CardTitle className="text-base font-semibold">Resumen de productos</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-1 text-sm">
+                        <CardContent className="space-y-1 text-sm p-4 pt-3">
                             <ResumenGeneralItem
                                 label="Ingreso total"
                                 amount={display.productos_ingreso}
@@ -1468,188 +1572,178 @@ export default function FinanzasMensualesPage() {
                                         amount={commission?.amount || 0}
                                         tooltipText="Comisión del administrador sobre la utilidad de productos."
                                     >
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'product')}>
+                                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-1" onClick={() => handleEditCommission({ id: admin.id, name: admin.name, type: type as any, value }, 'product')} title="Editar comisión">
                                             <Edit className="h-3 w-3" />
-                                        </Button>
+                                        </button>
                                     </ResumenGeneralItem>
                                 );
                             })}
-
 
                             <ResumenGeneralItem
                                 label="Utilidad neta"
                                 amount={display.productos_utilidad}
                                 isPrimary
                                 isBold
-                                className="text-xl pt-2 border-t mt-2"
+                                className="text-base sm:text-lg pt-2 border-t border-border/40 mt-2"
                                 tooltipText="Utilidad final de productos que queda para el dueño después de todos los pagos."
                             />
                         </CardContent>
                     </Card>
-                    <Card className="lg:col-span-4">
-                        <CardHeader>
-                            <CardTitle>Egresos</CardTitle>
+                    <Card className="lg:col-span-4 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="p-4 pb-2 border-b border-border/40">
+                            <CardTitle className="text-base font-semibold">Egresos</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
+                        <CardContent className="space-y-2 p-4 pt-3">
                             <Accordion type="multiple" className="w-full">
                                 <AccordionItem value="comisiones-servicios" className="border-b-0">
-                                    <div className="flex justify-between items-center text-base py-1.5 border-b">
+                                    <div className="flex justify-between items-center text-sm py-1.5 border-b border-border/40">
                                         <AccordionTrigger className="flex-grow hover:no-underline font-normal p-0">
                                             <span className="text-muted-foreground flex items-center">
                                                 Comisiones Servicios
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs">Dinero pagado exclusivamente por comisión de servicios realizados por los profesionales.</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3.5 w-3.5 inline-block ml-1 cursor-help" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Dinero pagado exclusivamente por comisión de servicios realizados por los profesionales.</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
                                         </AccordionTrigger>
                                         <span className="font-semibold mr-4">${display.egresos_comisiones_servicios_total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                     </div>
                                     <AccordionContent className="p-0">
-                                        <Table>
+                                        <Table className="my-1">
                                             <TableHeader>
-                                                <TableRow className="hover:bg-transparent">
-                                                    <TableHead className="w-[60%]">Profesional</TableHead>
-                                                    <TableHead className="text-right">Monto</TableHead>
+                                                <TableRow className="h-7 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                                    <TableHead className="w-[60%] py-1 px-3 text-xs font-semibold text-muted-foreground">Profesional</TableHead>
+                                                    <TableHead className="text-right py-1 px-3 text-xs font-semibold text-muted-foreground">Monto</TableHead>
                                                 </TableRow>
                                             </TableHeader>
                                             <TableBody>
                                                 {display.egresos_comisiones_servicios_list.map((item) => (
-                                                    <TableRow key={item.nombre}>
-                                                        <TableCell className="font-medium">
+                                                    <TableRow key={item.nombre} className="h-8 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                        <TableCell className="py-1 px-3 text-xs font-medium">
                                                             <span>{item.nombre}</span>
                                                         </TableCell>
-                                                        <TableCell className="text-right font-bold text-primary">${item.monto.toLocaleString('es-MX')}</TableCell>
+                                                        <TableCell className="py-1 px-3 text-xs text-right font-bold text-blue-400">${item.monto.toLocaleString('es-MX')}</TableCell>
                                                     </TableRow>
                                                 ))}
                                             </TableBody>
                                         </Table>
                                     </AccordionContent>
                                 </AccordionItem>
-
-
                             </Accordion>
-                            <ResumenEgresoItem label="Nómina" amount={display.egresos_nomina} tooltip="Sueldos base pagados al personal administratico o staff general." />
-                            <ResumenEgresoItem label="Insumos" amount={display.egresos_insumos} tooltip="Gasto en materia prima de trabajo (Papel, gels, etc)." />
+                            <ResumenEgresoItem label="Nómina" amount={display.egresos_nomina} tooltip="Sueldos base pagados al personal administrativo o staff general." />
+                            <ResumenEgresoItem label="Insumos" amount={display.egresos_insumos} tooltip="Gasto en materia prima de trabajo (Papel, geles, etc)." />
                             <ResumenEgresoItem label="Costos fijos" amount={display.egresos_costos_fijos} tooltip="Gastos fijos de operación del local (Renta, Luz, Internet)." />
 
                             {totalOtrosEgresos > 0 && (
                                 <ResumenEgresoItem label="Otros egresos registrados" amount={totalOtrosEgresos} tooltip="Gastos varios registrados en caja que no entran en las categorías principales." />
                             )}
 
-                            <div className="flex justify-between items-center text-lg pt-2 mt-2">
-                                <span className="font-bold text-primary">Total</span>
-                                <span className="font-extrabold text-primary text-lg">${display_totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <div className="flex justify-between items-center text-base pt-3 mt-2 border-t border-border/40">
+                                <span className="font-bold text-foreground">Total</span>
+                                <span className="font-extrabold text-foreground text-lg">${display_totalEgresos.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between items-center text-sm pt-2 mt-2 border-t text-muted-foreground">
+                            <div className="flex justify-between items-center text-xs sm:text-sm pt-2 mt-2 border-t border-border/40 text-muted-foreground">
                                 <span className="flex items-center">
                                     Propinas (Informativo)
                                     <Popover>
-                                        
-                                            <PopoverTrigger asChild>
-                                                <HelpCircle className="h-4 w-4 inline-block ml-1 cursor-help" />
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-80 p-3">
-                                                <p className="max-w-xs">Total de propinas pagadas realmente a los profesionales (egresos registrados en caja). No incluye propinas de ventas que aún no se han liquidado con el barbero.</p>
-                                            </PopoverContent>
-                                        
+                                        <PopoverTrigger asChild>
+                                            <HelpCircle className="h-3.5 w-3.5 inline-block ml-1 cursor-help" />
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                            <p className="max-w-xs text-xs text-slate-300">Total de propinas pagadas realmente a los profesionales (egresos registrados en caja). No incluye propinas de ventas que aún no se han liquidado con el barbero.</p>
+                                        </PopoverContent>
                                     </Popover>
                                 </span>
-                                <span className="font-medium">${display.egresos_propinas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-medium text-foreground">${display.egresos_propinas.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
                         </CardContent>
-        
-
-
-                </Card>
-
+                    </Card>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                    <Card className="lg:col-span-5">
-                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsIngresosCollapsed(!isIngresosCollapsed)}>
+                    <Card className="lg:col-span-5 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors py-2.5 px-4 border-b border-border/40" onClick={() => setIsIngresosCollapsed(!isIngresosCollapsed)}>
                             <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Ingresos</CardTitle>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    {isIngresosCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
-                                </Button>
+                                <CardTitle className="text-base font-semibold">Ingresos</CardTitle>
+                                <button type="button" className="text-slate-400 hover:text-foreground transition-colors p-1">
+                                    {isIngresosCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                </button>
                             </div>
                         </CardHeader>
                         {!isIngresosCollapsed && (
-                            <CardContent>
+                            <CardContent className="p-0">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('fecha')}>
-                                                    Fecha {ingresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                        <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleIngresosSort('fecha')}>
+                                                    Fecha {ingresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('efectivo')}>
-                                                    Efectivo {ingresosSortConfig.key === 'efectivo' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleIngresosSort('efectivo')}>
+                                                    Efectivo {ingresosSortConfig.key === 'efectivo' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('tarjeta')}>
-                                                    Tarjeta {ingresosSortConfig.key === 'tarjeta' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleIngresosSort('tarjeta')}>
+                                                    Tarjeta {ingresosSortConfig.key === 'tarjeta' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('transferencia')}>
-                                                    Transferencia {ingresosSortConfig.key === 'transferencia' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleIngresosSort('transferencia')}>
+                                                    <span className="hidden sm:inline">Transferencia</span><span className="sm:hidden">Transf.</span> {ingresosSortConfig.key === 'transferencia' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('pagos_en_linea')}>
-                                                    En línea {ingresosSortConfig.key === 'pagos_en_linea' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden md:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleIngresosSort('pagos_en_linea')}>
+                                                    En línea {ingresosSortConfig.key === 'pagos_en_linea' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleIngresosSort('total')}>
-                                                    Total venta {ingresosSortConfig.key === 'total' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground text-right">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center justify-end gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors w-full" onClick={() => handleIngresosSort('total')}>
+                                                    <span className="hidden sm:inline">Total venta</span><span className="sm:hidden">Total</span> {ingresosSortConfig.key === 'total' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {isLoading ? (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center h-24">
-                                                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                                            <TableRow className="h-9">
+                                                <TableCell colSpan={6} className="text-center py-4">
+                                                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                                                 </TableCell>
                                             </TableRow>
                                         ) : dailyIncome.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={6} className="text-center h-24">
+                                            <TableRow className="h-9">
+                                                <TableCell colSpan={6} className="text-center py-4 text-xs text-muted-foreground">
                                                     No hay ingresos registrados para {capitalize(monthName)}.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
                                             paginatedIncomes.map((ingreso, i) => (
-                                                <TableRow key={i}>
-                                                    <TableCell>{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
-                                                    <TableCell>${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
-                                                    <TableCell>${ingreso.tarjeta.toLocaleString('es-MX')}</TableCell>
-                                                    <TableCell>${ingreso.transferencia.toLocaleString('es-MX')}</TableCell>
-                                                    <TableCell>${ingreso.pagos_en_linea.toLocaleString('es-MX')}</TableCell>
-                                                    <TableCell className="font-semibold">${ingreso.total.toLocaleString('es-MX')}</TableCell>
+                                                <TableRow key={i} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs whitespace-nowrap">{ingreso.fecha.split('-').reverse().join('/')}</TableCell>
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs">${ingreso.efectivo.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs">${ingreso.tarjeta.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs">${ingreso.transferencia.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="hidden md:table-cell py-1.5 px-3 text-xs">${ingreso.pagos_en_linea.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-foreground text-right">${ingreso.total.toLocaleString('es-MX')}</TableCell>
                                                 </TableRow>
                                             ))
                                         )}
                                     </TableBody>
                                 </Table>
                                 {dailyIncome.length > 0 && (
-                                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
-                                        <div className="flex items-center space-x-2">
-                                            <p className="text-sm font-medium">Resultados por página</p>
+                                    <div className="flex flex-row items-center justify-between gap-2 p-2.5 sm:p-3 border-t border-border/40 w-full">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <span className="text-[11px] text-muted-foreground sm:hidden">Filas:</span>
+                                            <span className="text-xs text-muted-foreground hidden sm:inline">Resultados por página</span>
                                             <Select
                                                 value={`${incomesPerPage}`}
                                                 onValueChange={(value) => {
@@ -1657,37 +1751,39 @@ export default function FinanzasMensualesPage() {
                                                     setIncomesPage(1);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-8 w-[70px]">
+                                                <SelectTrigger className="h-7 w-[54px] sm:w-[65px] text-xs px-1.5 bg-background">
                                                     <SelectValue placeholder={incomesPerPage} />
                                                 </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="10">10</SelectItem>
-                                                    <SelectItem value="20">20</SelectItem>
-                                                    <SelectItem value="50">50</SelectItem>
+                                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                                    <SelectItem value="10" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">10</SelectItem>
+                                                    <SelectItem value="20" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">20</SelectItem>
+                                                    <SelectItem value="50" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">50</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="text-sm font-medium">
-                                            Página {incomesPage} de {totalIncomesPages}
+                                        <div className="text-[11px] sm:text-xs font-medium text-muted-foreground text-center">
+                                            <span className="hidden sm:inline">Página </span><span className="sm:hidden">Pág. </span>{incomesPage} de {totalIncomesPages}
                                         </div>
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex items-center gap-1">
                                             <Button
                                                 variant="outline"
-                                                className="h-8 w-8 p-0"
+                                                size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
                                                 onClick={() => setIncomesPage(p => Math.max(1, p - 1))}
                                                 disabled={incomesPage === 1}
                                             >
-                                                <span className="sr-only">Anterior</span>
-                                                <ChevronLeft className="h-4 w-4" />
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline ml-1">Anterior</span>
                                             </Button>
                                             <Button
                                                 variant="outline"
-                                                className="h-8 w-8 p-0"
+                                                size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
                                                 onClick={() => setIncomesPage(p => Math.min(totalIncomesPages, p + 1))}
                                                 disabled={incomesPage === totalIncomesPages}
                                             >
-                                                <span className="sr-only">Siguiente</span>
-                                                <ChevronRight className="h-4 w-4" />
+                                                <span className="hidden sm:inline mr-1">Siguiente</span>
+                                                <ChevronRight className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
                                     </div>
@@ -1695,78 +1791,87 @@ export default function FinanzasMensualesPage() {
                             </CardContent>
                         )}
                     </Card>
-                    <Card className="lg:col-span-7">
-                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsEgresosCollapsed(!isEgresosCollapsed)}>
+                    <Card className="lg:col-span-7 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors py-2.5 px-4 border-b border-border/40" onClick={() => setIsEgresosCollapsed(!isEgresosCollapsed)}>
                             <div className="flex items-center justify-between">
-                                <CardTitle className="text-lg">Egresos</CardTitle>
-                                <div className="flex items-center gap-2">
-                                    <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); setEditingEgreso(null); setIsEgresoModalOpen(true); }}>
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Agregar egreso
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                        {isEgresosCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
-                                    </Button>
+                                <CardTitle className="text-base font-semibold">Egresos</CardTitle>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                    <button 
+                                        type="button" 
+                                        className="text-slate-400 hover:text-foreground transition-colors p-1"
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            setEditingEgreso(null); 
+                                            setIsEgresoModalOpen(true); 
+                                        }}
+                                        title="Agregar egreso"
+                                    >
+                                        <PlusCircle className="h-4 w-4" />
+                                    </button>
+                                    <button type="button" className="text-slate-400 hover:text-foreground transition-colors p-1">
+                                        {isEgresosCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                    </button>
                                 </div>
                             </div>
                         </CardHeader>
                         {!isEgresosCollapsed && (
-                            <CardContent>
+                            <CardContent className="p-0">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('fecha')}>
-                                                    Fecha {egresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                        <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('fecha')}>
+                                                    Fecha {egresosSortConfig.key === 'fecha' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('concepto')}>
-                                                    Concepto {egresosSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('concepto')}>
+                                                    Concepto {egresosSortConfig.key === 'concepto' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('aQuien')}>
-                                                    A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden md:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('aQuien')}>
+                                                    A quién se entrega {egresosSortConfig.key === 'aQuien' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comisionServicios')}>
-                                                    Com. Servicio {egresosSortConfig.key === 'comisionServicios' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden lg:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('comisionServicios')}>
+                                                    Com. Servicio {egresosSortConfig.key === 'comisionServicios' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comisionProductos')}>
-                                                    Com. Producto {egresosSortConfig.key === 'comisionProductos' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden lg:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('comisionProductos')}>
+                                                    Com. Producto {egresosSortConfig.key === 'comisionProductos' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('propina')}>
-                                                    Propina {egresosSortConfig.key === 'propina' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden lg:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('propina')}>
+                                                    Propina {egresosSortConfig.key === 'propina' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('comentarios')}>
-                                                    Comentarios {egresosSortConfig.key === 'comentarios' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden xl:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('comentarios')}>
+                                                    Comentarios {egresosSortConfig.key === 'comentarios' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('quienPagaNombre')}>
-                                                    Pagado por {egresosSortConfig.key === 'quienPagaNombre' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="hidden md:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleEgresosSort('quienPagaNombre')}>
+                                                    Pagado por {egresosSortConfig.key === 'quienPagaNombre' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead>
-                                                <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleEgresosSort('monto')}>
-                                                    Total {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
-                                                </Button>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground text-right whitespace-nowrap">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center justify-end gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors w-full" onClick={() => handleEgresosSort('monto')}>
+                                                    Total {egresosSortConfig.key === 'monto' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
                                             </TableHead>
-                                            <TableHead className="text-right">Opciones</TableHead>
+                                            <TableHead className="w-[50px] sm:w-[70px] text-right py-1 px-1 sm:px-3 text-xs font-semibold text-muted-foreground"></TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {isLoading ? (
-                                            <TableRow><TableCell colSpan={9} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
+                                            <TableRow className="h-9"><TableCell colSpan={10} className="text-center py-4"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
                                         ) : calculatedEgresos.length === 0 ? (
-                                            <TableRow><TableCell colSpan={9} className="text-center h-24">No hay egresos registrados.</TableCell></TableRow>
+                                            <TableRow className="h-9"><TableCell colSpan={10} className="text-center py-4 text-xs text-muted-foreground">No hay egresos registrados.</TableCell></TableRow>
                                         ) : (
                                             paginatedEgresos.map((egreso: any) => {
                                                 const comS = egreso.displayComS;
@@ -1775,21 +1880,40 @@ export default function FinanzasMensualesPage() {
                                                 const commentClean = egreso.displayComment;
 
                                                 return (
-                                                    <TableRow key={egreso.id}>
-                                                        <TableCell>{egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd/MM/yyyy HH:mm') : format(new Date(egreso.fecha), 'dd/MM/yyyy HH:mm')}</TableCell>
-                                                        <TableCell>{egreso.concepto}</TableCell>
-                                                        <TableCell>{getNameFromId(egreso.aQuien)}</TableCell>
-                                                        <TableCell className="font-medium text-muted-foreground">{comS > 0 ? `$${comS.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
-                                                        <TableCell className="font-medium text-muted-foreground">{comP > 0 ? `$${comP.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
-                                                        <TableCell className="font-medium text-muted-foreground">{prop > 0 ? `$${prop.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
-                                                        <TableCell>{commentClean}</TableCell>
-                                                        <TableCell className="text-xs font-medium text-muted-foreground">{egreso.quienPagaNombre || '-'}</TableCell>
-                                                        <TableCell className="font-extrabold text-primary">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                        <TableCell className="text-right">
+                                                    <TableRow key={egreso.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                        <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs whitespace-nowrap text-muted-foreground font-medium">
+                                                            {egreso.fecha instanceof Timestamp ? format(egreso.fecha.toDate(), 'dd/MM HH:mm') : (egreso.fecha ? format(new Date(egreso.fecha), 'dd/MM HH:mm') : '-')}
+                                                        </TableCell>
+                                                        <TableCell className="py-1.5 px-1.5 sm:px-3 text-xs">
+                                                            <div className="font-medium text-foreground line-clamp-1">{egreso.concepto}</div>
+                                                            <div className="text-[10px] text-muted-foreground md:hidden flex items-center gap-1 mt-0.5">
+                                                                <span className="truncate max-w-[120px]">Para: {getNameFromId(egreso.aQuien)}</span>
+                                                                {egreso.quienPagaNombre && <span className="opacity-70 truncate max-w-[90px]">· {egreso.quienPagaNombre}</span>}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="hidden md:table-cell py-1.5 px-3 text-xs">{getNameFromId(egreso.aQuien)}</TableCell>
+                                                        <TableCell className="hidden lg:table-cell py-1.5 px-3 text-xs font-medium text-muted-foreground">{comS > 0 ? `$${comS.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell className="hidden lg:table-cell py-1.5 px-3 text-xs font-medium text-muted-foreground">{comP > 0 ? `$${comP.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell className="hidden lg:table-cell py-1.5 px-3 text-xs font-medium text-muted-foreground">{prop > 0 ? `$${prop.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : '-'}</TableCell>
+                                                        <TableCell className="hidden xl:table-cell py-1.5 px-3 text-xs text-muted-foreground truncate max-w-[120px]">{commentClean || '-'}</TableCell>
+                                                        <TableCell className="hidden md:table-cell py-1.5 px-3 text-xs text-muted-foreground">{egreso.quienPagaNombre || '-'}</TableCell>
+                                                        <TableCell className="py-1.5 px-1.5 sm:px-3 text-xs text-right whitespace-nowrap">
+                                                            <span className="font-bold text-foreground block">${egreso.monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                            {(comS > 0 || prop > 0) && (
+                                                                <span className="text-[10px] text-muted-foreground lg:hidden block">
+                                                                    {comS > 0 && `Com: $${comS.toLocaleString('es-MX')}`} {prop > 0 && `· Prop: $${prop.toLocaleString('es-MX')}`}
+                                                                </span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-1.5 px-1 sm:px-3 text-right">
                                                             {!egreso.id.startsWith('comm-') && (
-                                                                <div className="flex gap-1 justify-end">
-                                                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEditEgreso(egreso)}><Edit className="h-4 w-4" /></Button>
-                                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setEgresoToDelete(egreso)}><Trash2 className="h-4 w-4" /></Button>
+                                                                <div className="flex gap-0.5 sm:gap-1 justify-end items-center">
+                                                                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1" onClick={() => handleOpenEditEgreso(egreso)} title="Editar egreso">
+                                                                        <Edit className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                    <button type="button" className="text-muted-foreground hover:text-red-400 transition-colors p-1" onClick={() => setEgresoToDelete(egreso)} title="Eliminar egreso">
+                                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                                    </button>
                                                                 </div>
                                                             )}
                                                         </TableCell>
@@ -1800,9 +1924,10 @@ export default function FinanzasMensualesPage() {
                                     </TableBody>
                                 </Table>
                                 {calculatedEgresos.length > 0 && (
-                                    <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
-                                        <div className="flex items-center space-x-2">
-                                            <p className="text-sm font-medium">Resultados por página</p>
+                                    <div className="flex flex-row items-center justify-between gap-2 p-2.5 sm:p-3 border-t border-border/40 w-full">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <span className="text-[11px] text-muted-foreground sm:hidden">Filas:</span>
+                                            <span className="text-xs text-muted-foreground hidden sm:inline">Resultados por página</span>
                                             <Select
                                                 value={`${egresosPerPage}`}
                                                 onValueChange={(value) => {
@@ -1810,35 +1935,39 @@ export default function FinanzasMensualesPage() {
                                                     setEgresosPage(1);
                                                 }}
                                             >
-                                                <SelectTrigger className="h-8 w-[70px]">
+                                                <SelectTrigger className="h-7 w-[54px] sm:w-[65px] text-xs px-1.5 bg-background">
                                                     <SelectValue placeholder={egresosPerPage} />
                                                 </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="10">10</SelectItem>
-                                                    <SelectItem value="20">20</SelectItem>
-                                                    <SelectItem value="50">50</SelectItem>
+                                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                                    <SelectItem value="10" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">10</SelectItem>
+                                                    <SelectItem value="20" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">20</SelectItem>
+                                                    <SelectItem value="50" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">50</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="text-sm font-medium">
-                                            Página {egresosPage} de {totalEgresosPages}
+                                        <div className="text-[11px] sm:text-xs font-medium text-muted-foreground text-center">
+                                            <span className="hidden sm:inline">Página </span><span className="sm:hidden">Pág. </span>{egresosPage} de {totalEgresosPages}
                                         </div>
-                                        <div className="flex items-center space-x-2">
+                                        <div className="flex items-center gap-1">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
                                                 onClick={() => setEgresosPage(prev => Math.max(prev - 1, 1))}
                                                 disabled={egresosPage === 1}
                                             >
-                                                <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline ml-1">Anterior</span>
                                             </Button>
                                             <Button
                                                 variant="outline"
                                                 size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
                                                 onClick={() => setEgresosPage(prev => Math.min(prev + 1, totalEgresosPages))}
                                                 disabled={egresosPage === totalEgresosPages}
                                             >
-                                                Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                                                <span className="hidden sm:inline mr-1">Siguiente</span>
+                                                <ChevronRight className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
                                     </div>
@@ -1848,323 +1977,326 @@ export default function FinanzasMensualesPage() {
                     </Card>
                 </div>
 
-                <div className="mt-8">
-                    <Card>
-                        <CardHeader className="cursor-pointer hover:bg-slate-50 transition-colors py-3" onClick={() => setIsMovementsCollapsed(!isMovementsCollapsed)}>
+                <div className="mt-6">
+                    <Card className="rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
+                        <CardHeader className="cursor-pointer hover:bg-muted/20 transition-colors py-2.5 px-4 border-b border-border/40" onClick={() => setIsMovementsCollapsed(!isMovementsCollapsed)}>
                             <div className="flex items-center justify-between gap-4">
-                                <CardTitle className="flex items-center gap-2 min-w-0 flex-1 text-lg">
-                                    <DollarSign className="h-5 w-5 text-primary flex-shrink-0" />
-                                    <span className="truncate sm:whitespace-normal">Movimientos de Flujo de Caja (Informativo)</span>
+                                <CardTitle className="flex items-center gap-2 min-w-0 flex-1 text-base font-semibold">
+                                    <DollarSign className="h-4 w-4 text-[#C5A880] flex-shrink-0" />
+                                    <span className="truncate sm:whitespace-normal">Flujo de caja</span>
                                     <Popover>
-                                        
-                                            <PopoverTrigger asChild>
-                                                <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help flex-shrink-0" />
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-80 p-3">
-                                                <p className="max-w-xs text-xs">
-                                                    Registro de entregas de efectivo (sobrantes) y entradas de dinero (ajustes) para balancear la caja diaria.
-                                                    Estos movimientos NO afectan la utilidad neta ya que son transferencias internas de efectivo.
-                                                </p>
-                                            </PopoverContent>
-                                        
+                                        <PopoverTrigger asChild>
+                                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help flex-shrink-0" />
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                            <p className="max-w-xs text-xs text-slate-300">
+                                                Registro de entregas de efectivo (sobrantes) y entradas de dinero (ajustes) para balancear la caja diaria.
+                                                Estos movimientos NO afectan la utilidad neta ya que son transferencias internas de efectivo.
+                                            </p>
+                                        </PopoverContent>
                                     </Popover>
                                 </CardTitle>
                                 <div className="flex items-center gap-3 sm:gap-6 flex-shrink-0">
                                     <div className="text-right">
                                         <p className="text-[10px] text-muted-foreground leading-none">Total Entradas</p>
-                                        <p className="text-xs sm:text-sm font-bold text-slate-500">${totalEntradas.toLocaleString('es-MX')}</p>
+                                        <p className="text-xs sm:text-sm font-bold text-slate-400">${totalEntradas.toLocaleString('es-MX')}</p>
                                     </div>
-                                    <div className="text-right border-l pl-3 sm:pl-4">
+                                    <div className="text-right border-l border-border/40 pl-3 sm:pl-4">
                                         <p className="text-[10px] text-muted-foreground leading-none">Total Salidas</p>
-                                        <p className="text-xs sm:text-sm font-bold text-primary">${totalSalidas.toLocaleString('es-MX')}</p>
+                                        <p className="text-xs sm:text-sm font-bold text-blue-400">${totalSalidas.toLocaleString('es-MX')}</p>
                                     </div>
-                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                        {isMovementsCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
-                                    </Button>
+                                    <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1">
+                                        {isMovementsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                    </button>
                                 </div>
                             </div>
                         </CardHeader>
                         {!isMovementsCollapsed && (
-                            <CardContent>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('fecha')}>
-                                                Fecha {cashMovementsSortConfig.key === 'fecha' && <ArrowUpDown className="h-4 w-4" />}
+                            <CardContent className="p-0">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleCashMovementsSort('fecha')}>
+                                                    Fecha {cashMovementsSortConfig.key === 'fecha' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors" onClick={() => handleCashMovementsSort('tipo')}>
+                                                    Tipo {cashMovementsSortConfig.key === 'tipo' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="hidden md:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleCashMovementsSort('concepto')}>
+                                                    Concepto {cashMovementsSortConfig.key === 'concepto' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="hidden lg:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleCashMovementsSort('quien')}>
+                                                    Responsable / Destino {cashMovementsSortConfig.key === 'quien' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="py-1 px-1.5 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground text-right whitespace-nowrap">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center justify-end gap-1 text-[11px] sm:text-xs text-muted-foreground transition-colors w-full" onClick={() => handleCashMovementsSort('monto')}>
+                                                    Monto {cashMovementsSortConfig.key === 'monto' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="hidden md:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">
+                                                <button type="button" className="hover:text-foreground font-medium flex items-center gap-1 text-xs text-muted-foreground transition-colors" onClick={() => handleCashMovementsSort('comentarios')}>
+                                                    Comentarios {cashMovementsSortConfig.key === 'comentarios' && <ArrowUpDown className="h-3 w-3" />}
+                                                </button>
+                                            </TableHead>
+                                            <TableHead className="w-[40px] sm:w-[50px] text-right py-1 px-1 sm:px-3 text-xs font-semibold text-muted-foreground"></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {egresosLoading || incomesManualLoading ? (
+                                            <TableRow className="h-9"><TableCell colSpan={7} className="text-center py-4"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                                        ) : cashMovements.length === 0 ? (
+                                            <TableRow className="h-9"><TableCell colSpan={7} className="text-center py-4 text-xs text-muted-foreground">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
+                                        ) : (
+                                            paginatedCashMovements.map((mov) => (
+                                                <TableRow key={mov.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-[11px] sm:text-xs whitespace-nowrap text-muted-foreground font-medium">{safeFormatDate(mov.fecha)}</TableCell>
+                                                    <TableCell className="py-1.5 px-1.5 sm:px-3 text-xs">
+                                                        <span className="font-semibold text-foreground block">{mov.tipo}</span>
+                                                        <span className="text-[10px] text-muted-foreground md:hidden block truncate max-w-[130px]">
+                                                            {mov.concepto || mov.quien}
+                                                        </span>
+                                                        {mov.comentarios && (
+                                                            <span className="text-[10px] text-muted-foreground/80 italic md:hidden block truncate max-w-[130px]">
+                                                                "{mov.comentarios}"
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="hidden md:table-cell py-1.5 px-3 text-xs">{mov.concepto}</TableCell>
+                                                    <TableCell className="hidden lg:table-cell py-1.5 px-3 text-xs">{mov.quien}</TableCell>
+                                                    <TableCell className={cn("py-1.5 px-1.5 sm:px-3 text-xs font-bold text-right whitespace-nowrap", mov.color)}>${mov.monto.toLocaleString('es-MX')}</TableCell>
+                                                    <TableCell className="hidden md:table-cell py-1.5 px-3 text-xs text-muted-foreground italic">{mov.comentarios || 'Sin comentario'}</TableCell>
+                                                    <TableCell className="py-1.5 px-1 sm:px-3 text-right">
+                                                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1" onClick={() => { setCommentToEdit({ id: mov.id, type: mov.dbType, comment: mov.comentarios || '' }); setIsEditingComment(true); }} title="Editar comentario">
+                                                            <FileEdit className="h-3.5 w-3.5" />
+                                                        </button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                                {cashMovements.length > 0 && (
+                                    <div className="flex flex-row items-center justify-between gap-2 p-2.5 sm:p-3 border-t border-border/40 w-full">
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <span className="text-[11px] text-muted-foreground sm:hidden">Filas:</span>
+                                            <span className="text-xs text-muted-foreground hidden sm:inline">Resultados por página</span>
+                                            <Select
+                                                value={`${cashMovementsPerPage}`}
+                                                onValueChange={(value) => {
+                                                    setCashMovementsPerPage(Number(value));
+                                                    setCashMovementsPage(1);
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-7 w-[54px] sm:w-[65px] text-xs px-1.5 bg-background">
+                                                    <SelectValue placeholder={cashMovementsPerPage} />
+                                                </SelectTrigger>
+                                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                                    <SelectItem value="10" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">10</SelectItem>
+                                                    <SelectItem value="20" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">20</SelectItem>
+                                                    <SelectItem value="50" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">50</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="text-[11px] sm:text-xs font-medium text-muted-foreground text-center">
+                                            <span className="hidden sm:inline">Página </span><span className="sm:hidden">Pág. </span>{cashMovementsPage} de {totalCashMovementsPages}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
+                                                onClick={() => setCashMovementsPage(prev => Math.max(prev - 1, 1))}
+                                                disabled={cashMovementsPage === 1}
+                                            >
+                                                <ChevronLeft className="h-3.5 w-3.5" />
+                                                <span className="hidden sm:inline ml-1">Anterior</span>
                                             </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('tipo')}>
-                                                Tipo {cashMovementsSortConfig.key === 'tipo' && <ArrowUpDown className="h-4 w-4" />}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 px-1.5 sm:px-2 text-xs"
+                                                onClick={() => setCashMovementsPage(prev => Math.min(prev + 1, totalCashMovementsPages))}
+                                                disabled={cashMovementsPage === totalCashMovementsPages}
+                                            >
+                                                <span className="hidden sm:inline mr-1">Siguiente</span>
+                                                <ChevronRight className="h-3.5 w-3.5" />
                                             </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('concepto')}>
-                                                Concepto {cashMovementsSortConfig.key === 'concepto' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('quien')}>
-                                                Responsable / Destino {cashMovementsSortConfig.key === 'quien' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('monto')}>
-                                                Monto {cashMovementsSortConfig.key === 'monto' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead>
-                                            <Button variant="ghost" className="p-0 hover:bg-transparent font-medium flex items-center gap-1 h-auto text-muted-foreground hover:text-foreground" onClick={() => handleCashMovementsSort('comentarios')}>
-                                                Comentarios {cashMovementsSortConfig.key === 'comentarios' && <ArrowUpDown className="h-4 w-4" />}
-                                            </Button>
-                                        </TableHead>
-                                        <TableHead className="text-right w-[80px]">Opciones</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {egresosLoading || incomesManualLoading ? (
-                                        <TableRow><TableCell colSpan={7} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin" /></TableCell></TableRow>
-                                    ) : cashMovements.length === 0 ? (
-                                        <TableRow><TableCell colSpan={7} className="text-center h-24">No hay movimientos de flujo de caja registrados este mes.</TableCell></TableRow>
-                                    ) : (
-                                        paginatedCashMovements.map((mov) => (
-                                            <TableRow key={mov.id}>
-                                                <TableCell>{safeFormatDate(mov.fecha)}</TableCell>
-                                                <TableCell className="font-medium">{mov.tipo}</TableCell>
-                                                <TableCell>{mov.concepto}</TableCell>
-                                                <TableCell>{mov.quien}</TableCell>
-                                                <TableCell className={cn("font-bold", mov.color)}>${mov.monto.toLocaleString('es-MX')}</TableCell>
-                                                <TableCell className="text-muted-foreground text-xs italic">{mov.comentarios || 'Sin comentario'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => { setCommentToEdit({ id: mov.id, type: mov.dbType, comment: mov.comentarios || '' }); setIsEditingComment(true); }}>
-                                                        <FileEdit className="h-4 w-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                            {cashMovements.length > 0 && (
-                                <div className="flex flex-col sm:flex-row items-center justify-end gap-4 sm:gap-6 pt-4 pb-4">
-                                    <div className="flex items-center space-x-2">
-                                        <p className="text-sm font-medium">Resultados por página</p>
-                                        <Select
-                                            value={`${cashMovementsPerPage}`}
-                                            onValueChange={(value) => {
-                                                setCashMovementsPerPage(Number(value));
-                                                setCashMovementsPage(1);
-                                            }}
-                                        >
-                                            <SelectTrigger className="h-8 w-[70px]">
-                                                <SelectValue placeholder={cashMovementsPerPage} />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="10">10</SelectItem>
-                                                <SelectItem value="20">20</SelectItem>
-                                                <SelectItem value="50">50</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        </div>
                                     </div>
-                                    <div className="text-sm font-medium">
-                                        Página {cashMovementsPage} de {totalCashMovementsPages}
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCashMovementsPage(prev => Math.max(prev - 1, 1))}
-                                            disabled={cashMovementsPage === 1}
-                                        >
-                                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setCashMovementsPage(prev => Math.min(prev + 1, totalCashMovementsPages))}
-                                            disabled={cashMovementsPage === totalCashMovementsPages}
-                                        >
-                                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
+                                )}
+                            </CardContent>
                         )}
                     </Card>
                 </div>
 
                 {/* Tabla de Cálculo de Administradora Local */}
-                <Card className="my-8 overflow-hidden border-2 border-slate-200">
+                <Card className="my-6 rounded-2xl border border-border/60 shadow-sm bg-card/60 backdrop-blur-sm overflow-hidden">
                     <CardHeader 
-                        className="bg-slate-50/80 py-3 border-b cursor-pointer hover:bg-slate-100 transition-colors"
+                        className="py-2.5 px-4 border-b border-border/40 cursor-pointer hover:bg-muted/20 transition-colors"
                         onClick={() => setIsAdminBalanceCollapsed(!isAdminBalanceCollapsed)}
                     >
                         <CardTitle className="text-base flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <UserCircle className="h-5 w-5 text-primary" />
-                                Balance de Administradora Local
+                                <UserCircle className="h-4 w-4 text-[#C5A880]" />
+                                <span>Balance</span>
                                 <Popover>
-                                        <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                            <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help ml-1" />
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-80 p-3">
-                                            <p className="max-w-xs text-sm font-normal text-center">
-                                                Cálculo informativo del flujo de efectivo acumulado por la administración local del negocio, considerando entregas de dinero y pagos realizados.
-                                            </p>
-                                        </PopoverContent>
-                                    </Popover>
-
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help ml-1" />
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                        <p className="max-w-xs text-xs text-slate-300 text-center">
+                                            Cálculo informativo del flujo de efectivo acumulado por la administración local del negocio, considerando entregas de dinero y pagos realizados.
+                                        </p>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                             <div className="flex items-center gap-2 sm:gap-4">
                                 <Button 
                                     variant="outline" 
                                     size="sm" 
                                     onClick={(e) => { e.stopPropagation(); setIsLiquidacionModalOpen(true); }} 
-                                    className="h-8 border-primary text-primary hover:bg-primary/5 flex items-center"
+                                    className="h-7 text-xs border-border/60 text-foreground hover:bg-muted/20 flex items-center"
                                 >
-                                    <DollarSign className="mr-1 h-3 w-3" /> <span className="hidden sm:inline">Registrar Liquidación</span><span className="sm:hidden">Liquidar</span>
+                                    <DollarSign className="mr-1 h-3 w-3 text-[#C5A880]" /> <span className="hidden sm:inline">Registrar Liquidación</span><span className="sm:hidden">Liquidar</span>
                                 </Button>
-                                <span className="text-xs font-normal text-muted-foreground uppercase tracking-wider hidden md:inline ml-2">Resumen Mensual de Efectivo</span>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    {isAdminBalanceCollapsed ? <PlusCircle className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
-                                </Button>
+                                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider hidden md:inline ml-2">Resumen Mensual de Efectivo</span>
+                                <button type="button" className="text-slate-400 hover:text-foreground transition-colors p-1">
+                                    {isAdminBalanceCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                                </button>
                             </div>
                         </CardTitle>
                     </CardHeader>
                     {!isAdminBalanceCollapsed && (
                         <CardContent className="p-0">
+                        {/* Vista Desktop / Tablet: Tabla Completa */}
+                        <div className="hidden sm:block">
                         <Table>
                             <TableHeader>
-                                <TableRow className="bg-slate-50/30 hover:bg-slate-50/30">
-                                    <TableHead className="text-center py-4">
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="text-center py-2 px-3 border-r border-border/40">
                                         <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
                                                 Total Salidas Flow
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs text-[10px]">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3 w-3 cursor-help text-slate-400" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Efectivo total que ha salido de la caja según los movimientos informativos (lo que la administradora se lleva).</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
-                                            <span className="text-primary flex items-center gap-1 font-bold">
+                                            <span className="text-blue-400 flex items-center gap-1 font-bold text-xs">
                                                 <ArrowUpRight className="h-3 w-3" /> Efectivo Retirado
                                             </span>
                                         </div>
                                     </TableHead>
-                                    <TableHead className="text-center py-4 border-l">
+                                    <TableHead className="text-center py-2 px-3 border-r border-border/40">
                                         <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
                                                 Total Entradas Flow
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs text-[10px]">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3 w-3 cursor-help text-slate-400" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Efectivo total que la administradora ha ingresado a la caja para cuadrar faltantes.</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
-                                            <span className="text-slate-500 flex items-center gap-1 font-bold">
+                                            <span className="text-slate-400 flex items-center gap-1 font-bold text-xs">
                                                 <ArrowDownLeft className="h-3 w-3" /> Efectivo Ingresado
                                             </span>
                                         </div>
                                     </TableHead>
-                                    <TableHead className="text-center py-4 border-l">
+                                    <TableHead className="text-center py-2 px-3 border-r border-border/40">
                                         <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
                                                 Pagos / Reembolsos
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs text-[10px]">Dinero entregado por el Administrador General a la administradora local para saldar deudas del mes.</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3 w-3 cursor-help text-slate-400" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Dinero entregado por el Administrador General a la administradora local para saldar deudas del mes.</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
-                                            <span className="text-secondary flex items-center gap-1 font-bold">
+                                            <span className="text-slate-300 flex items-center gap-1 font-bold text-xs">
                                                 <DollarSign className="h-3 w-3" /> Liquidaciones
                                             </span>
                                         </div>
                                     </TableHead>
-                                    <TableHead className="text-center py-4 border-l">
+                                    <TableHead className="text-center py-2 px-3 border-r border-border/40">
                                         <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
                                                 Egresos Pagados
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs text-[10px]">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3 w-3 cursor-help text-slate-400" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Gastos operativos o de insumos que la administradora pagó de su bolsillo o del efectivo retirado.</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
-                                            <span className="text-slate-600 font-bold">Insumos / Otros</span>
+                                            <span className="text-slate-400 font-bold text-xs">Insumos / Otros</span>
                                         </div>
                                     </TableHead>
-                                    <TableHead className="text-center py-4 border-l bg-slate-100/50">
+                                    <TableHead className="text-center py-2 px-3 bg-muted/20">
                                         <div className="flex flex-col items-center">
-                                            <span className="text-[10px] uppercase text-muted-foreground font-bold mb-1 flex items-center gap-1">
+                                            <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
                                                 Estado de Cuenta
                                                 <Popover>
-                                                    
-                                                        <PopoverTrigger asChild>
-                                                            <HelpCircle className="h-4 w-4 cursor-help text-slate-400" />
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-80 p-3">
-                                                            <p className="max-w-xs text-[10px]">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
-                                                        </PopoverContent>
-                                                    
+                                                    <PopoverTrigger asChild>
+                                                        <HelpCircle className="h-3 w-3 cursor-help text-slate-400" />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-80 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white">
+                                                        <p className="max-w-xs text-xs text-slate-300">Cálculo final: Salidas - Entradas - Egresos pagados. Determina si sobra dinero o si hay un adeudo.</p>
+                                                    </PopoverContent>
                                                 </Popover>
                                             </span>
-                                            <span className="text-foreground font-bold">Resultado Final</span>
+                                            <span className="text-foreground font-bold text-xs">Resultado Final</span>
                                         </div>
                                     </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableCell className="text-center py-6">
-                                        <span className="text-2xl font-bold text-primary">
+                                <TableRow className="hover:bg-muted/10 border-b border-border/40">
+                                    <TableCell className="text-center py-4 border-r border-border/40">
+                                        <span className="text-xl sm:text-2xl font-bold text-blue-400">
                                             ${adminSummaryData.totalSalidas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                                         </span>
                                     </TableCell>
-                                    <TableCell className="text-center py-6 border-l">
-                                        <span className="text-2xl font-bold text-slate-500">
+                                    <TableCell className="text-center py-4 border-r border-border/40">
+                                        <span className="text-xl sm:text-2xl font-bold text-slate-400">
                                             ${adminSummaryData.totalEntradas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                                         </span>
                                     </TableCell>
-                                    <TableCell className="text-center py-6 border-l">
-                                        <span className="text-2xl font-bold text-secondary">
+                                    <TableCell className="text-center py-4 border-r border-border/40">
+                                        <span className="text-xl sm:text-2xl font-bold text-slate-300">
                                             ${(adminSummaryData.totalReembolsos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                                         </span>
                                     </TableCell>
-                                    <TableCell className="text-center py-6 border-l">
-                                        <span className="text-2xl font-bold text-slate-600">
+                                    <TableCell className="text-center py-4 border-r border-border/40">
+                                        <span className="text-xl sm:text-2xl font-bold text-slate-400">
                                             ${adminSummaryData.egresosAdmin.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                                         </span>
                                     </TableCell>
-                                    <TableCell className={cn("text-center py-6 border-l bg-slate-100/30", adminSummaryData.resultado >= 0 ? "bg-slate-100/50" : "bg-blue-50/10")}>
+                                    <TableCell className="text-center py-4 bg-muted/20">
                                         <div className="flex flex-col items-center">
-                                            <span className={cn("text-3xl font-black", adminSummaryData.resultado >= 0 ? "text-primary/70" : "text-primary")}>
-                                                ${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                            <span className={cn("text-2xl sm:text-3xl font-extrabold", adminSummaryData.resultado < 0 ? "text-red-400" : "text-blue-400")}>
+                                                {adminSummaryData.resultado < 0 ? `-$${Math.abs(adminSummaryData.resultado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : `$${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
                                             </span>
-                                            <span className="text-[10px] mt-1 font-bold uppercase">
+                                            <span className="text-[10px] mt-1 font-semibold text-muted-foreground uppercase">
                                                 {adminSummaryData.resultado >= 0 ? "A Favor Administrador Gral" : "A Favor Administradora Local"}
                                             </span>
                                         </div>
@@ -2172,60 +2304,125 @@ export default function FinanzasMensualesPage() {
                                 </TableRow>
                             </TableBody>
                         </Table>
+                        </div>
+
+                        {/* Vista Móvil: Grid Compacto sin desplazamiento horizontal */}
+                        <div className="sm:hidden p-3 space-y-2.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                        <ArrowUpRight className="h-3 w-3 text-blue-400" /> Salidas Flow
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground mb-1">Efectivo Retirado</span>
+                                    <span className="text-base font-bold text-blue-400 mt-auto">
+                                        ${adminSummaryData.totalSalidas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                        <ArrowDownLeft className="h-3 w-3 text-slate-400" /> Entradas Flow
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground mb-1">Efectivo Ingresado</span>
+                                    <span className="text-base font-bold text-slate-400 mt-auto">
+                                        ${adminSummaryData.totalEntradas.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                        <DollarSign className="h-3 w-3 text-[#C5A880]" /> Liquidaciones
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground mb-1">Pagos / Reembolsos</span>
+                                    <span className="text-base font-bold text-slate-300 mt-auto">
+                                        ${(adminSummaryData.totalReembolsos || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="p-2.5 rounded-xl border border-border/60 bg-muted/20 flex flex-col">
+                                    <span className="text-[10px] uppercase text-muted-foreground font-semibold flex items-center gap-1">
+                                        Egresos Pagados
+                                    </span>
+                                    <span className="text-[9px] text-muted-foreground mb-1">Insumos / Otros</span>
+                                    <span className="text-base font-bold text-slate-400 mt-auto">
+                                        ${adminSummaryData.egresosAdmin.toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="p-3 rounded-xl border border-border/60 bg-muted/30 text-center">
+                                <span className="text-[10px] uppercase text-muted-foreground font-semibold block">
+                                    Estado de Cuenta · Resultado Final
+                                </span>
+                                <div className={cn("text-2xl font-extrabold mt-0.5", adminSummaryData.resultado < 0 ? "text-red-400" : "text-blue-400")}>
+                                    {adminSummaryData.resultado < 0 ? `-$${Math.abs(adminSummaryData.resultado).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : `$${adminSummaryData.resultado.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                                </div>
+                                <span className="text-[10px] mt-0.5 font-semibold text-muted-foreground uppercase block">
+                                    {adminSummaryData.resultado >= 0 ? "A Favor Administrador Gral" : "A Favor Administradora Local"}
+                                </span>
+                            </div>
+                        </div>
 
                         {/* Sub-tabla de detalle de liquidaciones */}
-                        <div className="border-t bg-slate-50/20 p-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <h4 className="text-sm font-bold text-primary flex items-center gap-2">
-                                    <DollarSign className="h-4 w-4" /> Historial de Liquidaciones del mes
+                        <div className="border-t border-border/40 bg-muted/10 p-2.5 sm:p-4">
+                            <div className="flex items-center justify-between mb-2 sm:mb-3">
+                                <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                    <DollarSign className="h-3.5 w-3.5 text-[#C5A880]" /> Historial de Liquidaciones del mes
                                 </h4>
                             </div>
                             {liquidacionesLoading ? (
-                                <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-primary/30" /></div>
+                                <div className="flex justify-center p-6"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
                             ) : liquidaciones.length === 0 ? (
-                                <div className="text-center py-6 text-xs text-muted-foreground bg-white/50 border border-dashed rounded-md">
+                                <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-border/60 rounded-xl bg-card/40">
                                     No se han registrado liquidaciones directas este mes.
                                 </div>
                             ) : (
-                                <Table className="bg-white rounded-md shadow-sm border">
-                                    <TableHeader>
-                                        <TableRow className="bg-slate-50">
-                                            <TableHead className="w-[120px] h-9 text-xs font-bold">Fecha</TableHead>
-                                            <TableHead className="h-9 text-xs font-bold">Monto</TableHead>
-                                            <TableHead className="h-9 text-xs font-bold">Comentarios / Notas</TableHead>
-                                            <TableHead className="w-[100px] h-9 text-right text-xs font-bold">Opciones</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {liquidaciones.sort((a: any, b: any) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0)).map((liq: any) => (
-                                            <TableRow key={liq.id} className="hover:bg-slate-50/50">
-                                                <TableCell className="text-xs whitespace-nowrap font-medium">{format(liq.fecha instanceof Timestamp ? liq.fecha.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}</TableCell>
-                                                <TableCell className="text-xs font-bold text-secondary">${liq.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</TableCell>
-                                                <TableCell className="text-xs italic text-muted-foreground">{liq.comentarios || 'Sin nota'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-7 w-7 text-muted-foreground" 
-                                                            onClick={() => { setCommentToEdit({ id: liq.id, type: 'liquidacion', comment: liq.comentarios || '', monto: liq.monto }); setIsEditingComment(true); }}
-                                                        >
-                                                            <FileEdit className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button 
-                                                            variant="ghost" 
-                                                            size="icon" 
-                                                            className="h-7 w-7 text-destructive hover:bg-destructive/10" 
-                                                            onClick={() => { if (confirm('¿Deseas eliminar este registro de liquidación?')) handleDeleteLiquidacion(liq.id); }}
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
+                                <div className="rounded-xl border border-border/60 overflow-hidden bg-card/60">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                                <TableHead className="py-1 px-2 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground whitespace-nowrap">Fecha</TableHead>
+                                                <TableHead className="py-1 px-2 sm:px-3 text-[11px] sm:text-xs font-semibold text-muted-foreground">Monto</TableHead>
+                                                <TableHead className="hidden sm:table-cell py-1 px-3 text-xs font-semibold text-muted-foreground">Comentarios / Notas</TableHead>
+                                                <TableHead className="w-[50px] sm:w-[70px] text-right py-1 px-1 sm:px-3 text-xs font-semibold text-muted-foreground"></TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {liquidaciones.sort((a: any, b: any) => (b.fecha?.seconds || 0) - (a.fecha?.seconds || 0)).map((liq: any) => (
+                                                <TableRow key={liq.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                                    <TableCell className="py-1.5 px-2 sm:px-3 text-[11px] sm:text-xs whitespace-nowrap font-medium text-foreground">
+                                                        {format(liq.fecha instanceof Timestamp ? liq.fecha.toDate() : new Date(), 'dd/MM/yyyy HH:mm')}
+                                                    </TableCell>
+                                                    <TableCell className="py-1.5 px-2 sm:px-3 text-xs">
+                                                        <span className="font-bold text-foreground block">${liq.monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                                                        {liq.comentarios && (
+                                                            <span className="text-[10px] text-muted-foreground italic sm:hidden block truncate max-w-[130px]">
+                                                                {liq.comentarios}
+                                                            </span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="hidden sm:table-cell py-1.5 px-3 text-xs italic text-muted-foreground">{liq.comentarios || 'Sin nota'}</TableCell>
+                                                    <TableCell className="py-1.5 px-1 sm:px-3 text-right">
+                                                        <div className="flex items-center justify-end gap-0.5 sm:gap-1">
+                                                            <button 
+                                                                type="button"
+                                                                className="text-slate-400 hover:text-foreground transition-colors p-1" 
+                                                                onClick={() => { setCommentToEdit({ id: liq.id, type: 'liquidacion', comment: liq.comentarios || '', monto: liq.monto }); setIsEditingComment(true); }}
+                                                                title="Editar liquidación"
+                                                            >
+                                                                <FileEdit className="h-3.5 w-3.5" />
+                                                            </button>
+                                                            <button 
+                                                                type="button"
+                                                                className="text-slate-400 hover:text-red-400 transition-colors p-1" 
+                                                                onClick={() => { if (confirm('¿Deseas eliminar este registro de liquidación?')) handleDeleteLiquidacion(liq.id); }}
+                                                                title="Eliminar liquidación"
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             )}
                         </div>
                     </CardContent>
@@ -2265,221 +2462,287 @@ export default function FinanzasMensualesPage() {
             )}
 
             <Dialog open={isCommissionModalOpen} onOpenChange={setIsCommissionModalOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Ajustar Comisión Mensual ({editingCommissionType === 'service' ? 'Servicios' : 'Productos'})</DialogTitle>
-                        <DialogDescription>
-                            Ajuste la comisión para <strong>{editingCommissionUser?.name}</strong> solo para el mes de <strong>{monthName}</strong>.
-                        </DialogDescription>
-                    </DialogHeader>
+                <DialogContent className="p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] sm:max-w-md bg-card" hideCloseButton={true}>
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 text-white">
+                        <div className="header-light-beam pointer-events-none" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <DollarSign className="h-5 w-5 text-[#C5A880]" />
+                                <div>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                        Ajustar Comisión Mensual ({editingCommissionType === 'service' ? 'Servicios' : 'Productos'})
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                        Ajuste para <strong>{editingCommissionUser?.name}</strong> solo para el mes de {monthName}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsCommissionModalOpen(false)}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
                     {editingCommissionUser && (
-                        <div className="grid gap-4 py-4">
-                            <div className="flex flex-col gap-2">
-                                <Label>Tipo de comisión</Label>
+                        <div className="grid gap-4 p-5">
+                            <div className="flex flex-col gap-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tipo de comisión</Label>
                                 <Select
                                     value={editingCommissionUser.type}
                                     onValueChange={(val: 'fixed' | 'percentage') => setEditingCommissionUser({ ...editingCommissionUser, type: val })}
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger className="h-10 text-xs rounded-xl border-border/60">
                                         <SelectValue />
                                     </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="fixed">Monto Fijo</SelectItem>
-                                        <SelectItem value="percentage">Porcentaje Utilidad</SelectItem>
+                                    <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1">
+                                        <SelectItem value="fixed" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Monto Fijo ($)</SelectItem>
+                                        <SelectItem value="percentage" className="text-xs rounded-lg text-white hover:text-white focus:text-white focus:bg-white/10 cursor-pointer">Porcentaje Utilidad (%)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <Label>{editingCommissionUser.type === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}</Label>
+                            <div className="flex flex-col gap-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{editingCommissionUser.type === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}</Label>
                                 <Input
                                     type="number"
                                     value={editingCommissionUser.value}
                                     onChange={(e) => setEditingCommissionUser({ ...editingCommissionUser, value: Number(e.target.value) })}
+                                    className="h-10 text-xs rounded-xl"
                                 />
                             </div>
                         </div>
                     )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsCommissionModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSaveCommission}>Guardar Ajuste</Button>
-                    </DialogFooter>
+                    <div className="p-4 bg-muted/20 border-t border-border/40 flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsCommissionModalOpen(false)} className="rounded-xl text-xs h-9">Cancelar</Button>
+                        <Button variant="alfa" onClick={handleSaveCommission} className="rounded-xl text-xs h-9 font-semibold px-4">Guardar Ajuste</Button>
+                    </div>
                 </DialogContent>
             </Dialog>
 
             {/* Manual Override Dialog */}
             <Dialog open={isOverrideModalOpen} onOpenChange={setIsOverrideModalOpen}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Editar datos financieros — {monthName.charAt(0).toUpperCase() + monthName.slice(1)} {selectedYear}</DialogTitle>
-                        <DialogDescription>
-                            Ingresa los datos manuales para este mes. Los datos automáticos serán reemplazados.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-6 py-4">
-                        {/* Resumen de Servicios */}
-                        <Card className="border-border shadow-sm">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-sm font-semibold">Resumen de Servicios</CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                <DialogContent className="max-w-2xl max-h-[90vh] p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card" hideCloseButton={true}>
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 text-white">
+                        <div className="header-light-beam pointer-events-none" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <FileEdit className="h-5 w-5 text-slate-300" />
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Ingreso total</Label>
+                                    <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                        Editar datos financieros — {capitalize(monthName)} {selectedYear}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                        Ingresa los datos manuales para este mes. Los datos automáticos serán reemplazados.
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsOverrideModalOpen(false)}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 p-4 sm:p-6 overflow-y-auto max-h-[calc(90vh-140px)] min-h-0">
+                        <div className="p-3 bg-muted/20 border border-border/40 rounded-xl text-xs text-muted-foreground flex items-center gap-2.5">
+                            <HelpCircle className="h-4 w-4 text-blue-400 shrink-0" />
+                            <span>Los datos manuales anulan temporalmente los cálculos automáticos del sistema para este mes. Puedes restaurar los valores automáticos en cualquier momento.</span>
+                        </div>
+                        {/* Resumen de Servicios */}
+                        <div className="rounded-xl border border-border/60 overflow-hidden bg-card">
+                            <div className="py-2 px-3.5 bg-muted/30 border-b border-border/40 font-semibold text-xs text-foreground flex items-center gap-2">
+                                <Scissors className="h-3.5 w-3.5 text-muted-foreground" /> Resumen de Servicios
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5">
+                                <div>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Ingreso total</Label>
                                     <CurrencyInput value={overrideForm.servicios_ingreso} onChange={v => setOverrideForm(f => ({ ...f, servicios_ingreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Egreso total</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Egreso total</Label>
                                     <CurrencyInput value={overrideForm.servicios_egreso} onChange={v => setOverrideForm(f => ({ ...f, servicios_egreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Subtotal de utilidad</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Subtotal de utilidad</Label>
                                     <CurrencyInput value={overrideForm.servicios_subtotal} onChange={v => setOverrideForm(f => ({ ...f, servicios_subtotal: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Comisión admin</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Comisión admin</Label>
                                     <CurrencyInput value={overrideForm.servicios_comision_admin} onChange={v => setOverrideForm(f => ({ ...f, servicios_comision_admin: v }))} className="mt-1" />
                                 </div>
-                                <div className="col-span-2 mt-2 p-3 bg-muted/50 rounded-lg">
-                                    <Label className="text-xs font-semibold">Utilidad neta (Servicios)</Label>
-                                    <CurrencyInput value={overrideForm.servicios_utilidad} onChange={v => setOverrideForm(f => ({ ...f, servicios_utilidad: v }))} className="mt-1 font-bold" />
+                                <div className="col-span-1 sm:col-span-2 p-2.5 bg-muted/30 rounded-xl border border-border/40 flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-foreground">Utilidad neta (Servicios)</Label>
+                                    <CurrencyInput value={overrideForm.servicios_utilidad} onChange={v => setOverrideForm(f => ({ ...f, servicios_utilidad: v }))} className="w-36 font-bold" />
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
 
                         {/* Resumen de Productos */}
-                        <Card className="border-border shadow-sm">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-sm font-semibold">Resumen de Productos</CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                        <div className="rounded-xl border border-border/60 overflow-hidden bg-card">
+                            <div className="py-2 px-3.5 bg-muted/30 border-b border-border/40 font-semibold text-xs text-foreground flex items-center gap-2">
+                                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" /> Resumen de Productos
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5">
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Ingreso total</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Ingreso total</Label>
                                     <CurrencyInput value={overrideForm.productos_ingreso} onChange={v => setOverrideForm(f => ({ ...f, productos_ingreso: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Reinversión</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Reinversión</Label>
                                     <CurrencyInput value={overrideForm.productos_reinversion} onChange={v => setOverrideForm(f => ({ ...f, productos_reinversion: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Comisión profesionales</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Comisión profesionales</Label>
                                     <CurrencyInput value={overrideForm.productos_comision_prof} onChange={v => setOverrideForm(f => ({ ...f, productos_comision_prof: v }))} className="mt-1" />
                                 </div>
                                 <div>
-                                    <Label className="text-xs text-muted-foreground">Subtotal utilidad</Label>
+                                    <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Subtotal utilidad</Label>
                                     <CurrencyInput value={overrideForm.productos_subtotal} onChange={v => setOverrideForm(f => ({ ...f, productos_subtotal: v }))} className="mt-1" />
                                 </div>
-                                <div className="col-span-2 mt-2 p-3 bg-muted/50 rounded-lg">
-                                    <Label className="text-xs font-semibold">Utilidad neta (Productos)</Label>
-                                    <CurrencyInput value={overrideForm.productos_utilidad} onChange={v => setOverrideForm(f => ({ ...f, productos_utilidad: v }))} className="mt-1 font-bold" />
+                                <div className="col-span-1 sm:col-span-2 p-2.5 bg-muted/30 rounded-xl border border-border/40 flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-foreground">Utilidad neta (Productos)</Label>
+                                    <CurrencyInput value={overrideForm.productos_utilidad} onChange={v => setOverrideForm(f => ({ ...f, productos_utilidad: v }))} className="w-36 font-bold" />
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
 
                         {/* Egresos */}
-                        <Card className="border-border shadow-sm">
-                            <CardHeader className="py-3 bg-muted/30 border-b">
-                                <CardTitle className="text-sm font-semibold">Egresos y Comisiones</CardTitle>
-                            </CardHeader>
-                            <CardContent className="pt-4 space-y-6">
-                                <div className="p-4 border rounded-lg bg-background">
-                                    <Label className="text-sm font-semibold mb-3 block text-primary">Comisiones Servicios (por profesional)</Label>
-                                    <div className="space-y-3">
+                        <div className="rounded-xl border border-border/60 overflow-hidden bg-card">
+                            <div className="py-2 px-3.5 bg-muted/30 border-b border-border/40 font-semibold text-xs text-foreground flex items-center gap-2">
+                                <DollarSign className="h-3.5 w-3.5 text-[#C5A880]" /> Egresos y Comisiones
+                            </div>
+                            <div className="p-3.5 space-y-4">
+                                <div className="p-3 border border-border/50 rounded-xl bg-muted/20">
+                                    <Label className="text-xs font-semibold mb-2.5 block text-foreground">Comisiones Servicios (por profesional)</Label>
+                                    <div className="space-y-2">
                                         {overrideForm.egresos_comisiones_servicios.map((item, index) => (
-                                            <div key={index} className="flex items-center gap-3 bg-muted/40 p-2 rounded-md">
+                                            <div key={index} className="flex items-center gap-2 bg-background p-2 rounded-xl border border-border/40">
                                                 <Input
                                                     placeholder="Nombre del profesional"
                                                     value={item.nombre}
                                                     onChange={e => updateComisionServicio(index, 'nombre', e.target.value)}
-                                                    className="flex-1 bg-background"
+                                                    className="flex-1 bg-background text-xs h-8"
                                                 />
                                                 <CurrencyInput
                                                     value={item.monto}
                                                     onChange={v => updateComisionServicio(index, 'monto', v)}
-                                                    className="w-32 bg-background font-medium"
+                                                    className="w-28 bg-background font-medium text-xs h-8"
                                                 />
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10" onClick={() => removeComisionServicio(index)}>
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+                                                <button 
+                                                    type="button"
+                                                    className="text-muted-foreground hover:text-red-400 p-1 transition-colors" 
+                                                    onClick={() => removeComisionServicio(index)}
+                                                    title="Eliminar profesional"
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </button>
                                             </div>
                                         ))}
-                                        <Button variant="outline" size="sm" onClick={addComisionServicio} className="mt-2 w-full border-dashed">
-                                            <PlusCircle className="h-4 w-4 mr-2" /> Agregar profesional
+                                        <Button variant="outline" size="sm" onClick={addComisionServicio} className="mt-2 w-full border-dashed text-xs h-8">
+                                            <PlusCircle className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" /> Agregar profesional
                                         </Button>
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Comisiones Productos</Label>
+                                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Comisiones Productos</Label>
                                         <CurrencyInput value={overrideForm.egresos_comisiones_productos} onChange={v => setOverrideForm(f => ({ ...f, egresos_comisiones_productos: v }))} className="mt-1" />
                                     </div>
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Nómina</Label>
+                                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Nómina</Label>
                                         <CurrencyInput value={overrideForm.egresos_nomina} onChange={v => setOverrideForm(f => ({ ...f, egresos_nomina: v }))} className="mt-1" />
                                     </div>
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Insumos</Label>
+                                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Insumos</Label>
                                         <CurrencyInput value={overrideForm.egresos_insumos} onChange={v => setOverrideForm(f => ({ ...f, egresos_insumos: v }))} className="mt-1" />
                                     </div>
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Costos fijos</Label>
+                                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Costos fijos</Label>
                                         <CurrencyInput value={overrideForm.egresos_costos_fijos} onChange={v => setOverrideForm(f => ({ ...f, egresos_costos_fijos: v }))} className="mt-1" />
                                     </div>
                                     <div>
-                                        <Label className="text-xs text-muted-foreground">Propinas (Informativo)</Label>
+                                        <Label className="text-[11px] font-semibold text-muted-foreground uppercase">Propinas (Informativo)</Label>
                                         <CurrencyInput value={overrideForm.egresos_propinas} onChange={v => setOverrideForm(f => ({ ...f, egresos_propinas: v }))} className="mt-1" />
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     </div>
 
-                    <DialogFooter className="flex-col sm:flex-row gap-2">
-                        {hasOverride && (
-                            <Button variant="destructive" size="sm" onClick={handleDeleteOverride} className="mr-auto">
-                                <Trash2 className="h-4 w-4 mr-1" /> Restaurar datos automáticos
+                    <div className="p-4 bg-muted/20 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+                        {hasOverride ? (
+                            <Button variant="outline" size="sm" onClick={handleDeleteOverride} className="w-full sm:w-auto text-xs text-red-400 hover:text-red-300 border-red-500/30 hover:bg-red-500/10 h-9">
+                                <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Restaurar datos automáticos
                             </Button>
-                        )}
-                        <Button variant="outline" onClick={() => setIsOverrideModalOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleSaveOverride} disabled={isSavingOverride}>
-                            {isSavingOverride ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                            Guardar datos
-                        </Button>
-                    </DialogFooter>
+                        ) : <div />}
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button variant="outline" onClick={() => setIsOverrideModalOpen(false)} className="rounded-xl text-xs h-9">
+                                Cancelar
+                            </Button>
+                            <Button variant="alfa" onClick={handleSaveOverride} disabled={isSavingOverride} className="rounded-xl text-xs h-9 font-semibold px-4">
+                                {isSavingOverride ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                                Guardar datos
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
             <Dialog open={isEditingComment} onOpenChange={setIsEditingComment}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Editar comentario</DialogTitle>
-                        <DialogDescription>
-                            Actualiza el comentario para este movimiento de caja.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 space-y-4">
+                <DialogContent className="p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] sm:max-w-md bg-card" hideCloseButton={true}>
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 text-white">
+                        <div className="header-light-beam pointer-events-none" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <FileEdit className="h-5 w-5 text-slate-300" />
+                                <div>
+                                    <DialogTitle className="text-base font-bold text-white tracking-wide">
+                                        Editar Comentario
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                        Actualiza el comentario o monto para este movimiento de caja
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsEditingComment(false)}
+                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-5 space-y-4">
                         {commentToEdit?.type === 'liquidacion' && (
-                            <div className="space-y-2">
-                                <Label>Monto</Label>
+                            <div className="space-y-1.5">
+                                <Label className="text-xs font-semibold text-muted-foreground uppercase">Monto</Label>
                                 <CurrencyInput
                                     value={commentToEdit.monto || 0}
                                     onChange={(val) => setCommentToEdit(prev => prev ? { ...prev, monto: val } : null)}
+                                    className="h-9 text-xs"
                                 />
                             </div>
                         )}
-                        <div className="space-y-2">
-                            <Label>Comentario / Nota</Label>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-semibold text-muted-foreground uppercase">Comentario / Nota</Label>
                             <Input
                                 value={commentToEdit?.comment || ''}
                                 onChange={(e) => setCommentToEdit(prev => prev ? { ...prev, comment: e.target.value } : null)}
                                 placeholder="Escribe un comentario o nota..."
-                                className="mt-2"
+                                className="h-9 text-xs rounded-xl"
                             />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsEditingComment(false)}>Cancelar</Button>
-                        <Button onClick={handleSaveComment}>Guardar cambio</Button>
-                    </DialogFooter>
+                    <div className="p-4 bg-muted/20 border-t border-border/40 flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsEditingComment(false)} className="rounded-xl text-xs h-9">Cancelar</Button>
+                        <Button variant="alfa" onClick={handleSaveComment} className="rounded-xl text-xs h-9 font-semibold px-4">Guardar cambio</Button>
+                    </div>
                 </DialogContent>
             </Dialog>
 
@@ -2492,15 +2755,23 @@ export default function FinanzasMensualesPage() {
                     toast({ title: 'Liquidación registrada', description: 'El pago se ha guardado correctamente como control interno.' });
                 }}
                 monthYear={`${monthName.toLowerCase()}_${selectedYear}`}
+                currentBalance={adminSummaryData.resultado}
             />
         </>
     );
 }
 
-function AddLiquidacionModal({ isOpen, onOpenChange, onSuccess, monthYear }: { isOpen: boolean, onOpenChange: (val: boolean) => void, onSuccess: () => void, monthYear: string }) {
+function AddLiquidacionModal({ isOpen, onOpenChange, onSuccess, monthYear, currentBalance = 0 }: { isOpen: boolean, onOpenChange: (val: boolean) => void, onSuccess: () => void, monthYear: string, currentBalance?: number }) {
     const [monto, setMonto] = useState(0);
     const [comentarios, setComentarios] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+
+    const handleQuickFill = () => {
+        if (currentBalance < 0) {
+            setMonto(Math.abs(currentBalance));
+            setComentarios(`Liquidación de balance (${monthYear.replace('_', ' ')})`);
+        }
+    };
 
     const handleSave = async () => {
         if (monto <= 0) return;
@@ -2524,34 +2795,90 @@ function AddLiquidacionModal({ isOpen, onOpenChange, onSuccess, monthYear }: { i
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Registrar Pago a Administradora</DialogTitle>
-                    <DialogDescription>
-                        Este registro es de control interno y NO afecta los ingresos reportados en caja.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label>Monto a entregar</Label>
-                        <CurrencyInput value={monto} onChange={setMonto} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Comentarios / Nota</Label>
-                        <Input 
-                            placeholder="Ej. Depósito parcial, pago de adeudo, etc." 
-                            value={comentarios} 
-                            onChange={(e) => setComentarios(e.target.value)} 
-                        />
+            <DialogContent className="p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] sm:max-w-md bg-card" hideCloseButton={true}>
+                <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 text-white">
+                    <div className="header-light-beam pointer-events-none" />
+                    <div className="relative z-10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <DollarSign className="h-5 w-5 text-[#C5A880]" />
+                            <div>
+                                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                                    Registrar Pago a Administradora
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                                    Liquidación de balance mensual o reembolso de caja
+                                </DialogDescription>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => onOpenChange(false)}
+                            className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                     </div>
                 </div>
-                <DialogFooter className="gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>Cancelar</Button>
-                    <Button onClick={handleSave} disabled={isSaving || monto <= 0}>
-                        {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+
+                <div className="space-y-4 p-5">
+                    {/* Tarjeta de estado de balance actual */}
+                    <div className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between">
+                        <div>
+                            <span className="text-[10px] uppercase font-semibold text-muted-foreground block">
+                                Balance acumulado del mes
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className={cn("text-base font-bold", currentBalance < 0 ? "text-red-400" : "text-blue-400")}>
+                                    {currentBalance < 0 ? `-$${Math.abs(currentBalance).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : `$${currentBalance.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                    ({currentBalance < 0 ? "A favor administradora" : "A favor administrador gral"})
+                                </span>
+                            </div>
+                        </div>
+                        {currentBalance < 0 && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleQuickFill}
+                                className="h-7 text-[11px] px-2 border-border/60 text-foreground hover:bg-muted/30"
+                            >
+                                Saldar total
+                            </Button>
+                        )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center">
+                            <DollarSign className="mr-1 h-3.5 w-3.5 text-[#C5A880]" /> Monto a entregar
+                        </Label>
+                        <CurrencyInput value={monto} onChange={setMonto} className="h-10 text-base font-bold" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Comentarios / Nota</Label>
+                        <Input 
+                            placeholder="Ej. Depósito parcial, pago de adeudo, liquidación del mes..." 
+                            value={comentarios} 
+                            onChange={(e) => setComentarios(e.target.value)} 
+                            className="h-10 text-xs rounded-xl"
+                        />
+                    </div>
+                    <div className="p-3 bg-muted/20 border border-border/40 rounded-xl text-xs text-muted-foreground flex items-start gap-2.5">
+                        <HelpCircle className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                        <span>Este registro es de control interno y <strong className="text-foreground">NO afecta</strong> los ingresos fiscales reportados en la caja diaria.</span>
+                    </div>
+                </div>
+
+                <div className="p-4 bg-muted/20 border-t border-border/40 flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving} className="rounded-xl text-xs h-9">
+                        Cancelar
+                    </Button>
+                    <Button variant="alfa" onClick={handleSave} disabled={isSaving || monto <= 0} className="rounded-xl text-xs h-9 font-semibold px-4">
+                        {isSaving ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />}
                         Confirmar Pago
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

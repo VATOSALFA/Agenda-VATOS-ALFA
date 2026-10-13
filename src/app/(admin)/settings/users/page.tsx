@@ -3,13 +3,13 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save, Clock, Mail, Loader2 } from "lucide-react";
-
+import { Search, Info, Pencil, Trash2, ChevronLeft, ChevronRight, UserPlus, Save, Clock, Mail, Loader2, Users, ShieldCheck, Building } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { User, Local, Role } from '@/lib/types';
@@ -49,10 +49,10 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange, isD
 
     return (
         <Collapsible defaultOpen={false}>
-            <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted">
-                <CollapsibleTrigger className="flex items-center gap-2 font-semibold flex-grow text-left" disabled={isDisabled}>
-                    <category.icon className="h-5 w-5 text-primary" />
-                    {category.title}
+            <div className="flex items-center justify-between p-2.5 border border-border/60 rounded-t-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+                <CollapsibleTrigger className="flex items-center gap-2 font-medium text-xs flex-grow text-left" disabled={isDisabled}>
+                    <category.icon className="h-4 w-4 text-slate-400 shrink-0" />
+                    <span className="text-foreground">{category.title}</span>
                 </CollapsibleTrigger>
                 <Checkbox
                     checked={isAllSelected}
@@ -60,24 +60,25 @@ const PermissionGroup = ({ category, currentPermissions, onPermissionChange, isD
                     aria-label={`Seleccionar todo para ${category.title}`}
                     onClick={(e) => e.stopPropagation()}
                     disabled={isDisabled}
+                    className="scale-90"
                 />
             </div>
-            <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
-                <div className="space-y-3">
+            <CollapsibleContent className="p-3 border border-t-0 border-border/60 rounded-b-lg bg-card space-y-2">
+                <div className="space-y-2">
                     {category.permissions?.map(p => (
                         <div key={p.key} className="flex items-center gap-2">
-                            <Checkbox id={`${category.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} />
-                            <label htmlFor={`${category.title}-${p.key}`} className="text-sm text-muted-foreground">{p.label}</label>
+                            <Checkbox id={`${category.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} className="scale-90" />
+                            <label htmlFor={`${category.title}-${p.key}`} className="text-xs text-muted-foreground cursor-pointer">{p.label}</label>
                         </div>
                     ))}
                     {category.subCategories?.map(sub => (
-                        <div key={sub.title} className="ml-4 space-y-2 pt-2">
-                            <p className="font-semibold text-sm">{sub.title}</p>
-                            <div className="pl-2 space-y-2">
+                        <div key={sub.title} className="ml-3 space-y-1.5 pt-1.5 border-t border-border/40">
+                            <p className="font-semibold text-xs text-foreground">{sub.title}</p>
+                            <div className="pl-1 space-y-1.5">
                                 {sub.permissions.map(p => (
                                     <div key={p.key} className="flex items-center gap-2">
-                                        <Checkbox id={`${category.title}-${sub.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} />
-                                        <label htmlFor={`${category.title}-${sub.title}-${p.key}`} className="text-sm text-muted-foreground">{p.label}</label>
+                                        <Checkbox id={`${category.title}-${sub.title}-${p.key}`} checked={currentPermissions.includes(p.key)} onCheckedChange={(checked) => onPermissionChange(p.key, !!checked)} disabled={isDisabled} className="scale-90" />
+                                        <label htmlFor={`${category.title}-${sub.title}-${p.key}`} className="text-xs text-muted-foreground cursor-pointer">{p.label}</label>
                                     </div>
                                 ))}
                             </div>
@@ -281,214 +282,370 @@ export default function UsersPage() {
     }
 
     return (
-        <div className="flex-1 space-y-6 p-4 md:p-8">
-            <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>En esta pantalla podrás crear y gestionar usuarios.</AlertTitle>
-                <AlertDescription>
-                    Recuerda que un usuario no es lo mismo que un profesional, los usuarios son ilimitados y sirven para asignar diferentes permisos a cada persona que trabaje en tu compañía.
-                </AlertDescription>
-            </Alert>
-
-            <div className="flex items-center justify-between space-y-2 pt-4">
-                <h2 className="text-3xl font-bold tracking-tight">Usuarios registrados</h2>
-                <div className="flex items-center space-x-2">
-                    <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
-                        <SelectTrigger className="w-[180px]">
-                            <SelectValue placeholder="Ordenar por" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="default">Por defecto</SelectItem>
-                            <SelectItem value="name">Nombre</SelectItem>
-                            <SelectItem value="role">Rol</SelectItem>
-                            <SelectItem value="local">Sucursal</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar usuario" className="pl-10" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                    </div>
-                    <Button onClick={openNewModal}>
-                        <UserPlus className="mr-2 h-4 w-4" />
-                        Nuevo Usuario
+        <div className="flex-1 space-y-4 max-w-6xl pb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-border/60">
+                <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">Usuarios del Sistema</h2>
+                    <p className="text-xs text-muted-foreground hidden sm:block">
+                        Gestiona las cuentas de acceso, roles y permisos de tu personal en la plataforma.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={openNewModal} variant="alfa" className="h-8 sm:h-9 px-3.5 sm:px-4 text-xs font-semibold gap-1.5 shrink-0">
+                        <UserPlus className="h-3.5 w-3.5" />
+                        <span>Nuevo Usuario</span>
                     </Button>
                 </div>
             </div>
 
-            <Card>
-                <CardContent className="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Nombre</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Rol asignado</TableHead>
-                                <TableHead>Local asignado</TableHead>
-                                <TableHead className="text-right">Acciones</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {isLoading ? (
-                                Array.from({ length: 5 }).map((_, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+            <Tabs defaultValue="usuarios" className="w-full space-y-4">
+                <TabsList className="grid w-full grid-cols-2 h-auto p-1 bg-muted/20 border border-border/60 rounded-xl">
+                    <TabsTrigger
+                        value="usuarios"
+                        className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                    >
+                        <Users className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span>Usuarios ({sortedUsers.length})</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="roles"
+                        className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
+                    >
+                        <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span>Roles y Permisos</span>
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* TAB 1: USUARIOS */}
+                <TabsContent value="usuarios" className="mt-0 space-y-3.5 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                    {/* Barra de Filtros y Búsqueda */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Input
+                                placeholder="Buscar por nombre o correo..."
+                                className="pl-9 h-8 text-xs rounded-lg"
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+                                <SelectTrigger className="h-8 text-xs w-full sm:w-[160px] rounded-lg border-border/80">
+                                    <SelectValue placeholder="Ordenar por" />
+                                </SelectTrigger>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                    <SelectItem value="default">Por defecto</SelectItem>
+                                    <SelectItem value="name">Nombre</SelectItem>
+                                    <SelectItem value="role">Rol</SelectItem>
+                                    <SelectItem value="local">Sucursal</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* VISTA ESCRITORIO: Tabla Compacta (Regla 6) */}
+                    <div className="hidden sm:block">
+                        <Card className="border border-border/70 shadow-xs overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                        <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Nombre</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">Email</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">Rol asignado</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">Local</TableHead>
+                                        <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground text-right w-28">Acciones</TableHead>
                                     </TableRow>
-                                ))
-                            ) : paginatedUsers.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
-                                        No se encontraron usuarios.
-                                    </TableCell>
-                                </TableRow>
-                            ) : paginatedUsers.map((user) => (
-                                <TableRow key={user.id}>
-                                    <TableCell className="font-medium">{user.name}</TableCell>
-                                    <TableCell>{user.email}</TableCell>
-                                    <TableCell>{user.role}</TableCell>
-                                    <TableCell>{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                                disabled={resendingUserId === user.id}
-                                                onClick={() => handleResendInviteFromTable(user)}
-                                                title={`Reenviar correo de invitación a ${user.email}`}
-                                            >
-                                                {resendingUserId === user.id ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                                ) : (
-                                                    <Mail className="h-4 w-4" />
-                                                )}
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditModal(user)} title="Editar usuario">
-                                                <Pencil className="h-4 w-4" />
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setUserToDelete(user)} title="Eliminar usuario">
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {!isLoading && (
-                <div className="flex items-center justify-end space-x-6 pt-2 pb-4">
-                    <div className="flex items-center space-x-2">
-                        <p className="text-sm font-medium">Resultados por página</p>
-                        <Select
-                            value={`${itemsPerPage}`}
-                            onValueChange={(value) => {
-                                setItemsPerPage(Number(value))
-                                setCurrentPage(1)
-                            }}
-                        >
-                            <SelectTrigger className="h-8 w-[70px]">
-                                <SelectValue placeholder={`${itemsPerPage}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="5">5</SelectItem>
-                                <SelectItem value="10">10</SelectItem>
-                                <SelectItem value="20">20</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="text-sm font-medium">
-                        Página {currentPage} de {totalPages}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                        >
-                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                        >
-                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    </div>
-                </div>
-            )}
-
-            <div className="pt-8 border-t">
-                <h2 className="text-3xl font-bold tracking-tight mb-6">Roles de usuarios</h2>
-                {isLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-                        <Skeleton className="h-96 w-full" />
-                        <Skeleton className="h-96 w-full" />
-                        <Skeleton className="h-96 w-full" />
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-                        {localRolesState.map((role) => {
-                            const RoleIcon = roleIcons[role.title] || Info;
-                            return (
-                                <Card key={role.id}>
-                                    <CardHeader className="flex flex-row items-center gap-4 space-y-0">
-                                        <RoleIcon className="h-8 w-8 text-primary" />
-                                        <CardTitle>{role.title}</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-sm text-muted-foreground mb-4 h-12">{role.description}</p>
-                                        <div className="space-y-2">
-                                            {allPermissionCategories.map(cat => (
-                                                <PermissionGroup
-                                                    key={cat.title}
-                                                    category={cat}
-                                                    currentPermissions={role.permissions}
-                                                    onPermissionChange={(key, checked) => handlePermissionChange(role.id, key, checked)}
-                                                    isDisabled={false}
-                                                />
-                                            ))}
-
-                                            <Collapsible defaultOpen={false}>
-                                                <div className="flex items-center justify-between p-3 border rounded-t-lg bg-muted/50 hover:bg-muted mt-4">
-                                                    <CollapsibleTrigger className="flex items-center gap-2 font-semibold flex-grow text-left">
-                                                        <Clock className="h-5 w-5 text-primary" />
-                                                        Historial
-                                                    </CollapsibleTrigger>
+                                </TableHeader>
+                                <TableBody>
+                                    {isLoading ? (
+                                        Array.from({ length: 4 }).map((_, i) => (
+                                            <TableRow key={i} className="h-9">
+                                                <TableCell colSpan={5} className="py-2 px-3.5"><Skeleton className="h-4 w-full" /></TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : paginatedUsers.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="h-20 text-center text-xs text-muted-foreground">
+                                                No se encontraron usuarios.
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : paginatedUsers.map((user) => (
+                                        <TableRow key={user.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                            <TableCell className="py-1.5 px-3.5 text-xs font-semibold text-foreground">{user.name}</TableCell>
+                                            <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">{user.email}</TableCell>
+                                            <TableCell className="py-1.5 px-3 text-xs">
+                                                <Badge variant="outline" className="text-[10px] font-sans font-medium py-0 px-2 rounded-full border-border/60">
+                                                    {user.role}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">{user.local_id ? localMap.get(user.local_id) : 'Todos'}</TableCell>
+                                            <TableCell className="py-1.5 px-3.5 text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <button
+                                                        type="button"
+                                                        className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
+                                                        disabled={resendingUserId === user.id}
+                                                        onClick={() => handleResendInviteFromTable(user)}
+                                                        title={`Reenviar correo de invitación a ${user.email}`}
+                                                    >
+                                                        {resendingUserId === user.id ? (
+                                                            <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                                                        ) : (
+                                                            <Mail className="h-3.5 w-3.5" />
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-slate-400 hover:text-white transition-colors p-1 rounded-md hover:bg-white/10"
+                                                        onClick={() => openEditModal(user)}
+                                                        title="Editar usuario"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded-md hover:bg-white/10"
+                                                        onClick={() => setUserToDelete(user)}
+                                                        title="Eliminar usuario"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
-                                                <CollapsibleContent className="p-4 border border-t-0 rounded-b-lg">
-                                                    <div className="space-y-2">
-                                                        <label className="text-sm font-medium">
-                                                            Días visibles en el pasado
-                                                        </label>
-                                                        <Input
-                                                            type="number"
-                                                            min="0"
-                                                            placeholder="Sin límite"
-                                                            value={role.historyRestrictionDays ?? ''}
-                                                            onChange={(e) => handleHistoryRestrictionChange(role.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
-                                                        />
-                                                        <p className="text-xs text-muted-foreground">
-                                                            Define cuántos días hacia atrás puede ver este rol. Dejar vacío para acceso ilimitado.
-                                                        </p>
-                                                    </div>
-                                                </CollapsibleContent>
-                                            </Collapsible>
-                                        </div>
-                                        <Button className="w-full mt-4" onClick={() => handleSaveRolePermissions(role.id)}>
-                                            <Save className="mr-2 h-4 w-4" /> Guardar Cambios
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            );
-                        })}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </Card>
                     </div>
-                )}
-            </div>
+
+                    {/* VISTA MÓVIL: Tarjetas compactas sin scroll horizontal (sm:hidden) */}
+                    <div className="sm:hidden space-y-2.5">
+                        {isLoading ? (
+                            Array.from({ length: 4 }).map((_, i) => (
+                                <Card key={i} className="p-3 border border-border/70">
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <Skeleton className="h-4 w-32" />
+                                            <Skeleton className="h-5 w-20 rounded-full" />
+                                        </div>
+                                        <Skeleton className="h-3 w-40" />
+                                        <Skeleton className="h-3 w-24" />
+                                    </div>
+                                </Card>
+                            ))
+                        ) : paginatedUsers.length === 0 ? (
+                            <Card className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border/80">
+                                No se encontraron usuarios.
+                            </Card>
+                        ) : paginatedUsers.map((user) => (
+                            <div
+                                key={user.id}
+                                className="rounded-xl border border-border/70 bg-card p-3 shadow-xs space-y-2.5"
+                            >
+                                {/* Fila superior: Nombre, Rol y Acciones */}
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                                                {user.name}
+                                            </span>
+                                            <Badge variant="outline" className="text-[10px] font-sans font-medium py-0 px-2 rounded-full border-border/60">
+                                                {user.role}
+                                            </Badge>
+                                        </div>
+                                    </div>
+
+                                    {/* Botones de acción limpios (bare icons) */}
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                            type="button"
+                                            className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                                            disabled={resendingUserId === user.id}
+                                            onClick={() => handleResendInviteFromTable(user)}
+                                            title={`Reenviar invitación a ${user.email}`}
+                                        >
+                                            {resendingUserId === user.id ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                                            ) : (
+                                                <Mail className="h-3.5 w-3.5" />
+                                            )}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                                            onClick={() => openEditModal(user)}
+                                            title="Editar usuario"
+                                        >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="text-slate-400 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-white/10"
+                                            onClick={() => setUserToDelete(user)}
+                                            title="Eliminar usuario"
+                                        >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Fila inferior: Email y Local */}
+                                <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                                    <span className="truncate flex items-center gap-1">
+                                        <Mail className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span className="truncate">{user.email}</span>
+                                    </span>
+                                    <span className="shrink-0 flex items-center gap-1 text-[11px] font-medium text-foreground/80">
+                                        <Building className="h-3 w-3 text-slate-400 shrink-0" />
+                                        <span>{user.local_id ? localMap.get(user.local_id) : 'Todas las sucursales'}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Paginación */}
+                    {!isLoading && totalPages > 1 && (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1 pb-2">
+                            <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                                <span>Resultados por página</span>
+                                <Select
+                                    value={`${itemsPerPage}`}
+                                    onValueChange={(value) => {
+                                        setItemsPerPage(Number(value))
+                                        setCurrentPage(1)
+                                    }}
+                                >
+                                    <SelectTrigger className="h-7 w-[65px] text-xs rounded-lg border-border/80">
+                                        <SelectValue placeholder={`${itemsPerPage}`} />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                        <SelectItem value="5">5</SelectItem>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="20">20</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs text-muted-foreground">
+                                    Página {currentPage} de {totalPages}
+                                </span>
+                                <div className="flex items-center space-x-1.5">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className="h-7 px-2 text-xs rounded-lg border-border/80"
+                                    >
+                                        <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Anterior
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className="h-7 px-2 text-xs rounded-lg border-border/80"
+                                    >
+                                        Siguiente <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </TabsContent>
+
+                {/* TAB 2: ROLES Y PERMISOS */}
+                <TabsContent value="roles" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
+                    <div className="space-y-1">
+                        <h3 className="text-sm font-semibold tracking-tight text-foreground">Roles y Permisos de Usuarios</h3>
+                        <p className="text-xs text-muted-foreground hidden sm:block">
+                            Personaliza los accesos de visualización y edición permitidos para cada nivel del personal.
+                        </p>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                            <Skeleton className="h-72 w-full rounded-xl" />
+                            <Skeleton className="h-72 w-full rounded-xl" />
+                            <Skeleton className="h-72 w-full rounded-xl" />
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+                            {localRolesState.map((role) => {
+                                const RoleIcon = roleIcons[role.title] || Info;
+                                return (
+                                    <Card key={role.id} className="border border-border/70 shadow-xs overflow-hidden flex flex-col justify-between">
+                                        <div>
+                                            <CardHeader className="py-2.5 px-3.5 sm:px-4 border-b border-border/50 bg-muted/10">
+                                                <div className="flex items-center gap-2">
+                                                    <RoleIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                                                    <CardTitle className="text-sm font-semibold tracking-tight text-foreground">{role.title}</CardTitle>
+                                                </div>
+                                                <CardDescription className="text-xs text-muted-foreground mt-0.5 line-clamp-2 hidden sm:block">
+                                                    {role.description}
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="p-3 sm:p-4 space-y-2.5">
+                                                <div className="space-y-2">
+                                                    {allPermissionCategories.map(cat => (
+                                                        <PermissionGroup
+                                                            key={cat.title}
+                                                            category={cat}
+                                                            currentPermissions={role.permissions}
+                                                            onPermissionChange={(key, checked) => handlePermissionChange(role.id, key, checked)}
+                                                            isDisabled={false}
+                                                        />
+                                                    ))}
+
+                                                    <Collapsible defaultOpen={false}>
+                                                        <div className="flex items-center justify-between p-2.5 border border-border/60 rounded-t-lg bg-muted/20 hover:bg-muted/40 transition-colors mt-3">
+                                                            <CollapsibleTrigger className="flex items-center gap-2 font-medium text-xs flex-grow text-left">
+                                                                <Clock className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                <span className="text-foreground">Historial</span>
+                                                            </CollapsibleTrigger>
+                                                        </div>
+                                                        <CollapsibleContent className="p-3 border border-t-0 border-border/60 rounded-b-lg bg-card">
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-xs font-medium text-foreground">
+                                                                    Días visibles en el pasado
+                                                                </label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    placeholder="Sin límite"
+                                                                    className="h-8 text-xs font-sans"
+                                                                    value={role.historyRestrictionDays ?? ''}
+                                                                    onChange={(e) => handleHistoryRestrictionChange(role.id, e.target.value === '' ? undefined : parseInt(e.target.value))}
+                                                                />
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Define cuántos días hacia atrás puede ver este rol. Dejar vacío para ilimitado.
+                                                                </p>
+                                                            </div>
+                                                        </CollapsibleContent>
+                                                    </Collapsible>
+                                                </div>
+                                            </CardContent>
+                                        </div>
+                                        <div className="p-3 sm:p-4 pt-0">
+                                            <Button
+                                                variant="alfa"
+                                                className="w-full h-8 text-xs font-semibold gap-1.5"
+                                                onClick={() => handleSaveRolePermissions(role.id)}
+                                            >
+                                                <Save className="h-3.5 w-3.5" />
+                                                <span>Guardar Permisos</span>
+                                            </Button>
+                                        </div>
+                                    </Card>
+                                );
+                            })}
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
 
             {isModalOpen && (
                 <UserModal
@@ -502,7 +659,7 @@ export default function UsersPage() {
 
             {userToDelete && (
                 <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
-                    <AlertDialogContent>
+                    <AlertDialogContent className="border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                         <AlertDialogHeader>
                             <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                             <AlertDialogDescription>
@@ -510,8 +667,8 @@ export default function UsersPage() {
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive hover:bg-destructive/90">
+                            <AlertDialogCancel className="rounded-xl border-border/60">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDeleteUser} className="rounded-xl bg-destructive hover:bg-destructive/90 text-white">
                                 Sí, eliminar
                             </AlertDialogAction>
                         </AlertDialogFooter>

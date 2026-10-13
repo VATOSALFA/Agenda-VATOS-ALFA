@@ -31,7 +31,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2 } from 'lucide-react';
+import { Scissors, Lock, Calendar as CalendarIcon, Clock, Loader2, CalendarX2, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { es } from 'date-fns/locale';
 import type { Profesional } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
@@ -227,33 +228,74 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent onCloseAutoFocus={(e) => e.preventDefault()}>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <DialogHeader>
-              <DialogTitle>Bloquear Horario</DialogTitle>
-              <DialogDescription>
-                Selecciona un barbero y un rango horario para marcarlo como no disponible en la agenda.
-              </DialogDescription>
-            </DialogHeader>
+      <DialogContent 
+        hideCloseButton={true}
+        onCloseAutoFocus={(e) => e.preventDefault()}
+        className="max-w-lg p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col"
+      >
+        {/* CABECERA OFICIAL VATOS ALFA */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          {/* Haz de luz animado en diagonal */}
+          <div className="header-light-beam" aria-hidden="true" />
 
-            <div className="space-y-4 px-1 max-h-[60vh] overflow-y-auto">
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <CalendarX2 className="h-5 w-5 text-slate-300 shrink-0" />
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                  Bloquear Horario
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                  Selecciona un barbero y un rango horario para marcarlo como no disponible en la agenda.
+                </DialogDescription>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleOpenChange(false)}
+              className="p-1 text-slate-300 hover:text-white transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 p-5">
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
               <FormField
                 control={form.control}
                 name="barbero_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4" /> Barbero</FormLabel>
+                    <FormLabel className="flex items-center"><Scissors className="mr-2 h-4 w-4 text-slate-400" /> Barbero</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value} disabled={professionalsLoading}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm">
                           <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un barbero'} />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 p-1.5 min-w-[210px]">
                         {professionals.map(professional => (
-                          <SelectItem key={professional.id} value={professional.id}>
-                            {professional.publicName || professional.name}
+                          <SelectItem
+                            key={professional.id}
+                            value={professional.id}
+                            textValue={professional.publicName || professional.name}
+                            className="py-1.5 px-2 rounded-lg cursor-pointer my-0.5"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="h-6 w-6 border border-border/60 shrink-0">
+                                <AvatarImage src={professional.avatarUrl} alt={professional.publicName || professional.name} />
+                                <AvatarFallback className="bg-[#202A49] text-white font-bold text-[9px]">
+                                  {(professional.publicName || professional.name || 'P').substring(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="font-semibold text-xs text-foreground leading-tight">
+                                {professional.publicName || professional.name}
+                              </span>
+                            </div>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -268,9 +310,9 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                 name="motivo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center"><Lock className="mr-2 h-4 w-4" /> Motivo del bloqueo</FormLabel>
+                    <FormLabel className="flex items-center"><Lock className="mr-2 h-4 w-4 text-slate-400" /> Motivo del bloqueo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej. Almuerzo, día libre, evento" {...field} />
+                      <Input placeholder="Ej. Almuerzo, día libre, evento" className="h-10 rounded-xl border-border/80 bg-card" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -282,27 +324,27 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                 name="fecha"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4" /> Fecha</FormLabel>
+                    <FormLabel className="flex items-center"><CalendarIcon className="mr-2 h-4 w-4 text-slate-400" /> Fecha</FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
                             variant={"outline"}
                             className={cn(
-                              "w-full pl-3 text-left font-normal",
+                              "w-full h-10 pl-3 text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 hover:border-blue-500/50 shadow-xs",
                               !field.value && "text-muted-foreground"
                             )}
                           >
-                            {field.value ? format(field.value, 'PPP', { locale: es }) : <span>Selecciona una fecha</span>}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                            {field.value ? format(field.value, "EEEE dd 'de' MMMM", { locale: es }) : format(new Date(), "EEEE dd 'de' MMMM", { locale: es })}
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start">
                         <Calendar
                           locale={es}
                           mode="single"
-                          selected={field.value}
+                          selected={field.value || new Date()}
                           onSelect={field.onChange}
                           disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                           initialFocus
@@ -320,14 +362,14 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                   name="hora_inicio"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Inicio</FormLabel>
+                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-slate-400" /> Hora Inicio</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value} disabled={timeSlots.length === 0}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm">
                             <SelectValue placeholder={!selectedBarberId || !selectedDate ? 'Selecciona barbero y fecha' : 'Selecciona'} />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-52 p-1 min-w-[5rem]">
                           {timeSlots.map(time => (
                             <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
                           ))}
@@ -342,14 +384,14 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
                   name="hora_fin"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" /> Hora Fin</FormLabel>
+                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4 text-slate-400" /> Hora Fin</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value} disabled={timeSlots.length === 0}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm">
                             <SelectValue placeholder={!selectedBarberId || !selectedDate ? 'Selecciona barbero y fecha' : 'Selecciona'} />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="max-h-52 p-1 min-w-[5rem]">
                           {timeSlots.map(time => (
                             <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
                           ))}
@@ -363,8 +405,8 @@ export function BlockScheduleForm({ isOpen, onOpenChange, onFormSubmit, initialD
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
+              <Button type="button" variant="outline" className="rounded-xl" onClick={() => handleOpenChange(false)}>Cancelar</Button>
+              <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto btn-vatos-alfa rounded-xl font-bold">
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar Bloqueo
               </Button>

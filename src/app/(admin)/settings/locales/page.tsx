@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -7,6 +6,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +15,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,17 +26,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Filter,
   PlusCircle,
   Pencil,
-  Clock,
   Circle,
-  ChevronDown,
-  GripVertical,
-  Info,
+  MoreVertical,
   Trash2,
   MapPin,
   ExternalLink,
+  Phone,
+  Power,
 } from 'lucide-react';
 import { NewLocalModal } from '@/components/admin/locales/new-local-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -48,8 +45,6 @@ import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { cn } from '@/lib/utils';
 import type { Local } from '@/lib/types';
-
-
 
 export default function LocalesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,24 +57,24 @@ export default function LocalesPage() {
   const { data: locales, loading: localesLoading } = useFirestoreQuery<Local>('locales', queryKey);
 
   const handleDataUpdated = () => {
-    setQueryKey(prev => prev + 1); // Refreshes the data
+    setQueryKey(prev => prev + 1);
     closeModal();
   };
 
   const openNewModal = () => {
     setEditingLocal(null);
     setIsModalOpen(true);
-  }
+  };
 
   const openEditModal = (local: Local) => {
     setEditingLocal(local);
     setIsModalOpen(true);
-  }
+  };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingLocal(null);
-  }
+  };
 
   const handleToggleStatus = async (local: Local) => {
     if (!db) return;
@@ -89,7 +84,7 @@ export default function LocalesPage() {
       await updateDoc(localRef, { status: newStatus });
       toast({
         title: `Local ${newStatus === 'active' ? 'activado' : 'desactivado'}`,
-        description: `El local "${local.name}" ha sido ${newStatus === 'active' ? 'activado' : 'desactivado'}.`,
+        description: `El local "${local.name}" ahora está ${newStatus === 'active' ? 'activo' : 'inactivo'}.`,
       });
       setQueryKey(prev => prev + 1);
     } catch (error) {
@@ -123,97 +118,176 @@ export default function LocalesPage() {
     }
   };
 
-
   return (
     <>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>¡Administra tus locales!</AlertTitle>
-          <AlertDescription>
-            En esta sección puedes administrar y crear nuevos locales o sucursales para tu negocio.
-          </AlertDescription>
-        </Alert>
-
-        <div className="flex items-center justify-between pt-4">
-          <Button variant="outline">
-            <Filter className="mr-2 h-4 w-4" /> Filtrar por
-          </Button>
-          <Button onClick={openNewModal}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo local
-          </Button>
+      <div className="flex-1 space-y-5 max-w-5xl pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/60">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Locales y Sucursales</h2>
+            <p className="text-xs text-muted-foreground">
+              Gestiona las sucursales físicas de tu negocio, horarios y enlace de reseñas en Google Maps.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="alfa"
+              size="sm"
+              onClick={openNewModal}
+              className="h-9 px-4 text-xs font-semibold"
+            >
+              <PlusCircle className="mr-1.5 h-3.5 w-3.5 text-white" />
+              Nuevo Local
+            </Button>
+          </div>
         </div>
 
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Listado de Locales</CardTitle>
+        <Card className="border border-border/70 shadow-xs overflow-hidden">
+          <CardHeader className="py-3 px-4 sm:px-5 border-b border-border/50 bg-muted/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                  Listado de Sucursales
+                </CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[11px] font-sans font-medium bg-background border-border/60">
+                {locales.length} {locales.length === 1 ? 'sucursal' : 'sucursales'}
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Controla la visibilidad y disponibilidad de cada sucursal en la agenda.
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="divide-y divide-border">
+            <div className="divide-y divide-border/50 bg-card">
               {localesLoading ? (
                 Array.from({ length: 2 }).map((_, i) => (
                   <div key={i} className="flex items-center justify-between p-4">
                     <div className="space-y-2">
-                      <Skeleton className="h-5 w-40" />
-                      <Skeleton className="h-4 w-60" />
+                      <Skeleton className="h-4 w-40" />
+                      <Skeleton className="h-3 w-60" />
                     </div>
-                    <Skeleton className="h-9 w-44" />
+                    <Skeleton className="h-8 w-24" />
                   </div>
                 ))
-              ) : locales.map((local) => (
-                <div key={local.id} className="flex items-center justify-between p-4 hover:bg-muted/50">
-                  <div>
-                    <div className="font-bold flex items-center gap-2">
-                      <Badge className={cn(
-                        local.status === 'active'
-                          ? 'bg-primary/10 text-primary border-primary/30'
-                          : 'bg-accent/20 text-accent-foreground border-accent/50'
-                      )}>
-                        <Circle className={cn("mr-2 h-2 w-2 fill-current", local.status === 'active' ? 'text-primary' : 'text-accent-foreground')} />
-                        {local.status === 'active' ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                      {local.name}
+              ) : locales.map((local) => {
+                const isActive = local.status === 'active';
+                const mapsUrl = local.googleMapsReviewUrl || (local as any).google_maps_review_url;
+
+                return (
+                  <div
+                    key={local.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 hover:bg-muted/20 transition-colors gap-3"
+                  >
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <span className="font-semibold text-xs sm:text-sm text-foreground">
+                          {local.name}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px] font-sans font-medium py-0 px-2 rounded-full",
+                            isActive
+                              ? "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                              : "bg-muted/40 text-muted-foreground border-border/60"
+                          )}
+                        >
+                          <Circle className={cn("mr-1.5 h-1.5 w-1.5 fill-current", isActive ? "text-blue-400" : "text-slate-400")} />
+                          {isActive ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                        {local.address && (
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[280px] sm:max-w-md">{local.address}</span>
+                          </div>
+                        )}
+                        {local.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span>{local.phone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {Boolean(mapsUrl) && (
+                        <div>
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 hover:underline font-medium transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3 text-slate-400" />
+                            <span>Enlace de Reseñas en Google Maps</span>
+                          </a>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{local.address}</p>
-                    {Boolean(local.googleMapsReviewUrl || (local as any).google_maps_review_url) && (
-                      <a
-                        href={local.googleMapsReviewUrl || (local as any).google_maps_review_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1 font-medium"
+
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openEditModal(local)}
+                        className="h-8 px-2.5 text-xs rounded-lg border-border/80 hover:bg-muted/50 gap-1.5 text-foreground"
                       >
-                        <MapPin className="h-3 w-3" />
-                        Google Maps (Reseñas)
-                        <ExternalLink className="h-2.5 w-2.5 opacity-70" />
-                      </a>
-                    )}
+                        <Pencil className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Editar</span>
+                      </Button>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-white rounded-lg hover:bg-white/10"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                            <span className="sr-only">Acciones</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-44 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card p-1 space-y-0.5"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => handleToggleStatus(local)}
+                            className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer flex items-center gap-2"
+                          >
+                            <Power className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{isActive ? 'Desactivar local' : 'Activar local'}</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => setLocalToDelete(local)}
+                            className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer flex items-center gap-2 text-red-400 hover:!text-red-300 focus:text-red-400 focus:bg-red-500/10"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                            <span>Eliminar local</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          Opciones <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleToggleStatus(local)}>
-                          {local.status === 'active' ? 'Desactivar' : 'Activar'}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setLocalToDelete(local)} className="text-destructive hover:!text-destructive focus:text-destructive focus:bg-destructive/10">
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Eliminar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button variant="outline" size="sm" onClick={() => openEditModal(local)}>
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Editar
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
+
               {!localesLoading && locales.length === 0 && (
-                <p className="py-10 text-center text-muted-foreground">No hay locales creados. ¡Agrega uno!</p>
+                <div className="py-12 text-center space-y-2">
+                  <MapPin className="h-8 w-8 text-slate-500 mx-auto opacity-50" />
+                  <p className="text-xs text-muted-foreground">No hay locales registrados aún.</p>
+                  <Button
+                    variant="alfa"
+                    size="sm"
+                    onClick={openNewModal}
+                    className="h-8 px-4 text-xs font-semibold mt-2"
+                  >
+                    Crear Primer Local
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>
@@ -229,18 +303,28 @@ export default function LocalesPage() {
 
       {localToDelete && (
         <AlertDialog open={!!localToDelete} onOpenChange={(open) => !open && setLocalToDelete(null)}>
-          <AlertDialogContent>
+          <AlertDialogContent className="border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta acción no se puede deshacer. Esto eliminará permanentemente el local
-                <span className="font-bold"> {localToDelete.name}</span>.
+              <AlertDialogTitle className="text-base font-bold text-foreground">
+                ¿Eliminar sucursal?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-muted-foreground">
+                Esta acción no se puede deshacer. Se eliminará permanentemente la sucursal
+                <span className="font-semibold text-foreground"> "{localToDelete.name}"</span>.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setLocalToDelete(null)}>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteLocal} className="bg-destructive hover:bg-destructive/90">
-                Sí, eliminar local
+            <AlertDialogFooter className="gap-2 sm:gap-0">
+              <AlertDialogCancel
+                onClick={() => setLocalToDelete(null)}
+                className="h-8 px-3 text-xs rounded-lg"
+              >
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteLocal}
+                className="h-8 px-3 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold"
+              >
+                Sí, eliminar
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -21,10 +21,37 @@ export interface Client {
   puntos?: number;
   fotoUrl?: string;
   avatarUrl?: string;
+  foto_perfil_url?: string;
+  photoURL?: string;
   cortes_acumulados?: number;
+  cortesAcumulados?: number;
   corte_gratis_disponible?: boolean;
+  corteGratisDisponible?: boolean;
   nivel?: string;
   appVinculada?: boolean;
+  alfaCoins?: number;
+  alfa_coins?: number;
+  puntosLealtad?: number;
+  puntos_lealtad?: number;
+  fecha_registro_app?: any;
+}
+
+export interface CanjeBeneficio {
+  id?: string;
+  folio: string;
+  benefitId: string;
+  benefitTitle: string;
+  clienteId: string;
+  clienteNombre: string;
+  telefono?: string;
+  estado: 'disponible' | 'canjeado' | 'expirado';
+  fechaCreacion?: any;
+  fechaCanje?: any;
+  canjeadoEn?: any;
+  sucursal?: string;
+  recepcionista?: string;
+  ticketId?: string;
+  detalles?: string;
 }
 
 export interface Local {
@@ -90,6 +117,8 @@ export interface Reservation {
   notas?: string;
   nota_interna?: string;
   creado_en: Timestamp; // Firestore Timestamp
+  creada_por?: string;
+  creado_por?: string;
   canal_reserva?: string;
   origen?: string;
   local_id?: string; // Added local_id to reservations
@@ -103,6 +132,7 @@ export interface Reservation {
   monto_pagado?: number;
   monto_pagado_real?: number;
   monto_anticipo?: number;
+  requiere_anticipo?: boolean;
   metodo_pago_anticipo?: string;
   deposit_paid_at?: any;
   monto_retenido?: number;
@@ -115,6 +145,8 @@ export interface Reservation {
   confirmada_por_cliente?: boolean;
   confirmada_en?: any;
   etiqueta_recordatorio?: 'confirmada' | 'reagendada' | 'cancelada';
+  mercado_pago_link?: string;
+  mercado_pago_preference_id?: string;
 }
 
 export interface TimeBlock {
@@ -499,7 +531,7 @@ export interface Conversation {
   fecha_ultimo_mensaje?: any;
   mensajes_no_leidos?: number;
   modo_atencion: 'bot_activo' | 'humano_al_mando' | 'requiere_atencion';
-  canal: 'whatsapp' | 'simulador';
+  canal: 'whatsapp' | 'simulador' | 'web';
   etiquetas?: string[];
   notas_internas?: string;
   created_at?: any;

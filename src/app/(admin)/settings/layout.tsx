@@ -6,26 +6,40 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { CustomLoader } from "@/components/ui/custom-loader";
 
+import {
+  Building2,
+  Sparkles,
+  MapPin,
+  Globe,
+  CalendarClock,
+  Bot,
+  CreditCard,
+  Mail,
+  Users,
+  ShieldCheck,
+  KeyRound,
+  Tag,
+  Smartphone,
+} from "lucide-react";
+
 interface SettingsLayoutProps {
   children: React.ReactNode;
 }
 
 const sidebarNavItems = [
-  { title: "Empresa", href: "/settings/empresa" },
-  { title: "Funcionalidades Avanzadas", href: "/settings/features" },
-  { title: "Locales", href: "/settings/locales" },
-  { title: "Sitio Web", href: "/settings/sitio-web" },
-  { title: "Reglas de Reservas", href: "/settings/booking-rules" },
-  { title: "Asistente Janet", href: "/settings/sofia" },
-
-  { title: "Pagos", href: "/settings/pagos" },
-
-  { title: "Emails", href: "/settings/emails" },
-  { title: "Clientes", href: "/settings/clients-settings" },
-  { title: "Usuarios", href: "/settings/users" },
-  { title: "Códigos de autorización", href: "/settings/auth-codes" },
-  { title: "Promociones", href: "/settings/promotions" },
-  { title: "App Móvil", href: "/settings/mobile-app" },
+  { title: "Empresa", href: "/settings/empresa", icon: Building2 },
+  { title: "Funcionalidades Avanzadas", href: "/settings/features", icon: Sparkles },
+  { title: "Locales", href: "/settings/locales", icon: MapPin },
+  { title: "Sitio Web", href: "/settings/sitio-web", icon: Globe },
+  { title: "Reglas de Reservas", href: "/settings/booking-rules", icon: CalendarClock },
+  { title: "Asistente Janet", href: "/settings/sofia", icon: Bot },
+  { title: "Pagos", href: "/settings/pagos", icon: CreditCard },
+  { title: "Emails", href: "/settings/emails", icon: Mail },
+  { title: "Clientes", href: "/settings/clients-settings", icon: Users },
+  { title: "Usuarios", href: "/settings/users", icon: ShieldCheck },
+  { title: "Códigos de autorización", href: "/settings/auth-codes", icon: KeyRound },
+  { title: "Promociones", href: "/settings/promotions", icon: Tag },
+  { title: "App Móvil", href: "/settings/mobile-app", icon: Smartphone },
 ];
 
 

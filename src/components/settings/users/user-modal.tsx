@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Loader2, Sparkles, Eye, EyeOff, CircleHelp, Mail } from 'lucide-react';
+import { Loader2, Sparkles, Eye, EyeOff, CircleHelp, Mail, ShieldCheck, X } from 'lucide-react';
 import type { User, Local, Role, Profesional } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/lib/firebase-client';
@@ -220,81 +220,57 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent hideCloseButton className="p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] sm:max-w-2xl bg-card">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <DialogHeader>
-              <DialogTitle>{isEditMode ? 'Editar Usuario' : 'Nuevo Usuario'}</DialogTitle>
-            </DialogHeader>
-            <div className="py-6 px-1 max-h-[70vh] overflow-y-auto">
-              <div className="px-4 space-y-4">
-                <FormField
-                  name="avatarUrl"
-                  control={form.control}
-                  render={({ field }) => (
-                    <FormItem className="flex justify-center">
-                      <FormControl>
-                        <ImageUploader
-                          folder="profesionales"
-                          currentImageUrl={field.value}
-                          onUploadStateChange={setIsUploading}
-                          onUpload={(url) => {
-                            form.setValue('avatarUrl', url, { shouldDirty: true });
-                          }}
-                          onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {selectedRoleName === 'Administrador local' && (
-                  <div className="bg-slate-50 p-4 rounded-md border text-sm space-y-3">
-                    <h4 className="font-semibold text-slate-900">Configuración de Utilidad</h4>
-                    <FormField
-                      control={form.control}
-                      name="commissionType"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tipo de comisión</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value} defaultValue="none">
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione tipo" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Sin utilidad</SelectItem>
-                              <SelectItem value="fixed">Monto fijo mensual</SelectItem>
-                              <SelectItem value="percentage">Porcentaje utilidad mensual</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-
-                    {form.watch('commissionType') !== 'none' && (
-                      <FormField
-                        control={form.control}
-                        name="commissionValue"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {form.watch('commissionType') === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}
-                            </FormLabel>
-                            <FormControl>
-                              <Input type="number" {...field} placeholder="0" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
+            {/* Cabecera Oficial Vatos Alfa */}
+            <div className="relative px-5 py-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white overflow-hidden border-b border-slate-800">
+              <div className="header-light-beam" />
+              <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="h-5 w-5 text-slate-300 shrink-0" />
+                  <div>
+                    <DialogTitle className="text-sm font-semibold text-white tracking-tight">
+                      {isEditMode ? 'Editar Usuario' : 'Nuevo Usuario'}
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-slate-300">
+                      {isEditMode ? 'Modifica los datos del usuario y sus permisos de acceso.' : 'Registra un nuevo usuario del sistema y envía su invitación.'}
+                    </DialogDescription>
                   </div>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-5 max-h-[70vh] overflow-y-auto space-y-4">
+              <FormField
+                name="avatarUrl"
+                control={form.control}
+                render={({ field }) => (
+                  <FormItem className="flex justify-center">
+                    <FormControl>
+                      <ImageUploader
+                        folder="profesionales"
+                        currentImageUrl={field.value}
+                        onUploadStateChange={setIsUploading}
+                        onUpload={(url) => {
+                          form.setValue('avatarUrl', url, { shouldDirty: true });
+                        }}
+                        onRemove={() => form.setValue('avatarUrl', '', { shouldDirty: true })}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
 
                   <FormField
                     control={form.control}
@@ -441,21 +417,21 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                 )}
 
                 {selectedRoleName === 'Administrador local' && (
-                  <div className="bg-slate-50 p-4 rounded-md border text-sm space-y-3 mt-4">
-                    <h4 className="font-semibold text-slate-900">Configuración de Utilidad</h4>
+                  <div className="p-3.5 rounded-xl border border-border/60 bg-muted/10 space-y-3 mt-3">
+                    <h4 className="text-xs font-semibold text-foreground">Configuración de Utilidad</h4>
                     <FormField
                       control={form.control}
                       name="commissionType"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Tipo de comisión</FormLabel>
+                          <FormLabel className="text-xs">Tipo de comisión</FormLabel>
                           <Select onValueChange={field.onChange} value={field.value} defaultValue="none">
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="h-8 text-xs">
                                 <SelectValue placeholder="Seleccione tipo" />
                               </SelectTrigger>
                             </FormControl>
-                            <SelectContent>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                               <SelectItem value="none">Sin utilidad</SelectItem>
                               <SelectItem value="fixed">Monto fijo mensual</SelectItem>
                               <SelectItem value="percentage">Porcentaje utilidad mensual</SelectItem>
@@ -471,11 +447,11 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                         name="commissionValue"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>
+                            <FormLabel className="text-xs">
                               {form.watch('commissionType') === 'fixed' ? 'Monto ($)' : 'Porcentaje (%)'}
                             </FormLabel>
                             <FormControl>
-                              <Input type="number" {...field} placeholder="0" />
+                              <Input type="number" {...field} placeholder="0" className="h-8 text-xs font-sans" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -491,14 +467,14 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                     name="local_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Local asignado</FormLabel>
+                        <FormLabel className="text-xs">Local asignado</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-8 text-xs">
                               <SelectValue placeholder={localesLoading ? 'Cargando locales...' : "Seleccionar un local"} />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                             {!localesLoading && locales.map(local => (
                               <SelectItem key={local.id} value={local.id}>{local.name}</SelectItem>
                             ))}
@@ -510,32 +486,33 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
                   />
                 )}
               </div>
-            </div>
-            <DialogFooter className="border-t pt-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <DialogFooter className="border-t border-border/50 p-4 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-3">
               {isEditMode && user ? (
                 <Button
                   type="button"
                   variant="outline"
                   disabled={isResendingInvite || isSubmitting}
                   onClick={handleResendInvite}
-                  className="text-foreground hover:bg-muted border-border w-full sm:w-auto flex items-center justify-center gap-2 font-medium text-xs sm:text-sm h-9"
+                  className="text-foreground hover:bg-muted border-border/80 w-full sm:w-auto flex items-center justify-center gap-2 font-medium text-xs h-9 rounded-xl"
                   title={`Reenviar invitación por correo a ${user.email}`}
                 >
                   {isResendingInvite ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
                   ) : (
-                    <Mail className="h-4 w-4 text-primary" />
+                    <Mail className="h-3.5 w-3.5 text-slate-400" />
                   )}
-                  Reenviar Correo de Invitación
+                  <span>Reenviar Correo</span>
                 </Button>
               ) : (
                 <div />
               )}
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting || isUploading}>
-                  {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Guardar
+                <Button type="button" variant="outline" onClick={onClose} className="h-9 px-4 text-xs rounded-xl border-border/80">
+                  Cancelar
+                </Button>
+                <Button type="submit" variant="alfa" disabled={isSubmitting || isUploading} className="h-9 px-5 text-xs font-semibold">
+                  {(isSubmitting || isUploading) && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  {isEditMode ? 'Guardar Cambios' : 'Crear Usuario'}
                 </Button>
               </div>
             </DialogFooter>

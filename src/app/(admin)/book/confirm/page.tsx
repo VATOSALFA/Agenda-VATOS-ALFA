@@ -136,7 +136,6 @@ function ConfirmPageContent() {
             toast({
                 title: '¡Reserva Confirmada!',
                 description: 'Tu cita ha sido agendada con éxito.',
-                className: 'bg-green-100 text-green-800 border-green-200'
             });
 
             // Send WhatsApp notification only if enabled
@@ -248,7 +247,7 @@ function ConfirmPageContent() {
                                     <span>${totalPrice.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                 </div>
                             </div>
-                            <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+                            <Button type="submit" size="lg" variant="alfa" className="w-full text-white font-bold" disabled={isSubmitting}>
                                 {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
                                 Confirmar Reserva
                             </Button>

@@ -21,6 +21,7 @@ import { doc, getDoc, setDoc, collection, getDocs, query, limit } from 'firebase
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Badge } from '@/components/ui/badge';
 import { Star } from 'lucide-react';
+import { sendTestCancellationEmail } from '@/lib/actions/booking';
 
 // Verified domain - emails with this domain are auto-confirmed
 const VERIFIED_DOMAIN = 'vatosalfa.com';
@@ -79,6 +80,44 @@ export default function EmailsSettingsPage() {
         secondaryColor: '#314177'
     });
 
+    const [testEmailAddress, setTestEmailAddress] = useState('vatosalfa@gmail.com');
+    const [isSendingTest, setIsSendingTest] = useState(false);
+
+    const handleSendTestEmail = async () => {
+        if (!testEmailAddress || !testEmailAddress.includes('@')) {
+            toast({
+                variant: 'destructive',
+                title: 'Correo inválido',
+                description: 'Por favor ingresa un correo electrónico válido.'
+            });
+            return;
+        }
+        setIsSendingTest(true);
+        try {
+            const res = await sendTestCancellationEmail(testEmailAddress);
+            if (res.error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Error al enviar prueba',
+                    description: res.error
+                });
+            } else {
+                toast({
+                    title: '¡Correo de prueba enviado!',
+                    description: `Se ha enviado el correo de cancelación a ${testEmailAddress}.`
+                });
+            }
+        } catch (e: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Error inesperado',
+                description: e.message || 'No se pudo enviar el correo de prueba.'
+            });
+        } finally {
+            setIsSendingTest(false);
+        }
+    };
+
     const form = useForm({
         defaultValues: {
             signature: 'Saludos, El equipo de VATOS ALFA Barber Shop',
@@ -95,6 +134,21 @@ export default function EmailsSettingsPage() {
             showServices: true,
             showProfessional: true,
             enableConfirmationEmail: true,
+            // Cancellation Settings
+            enableCancellationEmail: true,
+            cancelSubject: 'Cancelación de Cita',
+            cancelHeadline: '¡Hola {nombre}, tu cita ha sido cancelada!',
+            cancellationEmailNote: 'Lamentamos informarte que tu cita ha sido cancelada. Si deseas volver a agendar con nosotros, puedes reservar una nueva cita en línea cuando gustes.',
+            cancelButtonText: 'AGENDAR NUEVA CITA',
+            cancelButtonUrl: 'https://vatosalfa.com/reservar',
+            cancelWhatsappText: 'Contáctanos por WhatsApp',
+            showCancelButton: true,
+            cancelShowDate: true,
+            cancelShowTime: true,
+            cancelShowLocation: true,
+            cancelShowServices: true,
+            cancelShowProfessional: true,
+            cancelShowReason: true,
             // Professional Email Settings
             enableProfessionalConfirmationEmail: true,
             profConfirmationEmailNote: '',
@@ -182,6 +236,28 @@ export default function EmailsSettingsPage() {
                     form.setValue('confirmSubject', cTpl.subject || 'Confirmación de Cita');
                     form.setValue('confirmHeadline', cTpl.headline || '¡Hola {nombre}, tu cita está confirmada!');
                     form.setValue('confirmWhatsappText', cTpl.whatsappText || 'Contáctanos por WhatsApp');
+
+                    // Load Cancellation Config
+                    if (data.cancellationEmailConfig) {
+                        form.setValue('enableCancellationEmail', data.cancellationEmailConfig.enabled ?? true);
+                        form.setValue('cancelShowDate', data.cancellationEmailConfig.showDate ?? true);
+                        form.setValue('cancelShowTime', data.cancellationEmailConfig.showTime ?? true);
+                        form.setValue('cancelShowLocation', data.cancellationEmailConfig.showLocation ?? true);
+                        form.setValue('cancelShowServices', data.cancellationEmailConfig.showServices ?? true);
+                        form.setValue('cancelShowProfessional', data.cancellationEmailConfig.showProfessional ?? true);
+                        form.setValue('cancelShowReason', data.cancellationEmailConfig.showReason ?? true);
+                        form.setValue('showCancelButton', data.cancellationEmailConfig.showButton ?? true);
+                    }
+
+                    if (data.cancellationEmailTemplate) {
+                        const canTpl = data.cancellationEmailTemplate;
+                        form.setValue('cancelSubject', canTpl.subject || 'Cancelación de Cita');
+                        form.setValue('cancelHeadline', canTpl.headline || '¡Hola {nombre}, tu cita ha sido cancelada!');
+                        form.setValue('cancellationEmailNote', canTpl.note || 'Lamentamos informarte que tu cita ha sido cancelada. Si deseas volver a agendar con nosotros, puedes reservar una nueva cita en línea cuando gustes.');
+                        form.setValue('cancelButtonText', canTpl.buttonText || 'AGENDAR NUEVA CITA');
+                        form.setValue('cancelButtonUrl', canTpl.buttonUrl || 'https://vatosalfa.com/reservar');
+                        form.setValue('cancelWhatsappText', canTpl.whatsappText || 'Contáctanos por WhatsApp');
+                    }
 
                     if (data.professionalConfirmationEmailConfig) {
                         form.setValue('enableProfessionalConfirmationEmail', data.professionalConfirmationEmailConfig.enabled ?? true);
@@ -292,6 +368,24 @@ export default function EmailsSettingsPage() {
                     subject: data.confirmSubject,
                     headline: data.confirmHeadline,
                     whatsappText: data.confirmWhatsappText
+                },
+                cancellationEmailConfig: {
+                    enabled: data.enableCancellationEmail,
+                    showDate: data.cancelShowDate,
+                    showTime: data.cancelShowTime,
+                    showLocation: data.cancelShowLocation,
+                    showServices: data.cancelShowServices,
+                    showProfessional: data.cancelShowProfessional,
+                    showReason: data.cancelShowReason,
+                    showButton: data.showCancelButton,
+                },
+                cancellationEmailTemplate: {
+                    subject: data.cancelSubject,
+                    headline: data.cancelHeadline,
+                    note: data.cancellationEmailNote,
+                    buttonText: data.cancelButtonText,
+                    buttonUrl: data.cancelButtonUrl,
+                    whatsappText: data.cancelWhatsappText,
                 },
                 professionalConfirmationEmailConfig: {
                     enabled: data.enableProfessionalConfirmationEmail,
@@ -506,80 +600,84 @@ export default function EmailsSettingsPage() {
 
     return (
         <>
-            <div className="flex-1 space-y-6 p-4 md:p-8 pt-6">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Configuración de Emails</h2>
-                    <p className="text-muted-foreground">
-                        Gestiona los correos remitentes, la firma y las notificaciones automáticas.
-                    </p>
+            <div className="flex-1 space-y-5 max-w-5xl pb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/60">
+                    <div>
+                        <h2 className="text-xl font-bold tracking-tight text-foreground">Configuración de Emails</h2>
+                        <p className="text-xs text-muted-foreground">
+                            Gestiona los correos remitentes, la firma oficial y las plantillas automáticas de notificación.
+                        </p>
+                    </div>
                 </div>
 
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8 max-w-5xl">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 max-w-5xl">
                     <CollapsibleCard
-                        title="Configuraciones de emails"
-                        description="Correos para enviar notificaciones a tus clientes."
+                        title="Correos Remitentes"
+                        description="Cuentas autorizadas para enviar confirmaciones y recordatorios a tus clientes."
                         action={
-                            <Button type="button" variant="outline" size="sm" onClick={(e) => { e.preventDefault(); openAddModal(); }}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Agregar Correo
+                            <Button type="button" variant="alfa" size="sm" className="h-8 px-3 text-xs font-semibold" onClick={(e) => { e.preventDefault(); openAddModal(); }}>
+                                <PlusCircle className="mr-1.5 h-3.5 w-3.5 text-white" /> Agregar Correo
                             </Button>
                         }
                     >
                         <Table>
                             <TableHeader>
-                                <TableRow>
-                                    <TableHead>Remitente</TableHead>
-                                    <TableHead>Estado</TableHead>
-                                    <TableHead className="text-right">Opciones</TableHead>
+                                <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                    <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Remitente</TableHead>
+                                    <TableHead className="py-1 px-3 text-xs font-semibold text-foreground">Estado</TableHead>
+                                    <TableHead className="py-1 px-3 text-right text-xs font-semibold text-foreground">Opciones</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoadingSenders ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center h-24">
-                                            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+                                        <TableCell colSpan={3} className="py-8 text-center">
+                                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" />
                                         </TableCell>
                                     </TableRow>
                                 ) : senders.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center h-24 text-muted-foreground">
+                                        <TableCell colSpan={3} className="py-8 text-center text-xs text-muted-foreground">
                                             No hay correos configurados. Agrega uno para comenzar.
                                         </TableCell>
                                     </TableRow>
                                 ) : senders.map((sender) => (
-                                    <TableRow key={sender.email}>
-                                        <TableCell className="font-medium">
+                                    <TableRow key={sender.email} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                        <TableCell className="py-1.5 px-3.5 text-xs font-medium">
                                             <div className="flex items-center gap-2">
-                                                {sender.email}
+                                                <span>{sender.email}</span>
                                                 {sender.isPrimary && (
-                                                    <Badge className="bg-primary/10 text-primary border-primary/30">
-                                                        <Star className="mr-1 h-3 w-3 fill-current" /> Principal
+                                                    <Badge variant="outline" className="text-[10px] font-sans font-medium py-0 px-1.5 border-border/60 bg-muted/40">
+                                                        <Star className="mr-1 h-3 w-3 text-[#C5A880] fill-[#C5A880]" /> Principal
                                                     </Badge>
                                                 )}
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            <span className={`flex items-center ${sender.confirmed ? 'text-primary' : 'text-yellow-600'}`}>
-                                                <CheckCircle className="mr-2 h-4 w-4" />
+                                        <TableCell className="py-1.5 px-3 text-xs">
+                                            <span className={`inline-flex items-center ${sender.confirmed ? 'text-blue-500 font-medium' : 'text-muted-foreground'}`}>
+                                                <CheckCircle className="mr-1.5 h-3.5 w-3.5 text-slate-400" />
                                                 {sender.confirmed ? 'Verificado' : 'Pendiente'}
                                             </span>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="py-1.5 px-3 text-right">
                                             <DropdownMenu modal={false}>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                                    <Button variant="ghost" className="h-7 w-7 p-0 text-slate-400 hover:text-white rounded-md hover:bg-white/10">
                                                         <span className="sr-only">Abrir menú</span>
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
+                                                <DropdownMenuContent align="end" className="w-44 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card p-1 space-y-0.5">
                                                     {!sender.isPrimary && sender.confirmed && (
-                                                        <DropdownMenuItem onClick={() => handleSetPrimary(sender.email)}>
-                                                            <Star className="mr-2 h-4 w-4" /> Usar como principal
+                                                        <DropdownMenuItem onClick={() => handleSetPrimary(sender.email)} className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer">
+                                                            <Star className="mr-2 h-3.5 w-3.5 text-[#C5A880]" /> Usar como principal
                                                         </DropdownMenuItem>
                                                     )}
-                                                    <DropdownMenuItem onClick={() => openEditModal(sender)}><Edit className="mr-2 h-4 w-4" /> Editar</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => setSenderToDelete(sender)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                                                        <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                                                    <DropdownMenuItem onClick={() => openEditModal(sender)} className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer">
+                                                        <Edit className="mr-2 h-3.5 w-3.5 text-slate-400" /> Editar
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setSenderToDelete(sender)} className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
+                                                        <Trash2 className="mr-2 h-3.5 w-3.5" /> Eliminar
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
@@ -766,6 +864,192 @@ export default function EmailsSettingsPage() {
                                                     name="showProfessional"
                                                     render={({ field }) => (
                                                         <Switch id="showProfessional" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </CollapsibleCard>
+
+                    <CollapsibleCard
+                        title="Correo de cancelación de cita (Cliente)"
+                        description="Personaliza el correo que reciben tus clientes cuando su cita es cancelada."
+                    >
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between rounded-lg border p-4">
+                                <div>
+                                    <Label htmlFor="enable-cancellation-email" className="font-medium">Activar correos de cancelación</Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Envía automáticamente una notificación por correo al cliente cuando una cita se cancela.</p>
+                                </div>
+                                <Controller
+                                    name="enableCancellationEmail"
+                                    control={form.control}
+                                    render={({ field }) => (
+                                        <Switch id="enable-cancellation-email" checked={field.value} onCheckedChange={field.onChange} />
+                                    )}
+                                />
+                            </div>
+
+                            {form.watch('enableCancellationEmail') && (
+                                <>
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/40 p-4 rounded-lg border">
+                                            <div>
+                                                <h4 className="font-semibold text-sm">Enviar correo de prueba</h4>
+                                                <p className="text-xs text-muted-foreground">Envía un correo de muestra con este diseño para comprobar cómo lo recibe el cliente.</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    type="email"
+                                                    value={testEmailAddress}
+                                                    onChange={(e) => setTestEmailAddress(e.target.value)}
+                                                    placeholder="vatosalfa@gmail.com"
+                                                    className="w-56 h-9 text-xs"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    disabled={isSendingTest}
+                                                    onClick={handleSendTestEmail}
+                                                    className="gap-1.5 whitespace-nowrap"
+                                                >
+                                                    {isSendingTest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+                                                    <span>{isSendingTest ? 'Enviando...' : 'Enviar Prueba'}</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        <h4 className="font-medium text-sm text-foreground mb-4">Personalizar Mensaje</h4>
+
+                                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 items-start">
+                                            <div className="space-y-4 order-2 xl:order-1">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="cancelSubject">Asunto del Correo</Label>
+                                                    <Input id="cancelSubject" {...form.register('cancelSubject')} />
+                                                    <p className="text-[0.8rem] text-muted-foreground">El nombre de la empresa se agregará automáticamente al final.</p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="cancelHeadline">Título Principal</Label>
+                                                    <Input id="cancelHeadline" {...form.register('cancelHeadline')} />
+                                                    <p className="text-[0.8rem] text-muted-foreground">Usa <code>{'{nombre}'}</code> para insertar el nombre del cliente.</p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="cancellationEmailNote">Nota en el Recuadro</Label>
+                                                    <Textarea
+                                                        id="cancellationEmailNote"
+                                                        placeholder="Ej: Lamentamos informarte que tu cita ha sido cancelada..."
+                                                        rows={3}
+                                                        {...form.register('cancellationEmailNote')}
+                                                    />
+                                                </div>
+
+                                                <div className="pt-3 border-t space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <Label className="font-semibold text-sm">Botón para Agendar Nueva Cita</Label>
+                                                            <p className="text-[0.8rem] text-muted-foreground">Permite al cliente volver a reservar desde el correo.</p>
+                                                        </div>
+                                                        <Controller
+                                                            name="showCancelButton"
+                                                            control={form.control}
+                                                            render={({ field }) => (
+                                                                <Switch checked={field.value} onCheckedChange={field.onChange} />
+                                                            )}
+                                                        />
+                                                    </div>
+
+                                                    {form.watch('showCancelButton') && (
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2">
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor="cancelButtonText" className="text-xs">Texto del Botón</Label>
+                                                                <Input id="cancelButtonText" {...form.register('cancelButtonText')} />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor="cancelButtonUrl" className="text-xs">Enlace de Reserva</Label>
+                                                                <Input id="cancelButtonUrl" {...form.register('cancelButtonUrl')} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-2 pt-3 border-t">
+                                                    <Label htmlFor="cancelWhatsappText">Texto botón WhatsApp</Label>
+                                                    <Input id="cancelWhatsappText" {...form.register('cancelWhatsappText')} />
+                                                </div>
+                                            </div>
+
+                                            <div className="order-1 xl:order-2 xl:sticky xl:top-6">
+                                                <EmailPreview config={form.watch()} type="cancellation" companyDetails={companyDetails} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4 pt-4 border-t">
+                                        <h4 className="font-medium text-sm text-muted-foreground">Datos visibles en el correo</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowDate" className="cursor-pointer text-sm">Mostrar Fecha</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowDate"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowDate" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowTime" className="cursor-pointer text-sm">Mostrar Hora</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowTime"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowTime" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowLocation" className="cursor-pointer text-sm">Mostrar Lugar</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowLocation"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowLocation" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowServices" className="cursor-pointer text-sm">Mostrar Servicios</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowServices"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowServices" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowProfessional" className="cursor-pointer text-sm">Mostrar Profesional</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowProfessional"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowProfessional" checked={field.value} onCheckedChange={field.onChange} />
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between p-3 border rounded-lg bg-card/50">
+                                                <Label htmlFor="cancelShowReason" className="cursor-pointer text-sm">Mostrar Motivo</Label>
+                                                <Controller
+                                                    control={form.control}
+                                                    name="cancelShowReason"
+                                                    render={({ field }) => (
+                                                        <Switch id="cancelShowReason" checked={field.value} onCheckedChange={field.onChange} />
                                                     )}
                                                 />
                                             </div>
@@ -1130,16 +1414,15 @@ export default function EmailsSettingsPage() {
                         </div>
                     </CollapsibleCard>
 
-                    <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm">
-                        <Button type="submit" disabled={isSubmitting}>
+                    <div className="flex justify-end sticky bottom-0 py-4 bg-background/80 backdrop-blur-sm z-10 border-t border-border/40">
+                        <Button type="submit" variant="alfa" disabled={isSubmitting}>
                             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Guardar Cambios
                         </Button>
                     </div>
-                </form >
+                </form>
 
-
-            </div >
+            </div>
 
             <AddSenderModal
                 isOpen={isSenderModalOpen}
@@ -1151,7 +1434,7 @@ export default function EmailsSettingsPage() {
             {
                 senderToDelete && (
                     <AlertDialog open={!!senderToDelete} onOpenChange={() => setSenderToDelete(null)}>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                             <AlertDialogHeader>
                                 <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
                                 <AlertDialogDescription>
@@ -1159,8 +1442,8 @@ export default function EmailsSettingsPage() {
                                 </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteSender} className="bg-destructive hover:bg-destructive/90">
+                                <AlertDialogCancel className="rounded-xl border-border/60">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteSender} className="rounded-xl bg-destructive hover:bg-destructive/90 text-white">
                                     Sí, eliminar
                                 </AlertDialogAction>
                             </AlertDialogFooter>

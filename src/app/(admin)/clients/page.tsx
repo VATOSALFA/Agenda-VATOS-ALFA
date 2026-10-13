@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -106,133 +106,162 @@ const FiltersSidebar = ({
 }) => {
 
   return (
-    <div className="space-y-4 flex flex-col h-full">
-      <div>
-        <h3 className="text-xl font-bold">Filtros avanzados</h3>
-        <div className="space-y-3 mt-4">
-          <div className="space-y-1">
-            <Label>Periodo de consumo</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant={"outline"} className="w-full justify-start text-left font-normal">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  <span className="flex-grow">
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y", { locale: es })
-                      )
+    <div className="space-y-3 flex flex-col h-full text-xs">
+      <div className="flex items-center gap-2 pb-2 border-b border-border/50 text-foreground font-semibold">
+        <SlidersHorizontal className="h-4 w-4 text-slate-400 shrink-0" />
+        <span className="text-sm">Filtros avanzados</span>
+      </div>
+
+      <div className="space-y-2.5">
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Periodo de consumo</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant={"outline"} className="w-full justify-start text-left font-normal h-8 text-xs px-2.5">
+                <CalendarIcon className="mr-2 h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="flex-grow truncate">
+                  {dateRange?.from ? (
+                    dateRange.to ? (
+                      <>{format(dateRange.from, "dd/MM/yy", { locale: es })} - {format(dateRange.to, "dd/MM/yy", { locale: es })}</>
                     ) : (
-                      <span>Desde / hasta</span>
-                    )}
-                  </span>
-                  {dateRange && (
-                    <X className="ml-2 h-4 w-4 text-muted-foreground hover:text-foreground" onClick={(e) => { e.stopPropagation(); setDateRange(undefined); }} />
+                      format(dateRange.from, "dd/MM/yy", { locale: es })
+                    )
+                  ) : (
+                    <span className="text-muted-foreground">Desde / hasta</span>
                   )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} locale={es} />
-              </PopoverContent>
-            </Popover>
-          </div>
-          <div className="space-y-1">
-            <Label>Clientes nuevos</Label>
-            <div className="grid grid-cols-2 gap-2">
-              <Select value={newClientsMonthFilter} onValueChange={setNewClientsMonthFilter} disabled={isLoading}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Mes" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos los meses</SelectItem>
-                  {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={newClientsYearFilter} onValueChange={setNewClientsYearFilter} disabled={isLoading}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Año" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos los años</SelectItem>
-                  {availableYears.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>Mejores clientes (Consumo)</Label>
-            <Select value={topSpentFilter} onValueChange={setTopSpentFilter} disabled={isLoading}>
-              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos los clientes</SelectItem>
-                <SelectItem value="top10">Top 10 que más consumen</SelectItem>
-                <SelectItem value="top25">Top 25 que más consumen</SelectItem>
-                <SelectItem value="top50">Top 50 que más consumen</SelectItem>
-                <SelectItem value="min500">Consumo mayor a $500</SelectItem>
-                <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
-                <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
-                <SelectItem value="min5000">Consumo mayor a $5,000</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Tiempo sin visita</Label>
-            <Select value={inactiveTimeFilter} onValueChange={setInactiveTimeFilter} disabled={isLoading}>
-              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="2">Más de 2 meses</SelectItem>
-                <SelectItem value="3">Más de 3 meses</SelectItem>
-                <SelectItem value="4">Más de 4 meses</SelectItem>
-                <SelectItem value="6">Más de 6 meses</SelectItem>
-                <SelectItem value="12">Más de 1 año</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Mes de cumpleaños</Label>
-            <Select value={birthdayMonthFilter} onValueChange={setBirthdayMonthFilter} disabled={isLoading}>
-              <SelectTrigger><SelectValue placeholder="Seleccione un mes" /></SelectTrigger>
+                </span>
+                {dateRange && (
+                  <X className="ml-1 h-3.5 w-3.5 text-muted-foreground hover:text-foreground shrink-0" onClick={(e) => { e.stopPropagation(); setDateRange(undefined); }} />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={1} locale={es} />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Clientes nuevos</Label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Select value={newClientsMonthFilter} onValueChange={setNewClientsMonthFilter} disabled={isLoading}>
+              <SelectTrigger className="w-full h-8 text-xs px-2"><SelectValue placeholder="Mes" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los meses</SelectItem>
                 {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Local/sede</Label>
-            <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLoading || isLocalAdmin}>
-              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <Select value={newClientsYearFilter} onValueChange={setNewClientsYearFilter} disabled={isLoading}>
+              <SelectTrigger className="w-full h-8 text-xs px-2"><SelectValue placeholder="Año" /></SelectTrigger>
               <SelectContent>
-                {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
-                {locales.map((l: Local) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label>Profesional</Label>
-            <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={isLoading}>
-              <SelectTrigger><SelectValue placeholder="Seleccione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                {professionals.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                <SelectItem value="todos">Todos los años</SelectItem>
+                {availableYears.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         </div>
-        <div className="space-y-2 pt-4 border-t">
-          <Button className="w-full" onClick={onApply} disabled={isLoading}>
-            {isLoading ? "Cargando..." : "Buscar"}
-          </Button>
-          <Button variant="ghost" className="w-full" onClick={onReset} disabled={isLoading}>Restablecer</Button>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Mejores clientes</Label>
+          <Select value={topSpentFilter} onValueChange={setTopSpentFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los clientes</SelectItem>
+              <SelectItem value="top10">Top 10 que más consumen</SelectItem>
+              <SelectItem value="top25">Top 25 que más consumen</SelectItem>
+              <SelectItem value="top50">Top 50 que más consumen</SelectItem>
+              <SelectItem value="min500">Consumo mayor a $500</SelectItem>
+              <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
+              <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
+              <SelectItem value="min5000">Consumo mayor a $5,000</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Tiempo sin visita</Label>
+          <Select value={inactiveTimeFilter} onValueChange={setInactiveTimeFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="2">Más de 2 meses</SelectItem>
+              <SelectItem value="3">Más de 3 meses</SelectItem>
+              <SelectItem value="4">Más de 4 meses</SelectItem>
+              <SelectItem value="6">Más de 6 meses</SelectItem>
+              <SelectItem value="12">Más de 1 año</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Mes de cumpleaños</Label>
+          <Select value={birthdayMonthFilter} onValueChange={setBirthdayMonthFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione un mes" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los meses</SelectItem>
+              {months.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Local / Sede</Label>
+          <Select value={localFilter} onValueChange={setLocalFilter} disabled={isLoading || isLocalAdmin}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              {!isLocalAdmin && <SelectItem value="todos">Todos los locales</SelectItem>}
+              {locales.map((l: Local) => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Profesional</Label>
+          <Select value={professionalFilter} onValueChange={setProfessionalFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              {professionals.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
-      <div className="mt-auto pt-6 flex justify-center pb-4">
-        {empresaLoading ? (
-          <Skeleton className="h-[200px] w-full" />
-        ) : logoUrl ? (
-          <Image src={logoUrl} alt="Logo de la empresa" width={250} height={200} className="object-contain" />
-        ) : null}
+
+      <div className="space-y-1.5 pt-2 border-t border-border/50">
+        <Button
+          className="btn-vatos-alfa w-full h-8 rounded-xl text-xs font-bold text-white tracking-wide shadow-sm"
+          onClick={onApply}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Buscando...</span>
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-1.5">
+              <Search className="h-3.5 w-3.5" />
+              <span>Buscar</span>
+            </span>
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          className="w-full h-7 text-xs text-muted-foreground hover:text-foreground"
+          onClick={onReset}
+          disabled={isLoading}
+        >
+          Restablecer filtros
+        </Button>
       </div>
+
+      {logoUrl && !empresaLoading && (
+        <div className="mt-auto pt-3 flex justify-center pb-1 opacity-70 hover:opacity-100 transition-opacity">
+          <Image src={logoUrl} alt="Logo" width={120} height={50} className="max-h-10 w-auto object-contain" />
+        </div>
+      )}
     </div>
   );
 }
@@ -340,6 +369,8 @@ export default function ClientsPage() {
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [authCode, setAuthCode] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -1028,49 +1059,87 @@ export default function ClientsPage() {
       <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Base de clientes</h2>
-          <div className="flex items-center space-x-2">
-            <Button variant="outline" onClick={() => setIsUploadModalOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" /> Cargar clientes
-            </Button>
-            <Button onClick={handleOpenNewModal}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Nuevo cliente
-            </Button>
+          <div className="flex items-center space-x-1">
+            <button
+              type="button"
+              onClick={() => setIsUploadModalOpen(true)}
+              title="Cargar clientes"
+              aria-label="Cargar clientes"
+              className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+            >
+              <Upload className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenNewModal}
+              title="Nuevo cliente"
+              aria-label="Nuevo cliente"
+              className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+            >
+              <UserPlus className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <aside className="lg:col-span-1">
-            <FiltersSidebar
-              onApply={handleApplyFilters}
-              onReset={handleResetFilters}
-              dateRange={dateRange} setDateRange={setDateRange}
-              localFilter={localFilter} setLocalFilter={setLocalFilter}
-              birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
-              newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
-              newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
-              professionalFilter={professionalFilter}
-              setProfessionalFilter={setProfessionalFilter}
-              inactiveTimeFilter={inactiveTimeFilter}
-              setInactiveTimeFilter={setInactiveTimeFilter}
-              topSpentFilter={topSpentFilter}
-              setTopSpentFilter={setTopSpentFilter}
-              professionals={professionals}
-              locales={locales}
-              isLoading={isLoading}
-              isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
-              logoUrl={logoUrl}
-              empresaLoading={empresaLoading}
-            />
+          <aside className={cn(
+            "lg:col-span-1",
+            showMobileFilters ? "block" : "hidden lg:block"
+          )}>
+            <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm">
+              <FiltersSidebar
+                onApply={() => {
+                  handleApplyFilters();
+                  setShowMobileFilters(false);
+                }}
+                onReset={handleResetFilters}
+                dateRange={dateRange} setDateRange={setDateRange}
+                localFilter={localFilter} setLocalFilter={setLocalFilter}
+                birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
+                newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
+                newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
+                professionalFilter={professionalFilter}
+                setProfessionalFilter={setProfessionalFilter}
+                inactiveTimeFilter={inactiveTimeFilter}
+                setInactiveTimeFilter={setInactiveTimeFilter}
+                topSpentFilter={topSpentFilter}
+                setTopSpentFilter={setTopSpentFilter}
+                professionals={professionals}
+                locales={locales}
+                isLoading={isLoading}
+                isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
+                logoUrl={logoUrl}
+                empresaLoading={empresaLoading}
+              />
+            </div>
           </aside>
 
           <main className="lg:col-span-3 space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <ClientSearchBar onSearch={handleSearchChange} />
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex-1 flex items-center gap-2">
+                <ClientSearchBar onSearch={handleSearchChange} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowMobileFilters(!showMobileFilters)}
+                  className={cn(
+                    "lg:hidden h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 border-border/80",
+                    showMobileFilters && "border-blue-500 bg-blue-500/10 text-blue-600 font-semibold"
+                  )}
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
+                  <span className="hidden xs:inline">Filtros</span>
+                  {hasActiveFilters && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                  )}
+                </Button>
+              </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    Acciones <ChevronDown className="ml-2 h-4 w-4" />
+                  <Button variant="outline" className="h-9 text-xs">
+                    Acciones <ChevronDown className="ml-1.5 h-3.5 w-3.5 text-slate-400" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1161,84 +1230,204 @@ export default function ClientsPage() {
               )}
             </div>
 
-            <Card>
+            {/* VISTA MÓVIL: Tarjetas compactas sin scroll horizontal (sm:hidden) */}
+            <div className="sm:hidden space-y-2.5">
+              {isLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <Card key={i} className="p-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="space-y-1.5 flex-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                  </Card>
+                ))
+              ) : paginatedClients.map((client) => {
+                const spent = clientSpentMap.get(client.id) || 0;
+                const formattedSpent = `$${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                const hasPhone = client.telefono && client.telefono.trim().length > 0;
+                const cleanPhone = client.telefono?.replace(/\D/g, '') || '';
+                const whatsappUrl = hasPhone
+                  ? `https://wa.me/${cleanPhone.length === 10 ? '52' + cleanPhone : cleanPhone}?text=Hola+${client.nombre},+te+extrañamos+en+VATOS+ALFA!`
+                  : '#';
+
+                return (
+                  <div
+                    key={client.id}
+                    className="rounded-xl border border-border/70 bg-card p-3 shadow-sm space-y-2"
+                  >
+                    {/* Fila superior: Avatar, Nombre, ID y Acciones */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar className="h-9 w-9 border border-border/60 shrink-0">
+                          <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
+                          <AvatarFallback className="text-xs font-bold bg-muted text-foreground">
+                            {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-sm text-foreground truncate">
+                              {client.nombre} {client.apellido}
+                            </span>
+                            {client.numero_cliente && (
+                              <span className="font-mono text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded border border-border/40">
+                                #{client.numero_cliente}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {client.correo || 'Sin correo registrado'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Iconos limpios de acción */}
+                      <div className="flex items-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleViewDetails(client)}
+                          className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                          title="Ver detalles"
+                        >
+                          <User className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditModal(client)}
+                          className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                          title="Editar"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClientToDelete(client)}
+                          className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-destructive transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Fila inferior: Teléfono, Registro y Consumo */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        {canViewPhone && hasPhone ? (
+                          <span className="font-medium text-foreground">{client.telefono}</span>
+                        ) : (
+                          <span>{canViewPhone ? 'Sin teléfono' : '****-****'}</span>
+                        )}
+                        {hasPhone && enableMarketing && (
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                            title="Enviar WhatsApp"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatDate(client.creado_en)}
+                        </span>
+                        <span className="font-bold text-slate-900 dark:text-white bg-muted/60 px-2 py-0.5 rounded text-xs">
+                          {formattedSpent}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!isLoading && paginatedClients.length === 0 && (
+                <p className="text-center py-8 text-muted-foreground text-xs">
+                  {searchTerm ? "No se encontraron clientes." : "No hay clientes que coincidan con los filtros."}
+                </p>
+              )}
+            </div>
+
+            {/* VISTA ESCRITORIO: Tabla compacta de alta densidad (hidden sm:block) */}
+            <Card className="hidden sm:block">
               <CardContent className="p-0">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('numero_cliente')}>
+                    <TableRow className="h-8 bg-muted/30">
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('numero_cliente')}>
                         <span className="flex items-center">Nº Cliente <SortIcon field="numero_cliente" /></span>
                       </TableHead>
-                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('nombre')}>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('nombre')}>
                         <span className="flex items-center">Nombre <SortIcon field="nombre" /></span>
                       </TableHead>
-                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('apellido')}>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('apellido')}>
                         <span className="flex items-center">Apellido <SortIcon field="apellido" /></span>
                       </TableHead>
-                      <TableHead>Correo</TableHead>
-                      <TableHead>Teléfono</TableHead>
-                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
+                      <TableHead className="py-1.5 px-3 text-xs h-8">Correo</TableHead>
+                      <TableHead className="py-1.5 px-3 text-xs h-8">Teléfono</TableHead>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
-                      <TableHead className="cursor-pointer select-none hover:bg-muted/50 transition-colors text-right" onClick={() => handleSort('gasto_total')}>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-right" onClick={() => handleSort('gasto_total')}>
                         <span className="flex items-center justify-end">Consumo <SortIcon field="gasto_total" /></span>
                       </TableHead>
-                      {enableMarketing && <TableHead className="w-[50px]">Contacto</TableHead>}
-                      <TableHead className="text-right">Opciones</TableHead>
+                      {enableMarketing && <TableHead className="py-1.5 px-3 text-xs h-8 w-[50px]">Contacto</TableHead>}
+                      <TableHead className="py-1.5 px-3 text-xs h-8 text-right">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       Array.from({ length: itemsPerPage }).map((_, i) => (
-                        <TableRow key={i}>
-                          <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                          <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                          <TableCell className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableCell>
-                          {enableMarketing && <TableCell><Skeleton className="h-8 w-8" /></TableCell>}
-                          <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                        <TableRow key={i} className="h-9">
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-12" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-24" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                          {enableMarketing && <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-6 w-6" /></TableCell>}
+                          <TableCell className="py-1.5 px-3 text-xs text-right"><Skeleton className="h-6 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
                     ) : paginatedClients.map((client) => {
                       const hasPhone = client.telefono && client.telefono.trim().length > 0;
                       const cleanPhone = client.telefono?.replace(/\D/g, '') || '';
-                      const whatsappUrl = hasPhone
-                        ? `https://wa.me/${cleanPhone.length === 10 ? '52' + cleanPhone : cleanPhone}?text=Hola+${client.nombre},+te+extrañamos+en+VATOS+ALFA!`
-                        : '#';
 
                       return (
-                        <TableRow key={client.id}>
-                          <TableCell>{client.numero_cliente || 'N/A'}</TableCell>
-                          <TableCell className="font-medium">
-                            <div className="flex items-center gap-2.5">
-                              <Avatar className="h-7 w-7 border border-primary/20 shrink-0">
+                        <TableRow key={client.id} className="h-9 hover:bg-muted/30 transition-colors">
+                          <TableCell className="py-1.5 px-3 text-xs font-mono">{client.numero_cliente || 'N/A'}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs font-medium">
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-6 w-6 border border-primary/20 shrink-0">
                                 <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
-                                <AvatarFallback className="text-[10px] font-bold bg-primary/10 text-primary">
+                                <AvatarFallback className="text-[9px] font-bold bg-primary/10 text-primary">
                                   {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
                                 </AvatarFallback>
                               </Avatar>
-                              <span>{client.nombre}</span>
+                              <span className="truncate max-w-[120px]">{client.nombre}</span>
                             </div>
                           </TableCell>
-                          <TableCell>{client.apellido}</TableCell>
-                          <TableCell>{client.correo}</TableCell>
-                          <TableCell>{canViewPhone ? client.telefono : '****-****'}</TableCell>
-                          <TableCell>{formatDate(client.creado_en)}</TableCell>
-                          <TableCell className="text-right font-medium text-slate-800">
+                          <TableCell className="py-1.5 px-3 text-xs truncate max-w-[120px]">{client.apellido}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs truncate max-w-[160px]">{client.correo}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{canViewPhone ? client.telefono : '****-****'}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{formatDate(client.creado_en)}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs text-right font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
                             {(() => {
                               const spent = clientSpentMap.get(client.id) || 0;
                               return `$${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                             })()}
                           </TableCell>
                           {enableMarketing && (
-                            <TableCell>
+                            <TableCell className="py-1 px-3">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-primary">
-                                    <MessageCircle className="h-4 w-4" />
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-800 dark:hover:text-white">
+                                    <MessageCircle className="h-3.5 w-3.5" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -1268,17 +1457,32 @@ export default function ClientsPage() {
                               </DropdownMenu>
                             </TableCell>
                           )}
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleViewDetails(client)}>
-                                <User className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEditModal(client)}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setClientToDelete(client)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                          <TableCell className="py-1 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                onClick={() => handleViewDetails(client)}
+                                title="Ver detalles"
+                              >
+                                <User className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                onClick={() => handleOpenEditModal(client)}
+                                title="Editar"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-destructive transition-colors"
+                                onClick={() => setClientToDelete(client)}
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1287,7 +1491,7 @@ export default function ClientsPage() {
                   </TableBody>
                 </Table>
                 {!isLoading && paginatedClients.length === 0 && (
-                  <p className="text-center py-10 text-muted-foreground">
+                  <p className="text-center py-10 text-muted-foreground text-xs">
                     {searchTerm ? "No se encontraron clientes." : "No hay clientes que coincidan con los filtros."}
                   </p>
                 )}
@@ -1346,22 +1550,52 @@ export default function ClientsPage() {
       </div>
 
       <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</DialogTitle>
-          </DialogHeader>
-          <NewClientForm
-            onFormSubmit={() => {
-              setIsClientModalOpen(false);
-              setEditingClient(null);
-              setQueryKey(prev => prev + 1);
-            }}
-            onCancel={() => {
-              setIsClientModalOpen(false);
-              setEditingClient(null);
-            }}
-            client={editingClient}
-          />
+        <DialogContent hideCloseButton={true} className="max-w-xl p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background flex flex-col">
+          {/* CABECERA OFICIAL VATOS ALFA */}
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 sm:px-5 py-3 border-b border-blue-900/40 flex items-center justify-between shrink-0 relative overflow-hidden">
+            <div className="header-light-beam" aria-hidden="true" />
+
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5">
+                <User className="h-4 w-4 text-slate-300 shrink-0" />
+                <div>
+                  <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
+                    {editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    {editingClient ? 'Modifica los datos del cliente.' : 'Registra un nuevo cliente en el sistema.'}
+                  </DialogDescription>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsClientModalOpen(false);
+                  setEditingClient(null);
+                }}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            <NewClientForm
+              onFormSubmit={() => {
+                setIsClientModalOpen(false);
+                setEditingClient(null);
+                setQueryKey(prev => prev + 1);
+              }}
+              onCancel={() => {
+                setIsClientModalOpen(false);
+                setEditingClient(null);
+              }}
+              client={editingClient}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1413,60 +1647,170 @@ export default function ClientsPage() {
             setDeleteConfirmationText('');
           }
         }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center"><AlertTriangle className="h-6 w-6 mr-2 text-destructive" />¿Estás absolutamente seguro?</DialogTitle>
-              <DialogDescription>
-                Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente <strong>{clientToDelete.nombre} {clientToDelete.apellido}</strong> y toda la información asociada.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2 py-2">
-              <Label htmlFor="delete-confirm">Para confirmar, escribe <strong>ELIMINAR</strong></Label>
-              <Input
-                id="delete-confirm"
-                value={deleteConfirmationText}
-                onChange={(e) => setDeleteConfirmationText(e.target.value)}
-                placeholder="ELIMINAR"
-              />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => { setClientToDelete(null); setDeleteConfirmationText(''); }}>Cancelar</Button>
+          <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+            {/* Header Oficial Vatos Alfa */}
+            <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+              <div className="header-light-beam" aria-hidden="true" />
+              <div className="relative z-10 flex items-center gap-3 min-w-0">
+                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                    ¿Eliminar Cliente?
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    Esta acción no se puede deshacer
+                  </DialogDescription>
+                </div>
+              </div>
               <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setClientToDelete(null);
+                  setDeleteConfirmationText('');
+                }}
+                className="h-8 w-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Esta acción eliminará permanentemente al cliente <strong className="text-foreground">{clientToDelete.nombre} {clientToDelete.apellido}</strong> y todo su historial asociado (citas, ventas y notas).
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="delete-confirm" className="text-xs font-semibold text-foreground">
+                  Para confirmar, escribe <strong className="text-destructive font-mono">ELIMINAR</strong>
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  value={deleteConfirmationText}
+                  onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                  placeholder="ELIMINAR"
+                  className="h-9 rounded-xl border-border/80 focus-visible:ring-destructive"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={() => {
+                  setClientToDelete(null);
+                  setDeleteConfirmationText('');
+                }}
+                className="rounded-xl h-9 text-xs"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
                 onClick={(e) => {
                   e.preventDefault();
                   handleDeleteClient();
                 }}
                 disabled={deleteConfirmationText !== 'ELIMINAR'}
-                className="bg-destructive hover:bg-destructive/90"
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl h-9 px-4 text-xs font-semibold shadow-sm"
               >
                 Sí, eliminar cliente
               </Button>
-            </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       )}
 
-      <AlertDialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-6 w-6 text-yellow-500" />
-              Requiere Autorización
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Para descargar este listado completo con información sensible, es necesario un código de autorización.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <Label htmlFor="auth-code">Código de Autorización</Label>
-            <Input id="auth-code" type="password" placeholder="Ingrese el código" value={authCode} onChange={e => setAuthCode(e.target.value)} />
+      <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
+        <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+          {/* Header Oficial Vatos Alfa */}
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+            <div className="header-light-beam" aria-hidden="true" />
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-3 min-w-0">
+                <ShieldAlert className="h-5 w-5 text-slate-300 shrink-0" />
+                <div>
+                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                    Requiere Autorización
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    Descarga segura de listado de clientes
+                  </DialogDescription>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setAuthCode('');
+                  setIsDownloadModalOpen(false);
+                }}
+                className="h-8 w-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setAuthCode('')}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDownloadRequest}>Aceptar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
+          <div className="p-5 space-y-4">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Para descargar este listado completo con información sensible, es necesario un código de autorización de administrador.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="auth-code" className="text-xs font-semibold text-foreground">
+                Código de Autorización
+              </Label>
+              <Input
+                id="auth-code"
+                type="password"
+                placeholder="Ingresa el código de autorización"
+                value={authCode}
+                onChange={e => setAuthCode(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    handleDownloadRequest();
+                  }
+                }}
+                className="h-9 rounded-xl border-border/80 focus-visible:ring-blue-500"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => {
+                setAuthCode('');
+                setIsDownloadModalOpen(false);
+              }}
+              className="rounded-xl h-9 text-xs"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDownloadRequest}
+              disabled={isDownloading}
+              className="btn-vatos-alfa rounded-xl h-9 px-4 text-xs font-bold text-white shadow-md"
+            >
+              {isDownloading ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Procesando...</span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Aceptar y Descargar</span>
+                </span>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

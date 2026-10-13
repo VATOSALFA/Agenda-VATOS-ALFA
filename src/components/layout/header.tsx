@@ -65,6 +65,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Promotion } from '@/lib/types';
 import { ExternalLink, WifiOff } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
@@ -354,8 +355,13 @@ export default function Header() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 bg-primary border-b border-border/40 backdrop-blur-sm">
-        <div className="flex h-16 items-center px-4 md:px-6">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-b border-[#2d3a60]/60 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+        {/* Haz de luz animado sutil que recorre la franja superior sin bloquear tooltips o menús */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+          <div className="header-light-beam" />
+        </div>
+
+        <div className="relative z-10 flex h-16 items-center px-4 md:px-6">
 
           {!isOnline && (
             <div className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-xs font-bold mr-4 flex items-center animate-pulse">
@@ -364,100 +370,178 @@ export default function Header() {
             </div>
           )}
 
-          {/* Mobile Menu (controlled via bottom navigation) */}
+          {/* Mobile Menu (controlled via bottom navigation) - Opción B: Fondo Claro (Continuidad Total con la Agenda) */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetContent side="right" className="w-full max-w-full sm:max-w-full h-full border-none bg-[#151b2e] text-white pl-6 pt-6 pb-6 pr-1 [&>button]:hidden">
+            <SheetContent
+              side="right"
+              overlayClassName="bg-black/35 backdrop-blur-xs"
+              className="w-full max-w-full sm:max-w-md h-full border-none sm:border-l sm:border-slate-200 bg-slate-50 text-slate-800 p-0 [&>button]:hidden shadow-2xl flex flex-col"
+            >
               <SheetHeader className="sr-only">
-                <SheetTitle>Opciones Secundarias</SheetTitle>
+                <SheetTitle>Menú de Navegación</SheetTitle>
               </SheetHeader>
-              <ScrollArea className="h-full pr-1">
-                <div className="flex justify-end mb-6 mt-2 pr-5">
-                  <button
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                    aria-label="Cerrar menú"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+
+              {/* Cabecera Oficial Vatos Alfa con Haz de Luz Oblicuo y Perfil */}
+              <div className="flex-shrink-0 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-md relative overflow-hidden">
+                <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+                  <div className="header-light-beam" />
                 </div>
 
-                <div className="space-y-6 pb-24 pr-5">
-                    {/* Website links group */}
-                    {websiteGroupLinks.length > 0 && (
-                      <div>
-                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                          Sitio Web
-                        </h3>
-                        <div className="grid grid-cols-3 gap-2">
-                          {websiteGroupLinks.map((link) => {
-                            const handleCopy = (e: React.MouseEvent) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(link.url);
-                              toast({
-                                title: "Enlace copiado",
-                                description: `El enlace ${link.isPersonal ? 'personal' : 'general'} ha sido copiado.`
-                              });
-                            };
-
-                            const handleOpen = () => {
-                              const previewUrl = link.url.includes('?') ? `${link.url}&preview=true` : `${link.url}?preview=true`;
-                              window.open(previewUrl, '_blank');
-                            };
-
-                            return (
-                              <div
-                                key={link.label}
-                                onClick={handleOpen}
-                                className="relative flex flex-col items-center justify-center p-3 rounded-xl border bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_12px_rgba(49,65,119,0.3)] group cursor-pointer h-20"
-                              >
-                                <button
-                                  onClick={handleCopy}
-                                  className="absolute top-1.5 right-1.5 p-1 rounded bg-white/5 border border-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-colors z-10"
-                                >
-                                  <Copy className="h-3 w-3" />
-                                </button>
-                                <link.icon className="h-5 w-5 text-blue-300 mb-1.5 group-hover:scale-110 transition-transform duration-300" />
-                                <span className="text-[10px] font-semibold text-gray-200 text-center leading-tight">{link.label}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Filtered Categories */}
-                    {filteredMenuGroups.map((group) => (
-                      <div key={group.title}>
-                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">
-                          {group.title}
-                        </h3>
-                        <div className="grid grid-cols-3 gap-2">
-                          {group.links.map((link) => {
-                            const Icon = link.icon;
-                            const isActive = pathname === link.href || (link.href === '/agenda' && pathname.startsWith('/agenda'));
-                            return (
-                              <Link
-                                key={link.href}
-                                href={link.href}
-                                onClick={handleLinkClick}
-                                className={cn(
-                                  "flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-300 h-20",
-                                  "bg-[#1f2742] border-[#314177]/40 hover:border-[#314177] hover:shadow-[0_0_12px_rgba(49,65,119,0.3)] group",
-                                  isActive && "border-[#314177] bg-[#1f2742] shadow-[0_0_12px_rgba(49,65,119,0.4)]"
-                                )}
-                              >
-                                <Icon className="h-5 w-5 text-blue-300 mb-1.5 group-hover:scale-110 transition-transform duration-300" />
-                                <span className="text-[10px] font-semibold text-gray-200 text-center leading-tight">{link.label}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
+                <div className="flex items-center gap-2.5 relative z-10 min-w-0">
+                  <Avatar className="h-9 w-9 border border-blue-500/40 rounded-xl shrink-0 shadow-sm">
+                    <AvatarImage src={user?.avatarUrl} alt={user?.displayName || "Usuario"} />
+                    <AvatarFallback className="rounded-xl text-xs font-bold bg-[#1b2644] text-blue-300">
+                      {getInitials(user?.displayName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-bold text-white truncate max-w-[200px]">
+                      {user?.displayName || "Usuario"}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize truncate">
+                      {user?.role || "Staff"}
+                    </span>
                   </div>
-                </ScrollArea>
-              </SheetContent>
-            </Sheet>
+                </div>
+
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer relative z-10 shrink-0"
+                  aria-label="Cerrar menú"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              {/* Contenido Desplazable con Tarjetas Blancas Nítidas y Fondo Gris Perla */}
+              <ScrollArea className="flex-1 px-4 py-3.5">
+                <div className="space-y-4 pb-24">
+                  {/* Website links group */}
+                  {websiteGroupLinks.length > 0 && (
+                    <div>
+                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5 text-blue-600" />
+                        Sitio Web y Reservas
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {websiteGroupLinks.map((link) => {
+                          const handleCopy = (e: React.MouseEvent) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(link.url);
+                            toast({
+                              title: "Enlace copiado",
+                              description: `El enlace ${link.isPersonal ? 'personal' : 'general'} ha sido copiado.`
+                            });
+                          };
+
+                          const handleOpen = () => {
+                            const previewUrl = link.url.includes('?') ? `${link.url}&preview=true` : `${link.url}?preview=true`;
+                            window.open(previewUrl, '_blank');
+                          };
+
+                          return (
+                            <div
+                              key={link.label}
+                              className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-blue-500 hover:shadow-md transition-all"
+                            >
+                              <button
+                                onClick={handleOpen}
+                                className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer"
+                              >
+                                <link.icon className={cn("h-4.5 w-4.5 shrink-0", link.isPersonal ? "text-[#C5A880]" : "text-blue-600")} />
+                                <div className="min-w-0">
+                                  <span className="text-xs font-semibold text-slate-800 block truncate">{link.label}</span>
+                                  <span className="text-[10px] text-slate-400 block truncate">Abrir sitio web</span>
+                                </div>
+                              </button>
+                              <button
+                                onClick={handleCopy}
+                                className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center shrink-0 transition-colors"
+                                title="Copiar enlace"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Filtered Categories */}
+                  {filteredMenuGroups.map((group) => (
+                    <div key={group.title}>
+                      <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                        {group.title}
+                      </h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        {group.links.map((link) => {
+                          const Icon = link.icon;
+                          const isActive = pathname === link.href || (link.href === '/agenda' && pathname.startsWith('/agenda'));
+                          const isPromo = link.href.startsWith('/promociones');
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              onClick={handleLinkClick}
+                              className={cn(
+                                "flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 h-[64px] group shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
+                                "bg-white border-slate-200/80 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5",
+                                isActive && "border-2 border-blue-500 bg-blue-50/70 shadow-[0_0_12px_rgba(59,130,246,0.18)]"
+                              )}
+                            >
+                              <Icon className={cn(
+                                "h-4.5 w-4.5 mb-1 group-hover:scale-110 transition-transform duration-200",
+                                isPromo
+                                  ? "text-[#C5A880]"
+                                  : (isActive
+                                      ? "text-blue-600"
+                                      : "text-blue-600 group-hover:text-blue-700")
+                              )} />
+                              <span className={cn(
+                                "text-[10px] text-center leading-tight line-clamp-2 px-0.5",
+                                isActive ? "font-bold text-blue-900" : "font-semibold text-slate-700 group-hover:text-slate-900"
+                              )}>
+                                {link.label}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Acciones de Cuenta (Mi Perfil y Cerrar Sesión) */}
+                  <div className="pt-2 border-t border-slate-200/80">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+                      Mi Cuenta
+                    </h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Link
+                        href="/settings/profile"
+                        onClick={handleLinkClick}
+                        className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all group"
+                      >
+                        <User className="h-4 w-4 text-blue-600 shrink-0 group-hover:scale-105 transition-transform" />
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 truncate">Mi Perfil</span>
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          setIsMobileMenuOpen(false);
+                          handleLogout();
+                        }}
+                        className="flex items-center gap-2 p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.04)] hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group"
+                      >
+                        <LogOut className="h-4 w-4 text-blue-600 shrink-0 group-hover:scale-105 transition-transform" />
+                        <span className="text-xs font-semibold text-slate-700 group-hover:text-slate-900 truncate">Cerrar Sesión</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </SheetContent>
+          </Sheet>
 
           <Link href="/agenda" className="mr-4 flex items-center flex-shrink-0">
             <div className="relative h-14 w-32 md:w-40 lg:w-52">
@@ -470,7 +554,7 @@ export default function Header() {
               />
             </div>
           </Link>
-          <nav className="hidden md:flex items-center min-w-0 flex-1 text-sm font-medium">
+          <nav className="hidden md:flex items-center min-w-0 flex-1 text-xs font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {
               const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
               return (
@@ -479,9 +563,9 @@ export default function Header() {
                     key={href}
                     href={href}
                     className={cn(
-                      'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm whitespace-nowrap',
+                      'px-2.5 py-1.5 rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                       isActive
-                        ? 'bg-secondary text-secondary-foreground'
+                        ? 'bg-secondary text-secondary-foreground font-semibold'
                         : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                     )}
                   >
@@ -495,15 +579,15 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
+                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                     pathname.startsWith('/sales')
-                      ? 'bg-secondary text-secondary-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Ventas <ChevronDown className="w-4 h-4 ml-1" />
+                    Ventas <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {salesNavLinks.map(({ href, label, icon: Icon, permission }) => (
                     canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
@@ -522,15 +606,15 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
+                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                     pathname.startsWith('/products')
-                      ? 'bg-secondary text-secondary-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Productos <ChevronDown className="w-4 h-4 ml-1" />
+                    Productos <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {productsNavLinks.map(({ href, label, icon: Icon, permission }) => (
                     canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
@@ -549,15 +633,15 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
+                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                     pathname.startsWith('/reports')
-                      ? 'bg-secondary text-secondary-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Reportes <ChevronDown className="w-4 h-4 ml-1" />
+                    Reportes <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {reportsNavLinks.map(({ href, label, icon: Icon, permission }) => (
                     canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
@@ -576,15 +660,15 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
+                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                     pathname.startsWith('/finanzas')
-                      ? 'bg-secondary text-secondary-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Finanzas <ChevronDown className="w-4 h-4 ml-1" />
+                    Finanzas <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {finanzasNavLinks.map((item) => (
                     canSee(item.permission!) && (
                       <DropdownMenuItem key={item.href} asChild>
@@ -603,15 +687,15 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 lg:px-3 py-2 rounded-md transition-colors text-xs lg:text-sm font-medium whitespace-nowrap',
+                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                     pathname.startsWith('/admin')
-                      ? 'bg-secondary text-secondary-foreground'
+                      ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Administración <ChevronDown className="w-4 h-4 ml-1" />
+                    Administración <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="start">
+                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {adminNavLinks.map(({ href, label, icon: Icon, permission }) => (
                     canSee(permission!) && (
                       <DropdownMenuItem key={href} asChild>
@@ -648,117 +732,164 @@ export default function Header() {
 
           </nav>
           <div className="ml-auto flex items-center space-x-1.5 flex-shrink-0">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => dispatchCustomEvent('open-qr-scanner')}
-              className="hidden sm:flex items-center gap-1.5 bg-[#C5A880]/15 hover:bg-[#C5A880]/25 text-[#C5A880] border border-[#C5A880]/40 shadow-sm transition-all text-xs font-semibold"
-              title="Escanear Pase Alfa o Cupón de Cliente"
-            >
-              <QrCode className="h-4 w-4" />
-              <span>Escanear QR</span>
-            </Button>
-
-            <div className="hidden md:block">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="secondary">
-                    Nuevo
+            <TooltipProvider delayDuration={150}>
+              {/* Escanear QR */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => dispatchCustomEvent('open-qr-scanner')}
+                    className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors hidden sm:inline-flex"
+                    aria-label="Escanear QR"
+                  >
+                    <QrCode className="h-4 w-4 text-[#C5A880]" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')}>
-                    <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
-                    <span className="font-semibold text-[#C5A880]">Escanear QR de cliente</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
-                    <Calendar className="mr-2 h-4 w-4" />
-                    <span>Crear nueva reserva</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    <span>Bloquear horario</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
-                    <Tag className="mr-2 h-4 w-4" />
-                    <span>Registrar nueva venta</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                  Escanear QR
+                </TooltipContent>
+              </Tooltip>
 
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="secondary" size="sm" className="hidden sm:flex">
-                  <Globe className="mr-2 h-4 w-4" />
-                  Web
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-4" align="end">
-                <div className="flex flex-col space-y-4">
-                  {user?.role !== 'Administrador general' && (
-                    <div className="space-y-2 border-b border-border/50 pb-4">
-                      <h4 className="font-semibold leading-none flex items-center text-primary"><User className="mr-2 h-4 w-4" /> Mi Enlace Personal</h4>
-                      <p className="text-xs text-muted-foreground break-all">
-                        {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : ''}
-                      </p>
-                      <div className="flex items-center gap-2 pt-1">
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                          const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
-                          if (baseUrl) {
-                            const url = `${baseUrl}/reservar?professionalId=${professionalId}&preview=true`;
-                            window.open(url, '_blank');
-                          }
-                        }}>
-                          <ExternalLink className="mr-2 h-4 w-4" />
-                          Ir a mi enlace
+              {/* Nuevo */}
+              <div className="hidden sm:block">
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          aria-label="Nuevo"
+                        >
+                          <Plus className="h-4 w-4" />
                         </Button>
-                        <Button variant="outline" size="icon" onClick={() => {
-                          const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
-                          navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${professionalId}`);
-                          toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
-                        }}>
-                          <Copy className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                      Nuevo
+                    </TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="end" className="w-56 bg-[#151b2e] border-2 border-blue-500 text-white rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5">
+                    <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')} className="rounded-lg focus:bg-blue-500/20">
+                      <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
+                      <span className="font-semibold text-[#C5A880]">Escanear QR de cliente</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')} className="rounded-lg focus:bg-blue-500/20">
+                      <Calendar className="mr-2 h-4 w-4" />
+                      <span>Crear nueva reserva</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')} className="rounded-lg focus:bg-blue-500/20">
+                      <Lock className="mr-2 h-4 w-4" />
+                      <span>Bloquear horario</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')} className="rounded-lg focus:bg-blue-500/20">
+                      <Tag className="mr-2 h-4 w-4" />
+                      <span>Registrar nueva venta</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Web */}
+              <div className="hidden sm:block">
+                <Popover>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          aria-label="Sitio Web y Enlaces"
+                        >
+                          <Globe className="h-4 w-4" />
                         </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                      Web
+                    </TooltipContent>
+                  </Tooltip>
+                  <PopoverContent className="w-80 p-4 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="end">
+                    <div className="flex flex-col space-y-4">
+                      {user?.role !== 'Administrador general' && (
+                        <div className="space-y-2 border-b border-border/50 pb-4">
+                          <h4 className="font-semibold leading-none flex items-center text-primary"><User className="mr-2 h-4 w-4" /> Mi Enlace Personal</h4>
+                          <p className="text-xs text-muted-foreground break-all">
+                            {displayUrl ? `${displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl}/reservar?professionalId=${professionalId}` : ''}
+                          </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                              const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                              if (baseUrl) {
+                                const url = `${baseUrl}/reservar?professionalId=${professionalId}&preview=true`;
+                                window.open(url, '_blank');
+                              }
+                            }}>
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Ir a mi enlace
+                            </Button>
+                            <Button variant="outline" size="icon" onClick={() => {
+                              const baseUrl = displayUrl ? (displayUrl.endsWith('/') ? displayUrl.slice(0, -1) : displayUrl) : '';
+                              navigator.clipboard.writeText(`${baseUrl}/reservar?professionalId=${professionalId}`);
+                              toast({ title: "Link copiado", description: "Tu enlace personal ha sido copiado." });
+                            }}>
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <h4 className="font-semibold leading-none flex items-center text-primary"><Store className="mr-2 h-4 w-4" /> Enlace General</h4>
+                        <p className="text-xs text-muted-foreground break-all">
+                          {displayUrl}
+                        </p>
+                        <div className="flex items-center gap-2 pt-1">
+                          <Button variant="outline" size="sm" className="w-full" onClick={() => {
+                            if (displayUrl) {
+                              const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
+                              window.open(previewUrl, '_blank');
+                            }
+                          }}>
+                            <ExternalLink className="mr-2 h-4 w-4" />
+                            Ir a la web
+                          </Button>
+                          <Button variant="outline" size="icon" onClick={() => {
+                            navigator.clipboard.writeText(displayUrl);
+                            toast({ title: "Link copiado", description: "El enlace general se ha copiado al portapapeles." });
+                          }}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  )}
-                  <div className="space-y-2">
-                    <h4 className="font-semibold leading-none flex items-center text-primary"><Store className="mr-2 h-4 w-4" /> Enlace General</h4>
-                    <p className="text-xs text-muted-foreground break-all">
-                      {displayUrl}
-                    </p>
-                    <div className="flex items-center gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="w-full" onClick={() => {
-                        if (displayUrl) {
-                          const previewUrl = displayUrl.includes('?') ? `${displayUrl}&preview=true` : `${displayUrl}?preview=true`;
-                          window.open(previewUrl, '_blank');
-                        }
-                      }}>
-                        <ExternalLink className="mr-2 h-4 w-4" />
-                        Ir a la web
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Ajustes */}
+              {user?.role === 'Administrador general' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Link href="/settings/empresa" passHref>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                        aria-label="Ajustes"
+                      >
+                        <Settings className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="icon" onClick={() => {
-                        navigator.clipboard.writeText(displayUrl);
-                        toast({ title: "Link copiado", description: "El enlace general se ha copiado al portapapeles." });
-                      }}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-
-
-
-            {user?.role === 'Administrador general' && (
-              <Link href="/settings/empresa" passHref>
-                <Button variant="ghost" size="icon" className="text-gray-300 hover:bg-black/10 hover:text-primary-foreground">
-                  <Settings className="h-5 w-5" />
-                </Button>
-              </Link>
-            )}
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                    Ajustes
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -799,14 +930,19 @@ export default function Header() {
       </header>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#151b2e] border-t border-[#314177]/30 backdrop-blur-md z-50 flex items-center justify-around px-2 pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-md z-[100] flex items-center justify-around px-2 pb-safe">
+        {/* Haz de luz oblicuo animado idéntico a la franja azul superior */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+          <div className="header-light-beam" />
+        </div>
+
         {/* Tab 1: Agenda */}
         {canSee('ver_agenda') && (
           <Link
             href="/agenda"
             className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-              pathname.startsWith('/agenda') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+              "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+              pathname.startsWith('/agenda') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
             )}
           >
             <Calendar className="h-5 w-5 mb-0.5" />
@@ -821,8 +957,8 @@ export default function Header() {
               <Link
                 href="/sales/invoiced"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/invoiced' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/invoiced' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <CreditCard className="h-5 w-5 mb-0.5" />
@@ -835,8 +971,8 @@ export default function Header() {
               <Link
                 href="/clients"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/clients' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/clients' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Users className="h-5 w-5 mb-0.5" />
@@ -849,8 +985,8 @@ export default function Header() {
               <Link
                 href="/promociones"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/promociones') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/promociones') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Gift className="h-5 w-5 mb-0.5" />
@@ -863,8 +999,8 @@ export default function Header() {
               <Link
                 href="/products"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/products') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/products') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Archive className="h-5 w-5 mb-0.5" />
@@ -877,8 +1013,8 @@ export default function Header() {
               <Link
                 href="/conversations"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/conversations') ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname.startsWith('/conversations') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <MessageSquare className="h-5 w-5 mb-0.5" />
@@ -889,29 +1025,38 @@ export default function Header() {
           return null;
         })()}
 
-        {/* Tab 3: Center Floating Button - Nuevo */}
+        {/* Tab 3: Center Floating Button - Nuevo con efecto oficial Vatos Alfa */}
         {(canSee('crear_reservas') || canSee('bloquear_horarios') || canSee('registrar_ventas')) && (
-          <div className="flex items-center justify-center flex-1 h-full relative">
+          <div className="flex items-center justify-center flex-1 h-full relative z-10 -translate-y-3.5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#202a49] to-[#3c4f90] text-white shadow-[0_0_12px_rgba(49,65,119,0.5)] border border-white/10 active:scale-95 duration-200 -translate-y-4">
-                  <Plus className="h-6 w-6" />
-                </button>
+                <Button
+                  variant="alfa"
+                  size="icon"
+                  className="w-12 h-12 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_12px_rgba(59,130,246,0.3)] cursor-pointer"
+                  aria-label="Acciones rápidas"
+                >
+                  <Plus className="h-6 w-6 text-white" />
+                </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" side="top" className="w-56 mb-2">
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')}>
+              <DropdownMenuContent
+                align="center"
+                side="top"
+                className="w-56 mb-2 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1.5"
+              >
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
                   <span className="font-semibold text-[#C5A880]">Escanear QR cliente</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')}>
+                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Tag className="mr-2 h-4 w-4" />
                   <span>Registrar nueva venta</span>
                 </DropdownMenuItem>
@@ -927,8 +1072,8 @@ export default function Header() {
               <Link
                 href="/sales/cash-box"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/cash-box' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/cash-box' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Wallet className="h-5 w-5 mb-0.5" />
@@ -941,8 +1086,8 @@ export default function Header() {
               <Link
                 href="/sales/my-performance"
                 className={cn(
-                  "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/my-performance' ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+                  "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
+                  pathname === '/sales/my-performance' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <LineChart className="h-5 w-5 mb-0.5" />
@@ -957,8 +1102,8 @@ export default function Header() {
         <button
           onClick={() => setIsMobileMenuOpen(true)}
           className={cn(
-            "flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-            isMobileMenuOpen ? "text-blue-300" : "text-gray-400 hover:text-gray-200"
+            "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors cursor-pointer",
+            isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
           )}
         >
           <Menu className="h-5 w-5 mb-0.5" />

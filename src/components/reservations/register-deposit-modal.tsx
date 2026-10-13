@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { DollarSign, CreditCard, Loader2, Wifi } from 'lucide-react';
+import { DollarSign, CreditCard, Loader2, Wifi, X } from 'lucide-react';
 import type { Reservation, Service } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { functions, httpsCallable, db } from '@/lib/firebase-client';
@@ -231,17 +231,46 @@ export function RegisterDepositModal({
         onOpenChange(open);
       }
     }}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg font-bold text-primary">
-            <DollarSign className="h-5 w-5 text-primary" />
-            Registrar Anticipo de Reserva
-          </DialogTitle>
-          <DialogDescription>
-            Registra el anticipo recibido para asegurar la cita del cliente.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent 
+        hideCloseButton={true}
+        className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col"
+      >
+        {/* CABECERA OFICIAL VATOS ALFA */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          {/* Haz de luz animado en diagonal */}
+          <div className="header-light-beam" aria-hidden="true" />
 
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <DollarSign className="h-5 w-5 text-[#C5A880] shrink-0" />
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                  Registrar Anticipo
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                  Asegura la reserva registrando el anticipo recibido.
+                </DialogDescription>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isWaitingForTerminal) {
+                  handleCancelTerminalWait();
+                } else {
+                  onOpenChange(false);
+                }
+              }}
+              className="p-1 text-slate-300 hover:text-white transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
         {isWaitingForTerminal ? (
           <div className="py-8 flex flex-col items-center justify-center space-y-4 text-center">
             <div className="relative">
@@ -362,8 +391,9 @@ export function RegisterDepositModal({
             )}
           </div>
         )}
+        </div>
 
-        <DialogFooter className="gap-2 sm:gap-0">
+        <DialogFooter className="px-5 pb-5 pt-0 gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => {
             if (isWaitingForTerminal) {
               handleCancelTerminalWait();
@@ -376,7 +406,7 @@ export function RegisterDepositModal({
           <Button
             onClick={handleConfirm}
             disabled={isSubmitting}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+            className="btn-vatos-alfa rounded-xl font-bold"
           >
             {isSubmitting ? (
               <>

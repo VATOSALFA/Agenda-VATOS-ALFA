@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +135,7 @@ export default function ControlFiscalResicoPage() {
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [facturaStepsDone, setFacturaStepsDone] = useState<Record<string, boolean>>({});
+    const [activeTab, setActiveTab] = useState<'paso1' | 'paso2' | 'paso3' | 'historial'>('paso1');
 
     const toggleStep = (stepKey: string) => {
         setFacturaStepsDone(prev => ({ ...prev, [stepKey]: !prev[stepKey] }));
@@ -386,17 +388,29 @@ export default function ControlFiscalResicoPage() {
     };
 
     return (
-        <div className="container mx-auto p-4 sm:p-6 max-w-7xl space-y-6">
+        <div className="container mx-auto p-3 sm:p-6 max-w-7xl space-y-4 sm:space-y-6">
             {/* Header del Módulo */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border/40 pb-4">
                 <div>
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-primary/10 text-primary">
-                            <Landmark className="h-6 w-6" />
-                        </div>
+                    <div className="flex items-center gap-2.5">
+                        <Landmark className="h-6 w-6 text-slate-300 shrink-0" />
                         <div>
-                            <h1 className="text-2xl font-bold tracking-tight text-[#202A49]">Control Fiscal RESICO</h1>
-                            <p className="text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Control Fiscal RESICO</h1>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors p-1" title="Ver información del módulo">
+                                            <HelpCircle className="h-4 w-4 text-slate-400" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
+                                        <p className="text-xs text-muted-foreground">
+                                            Pre-cálculo y autogestión de declaraciones mensuales ante el SAT para VATOS ALFA en el Régimen Simplificado de Confianza (RESICO).
+                                        </p>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <p className="text-xs text-muted-foreground hidden sm:block">
                                 Pre-cálculo y autogestión de declaraciones mensuales ante el SAT para VATOS ALFA
                             </p>
                         </div>
@@ -405,34 +419,34 @@ export default function ControlFiscalResicoPage() {
 
                 {/* Controles de Período y Estado */}
                 <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center bg-background border rounded-lg p-1 shadow-sm">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
+                    <div className="flex items-center bg-card border border-border/60 rounded-xl p-0.5 shadow-sm">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handlePrevMonth}>
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        <span className="px-3 text-sm font-semibold text-[#202A49] min-w-[130px] text-center">
+                        <span className="px-2.5 text-xs sm:text-sm font-semibold text-foreground min-w-[120px] text-center">
                             {monthLabel} {selectedYear}
                         </span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleNextMonth}>
                             <ChevronRight className="h-4 w-4" />
                         </Button>
                     </div>
 
                     <Badge 
-                        variant={fiscalData.estado === 'presentada' ? 'default' : 'outline'}
+                        variant="outline"
                         className={cn(
-                            "px-3 py-1 text-xs font-semibold gap-1.5",
+                            "px-2.5 py-1 text-xs font-semibold gap-1.5",
                             fiscalData.estado === 'presentada' 
-                                ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
-                                : "border-amber-500/50 text-amber-700 bg-amber-50"
+                                ? "border-blue-500/40 text-blue-400 bg-blue-500/10" 
+                                : "border-border/60 text-muted-foreground bg-muted/20"
                         )}
                     >
                         {fiscalData.estado === 'presentada' ? (
                             <>
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Presentada y Pagada
+                                <CheckCircle2 className="h-3.5 w-3.5 text-blue-400" /> Presentada y Pagada
                             </>
                         ) : (
                             <>
-                                <Clock className="h-3.5 w-3.5" /> Pendiente (Vence día 17)
+                                <Clock className="h-3.5 w-3.5 text-slate-400" /> Pendiente (Vence día 17)
                             </>
                         )}
                     </Badge>
@@ -440,553 +454,727 @@ export default function ControlFiscalResicoPage() {
                     <Button 
                         variant="outline" 
                         size="sm" 
-                        className="gap-1.5 border-primary/20 text-[#202A49]"
+                        className="h-8 text-xs border-border/60 text-foreground hover:bg-muted/20 gap-1.5"
                         onClick={() => window.open('https://www.sat.gob.mx/declaracion/74744/presenta-tus-declaraciones-provisionales-o-definitivas-de-personas-fisicas', '_blank')}
                     >
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
                         Portal del SAT
                     </Button>
                 </div>
             </div>
 
-            {/* AVISO IMPORTANTE DE SEGURIDAD FISCAL */}
-            <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-blue-900 flex items-start gap-3 text-sm shadow-sm">
-                <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-                <div>
-                    <span className="font-semibold">Regla de oro fiscal para tu barbería:</span> Mercado Pago y los bancos reportan automáticamente al SAT el dinero que ingresa a tus cuentas. La estrategia recomendada de blindaje es declarar como base **el 100% de lo bancarizado** para evitar discrepancias y multas, mientras administras el efectivo con total discreción.
+            {/* AVISO IMPORTANTE DE SEGURIDAD FISCAL (ALTO CONTRASTE TEMA CLARO Y OSCURO) */}
+            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 dark:bg-blue-950/40 px-3.5 py-2.5 text-xs text-blue-950 dark:text-blue-200 flex items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <span className="truncate sm:whitespace-normal leading-normal">
+                        <strong className="text-blue-950 dark:text-white font-semibold">Estrategia recomendada:</strong> Declarar como base el 100% de lo bancarizado para evitar discrepancias ante el SAT.
+                    </span>
                 </div>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <button type="button" className="text-[11px] text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-semibold underline whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors">
+                            <HelpCircle className="h-3.5 w-3.5" /> Ver regla de oro
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                            Mercado Pago y los bancos reportan automáticamente al SAT el dinero que ingresa a tus cuentas. La estrategia recomendada de blindaje es declarar como base <strong className="text-foreground">el 100% de lo bancarizado</strong> para evitar discrepancias y multas, mientras administras el efectivo con total discreción.
+                        </p>
+                    </PopoverContent>
+                </Popover>
             </div>
 
             {/* BLOQUE 1: RADIOGRAFÍA DE INGRESOS REALES */}
             <div>
-                <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="text-xs sm:text-sm font-semibold tracking-wide uppercase text-muted-foreground">
                         1. Ingresos Registrados en Agenda ({monthLabel} {selectedYear})
                     </h2>
                     {salesLoading && <span className="text-xs text-muted-foreground animate-pulse">Cargando ventas...</span>}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                     {/* Tarjeta Bancarizado */}
-                    <Card className="border-blue-200 bg-gradient-to-br from-blue-50/50 to-white shadow-sm">
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <CardTitle className="text-sm font-medium text-blue-900 flex items-center gap-1.5">
-                                    <CreditCard className="h-4 w-4 text-blue-600" />
-                                    Bancarizado (Visible al SAT)
-                                </CardTitle>
-                                <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px]">
-                                    Fiscalmente Rastreable
-                                </Badge>
-                            </div>
-                            <CardDescription className="text-xs text-blue-700">
-                                Mercado Pago + Tarjetas + Transferencias
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-extrabold text-[#202A49]">
-                                ${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <div className="mt-2 text-[11px] text-muted-foreground space-y-0.5 border-t pt-2">
-                                <div className="flex justify-between">
-                                    <span>Mercado Pago / En línea:</span>
-                                    <span className="font-medium">${incomeBreakdown.online.toFixed(2)}</span>
+                    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-2 sm:p-3.5 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-[11px] sm:text-xs font-semibold text-foreground flex items-center gap-1 sm:gap-1.5 truncate">
+                                    <CreditCard className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-400 shrink-0" />
+                                    <span className="truncate">Bancarizado</span>
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <Badge variant="outline" className="hidden sm:inline-flex border-blue-500/30 text-blue-400 bg-blue-500/10 text-[10px] h-5 py-0 px-1.5">
+                                        Rastreable
+                                    </Badge>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0" title="Información y desglose">
+                                                <HelpCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-2">
+                                            <div>
+                                                <p className="font-semibold text-blue-600 dark:text-blue-400">Mercado Pago + Tarjetas + SPEI</p>
+                                                <p className="text-muted-foreground text-[11px]">Dinero que ingresó a cuentas bancarias y que el SAT ya conoce en automático.</p>
+                                            </div>
+                                            <div className="space-y-1 text-[11px] border-t border-border/40 pt-1.5">
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">En línea / MP:</span>
+                                                    <span className="font-medium text-foreground">${incomeBreakdown.online.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Tarjeta en terminal:</span>
+                                                    <span className="font-medium text-foreground">${incomeBreakdown.tarjeta.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">Transferencias SPEI:</span>
+                                                    <span className="font-medium text-foreground">${incomeBreakdown.transferencia.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span>Tarjeta en terminal:</span>
-                                    <span className="font-medium">${incomeBreakdown.tarjeta.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Transferencias SPEI:</span>
-                                    <span className="font-medium">${incomeBreakdown.transferencia.toFixed(2)}</span>
-                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Tarjeta Efectivo */}
-                    <Card className="border-slate-200 bg-white shadow-sm">
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <CardTitle className="text-sm font-medium text-slate-800 flex items-center gap-1.5">
-                                    <Banknote className="h-4 w-4 text-emerald-600" />
-                                    Efectivo en Caja
-                                </CardTitle>
-                                <Badge variant="outline" className="text-slate-600 text-[10px]">
-                                    Cobros Físicos
-                                </Badge>
-                            </div>
-                            <CardDescription className="text-xs text-muted-foreground">
-                                Cobrado en mostrador en billetes y monedas
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-extrabold text-slate-700">
-                                ${incomeBreakdown.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <p className="mt-2 text-[11px] text-muted-foreground border-t pt-2">
-                                Puedes decidir qué porcentaje reportar en la factura global al público en general.
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    {/* Tarjeta Total Negocio */}
-                    <Card className="border-primary/20 bg-primary/5 shadow-sm">
-                        <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                                <CardTitle className="text-sm font-medium text-[#202A49] flex items-center gap-1.5">
-                                    <DollarSign className="h-4 w-4 text-primary" />
-                                    Total Real Recaudado
-                                </CardTitle>
-                                <Badge className="bg-primary text-white text-[10px]">
-                                    100% Caja
-                                </Badge>
-                            </div>
-                            <CardDescription className="text-xs text-muted-foreground">
-                                Facturación bruta total del mes
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-extrabold text-[#202A49]">
-                                ${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <p className="mt-2 text-[11px] text-muted-foreground border-t pt-2">
-                                Coincide 100% con tu sección de Finanzas Mensuales.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-
-            {/* BLOQUE 2: ESTRATEGIA DE DECLARACIÓN */}
-            <Card className="shadow-sm border-slate-200">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                        <Calculator className="h-5 w-5 text-primary" />
-                        2. Estrategia de Declaración para el SAT
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                        Selecciona el criterio para determinar el monto bruto de ventas que reportarás en tu declaración mensual
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {/* Opción A: Bancarizado */}
-                        <div 
-                            onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado' }))}
-                            className={cn(
-                                "cursor-pointer rounded-xl border p-4 transition-all",
-                                fiscalData.estrategia === 'bancarizado'
-                                    ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
-                                    : "border-slate-200 hover:border-slate-300 bg-white"
-                            )}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold text-primary">OPCIÓN A (RECOMENDADA)</span>
-                                {fiscalData.estrategia === 'bancarizado' && <Check className="h-4 w-4 text-primary" />}
-                            </div>
-                            <div className="font-semibold text-sm text-[#202A49]">100% Bancarizado</div>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                                Declara exactamente lo cobrado con tarjeta, transferencia y Mercado Pago. Blindaje contra auditorías bancarias.
-                            </p>
-                            <div className="mt-3 text-sm font-extrabold text-[#202A49]">
+                            <div className="text-xs sm:text-2xl font-extrabold text-foreground truncate">
                                 ${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                         </div>
-
-                        {/* Opción B: Bancarizado + Efectivo parcial */}
-                        <div 
-                            onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado_mas_efectivo' }))}
-                            className={cn(
-                                "cursor-pointer rounded-xl border p-4 transition-all",
-                                fiscalData.estrategia === 'bancarizado_mas_efectivo'
-                                    ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
-                                    : "border-slate-200 hover:border-slate-300 bg-white"
-                            )}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold text-slate-700">OPCIÓN B</span>
-                                {fiscalData.estrategia === 'bancarizado_mas_efectivo' && <Check className="h-4 w-4 text-primary" />}
+                        <div className="hidden sm:block mt-2.5 text-[11px] text-muted-foreground space-y-0.5 border-t border-border/40 pt-2">
+                            <div className="flex justify-between">
+                                <span>Mercado Pago / En línea:</span>
+                                <span className="font-medium text-foreground">${incomeBreakdown.online.toFixed(2)}</span>
                             </div>
-                            <div className="font-semibold text-sm text-[#202A49]">Bancarizado + % Efectivo</div>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                                Bancarizado más una fracción de efectivo ({fiscalData.porcentajeEfectivo || 20}%) para declarar actividad en caja.
-                            </p>
-                            <div className="mt-3 text-sm font-extrabold text-[#202A49]">
-                                ${(incomeBreakdown.bancarizado + (incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100))).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            <div className="flex justify-between">
+                                <span>Tarjeta en terminal:</span>
+                                <span className="font-medium text-foreground">${incomeBreakdown.tarjeta.toFixed(2)}</span>
                             </div>
-                        </div>
-
-                        {/* Opción C: Totalidad */}
-                        <div 
-                            onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'total' }))}
-                            className={cn(
-                                "cursor-pointer rounded-xl border p-4 transition-all",
-                                fiscalData.estrategia === 'total'
-                                    ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
-                                    : "border-slate-200 hover:border-slate-300 bg-white"
-                            )}
-                        >
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold text-slate-700">OPCIÓN C</span>
-                                {fiscalData.estrategia === 'total' && <Check className="h-4 w-4 text-primary" />}
-                            </div>
-                            <div className="font-semibold text-sm text-[#202A49]">100% de los Ingresos</div>
-                            <p className="text-[11px] text-muted-foreground mt-1">
-                                Declara el total absoluto generado en el mes (bancarizado + todo el efectivo de caja).
-                            </p>
-                            <div className="mt-3 text-sm font-extrabold text-[#202A49]">
-                                ${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                        </div>
-
-                        {/* Opción D: Personalizado */}
-                        <div 
-                            onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }))}
-                            className={cn(
-                                "cursor-pointer rounded-xl border p-4 transition-all flex flex-col justify-between",
-                                fiscalData.estrategia === 'personalizado'
-                                    ? "border-primary bg-primary/5 shadow-sm ring-1 ring-primary"
-                                    : "border-slate-200 hover:border-slate-300 bg-white"
-                            )}
-                        >
-                            <div>
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-bold text-slate-700">OPCIÓN D</span>
-                                    {fiscalData.estrategia === 'personalizado' && <Check className="h-4 w-4 text-primary" />}
-                                </div>
-                                <div className="font-semibold text-sm text-[#202A49]">Monto Personalizado</div>
-                                <p className="text-[11px] text-muted-foreground mt-1">
-                                    Haz clic y escribe aquí la cantidad que deseas declarar (ej. $3,200).
-                                </p>
-                            </div>
-                            <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                                <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">$</span>
-                                    <Input 
-                                        type="number" 
-                                        min={0}
-                                        value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
-                                        onChange={(e) => {
-                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                            setFiscalData(prev => ({ ...prev, estrategia: 'personalizado', montoPersonalizado: val }));
-                                        }}
-                                        onFocus={() => {
-                                            if (fiscalData.estrategia !== 'personalizado') {
-                                                setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }));
-                                            }
-                                        }}
-                                        placeholder="3200"
-                                        className="h-9 pl-6 text-sm font-bold text-[#202A49] bg-white border-slate-300 focus:border-primary focus:ring-1 focus:ring-primary shadow-inner"
-                                    />
-                                </div>
+                            <div className="flex justify-between">
+                                <span>Transferencias SPEI:</span>
+                                <span className="font-medium text-foreground">${incomeBreakdown.transferencia.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Inputs condicionales para estrategia B o D */}
-                    {fiscalData.estrategia === 'bancarizado_mas_efectivo' && (
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border text-sm">
-                            <Label className="text-xs font-medium">Porcentaje de efectivo a sumar:</Label>
-                            <div className="w-24">
+                    {/* Tarjeta Efectivo */}
+                    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-2 sm:p-3.5 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-[11px] sm:text-xs font-semibold text-foreground flex items-center gap-1 sm:gap-1.5 truncate">
+                                    <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-400 shrink-0" />
+                                    <span className="truncate">Efectivo</span>
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <Badge variant="outline" className="hidden sm:inline-flex border-border/60 text-muted-foreground text-[10px] h-5 py-0 px-1.5">
+                                        Cobros Físicos
+                                    </Badge>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0" title="Información">
+                                                <HelpCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                            <p className="font-semibold text-blue-600 dark:text-blue-400">Cobrado en mostrador</p>
+                                            <p className="text-muted-foreground text-[11px]">Billetes y monedas en mostrador. Puedes decidir qué porcentaje reportar en la factura global con total discreción.</p>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            </div>
+                            <div className="text-xs sm:text-2xl font-extrabold text-foreground truncate">
+                                ${incomeBreakdown.efectivo.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <div className="hidden sm:flex mt-2.5 text-[11px] text-muted-foreground border-t border-border/40 pt-2 items-center justify-between">
+                            <span>Manejo de efectivo:</span>
+                            <span className="text-slate-400 font-medium">Discrecional</span>
+                        </div>
+                    </div>
+
+                    {/* Tarjeta Total Negocio */}
+                    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-2 sm:p-3.5 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="text-[11px] sm:text-xs font-semibold text-foreground flex items-center gap-1 sm:gap-1.5 truncate">
+                                    <DollarSign className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-slate-300 shrink-0" />
+                                    <span className="truncate">Total</span>
+                                </span>
+                                <div className="flex items-center gap-1">
+                                    <Badge variant="outline" className="hidden sm:inline-flex border-blue-500/40 text-blue-400 bg-blue-500/10 text-[10px] h-5 py-0 px-1.5">
+                                        100% Caja
+                                    </Badge>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0" title="Información">
+                                                <HelpCircle className="h-3.5 w-3.5" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                            <p className="font-semibold text-blue-600 dark:text-blue-400">Facturación Bruta Total</p>
+                                            <p className="text-muted-foreground text-[11px]">Coincide al 100% con los ingresos de tu sección de Finanzas Mensuales.</p>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                            </div>
+                            <div className="text-xs sm:text-2xl font-extrabold text-foreground truncate">
+                                ${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+                        <div className="hidden sm:flex mt-2.5 text-[11px] text-muted-foreground border-t border-border/40 pt-2 items-center justify-between">
+                            <span>Finanzas del mes:</span>
+                            <span className="text-blue-400 font-medium">Sincronizado</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* BLOQUE 2: ESTRATEGIA DE DECLARACIÓN */}
+            <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-4 shadow-sm space-y-3.5">
+                <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2">
+                        <Calculator className="h-4 w-4 text-blue-400 shrink-0" />
+                        <h3 className="text-xs sm:text-sm font-bold text-foreground">2. Estrategia de Declaración para el SAT</h3>
+                    </div>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button type="button" className="text-slate-400 hover:text-foreground flex items-center gap-1 text-xs transition-colors">
+                                <HelpCircle className="h-3.5 w-3.5 text-blue-400" />
+                                <span className="hidden sm:inline text-[11px]">Criterio de cálculo</span>
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1.5">
+                            <p className="font-semibold text-blue-600 dark:text-blue-400">Selección de base gravable</p>
+                            <p className="text-muted-foreground text-[11px]">
+                                Selecciona el criterio para determinar el monto bruto de ventas que reportarás en tu factura global mensual ante el SAT.
+                            </p>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                    {/* Opción A: Bancarizado */}
+                    <div 
+                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado' }))}
+                        className={cn(
+                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
+                            fiscalData.estrategia === 'bancarizado'
+                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
+                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
+                        )}
+                    >
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] sm:text-[10px] font-bold text-blue-400 uppercase tracking-wider truncate">
+                                    <span className="sm:hidden">A (REC)</span>
+                                    <span className="hidden sm:inline">A (RECOMENDADA)</span>
+                                </span>
+                                {fiscalData.estrategia === 'bancarizado' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                            </div>
+                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
+                                <span className="truncate">100% Bancarizado</span>
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
+                                            <HelpCircle className="h-3 w-3" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
+                                        Declara exactamente lo cobrado con tarjeta, transferencia y Mercado Pago. Máximo blindaje contra auditorías bancarias.
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
+                                Blindaje contra discrepancias bancarias.
+                            </p>
+                        </div>
+                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
+                            ${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+
+                    {/* Opción B: Bancarizado + Efectivo parcial */}
+                    <div 
+                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado_mas_efectivo' }))}
+                        className={cn(
+                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
+                            fiscalData.estrategia === 'bancarizado_mas_efectivo'
+                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
+                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
+                        )}
+                    >
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN B</span>
+                                {fiscalData.estrategia === 'bancarizado_mas_efectivo' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                            </div>
+                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
+                                <span className="truncate">Bancarizado + % Efec.</span>
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
+                                            <HelpCircle className="h-3 w-3" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
+                                        Bancarizado más una fracción de efectivo ({fiscalData.porcentajeEfectivo || 20}%) para declarar actividad en caja.
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
+                                Bancarizado + fracción de efectivo ({fiscalData.porcentajeEfectivo || 20}%).
+                            </p>
+                        </div>
+                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
+                            ${(incomeBreakdown.bancarizado + (incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100))).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+
+                    {/* Opción C: Totalidad */}
+                    <div 
+                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'total' }))}
+                        className={cn(
+                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
+                            fiscalData.estrategia === 'total'
+                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
+                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
+                        )}
+                    >
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN C</span>
+                                {fiscalData.estrategia === 'total' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                            </div>
+                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
+                                <span className="truncate">100% de Ingresos</span>
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
+                                            <HelpCircle className="h-3 w-3" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
+                                        Declara el total absoluto generado en el mes (bancarizado + todo el efectivo de caja).
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
+                                Total absoluto generado en el mes.
+                            </p>
+                        </div>
+                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
+                            ${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+
+                    {/* Opción D: Personalizado */}
+                    <div 
+                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }))}
+                        className={cn(
+                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
+                            fiscalData.estrategia === 'personalizado'
+                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
+                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
+                        )}
+                    >
+                        <div>
+                            <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN D</span>
+                                {fiscalData.estrategia === 'personalizado' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
+                            </div>
+                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
+                                <span className="truncate">Personalizado</span>
+                                <Popover>
+                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
+                                            <HelpCircle className="h-3 w-3" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
+                                        Escribe libremente la cantidad exacta que deseas reportar en este periodo.
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
+                                Monto manual a declarar.
+                            </p>
+                        </div>
+                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
+                            ${(fiscalData.montoPersonalizado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Inputs condicionales para estrategia B o D */}
+                {fiscalData.estrategia === 'bancarizado_mas_efectivo' && (
+                    <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/60 text-xs">
+                        <Label className="text-xs font-medium text-foreground">Porcentaje de efectivo a sumar:</Label>
+                        <div className="w-20">
+                            <Input 
+                                type="number" 
+                                min={0} 
+                                max={100}
+                                value={fiscalData.porcentajeEfectivo || 20}
+                                onChange={(e) => setFiscalData(prev => ({ ...prev, porcentajeEfectivo: Number(e.target.value) }))}
+                                className="h-7 text-xs"
+                            />
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">% de ${incomeBreakdown.efectivo.toFixed(2)} = ${(incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100)).toFixed(2)}</span>
+                    </div>
+                )}
+
+                {fiscalData.estrategia === 'personalizado' && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 text-xs">
+                        <div className="flex items-center gap-2">
+                            <Label className="text-xs font-bold text-foreground">Monto a declarar:</Label>
+                            <div className="w-32 relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
                                 <Input 
                                     type="number" 
                                     min={0} 
-                                    max={100}
-                                    value={fiscalData.porcentajeEfectivo || 20}
-                                    onChange={(e) => setFiscalData(prev => ({ ...prev, porcentajeEfectivo: Number(e.target.value) }))}
-                                    className="h-8 text-xs"
+                                    value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
+                                    onChange={(e) => setFiscalData(prev => ({ ...prev, montoPersonalizado: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                                    placeholder="3200"
+                                    className="h-7 pl-6 text-xs font-bold bg-background border-border/60"
                                 />
                             </div>
-                            <span className="text-xs text-muted-foreground">% de ${incomeBreakdown.efectivo.toFixed(2)} = ${(incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100)).toFixed(2)}</span>
                         </div>
-                    )}
-
-                    {fiscalData.estrategia === 'personalizado' && (
-                        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-50/70 rounded-xl border border-blue-200 text-sm">
-                            <div className="flex items-center gap-2">
-                                <Label className="text-xs font-bold text-blue-950">Monto personalizado a declarar:</Label>
-                                <div className="w-36 relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">$</span>
-                                    <Input 
-                                        type="number" 
-                                        min={0} 
-                                        value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
-                                        onChange={(e) => setFiscalData(prev => ({ ...prev, montoPersonalizado: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                                        placeholder="3200"
-                                        className="h-8 pl-6 text-xs font-bold bg-white"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[11px] text-muted-foreground mr-1">Atajos para pagar ~$300-$400:</span>
-                                {[2900, 3200, 3500, 4000].map((preset) => (
-                                    <Button
-                                        key={preset}
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        className={cn(
-                                            "h-7 text-xs font-medium bg-white border-slate-200 hover:border-primary",
-                                            fiscalData.montoPersonalizado === preset && "border-primary text-primary font-bold bg-primary/10"
-                                        )}
-                                        onClick={() => setFiscalData(prev => ({ ...prev, montoPersonalizado: preset }))}
-                                    >
-                                        ${preset.toLocaleString('es-MX')}
-                                    </Button>
-                                ))}
-                            </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] text-muted-foreground mr-1">Atajos sugeridos:</span>
+                            {[2900, 3200, 3500, 4000].map((preset) => (
+                                <Button
+                                    key={preset}
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn(
+                                        "h-6 text-[11px] font-medium border-border/60 hover:border-blue-500 px-2",
+                                        fiscalData.montoPersonalizado === preset && "border-blue-500 text-blue-400 font-bold bg-blue-500/10"
+                                    )}
+                                    onClick={() => setFiscalData(prev => ({ ...prev, montoPersonalizado: preset }))}
+                                >
+                                    ${preset.toLocaleString('es-MX')}
+                                </Button>
+                            ))}
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                    </div>
+                )}
+            </div>
 
             {/* BLOQUE 3: SIMULADOR DE IMPUESTOS (ISR + IVA) */}
-            <div>
-                <h2 className="text-sm font-semibold tracking-wide uppercase text-muted-foreground mb-3">
-                    3. Cálculo Automático de Impuestos (RESICO)
-                </h2>
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xs sm:text-sm font-semibold tracking-wide uppercase text-muted-foreground flex items-center gap-1.5">
+                        <ShieldCheck className="h-4 w-4 text-blue-400" />
+                        3. Cálculo Automático de Impuestos (RESICO)
+                    </h2>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {/* Tarjeta ISR RESICO */}
-                    <Card className="border-slate-200 shadow-sm">
-                        <CardHeader className="bg-slate-50/50 pb-3 border-b">
-                            <div className="flex justify-between items-center">
-                                <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                                    <ShieldCheck className="h-5 w-5 text-emerald-600" />
-                                    Impuesto Sobre la Renta (ISR)
-                                </CardTitle>
-                                <Badge variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200">
-                                    Tasa RESICO: {tasaIsr}%
+                    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm space-y-3">
+                        <div className="flex justify-between items-center border-b border-border/40 pb-2">
+                            <div className="flex items-center gap-1.5">
+                                <ShieldCheck className="h-4 w-4 text-blue-400 shrink-0" />
+                                <span className="text-xs sm:text-sm font-bold text-foreground">Impuesto Sobre la Renta (ISR)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-[10px] h-5 py-0 px-2 font-mono">
+                                    Tasa: {tasaIsr}%
                                 </Badge>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Info ISR">
+                                            <HelpCircle className="h-3.5 w-3.5" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                        <p className="font-semibold text-blue-600 dark:text-blue-400">ISR Persona Física RESICO</p>
+                                        <p className="text-muted-foreground text-[11px]">En RESICO el ISR se cobra sobre el ingreso neto cobrado sin IVA (Art. 113-E Ley del ISR).</p>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
-                            <CardDescription className="text-xs">
-                                En RESICO el ISR se cobra sobre el ingreso neto cobrado sin IVA
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-4 space-y-3 text-sm">
-                            <div className="flex justify-between py-1 border-b">
+                        </div>
+
+                        <div className="space-y-2 text-xs">
+                            <div className="flex justify-between py-1 border-b border-border/40">
                                 <span className="text-muted-foreground">Monto Bruto Declarado:</span>
-                                <span className="font-semibold">${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-foreground">${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between py-1 border-b">
+                            <div className="flex justify-between py-1 border-b border-border/40">
                                 <span className="text-muted-foreground flex items-center gap-1">
-                                    Base Gravable para ISR (sin IVA):
+                                    Base Gravable (sin IVA):
                                     <Popover>
                                         <PopoverTrigger asChild>
-                                            <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-pointer" />
+                                            <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
+                                                <HelpCircle className="h-3 w-3" />
+                                            </button>
                                         </PopoverTrigger>
-                                        <PopoverContent className="w-64 text-xs p-3">
-                                            Se obtiene dividiendo el monto total entre 1.16, ya que los precios de mostrador ya tienen el 16% de IVA incluido.
+                                        <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
+                                            Se divide el monto entre 1.16, ya que los cobros en agenda ya incluyen el 16% de IVA.
                                         </PopoverContent>
                                     </Popover>
                                 </span>
-                                <span className="font-semibold">${baseGravableSinIVA.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-foreground">${baseGravableSinIVA.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
-                            <div className="flex justify-between py-1 border-b">
-                                <span className="text-muted-foreground">Tasa oficial RESICO mensual:</span>
-                                <span className="font-semibold text-emerald-700">{tasaIsr}%</span>
+                            <div className="flex justify-between py-1 border-b border-border/40">
+                                <span className="text-muted-foreground">Tasa oficial RESICO:</span>
+                                <span className="font-semibold text-blue-400">{tasaIsr}%</span>
                             </div>
-                            <div className="flex justify-between py-2 bg-emerald-50/60 rounded px-2 text-emerald-950 font-bold">
+                            <div className="flex justify-between items-center py-2 px-3 bg-muted/20 border border-border/60 rounded-lg text-foreground font-bold">
                                 <span>ISR a Pagar al SAT:</span>
-                                <span>${isrCalculado.toFixed(2)} → Redondeado: ${isrRedondeado.toLocaleString('es-MX')}</span>
+                                <span className="text-xs sm:text-sm font-extrabold text-blue-400">${isrCalculado.toFixed(2)} → ${isrRedondeado.toLocaleString('es-MX')}</span>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
 
                     {/* Tarjeta IVA */}
-                    <Card className="border-slate-200 shadow-sm">
-                        <CardHeader className="bg-slate-50/50 pb-3 border-b">
-                            <div className="flex justify-between items-center">
-                                <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                                    <FileText className="h-5 w-5 text-blue-600" />
-                                    Impuesto al Valor Agregado (IVA 16%)
-                                </CardTitle>
-                                <Badge variant="secondary" className="bg-blue-50 text-blue-800 border-blue-200">
-                                    16% Servicios y Productos
-                                </Badge>
+                    <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm space-y-3">
+                        <div className="flex justify-between items-center border-b border-border/40 pb-2">
+                            <div className="flex items-center gap-1.5">
+                                <FileText className="h-4 w-4 text-blue-400 shrink-0" />
+                                <span className="text-xs sm:text-sm font-bold text-foreground">Impuesto al Valor Agregado (IVA)</span>
                             </div>
-                            <CardDescription className="text-xs">
-                                IVA Cobrado menos el IVA de comisiones de Mercado Pago y compras
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="pt-4 space-y-3 text-sm">
-                            <div className="flex justify-between py-1 border-b">
+                            <div className="flex items-center gap-1.5">
+                                <Badge variant="outline" className="border-blue-500/30 text-blue-400 bg-blue-500/10 text-[10px] h-5 py-0 px-2 font-mono">
+                                    Tasa: 16%
+                                </Badge>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Info IVA">
+                                            <HelpCircle className="h-3.5 w-3.5" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                        <p className="font-semibold text-blue-600 dark:text-blue-400">IVA Trasladado y Acreditable</p>
+                                        <p className="text-muted-foreground text-[11px]">IVA Cobrado en tus servicios menos el IVA que pagas en comisiones de terminal y compras con CFDI.</p>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 text-xs">
+                            <div className="flex justify-between py-1 border-b border-border/40">
                                 <span className="text-muted-foreground">IVA Causado (16% sobre base):</span>
-                                <span className="font-semibold">${ivaTrasladado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-foreground">${ivaTrasladado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             </div>
 
                             {/* Deducción de comisiones MP */}
-                            <div className="flex items-center justify-between py-1 border-b">
+                            <div className="flex items-center justify-between py-1 border-b border-border/40">
                                 <div className="space-y-0.5">
-                                    <span className="text-xs font-medium text-emerald-700 flex items-center gap-1">
-                                        (-) IVA de Comisiones Mercado Pago:
+                                    <span className="text-xs font-medium text-foreground flex items-center gap-1">
+                                        (-) IVA Comisiones Terminal/MP:
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">Factura mensual descargable en MP</span>
+                                    <span className="text-[10px] text-muted-foreground">Factura descargable en MP</span>
                                 </div>
-                                <div className="w-28">
+                                <div className="w-24 sm:w-28">
                                     <Input 
                                         type="number" 
                                         value={fiscalData.ivaComisionesAcreditable || ''}
                                         onChange={(e) => setFiscalData(prev => ({ ...prev, ivaComisionesAcreditable: Number(e.target.value) }))}
                                         placeholder="289.65"
-                                        className="h-7 text-xs text-right"
+                                        className="h-7 text-xs text-right bg-background border-border/60"
                                     />
                                 </div>
                             </div>
 
                             {/* Deducción de otros gastos facturados */}
-                            <div className="flex items-center justify-between py-1 border-b">
+                            <div className="flex items-center justify-between py-1 border-b border-border/40">
                                 <div className="space-y-0.5">
-                                    <span className="text-xs font-medium text-emerald-700">
-                                        (-) IVA de Compras e Insumos con CFDI:
+                                    <span className="text-xs font-medium text-foreground">
+                                        (-) IVA Insumos/Gastos con CFDI:
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">Facturas a tu RFC con IVA desglosado</span>
+                                    <span className="text-[10px] text-muted-foreground">Facturas a tu RFC con IVA</span>
                                 </div>
-                                <div className="w-28">
+                                <div className="w-24 sm:w-28">
                                     <Input 
                                         type="number" 
                                         value={fiscalData.ivaOtrosGastosAcreditable || ''}
                                         onChange={(e) => setFiscalData(prev => ({ ...prev, ivaOtrosGastosAcreditable: Number(e.target.value) }))}
                                         placeholder="0.00"
-                                        className="h-7 text-xs text-right"
+                                        className="h-7 text-xs text-right bg-background border-border/60"
                                     />
                                 </div>
                             </div>
 
-                            <div className="flex justify-between py-2 bg-blue-50/60 rounded px-2 text-blue-950 font-bold">
+                            <div className="flex justify-between items-center py-2 px-3 bg-muted/20 border border-border/60 rounded-lg text-foreground font-bold">
                                 <span>IVA a Pagar al SAT:</span>
-                                <span>${ivaAPagar.toFixed(2)} → Redondeado: ${ivaRedondeado.toLocaleString('es-MX')}</span>
+                                <span className="text-xs sm:text-sm font-extrabold text-blue-400">${ivaAPagar.toFixed(2)} → ${ivaRedondeado.toLocaleString('es-MX')}</span>
                             </div>
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Resumen Total a Pagar */}
-                <div className="mt-4 p-4 rounded-xl bg-[#202A49] text-white flex flex-col sm:flex-row justify-between items-center gap-4 shadow-md">
+                <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                     <div>
-                        <div className="text-xs uppercase tracking-wider text-slate-300 font-semibold">
+                        <div className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-300 font-semibold">
                             Total a Pagar en Línea de Captura SAT ({monthLabel} {selectedYear})
                         </div>
-                        <div className="text-xs text-slate-300 mt-0.5">
+                        <div className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
                             ISR: ${isrRedondeado.toLocaleString('es-MX')} + IVA: ${ivaRedondeado.toLocaleString('es-MX')}
                         </div>
                     </div>
-                    <div className="text-3xl font-black tracking-tight text-white">
+                    <div className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                         ${granTotalAPagarSAT.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                 </div>
             </div>
 
-            {/* BLOQUE 4: PASO 1 - GENERAR FACTURA GLOBAL (CFDI 4.0) */}
-            <Card className="border-amber-300/80 bg-gradient-to-br from-amber-50/20 via-white to-white shadow-md">
-                <CardHeader className="bg-amber-100/60 pb-4 border-b border-amber-200">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            {/* TABS DE PROCESO Y GUÍA PASO A PASO */}
+            <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full space-y-3">
+                <TabsList className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 h-auto bg-card/80 border border-border/60 rounded-xl">
+                    <TabsTrigger 
+                        value="paso1" 
+                        className="text-xs py-2 px-2 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border data-[state=active]:border-blue-500/30 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                        <FileText className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="font-semibold truncate">1. Factura CFDI</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                        value="paso2" 
+                        className="text-xs py-2 px-2 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border data-[state=active]:border-blue-500/30 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                        <FileCheck className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="font-semibold truncate">2. Declaración</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                        value="paso3" 
+                        className="text-xs py-2 px-2 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border data-[state=active]:border-blue-500/30 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                        <Save className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="font-semibold truncate">3. Pago y Folio</span>
+                    </TabsTrigger>
+                    <TabsTrigger 
+                        value="historial" 
+                        className="text-xs py-2 px-2 data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400 data-[state=active]:border data-[state=active]:border-blue-500/30 flex items-center justify-center gap-1.5 transition-all"
+                    >
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="font-semibold truncate">Historial {selectedYear}</span>
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* BLOQUE 4: PASO 1 - GENERAR FACTURA GLOBAL (CFDI 4.0) */}
+                <TabsContent value="paso1" className="space-y-4 mt-0">
+                    <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 sm:p-5 shadow-sm space-y-4">
+                <div className="border-b border-border/40 pb-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div>
                             <div className="flex items-center gap-2">
-                                <Badge className="bg-amber-700 text-white font-bold text-xs">PASO 1 OBLIGATORIO (3 MINUTOS)</Badge>
-                                <span className="text-xs text-amber-800 font-medium">Autogestión SAT RESICO</span>
+                                <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 font-bold text-xs">
+                                    PASO 1 (3 MINUTOS)
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">Autogestión SAT RESICO</span>
                             </div>
-                            <CardTitle className="text-lg font-bold text-[#202A49] flex items-center gap-2 mt-1">
-                                <FileText className="h-5 w-5 text-amber-700 shrink-0" />
-                                Generar Factura Global al Público en General (CFDI 4.0)
-                            </CardTitle>
-                            <CardDescription className="text-xs text-amber-900/90 mt-1 max-w-3xl">
-                                Esta es la factura mensual que tu contadora generaba. Al timbrarla gratis en el SAT con los <strong>${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong> que elegiste, tu declaración del Paso 2 se prellenará en automático y pagarás únicamente los impuestos estimados (~$300-$400).
-                            </CardDescription>
+                            <div className="flex items-center gap-2 mt-1">
+                                <FileText className="h-4 w-4 text-blue-400 shrink-0" />
+                                <h3 className="text-base sm:text-lg font-bold text-foreground">
+                                    Generar Factura Global al Público en General (CFDI 4.0)
+                                </h3>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Información CFDI">
+                                            <HelpCircle className="h-4 w-4 text-blue-400" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1.5">
+                                        <p className="font-semibold text-blue-600 dark:text-blue-400">¿Por qué timbrar esta factura?</p>
+                                        <p className="text-muted-foreground text-[11px]">
+                                            Al timbrarla gratis en el SAT con los <strong className="text-foreground">${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong> seleccionados, tu declaración del Paso 2 se prellenará en automático y pagarás únicamente los impuestos estimados (~$300-$400).
+                                        </p>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
 
                         {/* Botones directos al portal de facturación del SAT */}
-                        <div className="flex flex-col sm:flex-row lg:flex-col xl:flex-row gap-2 shrink-0">
+                        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                             <Button 
-                                variant="default" 
+                                variant="alfa" 
                                 size="sm"
-                                className="bg-amber-700 hover:bg-amber-800 text-white font-bold gap-2 shadow-md hover:shadow-lg transition-all text-xs h-10 px-4"
+                                className="h-9 px-4 text-xs gap-1.5"
                                 onClick={() => window.open('https://portal.facturaelectronica.sat.gob.mx/', '_blank')}
                             >
-                                <ExternalLink className="h-4 w-4" />
-                                🚀 Abrir Facturación CFDI 4.0 del SAT
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Abrir Facturación CFDI 4.0 SAT
                             </Button>
                             <Button 
                                 variant="outline" 
                                 size="sm"
-                                className="border-amber-300 text-amber-900 hover:bg-amber-100/50 text-xs h-10"
+                                className="h-9 text-xs border-border/60 text-foreground hover:bg-muted/20"
                                 onClick={() => window.open('https://www.sat.gob.mx/aplicacion/operacion/53027/genera-tu-factura-electronica', '_blank')}
                             >
-                                <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                                <ExternalLink className="h-3.5 w-3.5 mr-1 text-slate-400" />
                                 Portal Alterno SAT
                             </Button>
                         </div>
                     </div>
 
                     {/* Acceso Rápido con RFC del Usuario */}
-                    <div className="mt-3 pt-3 border-t border-amber-200/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="mt-3 pt-3 border-t border-border/40 flex flex-wrap items-center justify-between gap-2 text-xs">
                         <div className="flex items-center gap-2">
-                            <span className="text-amber-950 font-semibold">Tu RFC para ingresar al SAT:</span>
+                            <span className="text-muted-foreground font-medium">Tu RFC SAT:</span>
                             <Button 
                                 variant="outline" 
                                 size="sm" 
-                                className="h-7 text-xs font-mono font-bold bg-white text-[#202A49] border-amber-300 gap-1.5"
+                                className="h-7 text-xs font-mono font-bold bg-muted/20 text-foreground border-border/60 hover:border-blue-500 gap-1.5"
                                 onClick={() => copyToClipboard('PABA850207PA6', 'user_rfc')}
                             >
-                                {copiedField === 'user_rfc' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                {copiedField === 'user_rfc' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                 PABA850207PA6
                             </Button>
                             <span className="text-[11px] text-muted-foreground hidden sm:inline">(JOSE ALEJANDRO PACHECO BARCENAS)</span>
                         </div>
-                        <div className="text-[11px] text-amber-800 flex items-center gap-1 font-medium">
-                            <Info className="h-3.5 w-3.5 text-amber-700" />
-                            Abre el portal en una pestaña nueva y sigue los 6 pasos ordenados aquí abajo:
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                            <Info className="h-3.5 w-3.5 text-blue-400" />
+                            Abre el portal en una pestaña nueva y completa estos 6 pasos:
                         </div>
                     </div>
-                </CardHeader>
+                </div>
 
-                <CardContent className="pt-5 space-y-6">
+                <div className="space-y-4">
                     {/* Barra de Progreso del Checklist */}
-                    <div className="p-3 bg-slate-50 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="p-3 bg-muted/20 rounded-xl border border-border/60 flex flex-wrap items-center justify-between gap-2 text-xs">
                         <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#202A49]">Lista de Pasos para no equivocarte:</span>
-                            <Badge variant="secondary" className="bg-amber-100 text-amber-900 border-amber-200 font-bold text-[11px]">
+                            <span className="font-semibold text-foreground">Progreso de la factura:</span>
+                            <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 font-bold text-[11px]">
                                 {Object.values(facturaStepsDone).filter(Boolean).length} de 6 pasos completados
                             </Badge>
                         </div>
                         <span className="text-[11px] text-muted-foreground">
-                            Haz clic en cada botón para copiar su valor exacto y pegarlo en el SAT
+                            Haz clic en cada campo para copiar su valor exacto y pegarlo en el SAT
                         </span>
                     </div>
 
                     {/* GUÍA PASO A PASO SECUENCIAL (1.1 a 1.6) */}
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         {/* PASO 1.1: Iniciar Sesión en el SAT */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_1'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_1'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.1
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.1</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Iniciar Sesión en el SAT e ir a "Generación de CFDI"
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_1'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_1'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_1')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_1'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_1'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_1'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-700">
-                                <div className="space-y-1.5">
-                                    <p>1. Entra a <a href="https://portal.facturaelectronica.sat.gob.mx/" target="_blank" rel="noreferrer" className="text-primary font-bold underline">portal.facturaelectronica.sat.gob.mx</a> con tu RFC y Contraseña CIEC o e.firma.</p>
-                                    <p>2. En el menú principal superior da clic en <strong>"Generación de CFDI"</strong> (o "Emisión de Factura 4.0").</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-muted-foreground">
+                                <div className="space-y-1">
+                                    <p>1. Entra a <a href="https://portal.facturaelectronica.sat.gob.mx/" target="_blank" rel="noreferrer" className="text-blue-400 font-semibold underline">portal.facturaelectronica.sat.gob.mx</a> con tu RFC y Contraseña CIEC o e.firma.</p>
+                                    <p>2. En el menú superior da clic en <strong>"Generación de CFDI"</strong> (o "Emisión de Factura 4.0").</p>
                                 </div>
-                                <div className="p-2.5 bg-slate-50 rounded-lg border text-[11px] space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 text-[11px] space-y-1">
                                     <div><strong>Régimen del Emisor:</strong> 626 - Régimen Simplificado de Confianza</div>
                                     <div><strong>Tipo de Comprobante:</strong> I - Ingreso</div>
                                     <div><strong>Moneda:</strong> MXN - Peso Mexicano</div>
@@ -996,61 +1184,59 @@ export default function ControlFiscalResicoPage() {
 
                         {/* PASO 1.2: Activar casilla obligatoria "¿Es factura global?" */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_2'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_2'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.2
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.2</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Activar la casilla obligatoria "¿Es una factura global?"
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_2'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_2'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_2')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_2'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_2'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_2'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <p className="text-xs text-slate-700 mb-3">
-                                ⚠️ <strong>Muy importante:</strong> En el encabezado verás la pregunta <em>"¿Es una factura global?"</em>. Marca la casilla como <strong>SÍ</strong>. Al activarla se desplegarán estos 3 campos de periodicidad:
+                            <p className="text-xs text-muted-foreground mb-2.5">
+                                En el encabezado verás la pregunta <em>"¿Es una factura global?"</em>. Marca la casilla como <strong>SÍ</strong> y copia estos 3 valores:
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Periodicidad:</div>
-                                        <div className="font-bold text-[#202A49]">05 (Mensual)</div>
+                                        <div className="font-bold text-foreground">05 (Mensual)</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('05', 'cfdi_per')}>
-                                        {copiedField === 'cfdi_per' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_per' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         05
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Mes de la venta:</div>
-                                        <div className="font-bold text-[#202A49]">{String(selectedMonthIdx + 1).padStart(2, '0')} ({monthLabel})</div>
+                                        <div className="font-bold text-foreground">{String(selectedMonthIdx + 1).padStart(2, '0')} ({monthLabel})</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard(String(selectedMonthIdx + 1).padStart(2, '0'), 'cfdi_mes')}>
-                                        {copiedField === 'cfdi_mes' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_mes' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         {String(selectedMonthIdx + 1).padStart(2, '0')}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Año fiscal:</div>
-                                        <div className="font-bold text-[#202A49]">{selectedYear}</div>
+                                        <div className="font-bold text-foreground">{selectedYear}</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard(String(selectedYear), 'cfdi_ano')}>
-                                        {copiedField === 'cfdi_ano' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_ano' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         {selectedYear}
                                     </Button>
                                 </div>
@@ -1059,123 +1245,119 @@ export default function ControlFiscalResicoPage() {
 
                         {/* PASO 1.3: Datos del Cliente (Público en General) */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_3'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_3'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.3
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.3</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Capturar los Datos del Cliente (Público en General)
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_3'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_3'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_3')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_3'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_3'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_3'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <p className="text-xs text-slate-700 mb-3">
+                            <p className="text-xs text-muted-foreground mb-2.5">
                                 En la sección <strong>"Cliente / Receptor"</strong>, copia y pega estos datos oficiales del SAT:
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">RFC Receptor:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('XAXX010101000', 'cfdi_rfc')}>
                                         XAXX010101000
-                                        {copiedField === 'cfdi_rfc' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'cfdi_rfc' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Nombre / Razón Social:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-bold" onClick={() => copyToClipboard('PUBLICO EN GENERAL', 'cfdi_nombre')}>
                                         PUBLICO EN GENERAL
-                                        {copiedField === 'cfdi_nombre' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'cfdi_nombre' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Régimen Fiscal Receptor:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('616', 'cfdi_regimen')}>
                                         616 (Sin obligaciones)
-                                        {copiedField === 'cfdi_regimen' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'cfdi_regimen' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-white rounded-lg border space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Uso de CFDI:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('S01', 'cfdi_uso')}>
                                         S01 (Sin efectos)
-                                        {copiedField === 'cfdi_uso' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'cfdi_uso' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                     </Button>
                                 </div>
                             </div>
                             <div className="mt-2 text-[11px] text-muted-foreground">
-                                💡 <strong>Código Postal del Cliente:</strong> Escribe tu mismo código postal fiscal (el de tu negocio o domicilio registrado en el SAT).
+                                💡 <strong>Código Postal del Cliente:</strong> Escribe tu mismo código postal fiscal registrado en el SAT.
                             </div>
                         </div>
 
                         {/* PASO 1.4: Agregar el Concepto e Impuestos */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_4'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_4'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.4
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.4</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Agregar el Concepto e Impuesto (Desglose exacto)
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_4'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_4'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_4')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_4'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_4'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_4'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <p className="text-xs text-slate-700 mb-3">
-                                Haz clic en el botón azul <strong>"+ Agregar"</strong> concepto en el SAT y completa estos campos:
+                            <p className="text-xs text-muted-foreground mb-2.5">
+                                Haz clic en <strong>"+ Agregar"</strong> concepto en el SAT y completa estos campos:
                             </p>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs mb-3">
-                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs mb-3">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Clave Producto / Servicio:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('01010101', 'cfdi_clave')}>
-                                        01010101 (No existe en catálogo)
-                                        {copiedField === 'cfdi_clave' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        01010101 (No existe en cat.)
+                                        {copiedField === 'cfdi_clave' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Clave de Unidad:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('ACT', 'cfdi_act')}>
                                         ACT (Actividad)
-                                        {copiedField === 'cfdi_act' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_act' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
                                     <div className="text-[11px] text-muted-foreground">Cantidad:</div>
                                     <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold" onClick={() => copyToClipboard('1', 'cfdi_cant')}>
                                         1
-                                        {copiedField === 'cfdi_cant' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_cant' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1 md:col-span-2">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1 md:col-span-2">
                                     <div className="text-[11px] text-muted-foreground">Descripción:</div>
                                     <Button 
                                         variant="outline" 
@@ -1184,97 +1366,95 @@ export default function ControlFiscalResicoPage() {
                                         onClick={() => copyToClipboard(`Venta global al publico en general del mes de ${monthName} ${selectedYear}`, 'cfdi_desc')}
                                     >
                                         <span className="truncate">Venta global al publico en general del mes de {monthName} {selectedYear}</span>
-                                        {copiedField === 'cfdi_desc' ? <Check className="h-3 w-3 text-emerald-600 shrink-0 ml-1" /> : <Copy className="h-3 w-3 shrink-0 ml-1" />}
+                                        {copiedField === 'cfdi_desc' ? <Check className="h-3 w-3 text-blue-400 shrink-0 ml-1" /> : <Copy className="h-3 w-3 text-slate-400 shrink-0 ml-1" />}
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border space-y-1">
-                                    <div className="text-[11px] text-muted-foreground font-semibold text-emerald-800">Valor Unitario (Base sin IVA):</div>
-                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold border-emerald-300 text-emerald-900 bg-white" onClick={() => copyToClipboard(baseGravableSinIVA.toFixed(2), 'cfdi_base')}>
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-1">
+                                    <div className="text-[11px] text-muted-foreground font-semibold">Valor Unitario (Base sin IVA):</div>
+                                    <Button variant="outline" size="sm" className="w-full justify-between h-8 text-xs font-mono font-bold border-blue-500/40 text-blue-400 bg-blue-500/10" onClick={() => copyToClipboard(baseGravableSinIVA.toFixed(2), 'cfdi_base')}>
                                         ${baseGravableSinIVA.toFixed(2)}
-                                        {copiedField === 'cfdi_base' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_base' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                     </Button>
                                 </div>
                             </div>
 
                             {/* Pestaña de Impuestos del SAT */}
-                            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-xs text-blue-950 space-y-2">
-                                <div className="font-bold flex items-center gap-1.5">
-                                    <ShieldCheck className="h-4 w-4 text-blue-700" />
+                            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 text-xs text-foreground space-y-2">
+                                <div className="font-bold flex items-center gap-1.5 text-blue-400">
+                                    <ShieldCheck className="h-4 w-4 text-blue-400" />
                                     En la sección "Impuestos" dentro del concepto:
                                 </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
-                                    <div><strong>Objeto de Impuesto:</strong> 02 (Sí objeto de impuesto)</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
+                                    <div><strong>Objeto de Impuesto:</strong> 02 (Sí objeto)</div>
                                     <div><strong>Impuesto:</strong> 002 (IVA)</div>
                                     <div><strong>Tipo Factor:</strong> Tasa</div>
                                     <div className="flex items-center justify-between">
                                         <span><strong>Tasa:</strong> 0.160000</span>
                                         <Button variant="ghost" size="sm" className="h-6 text-[10px] px-1.5" onClick={() => copyToClipboard('0.160000', 'cfdi_tasa')}>
-                                            {copiedField === 'cfdi_tasa' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                            {copiedField === 'cfdi_tasa' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between font-bold text-xs">
-                                    <span>🎯 Total de la Factura que debe arrojar el SAT:</span>
-                                    <span className="text-sm text-primary">${montoADeclararBruto.toFixed(2)} MXN</span>
+                                <div className="pt-2 border-t border-blue-500/20 flex items-center justify-between font-bold text-xs">
+                                    <span>🎯 Total de la Factura en el SAT:</span>
+                                    <span className="text-sm text-blue-400">${montoADeclararBruto.toFixed(2)} MXN</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* PASO 1.5: Forma y Método de Pago */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_5'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_5'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.5
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.5</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Forma y Método de Pago
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_5'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_5'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_5')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_5'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_5'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_5'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Forma de Pago:</div>
-                                        <div className="font-bold text-[#202A49]">01 (Efectivo)</div>
+                                        <div className="font-bold text-foreground">01 (Efectivo)</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('01', 'cfdi_fp')}>
-                                        {copiedField === 'cfdi_fp' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_fp' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         01
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Método de Pago:</div>
-                                        <div className="font-bold text-[#202A49]">PUE (Pago en una exhibición)</div>
+                                        <div className="font-bold text-foreground">PUE (Una exhibición)</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('PUE', 'cfdi_mp')}>
-                                        {copiedField === 'cfdi_mp' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_mp' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         PUE
                                     </Button>
                                 </div>
 
-                                <div className="p-2.5 bg-slate-50 rounded-lg border flex items-center justify-between">
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 flex items-center justify-between">
                                     <div>
                                         <div className="text-[11px] text-muted-foreground">Moneda:</div>
-                                        <div className="font-bold text-[#202A49]">MXN (Peso Mexicano)</div>
+                                        <div className="font-bold text-foreground">MXN (Peso Mex.)</div>
                                     </div>
                                     <Button variant="outline" size="sm" className="h-7 text-xs font-mono font-bold" onClick={() => copyToClipboard('MXN', 'cfdi_mon')}>
-                                        {copiedField === 'cfdi_mon' ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                        {copiedField === 'cfdi_mon' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
                                         MXN
                                     </Button>
                                 </div>
@@ -1283,386 +1463,491 @@ export default function ControlFiscalResicoPage() {
 
                         {/* PASO 1.6: Sellar y Descargar */}
                         <div className={cn(
-                            "rounded-xl border p-4 transition-all",
-                            facturaStepsDone['step_1_6'] ? "border-emerald-300 bg-emerald-50/30" : "border-slate-200 bg-white"
+                            "rounded-xl border p-3.5 transition-all",
+                            facturaStepsDone['step_1_6'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
                         )}>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3 mb-3">
-                                <div className="flex items-center gap-2.5">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-700 text-white font-bold text-xs">
-                                        1.6
-                                    </span>
-                                    <span className="font-bold text-sm text-[#202A49]">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5 mb-2.5">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-mono border-blue-500/40 text-blue-400">1.6</Badge>
+                                    <span className="font-bold text-xs sm:text-sm text-foreground">
                                         Sellar Factura y Descargar Archivos (XML y PDF)
                                     </span>
                                 </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_6'] && "border-emerald-500 text-emerald-700 font-bold bg-emerald-50")}
+                                    className={cn("h-7 text-xs gap-1.5", facturaStepsDone['step_1_6'] && "border-blue-500/40 text-blue-400 font-bold bg-blue-500/10")}
                                     onClick={() => toggleStep('step_1_6')}
                                 >
-                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_6'] ? "text-emerald-600" : "text-slate-400")} />
+                                    <Check className={cn("h-3.5 w-3.5", facturaStepsDone['step_1_6'] ? "text-blue-400" : "text-slate-400")} />
                                     {facturaStepsDone['step_1_6'] ? "Completado" : "Marcar completado"}
                                 </Button>
                             </div>
-                            <div className="space-y-2 text-xs text-slate-700">
+                            <div className="space-y-1.5 text-xs text-muted-foreground">
                                 <p>1. Da clic en el botón <strong>"Sellar Factura"</strong> en la esquina inferior derecha del SAT.</p>
-                                <p>2. Ingresa tu <strong>e.firma</strong> (archivo .cer, .key y contraseña de clave privada) o tu Contraseña CIEC según lo solicite el portal.</p>
+                                <p>2. Ingresa tu <strong>e.firma</strong> o tu Contraseña CIEC según lo solicite el portal.</p>
                                 <p>3. Da clic en <strong>"Confirmar y Firmar"</strong>.</p>
-                                <p>4. 📥 <strong>Descarga tu PDF y XML</strong> y guárdalos en tu carpeta de contabilidad.</p>
+                                <p>4. 📥 <strong>Descarga tu PDF y XML</strong> para tu expediente contable.</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* Banner de Felicitación / Siguiente Paso */}
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-600 to-[#202A49] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                    {/* Banner de Siguiente Paso */}
+                    <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                         <div className="space-y-0.5">
-                            <div className="text-sm font-bold flex items-center gap-1.5">
-                                <Sparkles className="h-4 w-4 text-amber-300" />
+                            <div className="text-sm font-bold flex items-center gap-1.5 text-white">
+                                <Sparkles className="h-4 w-4 text-blue-400" />
                                 ¿Ya sellaste y descargaste tu Factura Global en el SAT?
                             </div>
-                            <div className="text-xs text-emerald-100">
-                                Tu ingreso ya quedó formalmente reportado. Ahora pasa al <strong>Paso 2</strong> abajo para presentar la declaración y generar tu línea de captura de <strong>${granTotalAPagarSAT.toLocaleString('es-MX')}</strong>.
+                            <div className="text-xs text-slate-300">
+                                Tu ingreso quedó formalmente reportado. Ahora pasa al <strong>Paso 2</strong> abajo para presentar la declaración y pagar <strong>${granTotalAPagarSAT.toLocaleString('es-MX')}</strong>.
                             </div>
                         </div>
                         <Button 
-                            variant="secondary" 
+                            variant="alfa" 
                             size="sm" 
-                            className="bg-white text-[#202A49] font-bold hover:bg-slate-100 shrink-0 gap-1.5 text-xs shadow"
+                            className="shrink-0 gap-1.5 text-xs px-4"
                             onClick={() => {
-                                const el = document.getElementById('bloque-paso-2');
-                                if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                setActiveTab('paso2');
+                                window.scrollTo({ top: 350, behavior: 'smooth' });
                             }}
                         >
-                            Ir al Paso 2 (Declaración)
+                            Ir al Paso 2 (Declaración SAT)
                             <ArrowRight className="h-3.5 w-3.5" />
                         </Button>
                     </div>
 
-                    {/* Blindaje Antierrores y Preguntas Frecuentes */}
-                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs">
-                        <div className="font-bold text-[#202A49] flex items-center gap-1.5 text-xs">
-                            <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                            Blindaje Antierrores: Preguntas Rápidas
+                    {/* Blindaje Antierrores */}
+                    <div className="rounded-xl border border-border/60 bg-muted/10 p-3.5 space-y-2 text-xs">
+                        <div className="font-bold text-foreground flex items-center gap-1.5 text-xs">
+                            <ShieldCheck className="h-4 w-4 text-blue-400" />
+                            Blindaje Antierrores: Preguntas Frecuentes
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-muted-foreground">
-                            <div className="bg-white p-2.5 rounded-lg border">
-                                <strong className="text-slate-800">¿Qué pasa si me equivoco en una cantidad?</strong>
-                                <p className="mt-1 text-[11px]">No pasa nada: en el mismo portal del SAT vas a "Consultar facturas emitidas", seleccionas la factura, das clic en <em>Cancelar</em> con motivo "02 - Emitida con errores sin relación", y generas una nueva de inmediato.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-muted-foreground">
+                            <div className="bg-background p-2.5 rounded-lg border border-border/40">
+                                <strong className="text-foreground">¿Qué pasa si me equivoco en una cantidad?</strong>
+                                <p className="mt-1 text-[11px]">En el mismo portal del SAT ve a "Consultar facturas emitidas", selecciona la factura, da clic en <em>Cancelar</em> (motivo 02) y genera una nueva de inmediato.</p>
                             </div>
-                            <div className="bg-white p-2.5 rounded-lg border">
-                                <strong className="text-slate-800">¿Por qué el valor unitario es ${baseGravableSinIVA.toFixed(2)} y el total $ {montoADeclararBruto.toFixed(2)}?</strong>
-                                <p className="mt-1 text-[11px]">Porque el SAT exige capturar el precio sin IVA (${baseGravableSinIVA.toFixed(2)}). El sistema del SAT le suma automáticamente el 16% de IVA (${ivaTrasladado.toFixed(2)}) resultando exactamente en los ${montoADeclararBruto.toFixed(2)} que elegiste.</p>
+                            <div className="bg-background p-2.5 rounded-lg border border-border/40">
+                                <strong className="text-foreground">¿Por qué el valor unitario es ${baseGravableSinIVA.toFixed(2)} y el total ${montoADeclararBruto.toFixed(2)}?</strong>
+                                <p className="mt-1 text-[11px]">El SAT exige capturar el precio sin IVA. El sistema del portal le suma automáticamente el 16% resultando en los ${montoADeclararBruto.toFixed(2)} exactos.</p>
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
+            </TabsContent>
 
             {/* BLOQUE 5: PASO 2 - PRESENTAR DECLARACIÓN MENSUAL */}
-            <Card id="bloque-paso-2" className="border-primary/30 shadow-md">
-                <CardHeader className="bg-primary/5 pb-3 border-b">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <TabsContent value="paso2" className="space-y-4 mt-0">
+                <div id="bloque-paso-2" className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 sm:p-5 shadow-sm space-y-4">
+                <div className="border-b border-border/40 pb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                             <div className="flex items-center gap-2">
-                                <Badge className="bg-primary text-white font-bold text-xs">PASO 2 (2 MINUTOS)</Badge>
-                                <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                                    <Copy className="h-5 w-5 text-primary" />
-                                    Presentar Declaración Mensual RESICO en el SAT
-                                </CardTitle>
+                                <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 font-bold text-xs">
+                                    PASO 2 (2 MINUTOS)
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">Portal Declaraciones SAT</span>
                             </div>
-                            <CardDescription className="text-xs mt-1">
-                                Abre el portal de declaraciones y verás que el SAT ya precargó en automático tu factura timbrada en el Paso 1:
-                            </CardDescription>
+                            <div className="flex items-center gap-2 mt-1">
+                                <FileCheck className="h-4 w-4 text-blue-400 shrink-0" />
+                                <h3 className="text-base sm:text-lg font-bold text-foreground">
+                                    Presentar Declaración Mensual RESICO en el SAT
+                                </h3>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Información Declaración">
+                                            <HelpCircle className="h-4 w-4 text-blue-400" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1.5">
+                                        <p className="font-semibold text-blue-600 dark:text-blue-400">Prellenado automático</p>
+                                        <p className="text-muted-foreground text-[11px]">
+                                            Al entrar verás que el SAT ya precargó en automático tu factura timbrada en el Paso 1. Solo valida las casillas y genera tu línea de captura bancaria.
+                                        </p>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
                         <Button 
-                            variant="default" 
+                            variant="alfa" 
                             size="sm"
-                            className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
+                            className="h-9 px-4 text-xs gap-1.5 shrink-0"
                             onClick={() => window.open('https://www.sat.gob.mx/declaracion/74744/presenta-tus-declaraciones-provisionales-o-definitivas-de-personas-fisicas', '_blank')}
                         >
-                            <ExternalLink className="h-4 w-4" />
+                            <ExternalLink className="h-3.5 w-3.5" />
                             Abrir Declaraciones SAT
                         </Button>
                     </div>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-4">
+                </div>
+
+                <div className="space-y-4">
                     <div className="text-xs text-muted-foreground">
-                        El portal del SAT solicita capturar valores enteros sin centavos. Los botones ya copian los números redondeados oficiales:
+                        El portal del SAT solicita capturar valores enteros sin centavos. Los botones copian las cantidades redondeadas:
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         {/* Paso a paso ISR */}
-                        <div className="space-y-3 p-4 rounded-lg border bg-slate-50/50">
-                            <div className="font-bold text-xs uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 pb-2 border-b">
-                                <ShieldCheck className="h-4 w-4" /> Formulario ISR RESICO
+                        <div className="space-y-3 p-3.5 rounded-xl border border-border/60 bg-muted/10">
+                            <div className="font-bold text-xs uppercase tracking-wider text-blue-400 flex items-center gap-1.5 pb-2 border-b border-border/40">
+                                <ShieldCheck className="h-4 w-4 text-blue-400" /> Formulario ISR RESICO
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
                                     <div>
-                                        <div className="font-semibold text-[#202A49]">1. Total de ingresos cobrados:</div>
+                                        <div className="font-semibold text-foreground">1. Total de ingresos cobrados:</div>
                                         <div className="text-[11px] text-muted-foreground">Casilla principal de ingresos</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold"
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
                                         onClick={() => copyToClipboard(String(Math.round(baseGravableSinIVA)), 'isr_ingresos')}
                                     >
-                                        {copiedField === 'isr_ingresos' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'isr_ingresos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                         ${Math.round(baseGravableSinIVA).toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
                                     <div>
-                                        <div className="font-semibold text-[#202A49]">2. Ingresos exentos / no acumulables:</div>
+                                        <div className="font-semibold text-foreground">2. Ingresos exentos:</div>
                                         <div className="text-[11px] text-muted-foreground">Para barbería siempre es $0</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold"
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
                                         onClick={() => copyToClipboard('0', 'isr_exentos')}
                                     >
-                                        {copiedField === 'isr_exentos' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'isr_exentos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                         $0
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-emerald-50 rounded border border-emerald-200 text-emerald-900">
+                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
                                     <div>
-                                        <div className="font-semibold">3. ISR determinado (Automático por SAT):</div>
-                                        <div className="text-[11px]">Debe arrojar exactamente este valor</div>
+                                        <div className="font-semibold">3. ISR determinado (SAT):</div>
+                                        <div className="text-[11px] text-muted-foreground">Debe arrojar exactamente:</div>
                                     </div>
-                                    <span className="font-extrabold text-sm">${isrRedondeado.toLocaleString('es-MX')}</span>
+                                    <span className="font-extrabold text-sm text-blue-400">${isrRedondeado.toLocaleString('es-MX')}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Paso a paso IVA */}
-                        <div className="space-y-3 p-4 rounded-lg border bg-slate-50/50">
-                            <div className="font-bold text-xs uppercase tracking-wider text-blue-800 flex items-center gap-1.5 pb-2 border-b">
-                                <FileText className="h-4 w-4" /> Formulario IVA RESICO
+                        <div className="space-y-3 p-3.5 rounded-xl border border-border/60 bg-muted/10">
+                            <div className="font-bold text-xs uppercase tracking-wider text-blue-400 flex items-center gap-1.5 pb-2 border-b border-border/40">
+                                <FileText className="h-4 w-4 text-blue-400" /> Formulario IVA RESICO
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
                                     <div>
-                                        <div className="font-semibold text-[#202A49]">1. Actividades gravadas al 16%:</div>
-                                        <div className="text-[11px] text-muted-foreground">Base neta gravable de cortes y productos</div>
+                                        <div className="font-semibold text-foreground">1. Actividades gravadas al 16%:</div>
+                                        <div className="text-[11px] text-muted-foreground">Base neta gravable</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold"
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
                                         onClick={() => copyToClipboard(String(Math.round(baseGravableSinIVA)), 'iva_actividades')}
                                     >
-                                        {copiedField === 'iva_actividades' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'iva_actividades' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                         ${Math.round(baseGravableSinIVA).toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
                                     <div>
-                                        <div className="font-semibold text-[#202A49]">2. IVA acreditable del periodo:</div>
-                                        <div className="text-[11px] text-muted-foreground">Comisiones Mercado Pago e insumos</div>
+                                        <div className="font-semibold text-foreground">2. IVA acreditable del periodo:</div>
+                                        <div className="text-[11px] text-muted-foreground">Comisiones terminal e insumos</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold"
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
                                         onClick={() => copyToClipboard(String(Math.round(ivaAcreditableTotal)), 'iva_acreditable')}
                                     >
-                                        {copiedField === 'iva_acreditable' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                                        {copiedField === 'iva_acreditable' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
                                         ${Math.round(ivaAcreditableTotal).toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200 text-blue-900">
+                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
                                     <div>
-                                        <div className="font-semibold">3. IVA a cargo (A pagar en banco):</div>
-                                        <div className="text-[11px]">Debe arrojar exactamente este valor</div>
+                                        <div className="font-semibold">3. IVA a cargo (A pagar):</div>
+                                        <div className="text-[11px] text-muted-foreground">Debe arrojar exactamente:</div>
                                     </div>
-                                    <span className="font-extrabold text-sm">${ivaRedondeado.toLocaleString('es-MX')}</span>
+                                    <span className="font-extrabold text-sm text-blue-400">${ivaRedondeado.toLocaleString('es-MX')}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+
+                    {/* Botones de navegación entre pasos */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-border/40">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full sm:w-auto text-xs border-border/60 hover:border-blue-500"
+                            onClick={() => {
+                                setActiveTab('paso1');
+                                window.scrollTo({ top: 350, behavior: 'smooth' });
+                            }}
+                        >
+                            ← Volver al Paso 1 (CFDI)
+                        </Button>
+                        <Button 
+                            variant="alfa" 
+                            size="sm" 
+                            className="w-full sm:w-auto text-xs gap-1.5 px-4"
+                            onClick={() => {
+                                setActiveTab('paso3');
+                                window.scrollTo({ top: 350, behavior: 'smooth' });
+                            }}
+                        >
+                            Ir al Paso 3 (Registro y Pago)
+                            <ArrowRight className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                </div>
+            </div>
+            </TabsContent>
 
             {/* BLOQUE 6: PASO 3 - REGISTRO DE ACUSE Y CONTROL DE PAGO */}
-            <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-3">
+            <TabsContent value="paso3" className="space-y-4 mt-0">
+                <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 sm:p-5 shadow-sm space-y-4">
+                <div className="border-b border-border/40 pb-3">
                     <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline" className="text-[#202A49] font-bold text-xs">PASO 3 FINAL</Badge>
+                        <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 font-bold text-xs">
+                            PASO 3 FINAL
+                        </Badge>
                     </div>
-                    <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                        <Save className="h-5 w-5 text-primary" />
-                        Registro de Línea de Captura y Control de Pago ({monthLabel} {selectedYear})
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                        Una vez pagada la línea de captura en tu banca móvil (BBVA, Banorte, Santander, etc.), archiva aquí tus datos para tener tu expediente fiscal completo
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-2">
+                        <Save className="h-4 w-4 text-blue-400 shrink-0" />
+                        <h3 className="text-base sm:text-lg font-bold text-foreground">
+                            Registro de Línea de Captura y Control de Pago ({monthLabel} {selectedYear})
+                        </h3>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Información Paso 3">
+                                    <HelpCircle className="h-4 w-4 text-blue-400" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1.5">
+                                <p className="font-semibold text-blue-600 dark:text-blue-400">Expediente fiscal completo</p>
+                                <p className="text-muted-foreground text-[11px]">
+                                    Una vez pagada la línea de captura en tu banca móvil (BBVA, Banorte, Santander, etc.), archiva aquí tus datos para tener tu expediente fiscal completo y ordenado.
+                                </p>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="space-y-1.5">
-                            <Label className="text-xs">Estado de la Declaración:</Label>
+                            <Label className="text-xs text-foreground">Estado de la Declaración:</Label>
                             <Select 
                                 value={fiscalData.estado} 
                                 onValueChange={(val: 'pendiente' | 'presentada') => setFiscalData(prev => ({ ...prev, estado: val }))}
                             >
-                                <SelectTrigger className="h-9 text-xs">
+                                <SelectTrigger className="h-9 text-xs bg-background border-border/60">
                                     <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="pendiente">🟡 Pendiente de presentar</SelectItem>
-                                    <SelectItem value="presentada">🟢 Presentada y Pagada</SelectItem>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                    <SelectItem value="pendiente">Pendiente de presentar</SelectItem>
+                                    <SelectItem value="presentada">Presentada y Pagada</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs">Número de Operación / Folio SAT:</Label>
+                            <Label className="text-xs text-foreground">Número de Operación / Folio SAT:</Label>
                             <Input 
                                 value={fiscalData.folioOperacionSAT || ''}
                                 onChange={(e) => setFiscalData(prev => ({ ...prev, folioOperacionSAT: e.target.value }))}
                                 placeholder="Ej. 260812345678"
-                                className="h-9 text-xs"
+                                className="h-9 text-xs bg-background border-border/60"
                             />
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-xs">Línea de Captura / Referencia:</Label>
+                            <Label className="text-xs text-foreground">Línea de Captura / Referencia:</Label>
                             <Input 
                                 value={fiscalData.lineaCaptura || ''}
                                 onChange={(e) => setFiscalData(prev => ({ ...prev, lineaCaptura: e.target.value }))}
                                 placeholder="Ej. 0324 XXXXXXXXXX"
-                                className="h-9 text-xs"
+                                className="h-9 text-xs bg-background border-border/60"
                             />
                         </div>
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label className="text-xs">Notas / Comentarios Internos:</Label>
+                        <Label className="text-xs text-foreground">Notas / Comentarios Internos:</Label>
                         <Input 
                             value={fiscalData.notas || ''}
                             onChange={(e) => setFiscalData(prev => ({ ...prev, notas: e.target.value }))}
-                            placeholder="Ej. Pagado vía BBVA el 14 de septiembre por transferencia electrónica."
-                            className="h-9 text-xs"
+                            placeholder="Ej. Pagado vía BBVA el 14 de septiembre por transferencia."
+                            className="h-9 text-xs bg-background border-border/60"
                         />
                     </div>
-                </CardContent>
-                <CardFooter className="flex justify-end border-t pt-4">
-                    <Button 
-                        onClick={handleSaveFiscalData} 
-                        disabled={isSaving}
-                        className="bg-[#202A49] hover:bg-[#314177] text-white gap-2"
-                    >
-                        <Save className="h-4 w-4" />
-                        {isSaving ? "Guardando..." : "Guardar Registro Fiscal del Mes"}
-                    </Button>
-                </CardFooter>
-            </Card>
 
-            {/* BLOQUE 6: HISTORIAL ANUAL DE DECLARACIONES */}
-            <Card className="border-slate-200 shadow-sm">
-                <CardHeader className="pb-3">
-                    <CardTitle className="text-base font-bold text-[#202A49] flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-primary" />
-                        6. Historial Anual de Declaraciones ({selectedYear})
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                        Monitorea tu cumplimiento fiscal mes a mes a lo largo del año. Haz clic en cualquier mes para revisar o editar su declaración.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="rounded-lg border overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-slate-50 text-xs">
-                                    <TableHead className="font-bold">Mes</TableHead>
-                                    <TableHead className="font-bold">Estado SAT</TableHead>
-                                    <TableHead className="font-bold text-right">Monto Declarado</TableHead>
-                                    <TableHead className="font-bold text-right">ISR Pagado</TableHead>
-                                    <TableHead className="font-bold text-right">IVA Pagado</TableHead>
-                                    <TableHead className="font-bold text-right">Total Pagado</TableHead>
-                                    <TableHead className="font-bold">Folio de Acuse</TableHead>
-                                    <TableHead className="font-bold text-center">Acción</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody className="text-xs">
-                                {monthLabels.map((mLabel, idx) => {
-                                    const mKey = monthNames[idx];
-                                    const rec = yearlyFiscalRecords[mKey];
-                                    const isCurrent = idx === selectedMonthIdx;
-                                    const isPresentada = rec?.estado === 'presentada';
-
-                                    return (
-                                        <TableRow 
-                                            key={mKey}
-                                            className={cn(
-                                                "cursor-pointer hover:bg-slate-50 transition-colors",
-                                                isCurrent && "bg-primary/5 font-semibold"
-                                            )}
-                                            onClick={() => setSelectedMonthIdx(idx)}
-                                        >
-                                            <TableCell className="font-medium text-[#202A49]">
-                                                {mLabel} {selectedYear}
-                                                {isCurrent && <span className="ml-2 text-[10px] text-primary font-bold">(Seleccionado)</span>}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge 
-                                                    variant={isPresentada ? "default" : "outline"} 
-                                                    className={cn(
-                                                        "text-[10px] py-0.5",
-                                                        isPresentada 
-                                                            ? "bg-emerald-600 hover:bg-emerald-700 text-white" 
-                                                            : "text-amber-700 border-amber-300 bg-amber-50"
-                                                    )}
-                                                >
-                                                    {isPresentada ? "Pagada" : "Pendiente"}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {rec?.montoDeclaradoFinal ? `$${Number(rec.montoDeclaradoFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right text-emerald-800">
-                                                {rec?.isrPagadoFinal !== undefined ? `$${Number(rec.isrPagadoFinal).toLocaleString('es-MX')}` : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right text-blue-800">
-                                                {rec?.ivaPagadoFinal !== undefined ? `$${Number(rec.ivaPagadoFinal).toLocaleString('es-MX')}` : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right font-bold text-[#202A49]">
-                                                {rec?.totalPagadoFinal !== undefined ? `$${Number(rec.totalPagadoFinal).toLocaleString('es-MX')}` : "-"}
-                                            </TableCell>
-                                            <TableCell className="font-mono text-[11px] text-muted-foreground">
-                                                {rec?.folioOperacionSAT || "-"}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="h-7 text-xs text-primary hover:text-primary hover:bg-primary/10"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setSelectedMonthIdx(idx);
-                                                    }}
-                                                >
-                                                    Gestionar
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
-                        </Table>
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-border/40">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full sm:w-auto text-xs border-border/60 hover:border-blue-500"
+                            onClick={() => {
+                                setActiveTab('paso2');
+                                window.scrollTo({ top: 350, behavior: 'smooth' });
+                            }}
+                        >
+                            ← Volver al Paso 2 (Declaración)
+                        </Button>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs border-border/60 hover:border-blue-500"
+                                onClick={() => setActiveTab('historial')}
+                            >
+                                <Calendar className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                                Ver Historial Anual
+                            </Button>
+                            <Button 
+                                variant="alfa"
+                                onClick={handleSaveFiscalData} 
+                                disabled={isSaving}
+                                className="gap-2 px-5 text-xs h-9"
+                            >
+                                <Save className="h-4 w-4" />
+                                {isSaving ? "Guardando..." : "Guardar Registro Fiscal"}
+                            </Button>
+                        </div>
                     </div>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
+            </TabsContent>
+
+            {/* BLOQUE 7: HISTORIAL ANUAL DE DECLARACIONES */}
+            <TabsContent value="historial" className="space-y-4 mt-0">
+                <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 sm:p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-blue-400 shrink-0" />
+                        <h3 className="text-sm font-bold text-foreground">
+                            Historial Anual de Declaraciones ({selectedYear})
+                        </h3>
+                    </div>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Información Historial">
+                                <HelpCircle className="h-3.5 w-3.5 text-blue-400" />
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                            <p className="font-semibold text-blue-600 dark:text-blue-400">Cumplimiento mes a mes</p>
+                            <p className="text-muted-foreground text-[11px]">
+                                Monitorea tu cumplimiento fiscal mes a mes. Haz clic en cualquier fila para cargar o editar ese periodo.
+                            </p>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                <div className="rounded-xl border border-border/60 overflow-hidden">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                <TableHead className="py-1 px-3 text-xs font-semibold">Mes</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold">Estado</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right hidden sm:table-cell">Declarado</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right hidden md:table-cell">ISR</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right hidden md:table-cell">IVA</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right">Total Pagado</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold hidden lg:table-cell">Folio SAT</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-center w-12"></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody className="text-xs">
+                            {monthLabels.map((mLabel, idx) => {
+                                const mKey = monthNames[idx];
+                                const rec = yearlyFiscalRecords[mKey];
+                                const isCurrent = idx === selectedMonthIdx;
+                                const isPresentada = rec?.estado === 'presentada';
+
+                                return (
+                                    <TableRow 
+                                        key={mKey}
+                                        className={cn(
+                                            "h-9 hover:bg-muted/30 transition-colors border-b border-border/40 cursor-pointer",
+                                            isCurrent && "bg-blue-500/10 font-semibold"
+                                        )}
+                                        onClick={() => {
+                                            setSelectedMonthIdx(idx);
+                                            setActiveTab(isPresentada ? 'paso3' : 'paso1');
+                                            window.scrollTo({ top: 350, behavior: 'smooth' });
+                                        }}
+                                    >
+                                        <TableCell className="py-1.5 px-3 font-medium text-foreground">
+                                            {mLabel} {selectedYear}
+                                            {isCurrent && <span className="ml-1.5 text-[10px] text-blue-400 font-bold">(Activo)</span>}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3">
+                                            <Badge 
+                                                variant="outline" 
+                                                className={cn(
+                                                    "text-[10px] py-0 px-1.5 h-5",
+                                                    isPresentada 
+                                                        ? "border-blue-500/40 text-blue-400 bg-blue-500/10" 
+                                                        : "border-border/60 text-muted-foreground bg-muted/20"
+                                                )}
+                                            >
+                                                {isPresentada ? "Pagada" : "Pendiente"}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 text-right hidden sm:table-cell">
+                                            {rec?.montoDeclaradoFinal ? `$${Number(rec.montoDeclaradoFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : "-"}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 text-right text-blue-400 hidden md:table-cell">
+                                            {rec?.isrPagadoFinal !== undefined ? `$${Number(rec.isrPagadoFinal).toLocaleString('es-MX')}` : "-"}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 text-right text-slate-300 hidden md:table-cell">
+                                            {rec?.ivaPagadoFinal !== undefined ? `$${Number(rec.ivaPagadoFinal).toLocaleString('es-MX')}` : "-"}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 text-right font-bold text-foreground">
+                                            {rec?.totalPagadoFinal !== undefined ? `$${Number(rec.totalPagadoFinal).toLocaleString('es-MX')}` : "-"}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 font-mono text-[11px] text-muted-foreground hidden lg:table-cell">
+                                            {rec?.folioOperacionSAT || "-"}
+                                        </TableCell>
+                                        <TableCell className="py-1.5 px-3 text-center">
+                                            <button 
+                                                type="button"
+                                                className="text-slate-400 hover:text-foreground transition-colors p-1"
+                                                title="Gestionar este mes"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedMonthIdx(idx);
+                                                    setActiveTab(isPresentada ? 'paso3' : 'paso1');
+                                                    window.scrollTo({ top: 350, behavior: 'smooth' });
+                                                }}
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                            </button>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+            </TabsContent>
+            </Tabs>
         </div>
     );
 }

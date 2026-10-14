@@ -93,7 +93,10 @@ export function PwaUpdateBanner() {
     if (isPublicPage || !hasUpdate) return null;
 
     return (
-        <div className="fixed bottom-20 md:bottom-6 left-4 right-4 sm:right-auto sm:left-6 z-[120] max-w-sm sm:max-w-md w-auto sm:w-[calc(100vw-2rem)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+        <div
+            style={{ zIndex: 9999 }}
+            className="fixed bottom-24 md:bottom-6 left-4 right-4 sm:right-auto sm:left-6 z-[9999] max-w-sm sm:max-w-md w-auto sm:w-[calc(100vw-2rem)] animate-in slide-in-from-bottom-10 fade-in duration-500"
+        >
             <div className="rounded-2xl border-2 border-blue-500 bg-slate-950/95 text-white p-4 sm:p-5 shadow-[0_15px_45px_rgba(30,58,138,0.45)] backdrop-blur-2xl flex flex-col gap-3.5">
                 <div className="flex items-start gap-3">
                     <Sparkles className="h-5 w-5 animate-pulse text-blue-400 shrink-0 mt-0.5" />

@@ -113,11 +113,27 @@ export async function crearPreferenciaMercadoPagoChat({
   clientPhone?: string;
 }): Promise<{ id: string; initPoint: string } | null> {
   try {
-    const accessToken =
-      process.env.MERCADO_PAGO_ACCESS_TOKEN ||
-      process.env.MP_WEB_ACCESS_TOKEN ||
-      process.env.MP_ACCESS_TOKEN ||
-      '';
+    let accessToken = '';
+    try {
+      const db = getDb();
+      const configDoc = await db.collection('configuracion').doc('mercadopago').get();
+      if (configDoc.exists) {
+        const fsToken = configDoc.data()?.accessToken;
+        if (fsToken && typeof fsToken === 'string' && fsToken.trim().length > 10) {
+          accessToken = fsToken.trim();
+        }
+      }
+    } catch (e) {
+      console.warn('[MP Chat] Could not read configuracion/mercadopago from Firestore:', e);
+    }
+
+    if (!accessToken) {
+      accessToken =
+        process.env.MP_WEB_ACCESS_TOKEN ||
+        process.env.MERCADO_PAGO_ACCESS_TOKEN ||
+        process.env.MP_ACCESS_TOKEN ||
+        '';
+    }
 
     if (!accessToken || accessToken.length < 10) {
       console.error('[MP Chat] Access token is missing or invalid.');
@@ -183,7 +199,7 @@ export async function crearPreferenciaMercadoPagoChat({
         reservation_id: reservationId,
         origin: 'chatbot',
       },
-      notification_url: 'https://agenda-1ae08.web.app/api/mercado-pago-webhook',
+      notification_url: 'https://vatosalfa.com/api/mercado-pago-webhook',
     };
 
     const result = await preference.create({ body: bodyData });

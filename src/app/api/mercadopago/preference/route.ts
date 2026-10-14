@@ -9,15 +9,30 @@ export async function POST(req: NextRequest) {
 
         // Use provided reservationId or generate a REAL UNIQUE Firestore ID
         // This ID will be the key to create the document in the Webhook
+        const db = getDb();
         let reservationId = body.reservationId;
         if (!reservationId) {
-            const db = getDb();
             const newRef = db.collection('reservas').doc();
             reservationId = newRef.id;
         }
 
-        // Initialize Mercado Pago
-        const accessToken = process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_WEB_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+        // Initialize Mercado Pago (prioritize dynamic Firestore config, fallback to env)
+        let accessToken = '';
+        try {
+            const configDoc = await db.collection('configuracion').doc('mercadopago').get();
+            if (configDoc.exists) {
+                const fsToken = configDoc.data()?.accessToken;
+                if (fsToken && typeof fsToken === 'string' && fsToken.trim().length > 10) {
+                    accessToken = fsToken.trim();
+                }
+            }
+        } catch (e) {
+            console.warn("[MP] Could not read configuracion/mercadopago from Firestore, falling back to env:", e);
+        }
+
+        if (!accessToken) {
+            accessToken = process.env.MP_WEB_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+        }
 
         if (!accessToken || accessToken.length < 10) {
             console.error("[MP] Token missing or invalid.");
@@ -88,7 +103,7 @@ export async function POST(req: NextRequest) {
                 reservation_id: reservationId,
                 booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
             },
-            notification_url: "https://us-central1-agenda-1ae08.cloudfunctions.net/mercadoPagoWebhook"
+            notification_url: "https://vatosalfa.com/api/mercado-pago-webhook"
         };
 
         const result = await preference.create({ body: bodyData });

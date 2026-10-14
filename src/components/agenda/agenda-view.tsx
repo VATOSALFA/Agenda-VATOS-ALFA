@@ -824,6 +824,14 @@ export default function AgendaView() {
 
 
 
+  useEffect(() => {
+    if (!selectedReservation) return;
+    const updated = allEvents.find(r => r.id === selectedReservation.id) as Reservation | undefined;
+    if (updated) {
+      setSelectedReservation(updated);
+    }
+  }, [allEvents]);
+
   const handleOpenDetailModal = (event: AgendaEvent) => {
     playAgendaClickSound();
     const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;

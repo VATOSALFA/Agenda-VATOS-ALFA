@@ -629,6 +629,36 @@ export function ReservationDetailModal({
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
+  // Verificación automática en tiempo real con Mercado Pago si la reserva tiene preferencia o anticipo pendiente
+  useEffect(() => {
+    if (!isOpen || !reservation?.id) return;
+    if (reservation.pago_estado === 'Pagado' || isDepositPaid) return;
+    const hasMpLinkOrDeposit = Boolean(
+      (reservation as any).mercado_pago_preference_id ||
+      reservation.mercado_pago_link ||
+      reservation.requiere_anticipo ||
+      isAnticipoRequired
+    );
+    if (!hasMpLinkOrDeposit) return;
+
+    let cancelled = false;
+    fetch(`/api/mercado-pago-webhook?reservationId=${encodeURIComponent(reservation.id)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!cancelled && data?.verified) {
+          toast({
+            title: '¡Anticipo Mercado Pago Acreditado!',
+            description: `Se verificó el pago de $${Number(data.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN y la cita quedó Confirmada.`,
+          });
+        }
+      })
+      .catch(err => console.warn('[MP Verify] Background check error:', err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, reservation?.id, reservation.pago_estado, isDepositPaid, isAnticipoRequired]);
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>

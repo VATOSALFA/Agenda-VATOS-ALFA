@@ -482,63 +482,95 @@ exports.mercadoPagoWebhook = onRequest(
             // Usamos la misma lógica que calculamos arriba para la venta
             t.update(reservaRef, {
               pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
-              estado: isFullPay ? 'Asiste' : reservaDoc.data().estado, // SI PAGO COMPLETO -> ASISTE
-              saldo_pendiente: saldoPendiente // Actualizamos también el saldo
+              estado: isFullPay ? 'Asiste' : 'Confirmado', // SI PAGO COMPLETO -> ASISTE, SINO CONFIRMADO
+              saldo_pendiente: saldoPendiente,
+              anticipo_pagado: montoPagado,
+              anticipoPagado: montoPagado,
+              monto_anticipo: montoPagado,
+              monto_pagado: montoPagado,
+              monto_pagado_real: montoPagado,
+              metodo_pago_anticipo: 'mercadopago',
+              deposit_payment_id: String(paymentInfo.id),
+              deposit_paid_at: new Date()
             });
           }
           console.log(`[vFinal] Custom: Venta ${external_reference} updated.`);
           return;
         }
 
-        // CASE 2: It is a Reservaton (Online Booking flow)
+        // CASE 2: It is a Reservation (Online Booking / Advance Payment flow)
         const reservaRef = admin.firestore().collection('reservas').doc(external_reference);
-        const reservaDoc = await t.get(reservaRef);
+        const saleRef = admin.firestore().collection('ventas').doc(external_reference);
+        const [reservaDoc, saleDoc] = await Promise.all([
+          t.get(reservaRef),
+          t.get(saleRef)
+        ]);
 
         if (reservaDoc.exists) {
           // Update Reservation
-          const reservaData = reservaDoc.data();
-          const total = Number(reservaData.total || 0);
+          const reservaData = reservaDoc.data() || {};
+          const itemsSum = Array.isArray(reservaData.items)
+            ? reservaData.items.reduce((acc, it) => acc + (Number(it.precio || it.price || 0) * (Number(it.cantidad) || 1)), 0)
+            : 0;
+          const rawTotal = Number(reservaData.totalAmount || reservaData.precio || reservaData.total || itemsSum || 0);
           const pagadoAhora = Number(transaction_amount || 0);
-          const isFullPay = pagadoAhora >= (total - 0.01); // Tolerance
+          const total = rawTotal > 0 ? rawTotal : pagadoAhora;
+          const isFullPay = total > 0 && pagadoAhora >= (total * 0.99); // Tolerance
+          const saldoPendiente = isFullPay ? 0 : Math.max(0, total - pagadoAhora);
 
           t.update(reservaRef, {
             pago_estado: isFullPay ? 'Pagado' : 'deposit_paid', // Dynamic Status
             estado: isFullPay ? 'Asiste' : 'Confirmado',  // SI PAGO COMPLETO -> ASISTE, SINO CONFIRMADO
+            total: total,
+            precio: total,
 
             // Record Financials
             deposit_payment_id: String(paymentInfo.id),
             deposit_paid_at: new Date(),
+            anticipo_esperado: reservaData.anticipo_esperado || pagadoAhora,
+            monto_anticipo: pagadoAhora,
             anticipo_pagado: pagadoAhora,
-            saldo_pendiente: total > pagadoAhora ? (total - pagadoAhora) : 0,
+            anticipoPagado: pagadoAhora,
+            monto_pagado: pagadoAhora,
+            monto_pagado_real: pagadoAhora,
+            saldo_pendiente: saldoPendiente,
             metodo_pago_anticipo: 'mercadopago'
           });
-          // CRITICAL: Create 'ventas' document for Reporting
-          // Use 'external_reference' as Sale ID if possible, or new ID linked to reservation
-          const saleRef = admin.firestore().collection('ventas').doc(external_reference);
-          const saleDoc = await t.get(saleRef);
 
           if (!saleDoc.exists) {
             const saleData = {
+              id: external_reference,
               fecha_hora_venta: new Date(),
+              fecha_pago: new Date(),
               cliente_id: reservaData.cliente_id,
+              cliente_nombre: reservaData.cliente_nombre || '',
               local_id: reservaData.local_id || 'default',
               professional_id: reservaData.barbero_id || null,
               items: reservaData.items || [],
               subtotal: total,
               total: total,
-              descuento: { tipo: 'none', valor: 0 },
+              descuento: { tipo: 'fixed', valor: 0, monto: 0 },
               metodo_pago: 'mercadopago',
               pago_estado: isFullPay ? 'Pagado' : 'deposit_paid', // Dynamic Status
+              tipo: 'anticipo',
+              tipo_venta: 'anticipo',
               mercado_pago_id: String(paymentInfo.id),
+              mercado_pago_status: 'approved',
               monto_pagado_real: pagadoAhora,
-              origen: 'web_publica',
+              monto_anticipo: pagadoAhora,
+              anticipoPagado: pagadoAhora,
+              anticipo_pagado: pagadoAhora,
+              monto_pagado: pagadoAhora,
+              origen: reservaData.canal_reserva || 'web_publica',
+              estado: 'completed',
               status: 'completed',
               reservationId: external_reference, // Link directly
-              // If ID differs, we might need logic, but usually external_reference is safe for Case 2
-              saldo_pendiente: total > pagadoAhora ? (total - pagadoAhora) : 0,
+              saldo_pendiente: saldoPendiente,
               detalle_pago_combinado: {
                 efectivo: 0,
-                tarjeta: pagadoAhora
+                tarjeta: pagadoAhora,
+                transferencia: 0,
+                pagos_en_linea: 0
               }
             };
             t.set(saleRef, saleData);

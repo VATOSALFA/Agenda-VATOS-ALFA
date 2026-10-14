@@ -856,7 +856,7 @@ export function NewReservationForm({
           ? initialData.professional_lock
           : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
       );
-      setDepositPaid(initialData.pago_estado === 'anticipo_pagado' || Boolean((initialData as any).anticipo_pagado));
+      setDepositPaid(initialData.pago_estado === 'anticipo_pagado' || initialData.pago_estado === 'deposit_paid' || Boolean((initialData as any).anticipo_pagado));
       setDepositMethod((initialData as any).metodo_pago_anticipo || 'efectivo');
     } else if (isOpen) {
       form.reset({
@@ -1138,15 +1138,25 @@ export function NewReservationForm({
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
         requiere_anticipo: isAnticipoRequired || (data as any).requiere_anticipo || false,
-        monto_anticipo: targetDepositAmount,
+        anticipo_esperado: targetDepositAmount,
         ...(effectiveDepositPaid ? {
-          pago_estado: 'anticipo_pagado',
+          pago_estado: 'deposit_paid',
+          monto_anticipo: targetDepositAmount,
           monto_pagado: targetDepositAmount,
+          monto_pagado_real: targetDepositAmount,
           anticipo_pagado: targetDepositAmount,
+          anticipoPagado: targetDepositAmount,
+          saldo_pendiente: Math.max(0, (Number(data.precio) || 0) - targetDepositAmount),
           metodo_pago_anticipo: depositMethod,
           deposit_paid_at: Timestamp.now(),
         } : {
-          pago_estado: isAnticipoRequired ? 'pendiente_anticipo' : (data.pago_estado || 'Pendiente'),
+          pago_estado: isAnticipoRequired ? 'pendiente_anticipo' : (data.pago_estado && data.pago_estado !== 'deposit_paid' && data.pago_estado !== 'anticipo_pagado' ? data.pago_estado : 'Pendiente'),
+          monto_anticipo: 0,
+          monto_pagado: 0,
+          monto_pagado_real: 0,
+          anticipo_pagado: 0,
+          anticipoPagado: 0,
+          saldo_pendiente: Number(data.precio) || 0,
         }),
       };
 

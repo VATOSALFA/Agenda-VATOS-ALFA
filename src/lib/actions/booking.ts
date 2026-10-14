@@ -1070,7 +1070,7 @@ export async function createPublicReservation(data: any) {
             // Financials for Upfront Payment
             pago_estado: data.paymentStatus || (finalRequiresDeposit && !isPaid ? 'pending_payment' : 'pendiente'),
             anticipo_esperado: finalAmountDue,
-            saldo_pendiente: Math.max(0, grandTotal - finalAmountDue),
+            saldo_pendiente: isPaid ? Math.max(0, grandTotal - finalAmountDue) : grandTotal,
             requiere_pago_anticipado: finalRequiresDeposit
         };
 

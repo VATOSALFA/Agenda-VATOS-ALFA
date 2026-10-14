@@ -79,17 +79,20 @@ export function SendConfirmationModal({
     if (!reservation) return false;
     if (forceAnticipoMode) return true;
     if (reservation.requiere_anticipo) return true;
-    if (reservation.pago_estado === 'pendiente_anticipo') return true;
+    if (reservation.pago_estado === 'pendiente_anticipo' || reservation.pago_estado === 'pending_payment') return true;
     const isPaid =
       reservation.pago_estado === 'Pagado' ||
       reservation.pago_estado === 'deposit_paid' ||
       reservation.pago_estado === 'anticipo_pagado';
-    if (!isPaid && (reservation.monto_anticipo || 0) > 0) return true;
+    if (!isPaid && (((reservation as any).anticipo_esperado || 0) > 0 || (reservation.monto_anticipo || 0) > 0)) return true;
     return false;
   }, [reservation, forceAnticipoMode]);
 
   const depositAmount = useMemo(() => {
     if (!reservation) return 0;
+    if ((reservation as any).anticipo_esperado && (reservation as any).anticipo_esperado > 0) {
+      return Number((reservation as any).anticipo_esperado);
+    }
     if (reservation.monto_anticipo && reservation.monto_anticipo > 0) {
       return Number(reservation.monto_anticipo);
     }
@@ -171,7 +174,7 @@ export function SendConfirmationModal({
               await updateDoc(doc(db, 'reservas', reservation.id), {
                 mercado_pago_link: data.init_point,
                 mercado_pago_preference_id: data.id,
-                monto_anticipo: depositAmount,
+                anticipo_esperado: depositAmount,
                 requiere_anticipo: true,
               }).catch(console.error);
             }

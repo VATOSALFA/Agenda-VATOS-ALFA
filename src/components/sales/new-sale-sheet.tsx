@@ -1327,34 +1327,55 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 };
             });
             setCart(initialCartItems);
-            const passedDeposit = Number(
-                initialData.anticipoPagado ||
-                (initialData as any).anticipo_pagado ||
-                (initialData as any).monto_anticipo ||
-                (initialData as any).monto_pagado_real ||
-                (initialData as any).monto_pagado ||
-                0
-            );
+            const initPagoEstado = (initialData as any).pago_estado;
+            const isInitDepositUnpaid =
+                initPagoEstado === 'pendiente_anticipo' ||
+                initPagoEstado === 'pending_payment' ||
+                initPagoEstado === 'Pendiente' ||
+                initPagoEstado === 'pendiente';
+
+            const passedDeposit = isInitDepositUnpaid
+                ? 0
+                : Number(
+                    initialData.anticipoPagado ||
+                    (initialData as any).anticipo_pagado ||
+                    (initialData as any).monto_pagado_real ||
+                    (initialData as any).monto_pagado ||
+                    ((initPagoEstado === 'deposit_paid' || initPagoEstado === 'anticipo_pagado') ? (initialData as any).monto_anticipo : 0) ||
+                    0
+                );
             setAnticipoPagado(passedDeposit);
 
-            // Double security: If passedDeposit is 0 but there is a reservationId, fetch reservation from DB to verify
-            if (passedDeposit === 0 && initialData.reservationId && db) {
+            // Double security: If there is a reservationId, fetch reservation from DB to verify actual payment state
+            if (initialData.reservationId && db) {
                 getDoc(doc(db, 'reservas', initialData.reservationId)).then(snap => {
                     if (snap.exists()) {
                         const res = snap.data();
-                        const dbDeposit = Number(
-                            res.anticipoPagado ||
-                            res.anticipo_pagado ||
-                            res.monto_anticipo ||
-                            res.monto_pagado_real ||
-                            res.monto_pagado ||
-                            (res.pago_estado === 'deposit_paid' && res.total && res.saldo_pendiente !== undefined
-                                ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
-                                : 0)
-                        ) || 0;
-                        if (dbDeposit > 0) {
-                            setAnticipoPagado(dbDeposit);
-                        }
+                        const isResDepositPaid =
+                            res.pago_estado === 'deposit_paid' ||
+                            res.pago_estado === 'anticipo_pagado' ||
+                            (res.pago_estado !== 'pendiente_anticipo' &&
+                                res.pago_estado !== 'pending_payment' &&
+                                res.pago_estado !== 'Pendiente' &&
+                                res.pago_estado !== 'pendiente' &&
+                                (Number(res.anticipo_pagado) > 0 ||
+                                    Number(res.anticipoPagado) > 0 ||
+                                    Number(res.monto_pagado_real) > 0 ||
+                                    Number(res.monto_pagado) > 0));
+
+                        const dbDeposit = isResDepositPaid
+                            ? (Number(
+                                res.anticipoPagado ||
+                                res.anticipo_pagado ||
+                                res.monto_pagado_real ||
+                                res.monto_pagado ||
+                                res.monto_anticipo ||
+                                (res.total && res.saldo_pendiente !== undefined
+                                    ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
+                                    : 0)
+                            ) || 0)
+                            : 0;
+                        setAnticipoPagado(dbDeposit);
                     }
                 }).catch(console.error);
             }
@@ -2083,9 +2104,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 const checkDepositSale = (ref: any, sData: any) => {
                     const isDep = Boolean(
-                        sData?.tipo_venta === 'anticipo' ||
+                        (sData?.tipo_venta === 'anticipo' ||
                         ref.id?.startsWith('deposit_') ||
-                        sData?.pago_estado === 'deposit_paid'
+                        sData?.pago_estado === 'deposit_paid') &&
+                        sData?.pago_estado !== 'Pendiente' &&
+                        sData?.pago_estado !== 'pendiente'
                     );
                     if (isDep) {
                         isDepositLiquidation = true;

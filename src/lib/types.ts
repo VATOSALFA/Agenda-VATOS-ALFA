@@ -132,6 +132,7 @@ export interface Reservation {
   monto_pagado?: number;
   monto_pagado_real?: number;
   monto_anticipo?: number;
+  anticipo_esperado?: number;
   requiere_anticipo?: boolean;
   metodo_pago_anticipo?: string;
   deposit_paid_at?: any;

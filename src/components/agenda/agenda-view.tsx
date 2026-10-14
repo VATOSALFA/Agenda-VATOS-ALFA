@@ -848,22 +848,37 @@ export default function AgendaView() {
         }
       }).filter((i): i is any => !!i);
 
-      const depositPaid = Number(
-        selectedReservation.anticipoPagado ||
-        selectedReservation.anticipo_pagado ||
-        selectedReservation.monto_anticipo ||
-        selectedReservation.monto_pagado_real ||
-        selectedReservation.monto_pagado ||
-        (selectedReservation.pago_estado === 'deposit_paid' && selectedReservation.total && selectedReservation.saldo_pendiente !== undefined
-          ? Math.max(0, Number(selectedReservation.total) - Number(selectedReservation.saldo_pendiente))
-          : 0)
-      ) || 0;
+      const isDepositActuallyPaid =
+        selectedReservation.pago_estado === 'deposit_paid' ||
+        selectedReservation.pago_estado === 'anticipo_pagado' ||
+        (selectedReservation.pago_estado !== 'pendiente_anticipo' &&
+          selectedReservation.pago_estado !== 'pending_payment' &&
+          selectedReservation.pago_estado !== 'Pendiente' &&
+          selectedReservation.pago_estado !== 'pendiente' &&
+          (Number(selectedReservation.anticipo_pagado) > 0 ||
+            Number(selectedReservation.anticipoPagado) > 0 ||
+            Number(selectedReservation.monto_pagado_real) > 0 ||
+            Number(selectedReservation.monto_pagado) > 0));
+
+      const depositPaid = isDepositActuallyPaid
+        ? (Number(
+            selectedReservation.anticipoPagado ||
+            selectedReservation.anticipo_pagado ||
+            selectedReservation.monto_pagado_real ||
+            selectedReservation.monto_pagado ||
+            selectedReservation.monto_anticipo ||
+            (selectedReservation.total && selectedReservation.saldo_pendiente !== undefined
+              ? Math.max(0, Number(selectedReservation.total) - Number(selectedReservation.saldo_pendiente))
+              : 0)
+          ) || 0)
+        : 0;
 
       const saleData = {
         client,
         items: cartItems,
         reservationId: selectedReservation.id,
         local_id: selectedReservation.local_id,
+        pago_estado: selectedReservation.pago_estado,
         anticipoPagado: depositPaid,
         anticipo_pagado: depositPaid,
         monto_anticipo: depositPaid,
@@ -905,10 +920,11 @@ export default function AgendaView() {
           fecha_hora_venta: Timestamp.now(),
           tipo_venta: 'anticipo',
           total: total,
+          anticipo_esperado: depositAmount,
           monto_pagado_real: isTerminal ? 0 : depositAmount,
-          monto_anticipo: depositAmount,
-          anticipoPagado: depositAmount,
-          anticipo_pagado: depositAmount,
+          monto_anticipo: isTerminal ? 0 : depositAmount,
+          anticipoPagado: isTerminal ? 0 : depositAmount,
+          anticipo_pagado: isTerminal ? 0 : depositAmount,
           monto_pagado: isTerminal ? 0 : depositAmount,
           saldo_pendiente: isTerminal ? total : saldoPendiente,
           pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
@@ -925,6 +941,7 @@ export default function AgendaView() {
         const updateData = {
           total: total,
           pago_estado: 'deposit_paid',
+          anticipo_esperado: depositAmount,
           monto_anticipo: depositAmount,
           anticipo_pagado: depositAmount,
           anticipoPagado: depositAmount,
@@ -948,12 +965,10 @@ export default function AgendaView() {
           description: `Se registró el anticipo de $${depositAmount.toFixed(2)} correctamente.`,
         });
       } else {
-        // Store reference and deposit metadata on reservation without marking as paid yet
+        // Store reference and expected deposit metadata on reservation without marking as paid yet
         await updateDoc(resRef, {
           total: total,
-          monto_anticipo: depositAmount,
-          anticipo_pagado: depositAmount,
-          anticipoPagado: depositAmount,
+          anticipo_esperado: depositAmount,
           metodo_pago_anticipo: paymentMethod,
           deposit_payment_id: depositSaleId
         });
@@ -992,9 +1007,18 @@ export default function AgendaView() {
       const resSnap = await getDoc(resRef);
       const resData = resSnap.exists() ? (resSnap.data() as Reservation) : selectedReservation;
 
+      const isResDepositPaid =
+        resData?.pago_estado === 'deposit_paid' ||
+        resData?.pago_estado === 'anticipo_pagado' ||
+        (resData?.pago_estado !== 'pendiente_anticipo' &&
+          resData?.pago_estado !== 'pending_payment' &&
+          resData?.pago_estado !== 'Pendiente' &&
+          resData?.pago_estado !== 'pendiente' &&
+          (Number(resData?.anticipo_pagado) > 0 || Number(resData?.monto_pagado_real) > 0));
+
       // Retained Deposit logic for "No asistió" (No asiste)
-      if (newStatus === 'No asiste' && !isSandboxRes && (resData?.pago_estado === 'deposit_paid' || (resData?.monto_anticipo && resData.monto_anticipo > 0))) {
-        const depositAmount = resData?.monto_anticipo || resData?.monto_pagado_real || 0;
+      if (newStatus === 'No asiste' && !isSandboxRes && isResDepositPaid) {
+        const depositAmount = Number(resData?.anticipo_pagado || resData?.anticipoPagado || resData?.monto_pagado_real || resData?.monto_anticipo || 0);
 
         if (depositAmount > 0) {
           const totalRes = resData?.total || depositAmount;

@@ -581,16 +581,33 @@ export function ReservationDetailModal({
 
   const currentLocal = locales?.find(l => l.id === reservation.local_id);
   const totalAmount = reservation.precio ?? (reservation as any).total ?? 0;
-  const depositAmount = reservation.monto_anticipo ?? reservation.anticipo_pagado ?? 0;
-  const balancePending = reservation.saldo_pendiente ?? Math.max(0, totalAmount - depositAmount);
+  const isDepositPaid =
+    reservation.pago_estado === 'deposit_paid' ||
+    reservation.pago_estado === 'anticipo_pagado' ||
+    (reservation.pago_estado !== 'pendiente_anticipo' &&
+      reservation.pago_estado !== 'pending_payment' &&
+      reservation.pago_estado !== 'Pendiente' &&
+      reservation.pago_estado !== 'pendiente' &&
+      (Number(reservation.anticipo_pagado) > 0 ||
+        Number(reservation.anticipoPagado) > 0 ||
+        Number(reservation.monto_pagado_real) > 0 ||
+        Number(reservation.monto_pagado) > 0));
+
+  const depositAmount = isDepositPaid
+    ? Number(reservation.anticipo_pagado ?? reservation.anticipoPagado ?? reservation.monto_pagado_real ?? reservation.monto_pagado ?? reservation.monto_anticipo ?? 0)
+    : 0;
+  const expectedDepositAmount = Number((reservation as any).anticipo_esperado ?? reservation.monto_anticipo ?? 0);
+  const balancePending = reservation.pago_estado === 'Pagado'
+    ? 0
+    : Math.max(0, totalAmount - depositAmount);
 
   // Determinar si la cita realmente requiere anticipo (por inasistencias, regla >= $190 o estado)
   const isAnticipoRequired = Boolean(
     hasUnattendedAlert ||
     reservation.requiere_anticipo ||
     reservation.pago_estado === 'pendiente_anticipo' ||
-    ((reservation.monto_anticipo || 0) > 0 && reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid') ||
-    (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid')
+    (expectedDepositAmount > 0 && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
+    (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
   return (
@@ -701,18 +718,18 @@ export function ReservationDetailModal({
                     </Badge>
                   )}
                   <Badge
-                    variant={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid' ? 'default' : 'secondary'}
+                    variant={reservation.pago_estado === 'Pagado' || isDepositPaid ? 'default' : 'secondary'}
                     className={cn(
                       "text-[10px] font-bold px-2 py-0.5",
                       reservation.pago_estado === 'Pagado' ? 'bg-blue-600 text-white' :
-                        reservation.pago_estado === 'deposit_paid' ? 'bg-[#C5A880] text-black font-semibold' :
+                        isDepositPaid ? 'bg-[#C5A880] text-black font-semibold' :
                           reservation.estado === 'Cancelado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
                             'bg-slate-700 text-white dark:bg-slate-800 dark:text-slate-200'
                     )}
                   >
                     {reservation.estado === 'Cancelado' ? 'Cancelada' :
-                      (reservation.pago_estado === 'pending_payment' || reservation.pago_estado === 'pending') ? 'Pendiente Pago' :
-                        reservation.pago_estado === 'deposit_paid' ? 'Anticipo Pagado' :
+                      (reservation.pago_estado === 'pending_payment' || reservation.pago_estado === 'pending' || reservation.pago_estado === 'pendiente_anticipo') ? 'Pendiente Anticipo' :
+                        isDepositPaid ? 'Anticipo Pagado' :
                           reservation.pago_estado === 'Pagado' ? 'Pagada Completa' :
                             reservation.pago_estado || 'Sin Pago'}
                   </Badge>
@@ -920,17 +937,21 @@ export function ReservationDetailModal({
             </div>
 
             {/* 4. DESGLOSE FINANCIERO / ANTICIPO */}
-            {(depositAmount > 0 || reservation.pago_estado === 'deposit_paid' || reservation.pago_estado === 'Pagado') && (
+            {(depositAmount > 0 || (isAnticipoRequired && expectedDepositAmount > 0) || isDepositPaid || reservation.pago_estado === 'Pagado') && (
               <div className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between gap-3 text-xs flex-wrap">
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-blue-400" />
                   <div>
                     <span className="font-semibold text-foreground">Total Cita: ${totalAmount} MXN</span>
-                    {depositAmount > 0 && (
+                    {depositAmount > 0 ? (
                       <span className="text-muted-foreground ml-2">
-                        (Anticipo: <strong className="text-blue-400">${depositAmount} MXN</strong>)
+                        (Anticipo pagado: <strong className="text-blue-400">${depositAmount} MXN</strong>)
                       </span>
-                    )}
+                    ) : expectedDepositAmount > 0 && isAnticipoRequired ? (
+                      <span className="text-muted-foreground ml-2">
+                        (Anticipo requerido: <strong className="text-red-400">${expectedDepositAmount} MXN</strong>)
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 {reservation.pago_estado !== 'Pagado' && balancePending > 0 && (
@@ -1128,7 +1149,7 @@ export function ReservationDetailModal({
                   variant="destructive"
                   size="sm"
                   onClick={handleCancelClick}
-                  disabled={reservation.pago_estado === 'Pagado' || reservation.pago_estado === 'deposit_paid'}
+                  disabled={reservation.pago_estado === 'Pagado' || isDepositPaid}
                   className="rounded-xl text-xs shrink-0 whitespace-nowrap h-9 px-3"
                 >
                   <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Cancelar Cita
@@ -1137,7 +1158,7 @@ export function ReservationDetailModal({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
-              {reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid' && (
+              {reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && !isDepositPaid && (
                 <>
                   {/* SOLO se muestra el botón de Link SPEI si la cita realmente requiere anticipo */}
                   {isAnticipoRequired && (
@@ -1174,8 +1195,8 @@ export function ReservationDetailModal({
                   className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
                 >
                   <CreditCard className="mr-1.5 h-3.5 w-3.5" />
-                  {reservation.pago_estado === 'deposit_paid'
-                    ? `Cobrar Restante ($${(reservation.saldo_pendiente || balancePending || 0).toFixed(2)})`
+                  {isDepositPaid
+                    ? `Cobrar Restante ($${balancePending.toFixed(2)})`
                     : `Cobrar Total ($${totalAmount.toFixed(2)})`}
                 </Button>
               ) : (

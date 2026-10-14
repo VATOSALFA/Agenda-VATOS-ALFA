@@ -41,6 +41,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
 import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
+import { useLocal } from "@/contexts/local-context";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useFeatures } from "@/hooks/use-features";
 import Image from 'next/image';
@@ -334,6 +335,7 @@ const ClientSearchBar = React.memo(function ClientSearchBar({
 
 export default function ClientsPage() {
   const { user, db } = useAuth();
+  const { selectedLocalId } = useLocal();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -362,6 +364,7 @@ export default function ClientsPage() {
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
+  const [reservationInitialData, setReservationInitialData] = useState<any>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isCombineModalOpen, setIsCombineModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -1600,33 +1603,40 @@ export default function ClientsPage() {
       </Dialog>
 
       {selectedClient && (
-        <>
-          <ClientDetailModal
-            client={clients.find(c => c.id === selectedClient.id) || selectedClient}
-            isOpen={isDetailModalOpen}
-            onOpenChange={setIsDetailModalOpen}
-            onNewReservation={() => {
-              setIsDetailModalOpen(false);
-              setIsReservationModalOpen(true);
-            }}
-          />
-
-          <Dialog open={isReservationModalOpen} onOpenChange={setIsReservationModalOpen}>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Nueva Reserva para {selectedClient.nombre}</DialogTitle>
-              </DialogHeader>
-              <NewReservationForm
-                initialData={{ cliente_id: selectedClient.id }}
-                onFormSubmit={() => {
-                  setIsReservationModalOpen(false);
-                  toast({ title: "Reserva creada exitosamente" });
-                }}
-              />
-            </DialogContent>
-          </Dialog>
-        </>
+        <ClientDetailModal
+          client={clients.find(c => c.id === selectedClient.id) || selectedClient}
+          isOpen={isDetailModalOpen}
+          onOpenChange={setIsDetailModalOpen}
+          onNewReservation={() => {
+            setIsDetailModalOpen(false);
+            setReservationInitialData({
+              cliente_id: selectedClient.id,
+              cliente_nombre: `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim(),
+              local_id: selectedLocalId || undefined,
+              fecha: new Date(),
+              estado: 'Reservado',
+            });
+            setIsReservationModalOpen(true);
+          }}
+        />
       )}
+
+      <NewReservationForm
+        isOpen={isReservationModalOpen}
+        onOpenChange={(open) => {
+          setIsReservationModalOpen(open);
+          if (!open) {
+            setReservationInitialData(null);
+          }
+        }}
+        initialData={reservationInitialData}
+        onFormSubmit={() => {
+          setIsReservationModalOpen(false);
+          setReservationInitialData(null);
+          toast({ title: "Reserva creada exitosamente" });
+          handleDataUpdated();
+        }}
+      />
 
       <CombineClientsModal
         isOpen={isCombineModalOpen}

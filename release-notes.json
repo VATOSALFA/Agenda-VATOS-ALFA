@@ -2,10 +2,10 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Actualización con mejoras en la agenda, modal de reserva ligero y preferencias de perfil.",
+  "summary": "Mejoras en detalles del cliente para móvil y vinculación de reserva oficial.",
   "notes": [
-    "Detalles de reserva más limpios con horario de inicio/fin e indicadores rápidos.",
-    "Nuevas preferencias en Mi Perfil: tamaño de letra de la plataforma y volumen de notificaciones.",
-    "Calendario con memoria de estado por usuario y mejoras en navegación móvil."
+    "Modal de detalles del cliente unificado en móvil con scroll único, continuo y sin recortes.",
+    "Botón 'Nueva Cita' en detalles del cliente vinculado al modal oficial de la Agenda con el cliente preseleccionado.",
+    "Banner de actualización PWA reubicado por encima de la barra inferior de navegación."
   ]
 }

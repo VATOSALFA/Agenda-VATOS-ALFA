@@ -764,7 +764,7 @@ export function NewReservationForm({
   }, [filteredProfessionals, allReservations, allTimeBlocks, specialJourneys, isEditMode, initialData, agendaSettings]);
 
   useEffect(() => {
-    if (initialData && form && services.length > 0) {
+    if (initialData && form) {
       const fecha = safeParseDate(initialData.fecha) || new Date();
 
       const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
@@ -840,7 +840,7 @@ export function NewReservationForm({
         hora_inicio_minuto: startMinute,
         hora_fin_hora: endHour,
         hora_fin_minuto: endMinute,
-        estado: initialData.estado,
+        estado: initialData.estado || 'Reservado',
         precio: initialData.precio || 0,
         notas: initialData.notas || '',
         nota_interna: initialData.nota_interna || '',
@@ -849,7 +849,7 @@ export function NewReservationForm({
           whatsapp_notification: initialData.notifications?.whatsapp_notification ?? (initialData.notifications ? false : true),
           whatsapp_reminder: initialData.notifications?.whatsapp_reminder ?? (initialData.notifications ? false : true)
         },
-        local_id: initialData.local_id
+        local_id: initialData.local_id || selectedLocalId || ''
       });
       setIsProfessionalLocked(
         initialData.professional_lock !== undefined
@@ -2512,7 +2512,7 @@ export function NewReservationForm({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton={true}
-        className="max-w-2xl h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden shadow-2xl border border-border bg-background"
+        className="max-w-2xl h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {formContent}

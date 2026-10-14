@@ -165,6 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       uid: firebaseUser.uid,
       local_id: customData.local_id,
       avatarUrl: customData.avatarUrl || firebaseUser.photoURL,
+      audio_settings: customData.audio_settings || undefined,
     };
   };
 

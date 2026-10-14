@@ -1823,7 +1823,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     };
 
-    const handleNextStep = () => {
+    const [isStepTransitioning, setIsStepTransitioning] = useState(false);
+
+    const handleNextStep = (e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (cart.length === 0) {
             toast({ variant: 'destructive', title: 'Error', description: 'El carrito está vacío.' });
             return;
@@ -1854,7 +1860,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setAmountPaid(totalConPropina);
         }
 
+        // Guard against mobile ghost-clicks / double-taps hitting the Cobrar button in the exact same screen position
+        setIsStepTransitioning(true);
         setStep(2);
+        setTimeout(() => {
+            setIsStepTransitioning(false);
+        }, 450);
     };
 
     const resetComponentsState = useCallback(() => {
@@ -3785,8 +3796,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         type="submit"
                                         variant="alfa"
                                         className="h-9 sm:h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl"
-                                        disabled={isSubmitting || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
+                                        disabled={isSubmitting || isStepTransitioning || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
                                         onClick={(e) => {
+                                            if (isStepTransitioning) {
+                                                e.preventDefault();
+                                                return;
+                                            }
                                             if (total === 0 && pointsDiscount > 0) {
                                                 form.setValue('metodo_pago', 'alfacoins', { shouldValidate: true });
                                             } else {

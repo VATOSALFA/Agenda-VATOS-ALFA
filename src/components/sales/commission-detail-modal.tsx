@@ -53,7 +53,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent hideCloseButton={true} className="max-w-3xl sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+      <DialogContent hideCloseButton={true} className="max-w-3xl sm:max-w-4xl max-h-[85dvh] sm:max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background">
         {/* Official Vatos Alfa Header */}
         <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 text-white border-b border-blue-900/40 flex-shrink-0">
           <div className="header-light-beam" />
@@ -82,8 +82,8 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
         </div>
 
         {/* Mobile View */}
-        <div className="md:hidden flex flex-col flex-1 overflow-hidden">
-          <ScrollArea className="flex-1 p-3">
+        <div className="md:hidden flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 overscroll-contain">
             <div className="space-y-2.5 pb-2">
               {summary.details.map((detail, index) => (
                 <div key={index} className="flex flex-col space-y-2 border border-border/60 p-3 rounded-xl bg-card/60 backdrop-blur-sm text-card-foreground shadow-sm">
@@ -99,7 +99,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
                     <div>
                       <span className="text-muted-foreground block text-[11px]">Venta</span>
-                      <div className="font-medium flex items-center gap-1 mt-0.5">
+                      <div className="font-medium flex items-center gap-1 mt-0.5 font-sans">
                         ${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         {detail.discountDetails && (
                           <span className="text-[10px] bg-muted/40 text-muted-foreground px-1.5 py-0.5 rounded border border-border/40 whitespace-nowrap font-medium">
@@ -110,7 +110,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                     </div>
                     <div className="text-right">
                       <span className="text-muted-foreground block text-[11px]">Comisión ({detail.commissionPercentage.toFixed(0)}%)</span>
-                      <div className="font-bold text-sm text-blue-500 dark:text-blue-400 mt-0.5">
+                      <div className="font-bold text-sm text-blue-500 dark:text-blue-400 mt-0.5 font-sans">
                         ${detail.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </div>
@@ -118,14 +118,14 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
 
-          <div className="border-t border-border/60 pt-3 px-4 pb-3 bg-muted/20 flex-shrink-0">
-            <div className="flex justify-between text-xs text-muted-foreground">
+          <div className="border-t border-border/60 pt-2.5 px-4 pb-2.5 bg-muted/20 flex-shrink-0">
+            <div className="flex justify-between text-xs text-muted-foreground font-sans">
               <span>Total Ventas</span>
               <span className="font-semibold text-foreground">${summary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold text-foreground mt-1">
+            <div className="flex justify-between text-sm font-bold text-foreground mt-1 font-sans">
               <span>Total Comisiones</span>
               <span className="text-blue-500 dark:text-blue-400">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
@@ -133,33 +133,33 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
         </div>
 
         {/* Desktop View */}
-        <div className="hidden md:flex flex-col flex-1 overflow-hidden p-4 sm:p-5">
-          <div className="rounded-xl border border-border/60 overflow-hidden flex-1 flex flex-col">
-            <ScrollArea className="h-[48vh]">
+        <div className="hidden md:flex flex-col flex-1 min-h-0 overflow-hidden p-4 sm:p-5">
+          <div className="rounded-xl border border-border/60 overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div className="max-h-[48vh] overflow-y-auto custom-scrollbar">
               <Table>
-                <TableHeader className="sticky top-0 bg-muted/60 backdrop-blur-sm z-10 border-b border-border/60">
-                  <TableRow>
-                    <TableHead className="font-semibold text-xs">Concepto</TableHead>
-                    <TableHead className="font-semibold text-xs">Cliente</TableHead>
-                    <TableHead className="font-semibold text-xs">Tipo</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Venta</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">% Comisión</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Comisión</TableHead>
+                <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10 border-b border-border/60">
+                  <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                    <TableHead className="py-1 px-3 font-semibold text-xs">Concepto</TableHead>
+                    <TableHead className="py-1 px-3 font-semibold text-xs">Cliente</TableHead>
+                    <TableHead className="py-1 px-3 font-semibold text-xs">Tipo</TableHead>
+                    <TableHead className="py-1 px-3 font-semibold text-xs text-right">Venta</TableHead>
+                    <TableHead className="py-1 px-3 font-semibold text-xs text-right">% Comisión</TableHead>
+                    <TableHead className="py-1 px-3 font-semibold text-xs text-right">Comisión</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {summary.details.map((detail, index) => (
-                    <TableRow key={index} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="font-medium text-xs sm:text-sm">{detail.itemName}</TableCell>
-                      <TableCell className="text-xs sm:text-sm text-muted-foreground">{detail.clientName}</TableCell>
-                      <TableCell>
-                        <span className="px-2 py-0.5 rounded-md bg-muted/40 border border-border/60 text-xs font-medium capitalize text-foreground">
+                    <TableRow key={index} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                      <TableCell className="py-1.5 px-3 font-medium text-xs">{detail.itemName}</TableCell>
+                      <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">{detail.clientName}</TableCell>
+                      <TableCell className="py-1.5 px-3">
+                        <span className="px-2 py-0.5 rounded-md bg-muted/40 border border-border/60 text-[10px] font-medium capitalize text-foreground">
                           {detail.itemType}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="py-1.5 px-3 text-right font-sans">
                         <div className="flex flex-col items-end justify-center">
-                          <span className="text-xs sm:text-sm font-medium">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-xs font-medium text-foreground">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           {detail.discountDetails && (
                             <span className="text-[10px] text-muted-foreground font-medium bg-muted/40 px-1.5 py-0.5 rounded mt-0.5 border border-border/40 whitespace-nowrap">
                               {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
@@ -167,23 +167,23 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right text-xs sm:text-sm">{detail.commissionPercentage.toFixed(2)}%</TableCell>
-                      <TableCell className="text-right font-bold text-xs sm:text-sm text-blue-500 dark:text-blue-400">
+                      <TableCell className="py-1.5 px-3 text-right text-xs font-sans">{detail.commissionPercentage.toFixed(2)}%</TableCell>
+                      <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-500 dark:text-blue-400 font-sans">
                         ${detail.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
-                <TableFooter className="bg-muted/40 border-t border-border/60">
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-right font-bold text-xs sm:text-sm">Total</TableCell>
-                    <TableCell className="text-right font-bold text-xs sm:text-sm">${summary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell colSpan={1}></TableCell>
-                    <TableCell className="text-right font-bold text-xs sm:text-sm text-blue-500 dark:text-blue-400">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                <TableFooter className="bg-muted/40 border-t border-border/60 sticky bottom-0">
+                  <TableRow className="h-9">
+                    <TableCell colSpan={3} className="py-1.5 px-3 text-right font-bold text-xs">Total</TableCell>
+                    <TableCell className="py-1.5 px-3 text-right font-bold text-xs font-sans">${summary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell colSpan={1} className="py-1.5 px-3"></TableCell>
+                    <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-500 dark:text-blue-400 font-sans">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>
                 </TableFooter>
               </Table>
-            </ScrollArea>
+            </div>
           </div>
         </div>
 

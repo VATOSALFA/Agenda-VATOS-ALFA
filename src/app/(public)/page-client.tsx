@@ -6,12 +6,13 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import { getBranchOperationalStatus } from '@/lib/branch-status';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone, Menu, BookOpen } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -349,6 +350,44 @@ export default function LandingPageClient() {
     const logoUrl = empresa?.[0]?.logo_url;
     const iconUrl = empresa?.[0]?.icon_url;
 
+    // Calificación dinámica de Google Maps sincronizada con la sucursal activa
+    const [googleRatingData, setGoogleRatingData] = useState<{
+        rating: number;
+        userRatingCount: number | null;
+        googleMapsUri: string;
+    }>({
+        rating: Number(currentBranchObj?.googleRating || websiteSettings?.googleRating || 4.9),
+        userRatingCount: currentBranchObj?.googleReviewCount || websiteSettings?.googleReviewCount || null,
+        googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro')}`,
+    });
+
+    useEffect(() => {
+        let isMounted = true;
+        const branchQuery = currentBranchObj?.address
+            ? `${companyName} ${currentBranchObj.address}`
+            : 'VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro';
+        const branchPlaceId = currentBranchObj?.placeId || currentBranchObj?.google_place_id || websiteSettings?.googlePlaceId || '';
+
+        fetch(`/api/google-rating?query=${encodeURIComponent(branchQuery)}${branchPlaceId ? `&placeId=${encodeURIComponent(branchPlaceId)}` : ''}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (!isMounted || !data) return;
+                const customRating = Number(currentBranchObj?.googleRating || websiteSettings?.googleRating);
+                setGoogleRatingData({
+                    rating: (data.source !== 'fallback' && typeof data.rating === 'number')
+                        ? data.rating
+                        : (!isNaN(customRating) && customRating > 0 ? customRating : (data.rating || 4.9)),
+                    userRatingCount: data.userRatingCount ?? currentBranchObj?.googleReviewCount ?? websiteSettings?.googleReviewCount ?? null,
+                    googleMapsUri: data.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(branchQuery)}`,
+                });
+            })
+            .catch(() => {});
+
+        return () => {
+            isMounted = false;
+        };
+    }, [currentBranchObj, companyName, websiteSettings?.googleRating, websiteSettings?.googleReviewCount, websiteSettings?.googlePlaceId]);
+
     // Segmenta el slogan para aplicar el acento de degradado azul institucional a la segunda parte
     const sloganParts = useMemo(() => {
         const text = (companySlogan || '').trim();
@@ -563,33 +602,32 @@ export default function LandingPageClient() {
                     </div>
 
                     <div className="flex gap-2 sm:gap-3 items-center">
-                        {/* 0. Botón Descargar App Oficial */}
+                        {/* 0. Botón Descargar App Oficial (Visible en tablet/desktop; en móvil va dentro del menú hamburguesa) */}
                         {websiteSettings.showAppDownload !== false && (
                             <button
                                 type="button"
                                 onClick={handleAppDownloadClick}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors py-1.5 px-2.5 sm:px-3 rounded-xl border border-slate-700/80 hover:border-blue-500/60 bg-slate-900/60 hover:bg-blue-600/10 cursor-pointer shadow-xs shrink-0"
+                                className="hidden md:inline-flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white transition-colors py-1.5 px-2.5 sm:px-3 rounded-xl border border-slate-700/80 hover:border-blue-500/60 bg-slate-900/60 hover:bg-blue-600/10 cursor-pointer shadow-xs shrink-0"
                                 title="Descargar App Móvil"
                                 aria-label="Descargar App Móvil"
                             >
                                 <Smartphone className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                                <span className="hidden sm:inline">Descargar App</span>
-                                <span className="sm:hidden">App</span>
+                                <span>Descargar App</span>
                             </button>
                         )}
 
-                        {/* 1. Izquierda: Botón Reservar Cita (Oficial Alfa) */}
+                        {/* 1. Botón Reservar Cita (Oficial Alfa) */}
                         <Link href="/reservar" prefetch={false}>
                             <Button 
                                 variant="alfa" 
                                 size="sm" 
-                                className="h-9 px-3.5 sm:px-4 text-xs font-bold rounded-xl shadow-[0_4px_15px_rgba(32,42,73,0.6)] cursor-pointer shrink-0"
+                                className="h-9 px-3 sm:px-4 text-xs font-bold rounded-xl shadow-[0_4px_15px_rgba(32,42,73,0.6)] cursor-pointer shrink-0"
                             >
                                 Reservar Cita
                             </Button>
                         </Link>
 
-                        {/* 2. Medio: Sucursal (Sin contenedor, bare icon y texto limpio) */}
+                        {/* 2. Sucursal (Sin contenedor, bare icon y texto limpio) */}
                         <Select 
                             value={selectedBranch} 
                             onValueChange={(val) => {
@@ -603,8 +641,8 @@ export default function LandingPageClient() {
                                 setSelectedBranch(val);
                             }}
                         >
-                            <SelectTrigger className="h-auto p-0 border-0 border-none bg-transparent hover:bg-transparent text-xs font-semibold text-foreground hover:text-blue-600 transition-colors shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-auto gap-1 cursor-pointer">
-                                <div className="flex items-center gap-1.5 truncate">
+                            <SelectTrigger className="h-auto p-0 border-0 border-none bg-transparent hover:bg-transparent text-xs font-semibold text-foreground hover:text-blue-600 transition-colors shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-auto gap-1 cursor-pointer max-w-[130px] sm:max-w-none">
+                                <div className="flex items-center gap-1 truncate">
                                     <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                                     <SelectValue placeholder="Suc. Sombrerete" />
                                 </div>
@@ -629,10 +667,104 @@ export default function LandingPageClient() {
                             </SelectContent>
                         </Select>
 
-                        {/* 3. Derecha: Blog */}
-                        <Link href="/blog" prefetch={false} className="text-sm font-medium hover:text-primary transition-colors text-muted-foreground hover:text-foreground">
+                        {/* 3. Derecha en Desktop: Blog */}
+                        <Link href="/blog" prefetch={false} className="hidden md:inline-block text-sm font-medium hover:text-primary transition-colors text-muted-foreground hover:text-foreground">
                             Blog
                         </Link>
+
+                        {/* 4. Menú Hamburguesa en Celular (md:hidden) */}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="md:hidden h-8 w-8 rounded-lg flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors focus:outline-none shrink-0"
+                                    aria-label="Abrir menú de navegación"
+                                    title="Menú"
+                                >
+                                    <Menu className="h-5 w-5" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                sideOffset={8}
+                                className="w-56 p-1.5 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#0d1424] text-white z-[100]"
+                            >
+                                <DropdownMenuItem
+                                    onClick={() => scrollToSection('servicios')}
+                                    className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5"
+                                >
+                                    <Scissors className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span>Servicios</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                    onClick={() => scrollToSection('profesionales')}
+                                    className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5"
+                                >
+                                    <Users className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span>Staff</span>
+                                </DropdownMenuItem>
+
+                                <DropdownMenuItem
+                                    onClick={() => scrollToSection('inspiracion')}
+                                    className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5"
+                                >
+                                    <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
+                                    <span>Inspiración</span>
+                                </DropdownMenuItem>
+
+                                {products && products.length > 0 && (
+                                    <DropdownMenuItem
+                                        onClick={() => scrollToSection('productos')}
+                                        className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5"
+                                    >
+                                        <ShoppingBag className="h-4 w-4 text-slate-400 shrink-0" />
+                                        <span>Tienda</span>
+                                    </DropdownMenuItem>
+                                )}
+
+                                <DropdownMenuItem
+                                    onClick={() => scrollToSection('beneficios')}
+                                    className="text-xs font-semibold py-2.5 px-3 rounded-lg cursor-pointer text-[#C5A880] focus:bg-[#C5A880]/15 focus:text-[#f3e3ce] flex items-center gap-2.5"
+                                >
+                                    <Award className="h-4 w-4 text-[#C5A880] shrink-0" />
+                                    <span>Pase Alfa</span>
+                                </DropdownMenuItem>
+
+                                {locales && locales.length > 0 && (
+                                    <DropdownMenuItem
+                                        onClick={() => scrollToSection('ubicacion')}
+                                        className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5"
+                                    >
+                                        <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                                        <span>Ubicación</span>
+                                    </DropdownMenuItem>
+                                )}
+
+                                <DropdownMenuSeparator className="bg-slate-800/80 my-1" />
+
+                                {websiteSettings.showAppDownload !== false && (
+                                    <DropdownMenuItem
+                                        onClick={handleAppDownloadClick}
+                                        className="text-xs font-semibold py-2.5 px-3 rounded-lg cursor-pointer text-blue-400 focus:bg-blue-600/20 focus:text-blue-300 flex items-center gap-2.5"
+                                    >
+                                        <Smartphone className="h-4 w-4 text-blue-400 shrink-0" />
+                                        <span>Descargar App</span>
+                                    </DropdownMenuItem>
+                                )}
+
+                                <DropdownMenuItem asChild>
+                                    <Link
+                                        href="/blog"
+                                        prefetch={false}
+                                        className="text-xs font-medium py-2.5 px-3 rounded-lg cursor-pointer text-slate-200 focus:bg-blue-600/20 focus:text-white flex items-center gap-2.5 w-full"
+                                    >
+                                        <BookOpen className="h-4 w-4 text-slate-400 shrink-0" />
+                                        <span>Blog</span>
+                                    </Link>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </header>
@@ -657,8 +789,8 @@ export default function LandingPageClient() {
                         }}
                         className="relative z-10 max-w-5xl mx-auto flex flex-col items-center justify-between w-full h-full flex-1 will-change-transform"
                     >
-                        {/* 0. Enlaces Rápidos a Secciones (Arriba, sin contenedor, sin iconos, tipografía fina) */}
-                        <div className="mb-auto pt-1 w-full flex justify-center animate-in fade-in slide-in-from-top-2 duration-700">
+                        {/* 0. Enlaces Rápidos a Secciones (Visible en Desktop; en móvil se accede desde el botón de hamburguesa) */}
+                        <div className="mb-auto pt-1 w-full hidden md:flex justify-center animate-in fade-in slide-in-from-top-2 duration-700">
                             <nav 
                                 aria-label="Navegación rápida de secciones"
                                 className="inline-flex items-center justify-center gap-4 sm:gap-6 md:gap-8 max-w-full overflow-x-auto scrollbar-none py-1 px-3"
@@ -763,11 +895,21 @@ export default function LandingPageClient() {
 
                         {/* 4. Chips de Confianza / Prueba Social pegados cerca del borde inferior */}
                         <div className="mt-auto w-full max-w-3xl flex flex-wrap items-center justify-center gap-3 sm:gap-6 pt-5 border-t border-slate-800/80 text-xs sm:text-sm text-slate-300 animate-in fade-in duration-1000 delay-300">
-                            <div className="flex items-center gap-1.5 font-semibold">
+                            <a
+                                href={googleRatingData.googleMapsUri}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1.5 font-semibold hover:text-white transition-colors"
+                                title="Ver opiniones reales en Google Maps"
+                            >
                                 <span className="text-[#C5A880] tracking-widest text-sm">★★★★★</span>
-                                <span className="text-white font-bold">4.9</span>
-                                <span className="text-slate-400 text-xs">(Google Reviews)</span>
-                            </div>
+                                <span className="text-white font-bold">{googleRatingData.rating.toFixed(1)}</span>
+                                <span className="text-slate-400 text-xs">
+                                    {googleRatingData.userRatingCount
+                                        ? `(${googleRatingData.userRatingCount} opiniones en Google)`
+                                        : '(Google Reviews)'}
+                                </span>
+                            </a>
                             <span className="hidden sm:inline text-slate-700">•</span>
                             <div className="flex items-center gap-1.5 font-medium text-slate-300">
                                 <Clock className="w-4 h-4 text-slate-400" />

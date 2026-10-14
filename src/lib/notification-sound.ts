@@ -31,20 +31,47 @@ export const SOUND_STYLES: SoundStyleOption[] = [
   },
 ];
 
+export type FontSizeScale = 'compacto' | 'normal' | 'grande' | 'extra_grande';
+
+export interface FontSizeOption {
+  id: FontSizeScale;
+  label: string;
+  description: string;
+  px: number;
+}
+
+export const FONT_SIZE_OPTIONS: FontSizeOption[] = [
+  { id: 'compacto', label: 'Compacto', description: 'Más contenido en pantalla (93%)', px: 15 },
+  { id: 'normal', label: 'Normal', description: 'Tamaño estándar del sistema (100%)', px: 16 },
+  { id: 'grande', label: 'Grande', description: 'Lectura más cómoda y clara (108%)', px: 17.25 },
+  { id: 'extra_grande', label: 'Extra Grande', description: 'Máxima legibilidad en toda la plataforma (116%)', px: 18.5 },
+];
+
 export interface AudioNotificationSettings {
   notification_sound: SoundStyle;
+  notification_volume: number; // 0.0 to 1.0
   vibration_enabled: boolean;
   agenda_click_sound_enabled: boolean;
+  font_size_scale?: FontSizeScale;
 }
 
 export const DEFAULT_AUDIO_SETTINGS: AudioNotificationSettings = {
   notification_sound: 'alerta_insistente',
+  notification_volume: 1.0,
   vibration_enabled: true,
   agenda_click_sound_enabled: true,
+  font_size_scale: 'normal',
 };
 
 const STORAGE_SETTINGS_KEY = 'vatos_audio_settings';
 const STORAGE_LEGACY_STYLE_KEY = 'vatos_notification_sound_style';
+
+export function applyFontSizeScale(scale?: FontSizeScale) {
+  if (typeof document === 'undefined') return;
+  const option = FONT_SIZE_OPTIONS.find((o) => o.id === scale) || FONT_SIZE_OPTIONS[1];
+  document.documentElement.style.fontSize = `${option.px}px`;
+  document.documentElement.setAttribute('data-font-scale', option.id);
+}
 
 export function getAudioSettings(): AudioNotificationSettings {
   if (typeof window === 'undefined') return DEFAULT_AUDIO_SETTINGS;
@@ -52,10 +79,13 @@ export function getAudioSettings(): AudioNotificationSettings {
     const raw = localStorage.getItem(STORAGE_SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      const rawVol = typeof parsed.notification_volume === 'number' ? parsed.notification_volume : 1.0;
       return {
         notification_sound: parsed.notification_sound || getPreferredSoundStyle(),
+        notification_volume: Math.min(1, Math.max(0, rawVol)),
         vibration_enabled: parsed.vibration_enabled !== false,
         agenda_click_sound_enabled: parsed.agenda_click_sound_enabled !== false,
+        font_size_scale: parsed.font_size_scale || 'normal',
       };
     }
   } catch (_) {}
@@ -73,6 +103,9 @@ export function setAudioSettings(settings: Partial<AudioNotificationSettings>) {
     localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(updated));
     if (settings.notification_sound) {
       setPreferredSoundStyle(settings.notification_sound);
+    }
+    if (updated.font_size_scale) {
+      applyFontSizeScale(updated.font_size_scale);
     }
     window.dispatchEvent(new CustomEvent('vatos_audio_settings_changed', { detail: updated }));
   } catch (_) {}
@@ -155,11 +188,14 @@ export function triggerHapticAlert(pattern = [300, 100, 300, 250, 300, 100, 500]
  * Sonido de clic sutil y táctil (estilo iOS / pulsación mecánica) para cuando
  * el usuario hace clic en botones y elementos de la agenda.
  */
-export function playAgendaClickSound(volume = 0.28) {
+export function playAgendaClickSound(volume?: number) {
   if (typeof window === 'undefined') return;
   try {
     const settings = getAudioSettings();
     if (settings.agenda_click_sound_enabled === false) return;
+    const savedVol = typeof settings.notification_volume === 'number' ? settings.notification_volume : 1.0;
+    const effectiveVolume = volume !== undefined ? volume * savedVol : 0.28 * savedVol;
+    if (effectiveVolume <= 0.001) return;
 
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -175,7 +211,7 @@ export function playAgendaClickSound(volume = 0.28) {
         osc.frequency.setValueAtTime(1200, now);
         osc.frequency.exponentialRampToValueAtTime(320, now + 0.038);
 
-        gain.gain.setValueAtTime(volume, now);
+        gain.gain.setValueAtTime(effectiveVolume, now);
         gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.038);
 
         osc.connect(gain);
@@ -275,12 +311,15 @@ export async function playStrongNotificationAlert(options?: {
   const currentSettings = getAudioSettings();
   const chosenStyle = options?.style || currentSettings.notification_sound || getPreferredSoundStyle();
   const shouldVibrate = options?.vibrate !== undefined ? options.vibrate : currentSettings.vibration_enabled;
-  const { volume = 1.0 } = options || {};
+  const savedVol = typeof currentSettings.notification_volume === 'number' ? currentSettings.notification_volume : 1.0;
+  const effectiveVolume = options?.volume !== undefined ? options.volume : savedVol;
 
   // 1. Vibración sincronizada (si está habilitada en la configuración)
   if (shouldVibrate) {
     triggerHapticAlert();
   }
+
+  if (effectiveVolume <= 0.001) return;
 
   // 2. Audio Web API
   try {
@@ -302,7 +341,7 @@ export async function playStrongNotificationAlert(options?: {
     compressor.release.setValueAtTime(0.2, now);
 
     const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(Math.min(Math.max(volume, 0.1), 1.0), now);
+    masterGain.gain.setValueAtTime(Math.min(Math.max(effectiveVolume, 0.02), 1.0), now);
 
     compressor.connect(masterGain);
     masterGain.connect(ctx.destination);

@@ -73,7 +73,7 @@ import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { playStrongNotificationAlert, initAudioUnlock } from '@/lib/notification-sound';
+import { playStrongNotificationAlert, initAudioUnlock, getAudioSettings, setAudioSettings, applyFontSizeScale } from '@/lib/notification-sound';
 
 // Removed top-level mainNavLinks
 
@@ -202,7 +202,22 @@ export default function Header() {
 
   useEffect(() => {
     initAudioUnlock();
+    const local = getAudioSettings();
+    applyFontSizeScale(local.font_size_scale);
   }, []);
+
+  useEffect(() => {
+    const userAudio = (user as any)?.audio_settings;
+    if (userAudio) {
+      setAudioSettings({
+        notification_sound: userAudio.notification_sound || 'alerta_insistente',
+        notification_volume: typeof userAudio.notification_volume === 'number' ? userAudio.notification_volume : 1.0,
+        vibration_enabled: userAudio.vibration_enabled !== false,
+        agenda_click_sound_enabled: userAudio.agenda_click_sound_enabled !== false,
+        font_size_scale: userAudio.font_size_scale || 'normal',
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!db || !myProfessional?.id) return;
@@ -530,11 +545,18 @@ export default function Header() {
           )}
 
           {/* Mobile Menu (controlled via bottom navigation) - Opción B: Fondo Claro (Continuidad Total con la Agenda) */}
-          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen} modal={false}>
             <SheetContent
               side="right"
-              overlayClassName="bg-black/35 backdrop-blur-xs"
-              className="w-full max-w-full sm:max-w-md h-full border-none sm:border-l sm:border-slate-200 bg-slate-50 text-slate-800 p-0 [&>button]:hidden shadow-2xl flex flex-col"
+              overlayClassName="bg-black/35 backdrop-blur-xs pointer-events-none"
+              onInteractOutside={(e) => {
+                // Allow clicks on the bottom navigation bar to pass through and work normally
+                const target = e.target as HTMLElement | null;
+                if (target?.closest('[data-mobile-bottom-nav="true"]')) {
+                  return;
+                }
+              }}
+              className="w-full max-w-full sm:max-w-md h-[calc(100dvh-4rem)] sm:h-full top-0 border-none sm:border-l sm:border-slate-200 bg-slate-50 text-slate-800 p-0 [&>button]:hidden shadow-2xl flex flex-col z-[90]"
             >
               <SheetHeader className="sr-only">
                 <SheetTitle>Menú de Navegación</SheetTitle>
@@ -1214,7 +1236,10 @@ export default function Header() {
       </header>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-md z-[100] flex items-center justify-around px-2 pb-safe">
+      <div
+        data-mobile-bottom-nav="true"
+        className="md:hidden fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-md z-[100] flex items-center justify-around px-2 pb-safe pointer-events-auto"
+      >
         {/* Haz de luz oblicuo animado idéntico a la franja azul superior */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
           <div className="header-light-beam" />
@@ -1224,9 +1249,10 @@ export default function Header() {
         {canSee('ver_agenda') && (
           <Link
             href="/agenda"
+            onClick={() => setIsMobileMenuOpen(false)}
             className={cn(
               "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-              pathname.startsWith('/agenda') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+              pathname.startsWith('/agenda') && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
             )}
           >
             <Calendar className="h-5 w-5 mb-0.5" />
@@ -1240,9 +1266,10 @@ export default function Header() {
             return (
               <Link
                 href="/sales/invoiced"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/invoiced' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname === '/sales/invoiced' && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <CreditCard className="h-5 w-5 mb-0.5" />
@@ -1254,9 +1281,10 @@ export default function Header() {
             return (
               <Link
                 href="/clients"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/clients' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname === '/clients' && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Users className="h-5 w-5 mb-0.5" />
@@ -1268,9 +1296,10 @@ export default function Header() {
             return (
               <Link
                 href="/promociones"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/promociones') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname.startsWith('/promociones') && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Gift className="h-5 w-5 mb-0.5" />
@@ -1282,9 +1311,10 @@ export default function Header() {
             return (
               <Link
                 href="/products"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/products') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname.startsWith('/products') && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Archive className="h-5 w-5 mb-0.5" />
@@ -1296,9 +1326,10 @@ export default function Header() {
             return (
               <Link
                 href="/conversations"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname.startsWith('/conversations') ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname.startsWith('/conversations') && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <MessageSquare className="h-5 w-5 mb-0.5" />
@@ -1317,6 +1348,7 @@ export default function Header() {
                 <Button
                   variant="alfa"
                   size="icon"
+                  onClick={() => setIsMobileMenuOpen(false)}
                   className="w-12 h-12 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_12px_rgba(59,130,246,0.3)] cursor-pointer"
                   aria-label="Acciones rápidas"
                 >
@@ -1326,21 +1358,21 @@ export default function Header() {
               <DropdownMenuContent
                 align="center"
                 side="top"
-                className="w-56 mb-2 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1.5"
+                className="w-56 mb-2 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#151b2e] text-white p-1.5 z-[110]"
               >
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('open-qr-scanner')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
+                <DropdownMenuItem onSelect={() => { setIsMobileMenuOpen(false); dispatchCustomEvent('open-qr-scanner'); }} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <QrCode className="mr-2 h-4 w-4 text-[#C5A880]" />
                   <span className="font-semibold text-[#C5A880]">Escanear QR cliente</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-reservation')} disabled={!canSee('crear_reservas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
+                <DropdownMenuItem onSelect={() => { setIsMobileMenuOpen(false); dispatchCustomEvent('new-reservation'); }} disabled={!canSee('crear_reservas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Calendar className="mr-2 h-4 w-4" />
                   <span>Crear nueva reserva</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-block')} disabled={!canSee('bloquear_horarios')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
+                <DropdownMenuItem onSelect={() => { setIsMobileMenuOpen(false); dispatchCustomEvent('new-block'); }} disabled={!canSee('bloquear_horarios')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Lock className="mr-2 h-4 w-4" />
                   <span>Bloquear horario</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => dispatchCustomEvent('new-sale')} disabled={!canSee('registrar_ventas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
+                <DropdownMenuItem onSelect={() => { setIsMobileMenuOpen(false); dispatchCustomEvent('new-sale'); }} disabled={!canSee('registrar_ventas')} className="rounded-lg focus:bg-blue-500/20 cursor-pointer">
                   <Tag className="mr-2 h-4 w-4" />
                   <span>Registrar nueva venta</span>
                 </DropdownMenuItem>
@@ -1355,9 +1387,10 @@ export default function Header() {
             return (
               <Link
                 href="/sales/cash-box"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/cash-box' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname === '/sales/cash-box' && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <Wallet className="h-5 w-5 mb-0.5" />
@@ -1369,9 +1402,10 @@ export default function Header() {
             return (
               <Link
                 href="/sales/my-performance"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
                   "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors",
-                  pathname === '/sales/my-performance' ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
+                  pathname === '/sales/my-performance' && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
                 <LineChart className="h-5 w-5 mb-0.5" />
@@ -1384,7 +1418,7 @@ export default function Header() {
 
         {/* Tab 5: Más (Menu) */}
         <button
-          onClick={() => setIsMobileMenuOpen(true)}
+          onClick={() => setIsMobileMenuOpen((prev) => !prev)}
           className={cn(
             "relative z-10 flex flex-col items-center justify-center flex-1 h-full py-2 transition-colors cursor-pointer",
             isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"

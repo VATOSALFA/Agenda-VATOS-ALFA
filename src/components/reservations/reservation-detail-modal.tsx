@@ -53,7 +53,7 @@ import { format, parse, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, getDoc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -67,6 +67,16 @@ import { logAuditAction } from '@/lib/audit-logger';
 import { formatClientName } from '../agenda/agenda-utils';
 import { sendBookingCancellationAction } from '@/lib/actions/booking';
 import { isShortNoticeAppointment, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+
+const addMinutesToTimeStr = (timeStr?: string, mins: number = 60): string => {
+  if (!timeStr || !timeStr.includes(':')) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return '';
+  const total = h * 60 + m + mins;
+  const nh = Math.floor(total / 60) % 24;
+  const nm = total % 60;
+  return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+};
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" className={className}>
@@ -111,6 +121,9 @@ export function ReservationDetailModal({
   const [isSaleDetailModalOpen, setIsSaleDetailModalOpen] = useState(false);
   const [saleForReservation, setSaleForReservation] = useState<Sale | null>(null);
   const [isLoadingSale, setIsLoadingSale] = useState(false);
+  const [activeHintId, setActiveHintId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressRef = useRef(false);
 
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   
@@ -692,37 +705,110 @@ export function ReservationDetailModal({
           {/* CONTENIDO SCROLLEABLE */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-sm">
 
-            {/* 1. ORIGEN Y AUDITORÍA DE LA RESERVA */}
-            <div className={cn("p-3.5 rounded-xl border transition-all text-xs space-y-2.5", originInfo.cardBg)}>
+            {/* 1. ORIGEN Y AUDITORÍA DE LA RESERVA (Compacto con iconos interactivos) */}
+            <div className={cn("px-3.5 py-2.5 rounded-xl border transition-all text-xs", originInfo.cardBg)}>
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className={cn("font-bold text-[11px] gap-1 px-2.5 py-0.5", originInfo.badgeClass)}>
-                    <originInfo.icon className="w-3.5 h-3.5" />
-                    {originInfo.label}
-                  </Badge>
-
-                  {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica') || reservation.professional_lock) && (
-                    <TooltipProvider>
-                      <Tooltip>
+                <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+                  {/* Iconos de Origen y Preferencia de Barbero (Hover o Mantener Presionado) */}
+                  <div className="flex items-center gap-2 shrink-0 pr-2 border-r border-border/50">
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip open={activeHintId === 'origin'}>
                         <TooltipTrigger asChild>
-                          <Badge variant="outline" className="border-border bg-background/80 text-muted-foreground text-[10px] gap-1 px-1.5 py-0.5 cursor-help">
-                            <Lock className="w-3 h-3 text-slate-500" /> Barbero elegido por cliente
-                          </Badge>
+                          <button
+                            type="button"
+                            onMouseEnter={() => setActiveHintId('origin')}
+                            onMouseLeave={() => setActiveHintId(null)}
+                            onTouchStart={() => setActiveHintId(prev => prev === 'origin' ? null : 'origin')}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setActiveHintId(prev => prev === 'origin' ? null : 'origin');
+                            }}
+                            className="p-1 text-slate-400 hover:text-blue-400 transition-colors cursor-help focus:outline-none"
+                            aria-label={originInfo.label}
+                            title={originInfo.label}
+                          >
+                            <originInfo.icon className={cn("w-4 h-4", originInfo.accentColor)} />
+                          </button>
                         </TooltipTrigger>
-                        <TooltipContent>
-                          <p>El cliente seleccionó voluntariamente a este barbero durante el proceso de reserva.</p>
+                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                          <p>{originInfo.label}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                  )}
+
+                    {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica') || reservation.professional_lock) && (
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip open={activeHintId === 'barber_lock'}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setActiveHintId('barber_lock')}
+                              onMouseLeave={() => setActiveHintId(null)}
+                              onTouchStart={() => setActiveHintId(prev => prev === 'barber_lock' ? null : 'barber_lock')}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setActiveHintId(prev => prev === 'barber_lock' ? null : 'barber_lock');
+                              }}
+                              className="p-1 text-slate-400 hover:text-blue-400 transition-colors cursor-help focus:outline-none"
+                              aria-label="Barbero elegido por cliente"
+                              title="Barbero elegido por cliente"
+                            >
+                              <Lock className="w-4 h-4 text-slate-400" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                            <p>Barbero elegido por cliente</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+
+                    {reservation.confirmada_por_cliente && (
+                      <TooltipProvider delayDuration={100}>
+                        <Tooltip open={activeHintId === 'wa_confirmed'}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onMouseEnter={() => setActiveHintId('wa_confirmed')}
+                              onMouseLeave={() => setActiveHintId(null)}
+                              onTouchStart={() => setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed')}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed');
+                              }}
+                              className="p-1 text-blue-400 hover:text-blue-300 transition-colors cursor-help focus:outline-none"
+                              aria-label="Confirmada por WhatsApp"
+                              title="Confirmada por WhatsApp"
+                            >
+                              <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                            <p>Confirmada por WhatsApp</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </div>
+
+                  {/* Quién agendó y fecha */}
+                  <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                    <User className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                    <span className="text-muted-foreground shrink-0">Agendó:</span>
+                    <strong className="text-foreground font-semibold truncate">{originInfo.creator}</strong>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {reservation.confirmada_por_cliente && (
-                    <Badge variant="outline" className="border-blue-500/50 bg-blue-500/10 text-blue-400 text-[10px] gap-1 font-semibold">
-                      <CheckCircle2 className="w-3 h-3 text-blue-400" /> Confirmada WhatsApp
-                    </Badge>
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  {creationFormattedDate && (
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                      <Clock className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                      <strong className="text-foreground font-semibold whitespace-nowrap">
+                        {creationFormattedDate.short}
+                      </strong>
+                    </div>
                   )}
+
                   <Badge
                     variant={reservation.pago_estado === 'Pagado' || isDepositPaid ? 'default' : 'secondary'}
                     className={cn(
@@ -741,67 +827,41 @@ export function ReservationDetailModal({
                   </Badge>
                 </div>
               </div>
-
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/40 text-[11px]">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <User className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                  <span className="text-muted-foreground shrink-0">Agendó:</span>
-                  <strong className="text-foreground font-semibold truncate">{originInfo.creator}</strong>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 text-muted-foreground">
-                  <Clock className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                  <strong className="text-foreground font-semibold whitespace-nowrap">
-                    {creationFormattedDate ? creationFormattedDate.short : 'N/A'}
-                  </strong>
-                </div>
-              </div>
             </div>
 
-            {/* 2. FICHA INTELIGENTE DEL CLIENTE */}
-            <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10 border border-border shrink-0">
+            {/* 2. FICHA DEL CLIENTE (Simplificada: solo nombre y acceso a Ver Perfil) */}
+            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Avatar className="h-9 w-9 border border-border shrink-0">
                     <AvatarFallback className="bg-[#1a233a] text-white font-bold text-xs">
                       {clientData?.nombre?.[0] || 'C'}{clientData?.apellido?.[0] || ''}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4
-                        className={cn(
-                          "font-bold text-sm text-foreground transition-colors",
-                          canViewPhone && onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
-                        )}
-                        onClick={() => canViewPhone && onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
-                      >
-                        {formatClientName(clientData?.nombre, clientData?.apellido)}
-                      </h4>
-
-                      {isNewClient ? (
-                        <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                          ⭐ Nuevo
-                        </Badge>
-                      ) : hasUnattendedAlert ? (
-                        <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
-                          🚨 Anticipo Requerido
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                          ✓ Frecuente
-                        </Badge>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <h4
+                      className={cn(
+                        "font-bold text-sm text-foreground transition-colors truncate",
+                        canViewPhone && onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
                       )}
-                    </div>
+                      onClick={() => canViewPhone && onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
+                    >
+                      {formatClientName(clientData?.nombre, clientData?.apellido)}
+                    </h4>
 
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-sans">
-                      <span>{canViewPhone ? (clientData?.telefono || 'Sin teléfono') : 'Teléfono privado'}</span>
-                      {canViewPhone && clientData?.correo && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate max-w-[200px]">{clientData.correo}</span>
-                        </>
-                      )}
-                    </p>
+                    {isNewClient ? (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                        ⭐ Nuevo
+                      </Badge>
+                    ) : hasUnattendedAlert ? (
+                      <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
+                        🚨 Anticipo Requerido
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                        ✓ Frecuente
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -810,7 +870,7 @@ export function ReservationDetailModal({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground rounded-lg"
+                    className="h-7 px-2.5 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg shrink-0"
                     onClick={() => onClientClick(reservation.cliente_id!)}
                   >
                     Ver Perfil
@@ -818,38 +878,9 @@ export function ReservationDetailModal({
                 )}
               </div>
 
-              {/* Mini-Métricas de Asistencia y Fidelidad para Recepción (Número delante del texto en una sola fila) */}
-              <div className="grid grid-cols-4 gap-2 pt-2 border-t border-border/60 text-center">
-                <div className="bg-muted/30 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1.5">
-                  <span className="text-xs font-bold text-foreground">{clientStats.totalCitas}</span>
-                  <span className="text-[10px] text-muted-foreground font-medium uppercase">Citas</span>
-                </div>
-                <div className="bg-blue-500/5 rounded-lg px-2 py-1.5 border border-blue-500/15 flex items-center justify-center gap-1.5">
-                  <span className="text-xs font-bold text-blue-400">{clientStats.asistidasCount}</span>
-                  <span className="text-[10px] text-blue-400/80 font-medium uppercase">Asistidas</span>
-                </div>
-                <div className={cn(
-                  "rounded-lg px-2 py-1.5 border transition-colors flex items-center justify-center gap-1.5",
-                  unattendedCount >= maxInasistenciasPermitidas
-                    ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
-                    : unattendedCount > 0
-                    ? "bg-slate-500/10 border-slate-500/20 text-slate-700 dark:text-slate-300"
-                    : "bg-muted/30 border-transparent text-muted-foreground"
-                )}>
-                  <span className={cn("text-xs font-black", unattendedCount >= maxInasistenciasPermitidas && "animate-pulse")}>
-                    {unattendedCount}
-                  </span>
-                  <span className="text-[10px] font-medium uppercase">Inasistencias</span>
-                </div>
-                <div className="bg-muted/30 rounded-lg px-2 py-1.5 flex items-center justify-center gap-1.5">
-                  <span className="text-xs font-bold text-muted-foreground">{clientStats.canceladasCount}</span>
-                  <span className="text-[10px] text-muted-foreground font-medium uppercase">Canceladas</span>
-                </div>
-              </div>
-
               {/* Alerta de Escudo Antifraude si tiene inasistencias acumuladas */}
               {hasUnattendedAlert && !isStaff && (
-                <div className="p-3 rounded-lg border-2 border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200 flex items-start gap-2.5">
+                <div className="p-2.5 rounded-lg border-2 border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200 flex items-start gap-2.5">
                   <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
                   <div className="text-xs space-y-1 flex-1">
                     <p className="font-bold uppercase tracking-wide text-[11px]">Escudo Antifraude: Cliente con {unattendedCount} Faltas</p>
@@ -874,7 +905,7 @@ export function ReservationDetailModal({
 
               {/* Notas del perfil del cliente si existen */}
               {clientData?.notas && (
-                <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-2.5 rounded-lg text-xs">
+                <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-2 rounded-lg text-xs">
                   <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-0.5">
                     <Tag className="w-3 h-3 text-slate-500" /> Notas del Cliente (Perfil):
                   </span>
@@ -890,16 +921,20 @@ export function ReservationDetailModal({
                   <CalendarIcon className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Fecha y Horario
                 </p>
                 <div className="space-y-1 pl-6">
-                  <p className="font-bold text-sm text-foreground">
+                  <p className="font-bold text-sm text-foreground capitalize">
                     {format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", { locale: es })}
                   </p>
                   <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    {reservation.hora_inicio} - {reservation.hora_fin}
+                    <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                    <span>
+                      Inicio: <strong className="text-foreground font-semibold">{reservation.hora_inicio || '--:--'}</strong>
+                      {' • '}
+                      Fin: <strong className="text-foreground font-semibold">{reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, 60)}</strong>
+                    </span>
                   </p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
-                    <UserCheck className="w-3.5 h-3.5 text-primary" />
-                    <strong>{allProfessionalNames}</strong>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                    <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <strong className="text-foreground">{allProfessionalNames}</strong>
                   </p>
                 </div>
               </div>
@@ -909,21 +944,30 @@ export function ReservationDetailModal({
                   <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
                     <Scissors className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Servicios ({reservation.items?.length || 1})
                   </p>
-                  <span className="text-xs font-bold text-foreground">
-                    ${totalAmount} MXN
+                  <span className="text-xs font-bold text-foreground font-sans">
+                    ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
                   </span>
                 </div>
                 <ul className="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
-                  {reservation.items && reservation.items.length > 0 ? (
-                    reservation.items.map((i, idx) => {
+                  {reservation.items && reservation.items.length > 0 ? (() => {
+                    let runningStart = reservation.hora_inicio || '';
+                    return reservation.items.map((i, idx) => {
                       const prof = professionals?.find(p => p.id === i.barbero_id);
+                      const dur = Number((i as any).duracion) || 60;
+                      const itemStart = (i as any).hora_inicio || runningStart || reservation.hora_inicio || '';
+                      const itemEnd = (i as any).hora_fin || (reservation.items!.length === 1 && reservation.hora_fin ? reservation.hora_fin : addMinutesToTimeStr(itemStart, dur));
+                      runningStart = itemEnd || runningStart;
+
                       return (
                         <li key={idx} className="flex justify-between items-start py-1 border-b last:border-b-0 border-border/50">
-                          <div className="flex flex-col">
+                          <div className="flex flex-col gap-0.5">
                             <span className="font-medium text-foreground">{i.nombre || i.servicio}</span>
-                            {(i as any).hora_inicio && (
-                              <span className="text-[10px] text-muted-foreground">
-                                {(i as any).hora_inicio} - {(i as any).hora_fin || ''} ({((i as any).duracion) || 30} min)
+                            {itemStart && (
+                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                <span>
+                                  {itemStart} - {itemEnd}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -934,9 +978,17 @@ export function ReservationDetailModal({
                           )}
                         </li>
                       );
-                    })
-                  ) : (
-                    <li className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</li>
+                    });
+                  })() : (
+                    <li className="flex flex-col gap-0.5 py-1">
+                      <span className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</span>
+                      {reservation.hora_inicio && (
+                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{reservation.hora_inicio} - {reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, 60)}</span>
+                        </span>
+                      )}
+                    </li>
                   )}
                 </ul>
               </div>
@@ -948,21 +1000,21 @@ export function ReservationDetailModal({
                 <div className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-blue-400" />
                   <div>
-                    <span className="font-semibold text-foreground">Total Cita: ${totalAmount} MXN</span>
+                    <span className="font-semibold text-foreground">Total Cita: ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
                     {depositAmount > 0 ? (
                       <span className="text-muted-foreground ml-2">
-                        (Anticipo pagado: <strong className="text-blue-400">${depositAmount} MXN</strong>)
+                        (Anticipo pagado: <strong className="text-blue-400">${Number(depositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
                       </span>
                     ) : expectedDepositAmount > 0 && isAnticipoRequired ? (
                       <span className="text-muted-foreground ml-2">
-                        (Anticipo requerido: <strong className="text-red-400">${expectedDepositAmount} MXN</strong>)
+                        (Anticipo requerido: <strong className="text-red-400">${Number(expectedDepositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
                       </span>
                     ) : null}
                   </div>
                 </div>
                 {reservation.pago_estado !== 'Pagado' && balancePending > 0 && (
                   <Badge variant="outline" className="border-border bg-muted/50 text-foreground font-bold text-xs">
-                    Resta por cobrar: ${balancePending} MXN
+                    Resta por cobrar: ${Number(balancePending).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
                   </Badge>
                 )}
               </div>
@@ -1094,54 +1146,87 @@ export function ReservationDetailModal({
               </div>
             )}
 
-            {/* 7. SELECTOR DE ESTADOS DE AGENDA */}
-            <div className="pt-2 border-t border-border/60 space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                Cambiar Estado de la Cita
-              </span>
-              <div className="flex items-center gap-2 flex-wrap">
-                {statusOptions.map(({ status, color, hex, label }) => (
-                  <TooltipProvider key={status}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={() => {
-                            if (reservation.pago_estado === 'Pagado') return;
-                            if (status === 'Cancelado') {
-                              handleCancelClick();
-                            } else {
-                              onUpdateStatus(reservation.id, status);
-                            }
-                          }}
-                          className={cn(
-                            'h-7 px-2.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-1.5',
-                            reservation.estado === status 
-                              ? 'border-foreground bg-foreground text-background font-bold shadow-xs' 
-                              : 'border-border bg-card hover:bg-muted text-muted-foreground',
-                            reservation.pago_estado === 'Pagado' && 'cursor-not-allowed opacity-40'
-                          )}
-                        >
-                          <span
-                            className="rounded-full shrink-0 shadow-xs"
-                            style={{
-                              backgroundColor: hex,
-                              width: '9px',
-                              height: '9px',
-                              minWidth: '9px',
-                              minHeight: '9px',
-                              borderRadius: '9999px',
-                              display: 'inline-block'
+            {/* 7. SELECTOR DE ESTADOS DE AGENDA (Solo círculos de color con texto al pasar el puntero o mantener presionado) */}
+            <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Estado de la Cita:
+                </span>
+                <span className="text-xs font-bold text-foreground">
+                  {statusOptions.find(s => s.status === reservation.estado)?.label || reservation.estado}
+                </span>
+              </div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {statusOptions.map(({ status, hex, label }) => {
+                  const hintKey = `status_${status}`;
+                  const isSelected = reservation.estado === status;
+                  return (
+                    <TooltipProvider key={status} delayDuration={80}>
+                      <Tooltip open={activeHintId === hintKey}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onMouseEnter={() => setActiveHintId(hintKey)}
+                            onMouseLeave={() => setActiveHintId(null)}
+                            onTouchStart={() => {
+                              isLongPressRef.current = false;
+                              if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                              longPressTimerRef.current = setTimeout(() => {
+                                isLongPressRef.current = true;
+                                setActiveHintId(hintKey);
+                              }, 220);
                             }}
-                          />
-                          {label}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Marcar como {label}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
+                            onTouchEnd={() => {
+                              if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                              setTimeout(() => setActiveHintId(null), 1400);
+                            }}
+                            onContextMenu={(e) => {
+                              e.preventDefault();
+                              setActiveHintId(hintKey);
+                            }}
+                            onClick={() => {
+                              if (isLongPressRef.current) {
+                                isLongPressRef.current = false;
+                                return;
+                              }
+                              if (reservation.pago_estado === 'Pagado') return;
+                              if (status === 'Cancelado') {
+                                handleCancelClick();
+                              } else {
+                                onUpdateStatus(reservation.id, status);
+                              }
+                            }}
+                            aria-label={label}
+                            title={label}
+                            className={cn(
+                              'w-7 h-7 rounded-full flex items-center justify-center transition-all focus:outline-none',
+                              isSelected
+                                ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
+                                : 'hover:scale-110 opacity-80 hover:opacity-100',
+                              reservation.pago_estado === 'Pagado' && 'cursor-not-allowed opacity-40'
+                            )}
+                          >
+                            <span
+                              className="rounded-full shrink-0 shadow-xs"
+                              style={{
+                                backgroundColor: hex,
+                                width: '16px',
+                                height: '16px',
+                                minWidth: '16px',
+                                minHeight: '16px',
+                                borderRadius: '9999px',
+                                display: 'inline-block'
+                              }}
+                            />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                          <p>{label}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  );
+                })}
               </div>
             </div>
 

@@ -252,8 +252,38 @@ export default function AgendaView() {
   // Quick Consult Modal State
   const [isQuickConsultOpen, setIsQuickConsultOpen] = useState(false);
 
-  // Sidebar collapse state (default minimized on PC / tablet)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  // Sidebar collapse state persisted per user preference
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const savedGlobal = localStorage.getItem('vatos_agenda_sidebar_collapsed');
+      if (savedGlobal !== null) return savedGlobal === 'true';
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const userKey = user?.uid ? `vatos_agenda_sidebar_collapsed_${user.uid}` : null;
+    const savedUser = userKey ? localStorage.getItem(userKey) : null;
+    const savedGlobal = localStorage.getItem('vatos_agenda_sidebar_collapsed');
+    const resolved = savedUser ?? savedGlobal;
+    if (resolved !== null) {
+      setIsSidebarCollapsed(resolved === 'true');
+    }
+  }, [user?.uid]);
+
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('vatos_agenda_sidebar_collapsed', String(next));
+        if (user?.uid) {
+          localStorage.setItem(`vatos_agenda_sidebar_collapsed_${user.uid}`, String(next));
+        }
+      }
+      return next;
+    });
+  }, [user?.uid]);
 
   const handleNonWorkClick = (e: MouseEvent<HTMLDivElement>, barberId: string) => {
     playAgendaClickSound();
@@ -1388,7 +1418,7 @@ export default function AgendaView() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                    onClick={handleToggleSidebar}
                     className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors hidden md:flex shrink-0"
                   >
                     {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}

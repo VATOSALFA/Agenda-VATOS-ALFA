@@ -93,12 +93,10 @@ export function PwaUpdateBanner() {
     if (isPublicPage || !hasUpdate) return null;
 
     return (
-        <div className="fixed bottom-6 left-4 sm:left-6 z-[100] max-w-sm sm:max-w-md w-[calc(100vw-2rem)] animate-in slide-in-from-bottom-10 fade-in duration-500">
-            <div className="rounded-2xl border border-blue-500/40 bg-slate-950/95 text-white p-4 sm:p-5 shadow-[0_15px_45px_rgba(30,58,138,0.45)] backdrop-blur-2xl flex flex-col gap-3.5 ring-1 ring-white/10">
+        <div className="fixed bottom-20 md:bottom-6 left-4 right-4 sm:right-auto sm:left-6 z-[120] max-w-sm sm:max-w-md w-auto sm:w-[calc(100vw-2rem)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+            <div className="rounded-2xl border-2 border-blue-500 bg-slate-950/95 text-white p-4 sm:p-5 shadow-[0_15px_45px_rgba(30,58,138,0.45)] backdrop-blur-2xl flex flex-col gap-3.5">
                 <div className="flex items-start gap-3">
-                    <div className="p-2.5 bg-blue-500/15 rounded-xl shrink-0 text-blue-400 border border-blue-500/30">
-                        <Sparkles className="h-5 w-5 animate-pulse text-blue-300" />
-                    </div>
+                    <Sparkles className="h-5 w-5 animate-pulse text-blue-400 shrink-0 mt-0.5" />
                     <div className="flex-1 space-y-1">
                         <div className="flex items-center justify-between gap-2">
                             <h4 className="font-bold text-sm leading-tight text-white tracking-wide uppercase">

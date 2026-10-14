@@ -2,10 +2,10 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Actualización con mejoras en la agenda, perfil de staff, nuevo lector QR y sitio web.",
+  "summary": "Actualización con mejoras en la agenda, modal de reserva ligero y preferencias de perfil.",
   "notes": [
-    "Optimización integral de la agenda y visualización exclusiva para Staff.",
-    "Lector QR mejorado para Pase Alfa Club y sellos de lealtad.",
-    "Nueva landing page con catálogo de cortes, reservas y servicios."
+    "Detalles de reserva más limpios con horario de inicio/fin e indicadores rápidos.",
+    "Nuevas preferencias en Mi Perfil: tamaño de letra de la plataforma y volumen de notificaciones.",
+    "Calendario con memoria de estado por usuario y mejoras en navegación móvil."
   ]
 }

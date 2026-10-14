@@ -68,6 +68,7 @@ export default function SalesReportPage() {
     const { toast } = useToast();
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: subDays(new Date(), 28), to: new Date() });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const [isMobileCalendarOpen, setIsMobileCalendarOpen] = useState(false);
     const [professionalFilter, setProfessionalFilter] = useState('todos');
     const [serviceFilter, setServiceFilter] = useState('todos');
     const [daySortOrder, setDaySortOrder] = useState<'chronological' | 'desc' | 'asc'>('chronological');
@@ -109,10 +110,15 @@ export default function SalesReportPage() {
     const isLoading = salesLoading || servicesLoading || categoriesLoading || professionalsLoading;
 
     const handleSearch = () => {
+        const normalizedRange = dateRange?.from ? {
+            from: dateRange.from,
+            to: dateRange.to || dateRange.from
+        } : undefined;
+        setDateRange(normalizedRange);
         setActiveFilters({
             professional: professionalFilter,
             service: serviceFilter,
-            dateRange: dateRange
+            dateRange: normalizedRange
         });
     };
 
@@ -484,10 +490,7 @@ export default function SalesReportPage() {
                         {/* Rango de fechas */}
                         <div className="flex-1 min-w-[200px] space-y-1.5">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Rango de fechas</label>
-                            <Popover open={isCalendarOpen} onOpenChange={(open) => {
-                                setIsCalendarOpen(open);
-                                if (open) setDateRange(undefined);
-                            }}>
+                            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl h-10 border-border/60 text-xs sm:text-sm", !dateRange && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4 text-slate-400 shrink-0" />
@@ -512,6 +515,7 @@ export default function SalesReportPage() {
                                             setDateRange(range);
                                             if (range?.from && range?.to) {
                                                 setIsCalendarOpen(false);
+                                                setIsMobileCalendarOpen(false);
                                             }
                                         }}
                                         numberOfMonths={1}
@@ -574,10 +578,7 @@ export default function SalesReportPage() {
             <Card className="sm:hidden rounded-2xl border border-border/60 shadow-sm overflow-hidden bg-card/60 backdrop-blur-sm">
                 <CardContent className="p-2.5 space-y-2">
                     <div className="flex items-center gap-1.5">
-                        <Popover open={isCalendarOpen} onOpenChange={(open) => {
-                            setIsCalendarOpen(open);
-                            if (open) setDateRange(undefined);
-                        }}>
+                        <Popover open={isMobileCalendarOpen} onOpenChange={setIsMobileCalendarOpen}>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="flex-1 justify-start text-left font-normal rounded-xl h-9 text-xs border-border/60 px-2.5 truncate">
                                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -604,6 +605,7 @@ export default function SalesReportPage() {
                                         setDateRange(range);
                                         if (range?.from && range?.to) {
                                             setIsCalendarOpen(false);
+                                            setIsMobileCalendarOpen(false);
                                         }
                                     }}
                                     numberOfMonths={1}

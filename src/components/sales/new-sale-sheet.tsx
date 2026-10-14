@@ -188,8 +188,8 @@ ClientCombobox.displayName = 'ClientCombobox';
 
 import { Switch } from '@/components/ui/switch';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, assignAllProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, redeemPoints, setRedeemPoints, pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins, propina, appliedBenefit, alfaCoinUnitValue, clientLevelInfo }: any) => (
-    <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-full min-h-0 overflow-hidden">
+const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, assignAllProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, hasAppDownloaded, redeemPoints, setRedeemPoints, pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins, propina, appliedBenefit, alfaCoinUnitValue, clientLevelInfo }: any) => (
+    <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-auto md:h-full md:min-h-0 shrink-0 md:shrink overflow-hidden">
         {/* Cabecera del Ticket */}
         <div className="p-3 sm:p-3.5 border-b border-border/60 flex justify-between items-center shrink-0 bg-muted/20">
             <div className="flex items-center gap-2">
@@ -343,18 +343,20 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
                             </div>
                         ))}
 
-                        {/* Tarjeta de Lealtad y Operación (Elimina el vacío cuando hay pocos items) */}
-                        <div className="p-3 rounded-xl border border-border/50 bg-muted/20 space-y-1.5 text-xs">
-                            <div className="flex items-center justify-between text-foreground font-semibold">
-                                <span className="flex items-center gap-1.5">
-                                    <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
-                                </span>
-                                <span className="text-[#C5A880] font-bold">+{Math.max(1, Math.round(total * 0.1))} ALFA COINS</span>
+                        {/* Tarjeta de Lealtad y Operación */}
+                        {hasAppDownloaded ? (
+                            <div className="p-3 rounded-xl border border-border/50 bg-muted/20 space-y-1.5 text-xs">
+                                <div className="flex items-center justify-between text-foreground font-semibold">
+                                    <span className="flex items-center gap-1.5">
+                                        <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
+                                    </span>
+                                    <span className="text-[#C5A880] font-bold">+{Math.max(1, Math.floor(total))} ALFA COINS</span>
+                                </div>
+                                <p className="text-[11px] text-muted-foreground leading-snug">
+                                    Registra comisión directa al profesional asignado y acredita puntos de lealtad en la App del cliente.
+                                </p>
                             </div>
-                            <p className="text-[11px] text-muted-foreground leading-snug">
-                                Registra comisión directa al profesional asignado y acredita puntos de lealtad en el perfil del cliente.
-                            </p>
-                        </div>
+                        ) : null}
                     </>
                 )}
             </div>
@@ -382,8 +384,8 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
             </div>
         )}
 
-        {/* Puntos y AlfaCoins de Lealtad Alfa Club (Dorado Mate Oficial #C5A880) */}
-        {client && (() => {
+        {/* Puntos y AlfaCoins de Lealtad Alfa Club (Solo usuarios con App descargada) */}
+        {client && hasAppDownloaded && (() => {
             const clientCoins = Number(clientAlfaCoins ?? client.alfaCoins ?? client.alfa_coins ?? client.puntos ?? client.puntosLealtad ?? 0);
             const unitVal = Number(alfaCoinUnitValue || 0.03);
             const cashEquivalent = Math.round(clientCoins * unitVal * 100) / 100;
@@ -908,10 +910,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const alfaCoinUnitValue = clientLevelInfo.coinValue;
 
-    const clientAlfaCoins = useMemo(() => {
-        if (!selectedClient) return 0;
-        return Number(selectedClient.alfaCoins ?? (selectedClient as any).alfa_coins ?? selectedClient.puntos ?? selectedClient.puntosLealtad ?? 0);
+    const hasAppDownloaded = useMemo(() => {
+        if (!selectedClient) return false;
+        return Boolean(selectedClient.appVinculada === true || selectedClient.fecha_registro_app);
     }, [selectedClient]);
+
+    const clientAlfaCoins = useMemo(() => {
+        if (!selectedClient || !hasAppDownloaded) return 0;
+        return Number(selectedClient.alfaCoins ?? (selectedClient as any).alfa_coins ?? selectedClient.puntos ?? selectedClient.puntosLealtad ?? 0);
+    }, [selectedClient, hasAppDownloaded]);
 
     const clientCashAvailable = useMemo(() => {
         return Math.round(clientAlfaCoins * alfaCoinUnitValue * 100) / 100;
@@ -1385,8 +1392,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
 
     const finalizeSaleProcess = async (clientId: string, localId: string) => {
-        // Loyalty Points / AlfaCoins Logic
-        if (db && selectedClient) {
+        // Loyalty Points / AlfaCoins Logic (Exclusivo para clientes con la App Móvil descargada y vinculada)
+        if (db && selectedClient && hasAppDownloaded) {
             // 1 AlfaCoin ganado por cada $1 MXN pagado en la venta
             const pointsEarned = total > 0 ? Math.floor(total) : 0;
             const pointsSpent = effectiveAlfaCoinsToUse || 0;
@@ -2505,7 +2512,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={!isMinimized}>
                 <SheetContent
                     className={cn(
-                        "w-full sm:max-w-[1100px] flex flex-col p-0 gap-0 transition-transform duration-300 ease-in-out border-l-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background",
+                        "w-full sm:max-w-[1100px] h-[100dvh] max-h-[100dvh] flex flex-col p-0 gap-0 transition-transform duration-300 ease-in-out border-l-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background overflow-hidden",
                         isMinimized && "translate-x-[100%] shadow-none border-none pointer-events-none"
                     )}
                     hideCloseButton
@@ -2587,7 +2594,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </div>
 
                     {/* CABECERA OFICIAL VATOS ALFA (Regla 5) */}
-                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 sm:px-6 py-3.5 border-b border-blue-900/40 flex items-center justify-between shrink-0">
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-3.5 sm:px-6 py-2.5 sm:py-3.5 border-b border-blue-900/40 flex items-center justify-between shrink-0">
                         <div className="header-light-beam" />
                         <div className="flex items-center gap-3 relative z-10">
                             <ShoppingBag className="h-5 w-5 text-slate-300 shrink-0" />
@@ -2898,6 +2905,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         serviceSellers={serviceSellers}
                                         productSellers={productSellers}
                                         client={selectedClient}
+                                        hasAppDownloaded={hasAppDownloaded}
                                         redeemPoints={redeemPoints}
                                         setRedeemPoints={setRedeemPoints}
                                         pointsDiscount={pointsDiscount}
@@ -2914,7 +2922,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                                 {/* BARRA FLOTANTE FIJA EN MÓVIL (en catálogo con items) */}
                                 {mobileTab === 'catalogo' && totalCartItems > 0 && (
-                                    <div className="md:hidden fixed bottom-16 left-3 right-3 p-2.5 bg-[#151b2e] border-2 border-blue-500 rounded-xl shadow-2xl flex items-center justify-between gap-3 z-30 animate-in slide-in-from-bottom-2">
+                                    <div className="md:hidden absolute bottom-2.5 left-3 right-3 p-2.5 bg-[#151b2e] border-2 border-blue-500 rounded-xl shadow-2xl flex items-center justify-between gap-3 z-30 animate-in slide-in-from-bottom-2">
                                         <div className="flex items-center gap-2.5">
                                             <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shrink-0">
                                                 {totalCartItems}
@@ -2943,33 +2951,33 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                         {step === 2 && (
                             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 px-4 md:px-6 py-3 flex-1 min-h-0 overflow-y-auto">
-                                    <div className="space-y-3 min-h-0">
+                                <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6 px-3 sm:px-6 py-3 flex-1 min-h-0 overflow-y-auto">
+                                    <div className="space-y-3 shrink-0 md:shrink">
 
                                         {selectedClient ? (
                                             <Card className="border border-border/70 bg-card rounded-xl overflow-hidden shadow-xs">
-                                                <CardContent className="p-3.5">
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <div className="flex items-center gap-3 min-w-0">
-                                                            <Avatar className="h-10 w-10 shrink-0 border border-border/60">
+                                                <CardContent className="p-3 sm:p-3.5">
+                                                    <div className="flex items-start sm:items-center justify-between gap-2.5">
+                                                        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                                                            <Avatar className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 border border-border/60">
                                                                 <AvatarImage src={selectedClient.fotoUrl || selectedClient.avatarUrl || selectedClient.photoURL} />
                                                                 <AvatarFallback className="bg-muted text-foreground font-bold text-xs">
                                                                     {selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}
                                                                 </AvatarFallback>
                                                             </Avatar>
-                                                            <div className="min-w-0">
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="font-bold text-sm text-foreground truncate">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <p className="font-bold text-xs sm:text-sm text-foreground truncate max-w-full">
                                                                         {selectedClient.nombre} {selectedClient.apellido}
                                                                     </p>
-                                                                    {((selectedClient.cortes_acumulados || selectedClient.cortesAcumulados || 0) > 0 || (selectedClient.alfaCoins || selectedClient.puntos || 0) > 0) && (
+                                                                    {hasAppDownloaded && ((selectedClient.cortes_acumulados || selectedClient.cortesAcumulados || 0) > 0 || clientAlfaCoins > 0) && (
                                                                         <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold border-[#C5A880]/40 text-[#C5A880] bg-[#C5A880]/10 shrink-0 font-sans">
                                                                             <Sparkles className="h-2.5 w-2.5 mr-1 text-[#C5A880]" />
                                                                             VIP Alfa
                                                                         </Badge>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                                                                <div className="flex items-center gap-2.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
                                                                     <span className="flex items-center gap-1 shrink-0">
                                                                         <Phone className="h-3 w-3 text-slate-400" />
                                                                         {selectedClient.telefono || 'Sin teléfono'}
@@ -2981,15 +2989,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         </span>
                                                                     )}
                                                                 </div>
-                                                                <div className="flex items-center gap-2 mt-2">
-                                                                    <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40 font-sans">
+                                                                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                                                                    <span className="text-[11px] font-semibold text-slate-300 flex items-center gap-1 bg-muted/40 px-2 py-0.5 rounded-md border border-border/40 font-sans shrink-0">
                                                                         <Scissors className="h-3 w-3 text-slate-400" />
                                                                         <span className="text-foreground">{selectedClient.cortes_acumulados || selectedClient.cortesAcumulados || 0}</span> cortes
                                                                     </span>
-                                                                    <span className="text-[11px] font-semibold text-[#C5A880] flex items-center gap-1 bg-[#C5A880]/10 px-2 py-0.5 rounded-md border border-[#C5A880]/30 font-sans">
-                                                                        <Coins className="h-3 w-3 text-[#C5A880]" />
-                                                                        <span>{selectedClient.alfaCoins || selectedClient.puntos || 0}</span> ALFA COINS
-                                                                    </span>
+                                                                    {hasAppDownloaded && (
+                                                                        <span className="text-[11px] font-semibold text-[#C5A880] flex items-center gap-1 bg-[#C5A880]/10 px-2 py-0.5 rounded-md border border-[#C5A880]/30 font-sans shrink-0">
+                                                                            <Coins className="h-3 w-3 text-[#C5A880]" />
+                                                                            <span>{clientAlfaCoins}</span> ALFA COINS
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -3072,29 +3082,29 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
-                                        {/* Pase Alfa Club - Canjear AlfaCoins en Paso 2 */}
-                                        {selectedClient && (
+                                        {/* Pase Alfa Club - Canjear AlfaCoins en Paso 2 (Solo para clientes con App descargada) */}
+                                        {selectedClient && hasAppDownloaded && (
                                             <div className={cn(
                                                 "p-3 rounded-xl border transition-all space-y-2",
                                                 clientAlfaCoins > 0
                                                     ? "border-[#C5A880]/40 bg-[#C5A880]/10 shadow-xs"
                                                     : "border-border/60 bg-muted/20"
                                             )}>
-                                                <div className="flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
                                                         <Coins className={cn("h-4 w-4 shrink-0", clientAlfaCoins > 0 ? "text-[#C5A880]" : "text-slate-400")} />
-                                                        <div>
-                                                            <span className={cn("text-xs font-bold font-sans", clientAlfaCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
-                                                                ALFA COINS del Cliente: {clientAlfaCoins} ({clientLevelInfo.tierName} • {clientLevelInfo.cashbackPct}%)
+                                                        <div className="min-w-0">
+                                                            <span className={cn("text-xs font-bold font-sans block truncate", clientAlfaCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
+                                                                ALFA COINS: {clientAlfaCoins} ({clientLevelInfo.tierName} • {clientLevelInfo.cashbackPct}%)
                                                             </span>
                                                             <p className="text-[10px] text-muted-foreground font-sans">
                                                                 {clientAlfaCoins > 0
-                                                                    ? `Saldo disponible equivalente a $${formatMoney(clientCashAvailable)} MXN ($${alfaCoinUnitValue.toFixed(2)} por coin)`
+                                                                    ? `Equivalente a $${formatMoney(clientCashAvailable)} MXN ($${alfaCoinUnitValue.toFixed(2)} c/u)`
                                                                     : 'Sin saldo de ALFA COINS para canjear en este cobro'}
                                                             </p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 shrink-0">
                                                         <span className="text-[11px] font-medium text-foreground">
                                                             {redeemPoints ? 'Aplicando' : 'Canjear'}
                                                         </span>
@@ -3114,7 +3124,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 {redeemPoints && clientAlfaCoins > 0 && (
                                                     <div className="pt-2 border-t border-[#C5A880]/20 space-y-2">
                                                         <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-xs text-muted-foreground">Monedas a canjear en esta venta:</span>
+                                                            <span className="text-xs text-muted-foreground">Monedas a canjear:</span>
                                                             <div className="flex items-center gap-1.5">
                                                                 <Input
                                                                     type="number"
@@ -3174,11 +3184,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             name="metodo_pago"
                                             render={({ field }) => (
                                                 <FormItem className="space-y-2">
-                                                    <div className="flex items-center justify-between">
+                                                    <div className="flex items-center justify-between gap-2">
                                                         <FormLabel className="text-xs font-semibold flex items-center gap-1.5">
                                                             <Wallet className="h-3.5 w-3.5 text-slate-400" /> Método de Pago
                                                         </FormLabel>
-                                                        <span className="text-[11px] text-muted-foreground">
+                                                        <span className="text-[11px] text-muted-foreground hidden sm:inline">
                                                             Selecciona cómo paga el cliente
                                                         </span>
                                                     </div>
@@ -3243,12 +3253,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         {paymentMethod && paymentMethod !== 'efectivo' && (
                                             <Card className="p-3 bg-primary/5 border-primary/20">
                                                 <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
+                                                    <div className="flex items-center justify-between gap-2 flex-wrap">
                                                         <FormLabel className="flex items-center gap-1.5 text-xs font-semibold text-primary">
                                                             <Sparkles className="h-3.5 w-3.5 text-primary" /> Propina (Opcional)
                                                         </FormLabel>
                                                         {cartBarberoNames.length > 0 && (
-                                                            <span className="text-[11px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-medium">
+                                                            <span className="text-[11px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-medium truncate max-w-[180px]">
                                                                 {cartBarberoNames.length === 1 ? `Para ${cartBarberoNames[0]}` : `Para: ${cartBarberoNames.join(', ')}`}
                                                             </span>
                                                         )}
@@ -3271,7 +3281,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         form.setValue('propina', amount, { shouldValidate: true });
                                                                     }}
                                                                 >
-                                                                    {amount === 0 ? 'Sin propina' : `$${amount}`}
+                                                                    {amount === 0 ? 'No' : `$${amount}`}
                                                                 </Button>
                                                             );
                                                         })}
@@ -3748,6 +3758,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         serviceSellers={serviceSellers}
                                         productSellers={productSellers}
                                         client={selectedClient}
+                                        hasAppDownloaded={hasAppDownloaded}
                                         redeemPoints={redeemPoints}
                                         setRedeemPoints={setRedeemPoints}
                                         pointsDiscount={pointsDiscount}
@@ -3761,11 +3772,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         clientLevelInfo={clientLevelInfo}
                                     />
                                 </div>
-                                <SheetFooter className="p-3.5 sm:p-5 bg-background border-t border-border/60 mt-auto shrink-0 flex items-center justify-between gap-3">
+                                <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3">
                                     <Button
                                         type="button"
                                         variant="ghost"
-                                        className="h-10 px-4 text-xs font-semibold rounded-xl text-slate-400 hover:text-foreground"
+                                        className="h-9 sm:h-10 px-3 sm:px-4 text-xs font-semibold rounded-xl text-slate-400 hover:text-foreground shrink-0"
                                         onClick={() => setStep(1)}
                                     >
                                         <ChevronLeft className="h-4 w-4 mr-1 text-slate-400" /> Volver
@@ -3773,7 +3784,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <Button
                                         type="submit"
                                         variant="alfa"
-                                        className="h-10 px-6 text-xs font-semibold rounded-xl"
+                                        className="h-9 sm:h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl"
                                         disabled={isSubmitting || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
                                         onClick={(e) => {
                                             if (total === 0 && pointsDiscount > 0) {
@@ -3816,9 +3827,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     >
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />}
                                         {total === 0 && pointsDiscount > 0
-                                            ? `Finalizar Venta (${pointsDiscount} ALFA COINS)`
+                                            ? `Finalizar (${pointsDiscount} ALFA COINS)`
                                             : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
-                                                ? `Usa el botón de Cobrar en Terminal arriba`
+                                                ? `Usa Cobrar en Terminal arriba`
                                                 : `Cobrar $${formatMoney(totalConPropina)} MXN`}
                                     </Button>
                                 </SheetFooter>
@@ -3827,23 +3838,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </Form>
 
                     {step === 1 && (
-                        <SheetFooter className="p-3.5 sm:p-5 bg-background border-t border-border/60 flex items-center justify-between gap-4 shrink-0 mt-auto">
-                            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                        <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 flex flex-row items-center justify-between gap-2 sm:gap-4 shrink-0 mt-auto">
+                            <div className="text-xs text-muted-foreground font-medium flex items-center gap-1 sm:gap-1.5 flex-wrap min-w-0">
                                 <span>Total:</span>
-                                <span className="text-sm font-bold text-foreground">
+                                <span className="text-xs sm:text-sm font-bold text-foreground font-sans">
                                     ${formatMoney(Math.max(0, total + Number(watchedPropina || 0)))} MXN
                                 </span>
                                 {totalCartItems > 0 && (
-                                    <Badge variant="outline" className="text-[10px] font-bold py-0 ml-1.5 bg-blue-500/10 text-blue-400 border-blue-500/30">
+                                    <Badge variant="outline" className="text-[10px] font-bold py-0 ml-1 bg-blue-500/10 text-blue-400 border-blue-500/30 hidden xs:inline-flex sm:inline-flex">
                                         {totalCartItems} {totalCartItems === 1 ? 'ítem' : 'ítems'}
                                     </Badge>
                                 )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    className="h-10 px-4 text-xs font-semibold rounded-xl text-slate-400 hover:text-foreground"
+                                    className="h-9 sm:h-10 px-3 sm:px-4 text-xs font-semibold rounded-xl text-slate-400 hover:text-foreground"
                                     onClick={handleClose}
                                 >
                                     Cancelar
@@ -3851,7 +3862,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <Button
                                     type="button"
                                     variant="alfa"
-                                    className="h-10 px-5 text-xs font-semibold rounded-xl"
+                                    className="h-9 sm:h-10 px-4 sm:px-5 text-xs font-semibold rounded-xl"
                                     onClick={handleNextStep}
                                     disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
                                 >

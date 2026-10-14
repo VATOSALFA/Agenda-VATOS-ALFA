@@ -119,6 +119,12 @@ export function ReservationDetailModal({
 
   const { toast } = useToast();
   const { db, user } = useAuth();
+  const isStaff = user?.role === 'Staff';
+  const canViewPhone = useMemo(() => {
+    if (isStaff) return false;
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local' || user?.role === 'Recepcionista') return true;
+    return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+  }, [user, isStaff]);
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
@@ -765,9 +771,9 @@ export function ReservationDetailModal({
                       <h4
                         className={cn(
                           "font-bold text-sm text-foreground transition-colors",
-                          onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
+                          canViewPhone && onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
                         )}
-                        onClick={() => onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
+                        onClick={() => canViewPhone && onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
                       >
                         {formatClientName(clientData?.nombre, clientData?.apellido)}
                       </h4>
@@ -787,9 +793,9 @@ export function ReservationDetailModal({
                       )}
                     </div>
 
-                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono">
-                      <span>{clientData?.telefono || 'Sin teléfono'}</span>
-                      {clientData?.correo && (
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-sans">
+                      <span>{canViewPhone ? (clientData?.telefono || 'Sin teléfono') : 'Teléfono privado'}</span>
+                      {canViewPhone && clientData?.correo && (
                         <>
                           <span>•</span>
                           <span className="truncate max-w-[200px]">{clientData.correo}</span>
@@ -799,7 +805,7 @@ export function ReservationDetailModal({
                   </div>
                 </div>
 
-                {onClientClick && reservation.cliente_id && (
+                {canViewPhone && onClientClick && reservation.cliente_id && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -842,7 +848,7 @@ export function ReservationDetailModal({
               </div>
 
               {/* Alerta de Escudo Antifraude si tiene inasistencias acumuladas */}
-              {hasUnattendedAlert && (
+              {hasUnattendedAlert && !isStaff && (
                 <div className="p-3 rounded-lg border-2 border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200 flex items-start gap-2.5">
                   <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
                   <div className="text-xs space-y-1 flex-1">
@@ -962,8 +968,8 @@ export function ReservationDetailModal({
               </div>
             )}
 
-            {/* 5. COMUNICACIÓN POR WHATSAPP */}
-            {reservation.customer?.telefono && (
+            {/* 5. COMUNICACIÓN POR WHATSAPP (Oculto para rol Staff por privacidad del cliente) */}
+            {canViewPhone && reservation.customer?.telefono && (
               <div className="space-y-2 pt-2 border-t border-border/60">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">

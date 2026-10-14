@@ -146,10 +146,10 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   }, [isOpen, client?.id]);
 
   const clientPhoto = liveClient.fotoUrl || liveClient.avatarUrl || (liveClient as any).foto_perfil_url || (liveClient as any).photoURL || (liveClient as any).photoUrl;
-  const alfaCoins = Number(liveClient.alfaCoins ?? liveClient.alfa_coins ?? liveClient.puntosLealtad ?? liveClient.puntos_lealtad ?? liveClient.puntos ?? 0);
+  const hasAppLinked = Boolean(liveClient.appVinculada === true || (liveClient as any).fecha_registro_app);
+  const alfaCoins = hasAppLinked ? Number(liveClient.alfaCoins ?? liveClient.alfa_coins ?? liveClient.puntosLealtad ?? liveClient.puntos_lealtad ?? liveClient.puntos ?? 0) : 0;
   const stamps = Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0);
   const freeCutReady = Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
-  const hasAppLinked = Boolean(liveClient.appVinculada || (liveClient as any).correo_app || (liveClient as any).fecha_registro_app || liveClient.fotoUrl || alfaCoins > 0 || stamps > 0);
 
   const isBirthdayMonth = useMemo(() => {
     if (!liveClient.fecha_nacimiento) return false;

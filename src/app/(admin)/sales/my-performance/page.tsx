@@ -75,8 +75,14 @@ export default function MyPerformancePage() {
             return;
         }
 
+        const normalizedRange = dateRange?.from ? {
+            from: startOfDay(dateRange.from),
+            to: endOfDay(dateRange.to || dateRange.from)
+        } : undefined;
+        setDateRange(normalizedRange);
+
         setActiveFilters({
-            dateRange,
+            dateRange: normalizedRange,
             local: 'todos',
             paymentMethod: 'todos',
             professional: effectiveProfessionalId
@@ -184,31 +190,31 @@ export default function MyPerformancePage() {
                 )}
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Filtros</CardTitle>
-                    <CardDescription>Selecciona el periodo para visualizar tu desempeño.</CardDescription>
+            <Card className="rounded-2xl border border-border/60 shadow-sm">
+                <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-base font-semibold">Filtros</CardTitle>
+                    <CardDescription className="text-xs">Selecciona el periodo para visualizar tu desempeño.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="space-y-2 flex-grow max-w-sm">
-                            <label className="text-sm font-medium">Periodo de tiempo</label>
+                <CardContent className="p-4 pt-2">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                        <div className="space-y-1.5 flex-grow max-w-sm">
+                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Periodo de tiempo</label>
                             <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                                 <PopoverTrigger asChild>
-                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}>
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal rounded-xl h-10 border-border/60 text-xs sm:text-sm", !dateRange && "text-muted-foreground")}>
+                                        <CalendarIcon className="mr-2 h-4 w-4 text-slate-400 shrink-0" />
                                         {dateRange?.from ? (
                                             dateRange.to ? (
-                                                <>{format(dateRange.from, "LLL dd, y", { locale: es })} - {format(dateRange.to, "LLL dd, y", { locale: es })}</>
+                                                <>{format(dateRange.from, "dd MMM, y", { locale: es })} - {format(dateRange.to, "dd MMM, y", { locale: es })}</>
                                             ) : (
-                                                format(dateRange.from, "LLL dd, y", { locale: es })
+                                                format(dateRange.from, "dd MMM, y", { locale: es })
                                             )
                                         ) : (
                                             <span>Seleccionar rango</span>
                                         )}
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
+                                <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="start">
                                     <Calendar
                                         initialFocus
                                         mode="range"
@@ -221,7 +227,7 @@ export default function MyPerformancePage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <Button onClick={handleSearch} disabled={isLoading || !effectiveProfessionalId}>
+                        <Button variant="alfa" className="h-10 rounded-xl px-5 text-xs sm:text-sm font-bold text-white shadow-md shrink-0" onClick={handleSearch} disabled={isLoading || !effectiveProfessionalId}>
                             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />} Buscar
                         </Button>
                     </div>

@@ -37,6 +37,7 @@ export default function TipsPage() {
     const { toast } = useToast();
     const isLocalRestricted = !!user?.local_id && user?.role !== 'Administrador general';
     const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+    const [isMobilePopoverOpen, setIsMobilePopoverOpen] = useState(false);
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>({ from: new Date(), to: new Date() });
     const [localFilter, setLocalFilter] = useState('todos');
@@ -61,6 +62,7 @@ export default function TipsPage() {
         setDateRange(range);
         if (range?.from && range?.to) {
             setIsPopoverOpen(false);
+            setIsMobilePopoverOpen(false);
         }
     };
 
@@ -169,8 +171,13 @@ export default function TipsPage() {
     }, [filteredTips, totalTips]);
 
     const handleSearch = () => {
+        const normalizedRange = dateRange?.from ? {
+            from: dateRange.from,
+            to: dateRange.to || dateRange.from
+        } : undefined;
+        setDateRange(normalizedRange);
         setActiveFilters({
-            dateRange: dateRange,
+            dateRange: normalizedRange,
             local: localFilter,
             professional: professionalFilter
         });
@@ -241,10 +248,7 @@ export default function TipsPage() {
                         {/* Periodo de tiempo */}
                         <div className="flex-1 min-w-[200px] space-y-1.5">
                             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Periodo de tiempo</label>
-                            <Popover open={isPopoverOpen} onOpenChange={(open) => {
-                                setIsPopoverOpen(open);
-                                if (open) setDateRange(undefined);
-                            }}>
+                            <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button id="date" variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl h-10 border-border/60 text-xs sm:text-sm", !dateRange && "text-muted-foreground")}>
                                         <CalendarIcon className="mr-2 h-4 w-4 text-slate-400 shrink-0" />
@@ -329,10 +333,7 @@ export default function TipsPage() {
                 <CardContent className="p-2.5 space-y-2">
                     <div className="flex items-center gap-1.5">
                         {/* Selector de Rango de Fecha */}
-                        <Popover open={isPopoverOpen} onOpenChange={(open) => {
-                            setIsPopoverOpen(open);
-                            if (open) setDateRange(undefined);
-                        }}>
+                        <Popover open={isMobilePopoverOpen} onOpenChange={setIsMobilePopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" className="flex-1 justify-start text-left font-normal rounded-xl h-9 text-xs border-border/60 px-2.5 truncate">
                                     <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />

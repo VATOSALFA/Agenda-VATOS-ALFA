@@ -59,6 +59,7 @@ export default function ProductSalesPage() {
         to: endOfDay(new Date())
     });
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+    const [isMobileCalendarOpen, setIsMobileCalendarOpen] = useState(false);
     const [productStatusFilter, setProductStatusFilter] = useState('active');
     const [productFilter, setProductFilter] = useState('todos');
     const [isSellerDetailModalOpen, setIsSellerDetailModalOpen] = useState(false);
@@ -105,8 +106,13 @@ export default function ProductSalesPage() {
     );
 
     const handleSearch = () => {
+        const normalizedRange = dateRange?.from ? {
+            from: dateRange.from,
+            to: dateRange.to || dateRange.from
+        } : undefined;
+        setDateRange(normalizedRange);
         setActiveFilters({
-            dateRange,
+            dateRange: normalizedRange,
             productStatus: productStatusFilter,
             product: productFilter
         });
@@ -254,10 +260,7 @@ export default function ProductSalesPage() {
                             {/* Periodo de tiempo */}
                             <div className="flex-1 min-w-[180px] space-y-1.5">
                                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Periodo de tiempo</label>
-                                <Popover open={isCalendarOpen} onOpenChange={(open) => {
-                                    setIsCalendarOpen(open);
-                                    if (open) setDateRange(undefined);
-                                }}>
+                                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                                     <PopoverTrigger asChild>
                                         <Button id="date" variant="outline" className={cn("w-full justify-start text-left font-normal rounded-xl h-10 border-border/60 text-xs sm:text-sm", !dateRange && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-4 w-4 text-slate-400 shrink-0" />
@@ -282,6 +285,7 @@ export default function ProductSalesPage() {
                                                 setDateRange(range);
                                                 if (range?.from && range?.to) {
                                                     setIsCalendarOpen(false);
+                                                    setIsMobileCalendarOpen(false);
                                                 }
                                             }}
                                             numberOfMonths={1}
@@ -344,10 +348,7 @@ export default function ProductSalesPage() {
                     <CardContent className="p-2.5 space-y-2">
                         <div className="flex items-center gap-1.5">
                             {/* Selector de Rango de Fecha */}
-                            <Popover open={isCalendarOpen} onOpenChange={(open) => {
-                                setIsCalendarOpen(open);
-                                if (open) setDateRange(undefined);
-                            }}>
+                            <Popover open={isMobileCalendarOpen} onOpenChange={setIsMobileCalendarOpen}>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" className="flex-1 justify-start text-left font-normal rounded-xl h-9 text-xs border-border/60 px-2.5 truncate">
                                         <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -374,6 +375,7 @@ export default function ProductSalesPage() {
                                             setDateRange(range);
                                             if (range?.from && range?.to) {
                                                 setIsCalendarOpen(false);
+                                                setIsMobileCalendarOpen(false);
                                             }
                                         }}
                                         numberOfMonths={1}

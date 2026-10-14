@@ -136,13 +136,17 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
   };
 
 
-  const selectedProfessionals = watch('professionals') || [];
+  const rawSelectedProfessionals = watch('professionals') || [];
+  const validProfessionalIds = new Set(professionals.map(p => p.id));
+  const selectedProfessionals = professionalsLoading
+    ? rawSelectedProfessionals
+    : rawSelectedProfessionals.filter(id => validProfessionalIds.has(id));
 
   const handleSelectAll = (checked: boolean | string) => {
     if (checked) {
-      setValue('professionals', professionals.map(p => p.id));
+      setValue('professionals', professionals.map(p => p.id), { shouldDirty: true });
     } else {
-      setValue('professionals', []);
+      setValue('professionals', [], { shouldDirty: true });
     }
   }
 
@@ -156,10 +160,11 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
     try {
       const commissionValue = Number(data.commission_value) || 0;
       const commissionType = data.commission_type || '%';
+      const cleanSelectedProfessionals = (data.professionals || []).filter(id => validProfessionalIds.has(id));
 
       // Clean durationPorProfesional to avoid saving undefined/empty values
       const cleanDurationPorProfesional = Object.entries(data.durationPorProfesional || {})
-        .filter(([_, val]) => val !== undefined && val !== null && val !== "")
+        .filter(([profId, val]) => validProfessionalIds.has(profId) && val !== undefined && val !== null && val !== "")
         .reduce((acc, [key, val]) => {
           acc[key] = val;
           return acc;
@@ -182,7 +187,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
           value: commissionValue,
           type: commissionType
         },
-        professionals: data.professionals || [],
+        professionals: cleanSelectedProfessionals,
         durationPorProfesional: cleanDurationPorProfesional,
         images: data.images?.map(img => img.value).filter(Boolean) || [],
       };
@@ -232,7 +237,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         await updateDoc(serviceRef, dataToSave);
 
         // Sync professionals
-        await syncProfessionals(service.id, data.professionals || []);
+        await syncProfessionals(service.id, cleanSelectedProfessionals);
 
         toast({ title: "Servicio actualizado con éxito" });
       } else {
@@ -244,7 +249,7 @@ export function EditServicioModal({ isOpen, onClose, service, onDataSaved }: Edi
         });
 
         // Sync professionals for new service
-        await syncProfessionals(newServiceRef.id, data.professionals || []);
+        await syncProfessionals(newServiceRef.id, cleanSelectedProfessionals);
 
         toast({ title: "Servicio guardado con éxito" });
       }

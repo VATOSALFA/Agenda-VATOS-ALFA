@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Calendar,
   Tag,
@@ -37,6 +37,9 @@ import {
   X,
   MessageSquare,
   QrCode,
+  Bell,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -69,6 +72,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { playStrongNotificationAlert, initAudioUnlock } from '@/lib/notification-sound';
 
 // Removed top-level mainNavLinks
 
@@ -168,11 +173,165 @@ export default function Header() {
     return allPromotions.some(p => p.active && (!p.endDate || today <= p.endDate));
   }, [allPromotions]);
 
+  const myProfessional = useMemo(() => {
+    if (!user || allProfessionals.length === 0) return null;
+    const userEmailClean = user.email?.toLowerCase().trim();
+    const userUid = user.uid;
+    return allProfessionals.find((p: any) =>
+      !p.deleted && (
+        (userUid && p.userId === userUid) ||
+        (userEmailClean && p.email?.toLowerCase().trim() === userEmailClean)
+      )
+    ) || null;
+  }, [user, allProfessionals]);
+
   const professionalId = useMemo(() => {
-    if (!user?.uid || allProfessionals.length === 0) return user?.uid;
-    const match = allProfessionals.find((p: any) => p.userId === user.uid);
-    return match ? match.id : user.uid;
-  }, [user?.uid, allProfessionals]);
+    return myProfessional ? myProfessional.id : user?.uid;
+  }, [myProfessional, user?.uid]);
+
+  const isStaffRole = Boolean(
+    user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero'))
+  );
+
+  // Real-time notifications for Staff new appointments
+  const [staffAppointments, setStaffAppointments] = useState<any[]>([]);
+  const [seenAppointmentIds, setSeenAppointmentIds] = useState<string[]>([]);
+  const [isStaffNotifOpen, setIsStaffNotifOpen] = useState(false);
+  const knownAppointmentIdsRef = useRef<Set<string>>(new Set());
+  const isInitialSnapshotRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    initAudioUnlock();
+  }, []);
+
+  useEffect(() => {
+    if (!db || !myProfessional?.id) return;
+
+    const storageKey = `vatos_staff_seen_res_${myProfessional.id}`;
+    let storedSeen: string[] = [];
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        storedSeen = JSON.parse(raw);
+        if (Array.isArray(storedSeen)) {
+          setSeenAppointmentIds(storedSeen);
+        }
+      }
+    } catch (_) {}
+
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+    isInitialSnapshotRef.current = true;
+    knownAppointmentIdsRef.current = new Set();
+
+    const q = query(collection(db, 'reservas'), where('fecha', '>=', todayStr));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const myProfId = myProfessional.id;
+        const matchingDocs = snapshot.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((res) => {
+            if (res.estado === 'Cancelado') return false;
+            const isAssigned =
+              res.barbero_id === myProfId ||
+              (Array.isArray(res.items) && res.items.some((item: any) => item.barbero_id === myProfId));
+            return isAssigned;
+          });
+
+        // Sort newest created or upcoming first
+        matchingDocs.sort((a, b) => {
+          const dateCompare = String(a.fecha || '').localeCompare(String(b.fecha || ''));
+          if (dateCompare !== 0) return dateCompare;
+          return String(a.hora_inicio || '').localeCompare(String(b.hora_inicio || ''));
+        });
+
+        setStaffAppointments(matchingDocs);
+
+        if (isInitialSnapshotRef.current) {
+          isInitialSnapshotRef.current = false;
+          matchingDocs.forEach((r) => knownAppointmentIdsRef.current.add(r.id));
+
+          // If localStorage was never initialized for this barber, mark existing older appointments as seen
+          // except those created in the last 2 hours so recent bookings still show a badge
+          if (!localStorage.getItem(storageKey)) {
+            const twoHoursAgoMs = Date.now() - 2 * 60 * 60 * 1000;
+            const autoSeen = matchingDocs
+              .filter((r) => {
+                const createdMs = r.creado_en?.toMillis
+                  ? r.creado_en.toMillis()
+                  : r.created_at?.toMillis
+                  ? r.created_at.toMillis()
+                  : 0;
+                return !createdMs || createdMs < twoHoursAgoMs;
+              })
+              .map((r) => r.id);
+            setSeenAppointmentIds(autoSeen);
+            try {
+              localStorage.setItem(storageKey, JSON.stringify(autoSeen));
+            } catch (_) {}
+          }
+          return;
+        }
+
+        // Detect newly added reservations for this professional
+        const newlyAdded = matchingDocs.filter((r) => !knownAppointmentIdsRef.current.has(r.id));
+        matchingDocs.forEach((r) => knownAppointmentIdsRef.current.add(r.id));
+
+        if (newlyAdded.length > 0) {
+          playStrongNotificationAlert();
+          newlyAdded.forEach((newRes) => {
+            const clientDisplayName =
+              newRes.cliente_nombre ||
+              (newRes.customer
+                ? `${newRes.customer.nombre || ''} ${newRes.customer.apellido || ''}`.trim()
+                : '') ||
+              'Cliente';
+            const servicesSummary =
+              Array.isArray(newRes.items) && newRes.items.length > 0
+                ? newRes.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ')
+                : newRes.servicio || 'Servicio agendado';
+            const fechaLabel = newRes.fecha === todayStr ? 'Hoy' : newRes.fecha;
+
+            toast({
+              title: '💈 ¡Nueva cita agendada!',
+              description: `${clientDisplayName} • ${servicesSummary} (${fechaLabel} a las ${newRes.hora_inicio || ''})`,
+            });
+          });
+        }
+      },
+      (err) => {
+        console.warn('Error listening to staff appointments:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [db, myProfessional?.id, toast]);
+
+  const unreadStaffAppointments = useMemo(() => {
+    const seenSet = new Set(seenAppointmentIds);
+    return staffAppointments.filter((r) => !seenSet.has(r.id));
+  }, [staffAppointments, seenAppointmentIds]);
+
+  const markAllStaffAppointmentsAsRead = () => {
+    if (!myProfessional?.id) return;
+    const allIds = Array.from(new Set([...seenAppointmentIds, ...staffAppointments.map((r) => r.id)]));
+    setSeenAppointmentIds(allIds);
+    try {
+      localStorage.setItem(`vatos_staff_seen_res_${myProfessional.id}`, JSON.stringify(allIds));
+    } catch (_) {}
+  };
+
+  const markSingleAppointmentAsRead = (resId: string) => {
+    if (!myProfessional?.id) return;
+    if (seenAppointmentIds.includes(resId)) return;
+    const updated = [...seenAppointmentIds, resId];
+    setSeenAppointmentIds(updated);
+    try {
+      localStorage.setItem(`vatos_staff_seen_res_${myProfessional.id}`, JSON.stringify(updated));
+    } catch (_) {}
+  };
 
   const mainNavLinks = useMemo(() => [
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
@@ -888,6 +1047,131 @@ export default function Header() {
                     Ajustes
                   </TooltipContent>
                 </Tooltip>
+              )}
+              {/* Campana de Notificaciones de Citas para Staff / Profesionales */}
+              {(isStaffRole || myProfessional) && (
+                <Popover open={isStaffNotifOpen} onOpenChange={setIsStaffNotifOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="relative h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                      aria-label="Notificaciones de mis citas"
+                      title="Notificaciones de mis citas"
+                    >
+                      <Bell className={cn("h-4 w-4", unreadStaffAppointments.length > 0 && "text-blue-400")} />
+                      {unreadStaffAppointments.length > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full h-3.5 min-w-[14px] px-0.5 flex items-center justify-center shadow-xs animate-pulse">
+                          {unreadStaffAppointments.length}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-80 sm:w-96 p-0 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-[#0c1222] text-white overflow-hidden"
+                  >
+                    {/* Cabecera Oficial VATOS ALFA */}
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-3.5 border-b border-slate-800 flex items-center justify-between">
+                      <div className="header-light-beam" aria-hidden="true" />
+                      <div className="relative z-10 flex items-center gap-2">
+                        <Bell className="h-4 w-4 text-blue-400 shrink-0" />
+                        <div>
+                          <h4 className="font-bold text-xs sm:text-sm text-white leading-none">
+                            Mis Citas Agendadas
+                          </h4>
+                          <p className="text-[10px] text-slate-300 mt-1 leading-none">
+                            {unreadStaffAppointments.length > 0
+                              ? `${unreadStaffAppointments.length} nueva(s) sin revisar`
+                              : `${staffAppointments.length} cita(s) programadas`}
+                          </p>
+                        </div>
+                      </div>
+                      {unreadStaffAppointments.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllStaffAppointmentsAsRead}
+                          className="relative z-10 text-[10px] font-semibold text-blue-300 hover:text-white bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg px-2 py-1 transition-colors"
+                        >
+                          Marcar leídas
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Lista de citas */}
+                    <div className="max-h-[340px] overflow-y-auto divide-y divide-slate-800/80">
+                      {staffAppointments.length === 0 ? (
+                        <div className="p-6 text-center space-y-1.5">
+                          <CheckCircle2 className="h-7 w-7 text-slate-500 mx-auto" />
+                          <p className="text-xs font-semibold text-slate-200">Sin citas pendientes</p>
+                          <p className="text-[11px] text-slate-400">
+                            Te notificaremos con sonido cuando te agenden una nueva cita.
+                          </p>
+                        </div>
+                      ) : (
+                        staffAppointments.slice(0, 20).map((res) => {
+                          const isUnread = !seenAppointmentIds.includes(res.id);
+                          const clientName =
+                            res.cliente_nombre ||
+                            (res.customer
+                              ? `${res.customer.nombre || ''} ${res.customer.apellido || ''}`.trim()
+                              : '') ||
+                            'Cliente';
+                          const servicesText =
+                            Array.isArray(res.items) && res.items.length > 0
+                              ? res.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ')
+                              : res.servicio || 'Servicio';
+
+                          return (
+                            <Link
+                              key={res.id}
+                              href="/agenda"
+                              onClick={() => {
+                                markSingleAppointmentAsRead(res.id);
+                                setIsStaffNotifOpen(false);
+                              }}
+                              className={cn(
+                                "block p-3 transition-colors hover:bg-slate-800/60",
+                                isUnread ? "bg-blue-500/10" : "bg-transparent"
+                              )}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1 space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                    <span className="text-xs font-bold text-white truncate">
+                                      {clientName}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-slate-300">
+                                    <Scissors className="h-3 w-3 text-blue-400 shrink-0" />
+                                    <span className="truncate">{servicesText}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                                    <Clock className="h-3 w-3 text-slate-400 shrink-0" />
+                                    <span className="font-semibold text-slate-200">
+                                      {res.fecha} • {res.hora_inicio}
+                                      {res.hora_fin ? ` - ${res.hora_fin}` : ''}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isUnread ? (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0">
+                                    Nueva
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-medium text-slate-400 shrink-0">
+                                    {res.estado || 'Reservado'}
+                                  </span>
+                                )}
+                              </div>
+                            </Link>
+                          );
+                        })
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               )}
             </TooltipProvider>
 

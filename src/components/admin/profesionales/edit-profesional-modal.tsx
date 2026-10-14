@@ -228,26 +228,31 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                 const oldServices = profesional?.services || [];
                 const addedServices = newServices.filter(s => !oldServices.includes(s));
                 const removedServices = oldServices.filter(s => !newServices.includes(s));
+                const existingServiceIds = new Set(services.map(s => s.id));
 
                 const batch = writeBatch(db);
                 let batchCount = 0;
 
                 // For added services, add professional ID to service.professionals
                 for (const serviceId of addedServices) {
-                    const serviceRef = doc(db, 'servicios', serviceId);
-                    batch.update(serviceRef, {
-                        professionals: arrayUnion(profId)
-                    });
-                    batchCount++;
+                    if (existingServiceIds.has(serviceId)) {
+                        const serviceRef = doc(db, 'servicios', serviceId);
+                        batch.update(serviceRef, {
+                            professionals: arrayUnion(profId)
+                        });
+                        batchCount++;
+                    }
                 }
 
                 // For removed services, remove professional ID from service.professionals
                 for (const serviceId of removedServices) {
-                    const serviceRef = doc(db, 'servicios', serviceId);
-                    batch.update(serviceRef, {
-                        professionals: arrayRemove(profId)
-                    });
-                    batchCount++;
+                    if (existingServiceIds.has(serviceId)) {
+                        const serviceRef = doc(db, 'servicios', serviceId);
+                        batch.update(serviceRef, {
+                            professionals: arrayRemove(profId)
+                        });
+                        batchCount++;
+                    }
                 }
 
                 if (batchCount > 0) {
@@ -346,6 +351,18 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                 deletedAt: Timestamp.now()
             });
 
+            // Remove professional ID from all linked services so service professional counts stay accurate
+            const linkedServices = services.filter(s => Array.isArray(s.professionals) && s.professionals.includes(profesional.id));
+            if (linkedServices.length > 0) {
+                const cleanupBatch = writeBatch(db);
+                linkedServices.forEach(s => {
+                    cleanupBatch.update(doc(db, 'servicios', s.id), {
+                        professionals: arrayRemove(profesional.id)
+                    });
+                });
+                await cleanupBatch.commit();
+            }
+
             toast({ title: "Profesional eliminado con éxito" });
             setShowDeleteConfirm(false);
             onDataSaved();
@@ -395,7 +412,13 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     };
 
     const schedule = form.watch('schedule');
-    const selectedServices = form.watch('services');
+    const rawSelectedServices = form.watch('services');
+    const selectedServices = useMemo(() => {
+        const arr = Array.isArray(rawSelectedServices) ? rawSelectedServices : [];
+        if (servicesLoading) return arr;
+        const validIds = new Set(allServices);
+        return arr.filter((id: string) => validIds.has(id));
+    }, [rawSelectedServices, allServices, servicesLoading]);
 
     return (
         <>

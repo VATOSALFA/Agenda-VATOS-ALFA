@@ -1475,7 +1475,46 @@ export default function CashBoxPage() {
                                 </div>
 
                                 {/* Vista Móvil: Tarjetas compactas */}
-                                <div className="sm:hidden divide-y divide-border/60">
+                                <div className="sm:hidden">
+                                    {!isLoading && paginatedSales.length > 0 && (
+                                        <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/20 border-b border-border/60 overflow-x-auto no-scrollbar">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0 mr-1">Ordenar:</span>
+                                            {[
+                                                { key: 'fecha_hora_venta', label: 'Fecha' },
+                                                { key: 'total', label: 'Monto' },
+                                                { key: 'client', label: 'Cliente' },
+                                                { key: 'professional', label: 'Barbero' },
+                                                { key: 'id', label: 'ID' },
+                                            ].map((col) => {
+                                                const isActive = sortConfig?.key === col.key;
+                                                return (
+                                                    <button
+                                                        key={col.key}
+                                                        type="button"
+                                                        onClick={() => requestSort(col.key)}
+                                                        className={cn(
+                                                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors shrink-0 border",
+                                                            isActive
+                                                                ? "bg-[#202A49] text-white border-blue-500 shadow-xs"
+                                                                : "bg-card/60 text-muted-foreground border-border/60 hover:text-foreground"
+                                                        )}
+                                                    >
+                                                        <span>{col.label}</span>
+                                                        {isActive ? (
+                                                            sortConfig.direction === 'asc' ? (
+                                                                <ArrowUp className="h-3 w-3 text-blue-400" />
+                                                            ) : (
+                                                                <ArrowDown className="h-3 w-3 text-blue-400" />
+                                                            )
+                                                        ) : (
+                                                            <ArrowUpDown className="h-3 w-3 text-slate-400/60" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    <div className="divide-y divide-border/60">
                                     {isLoading ? (
                                         <div className="text-center py-10 space-y-2">
                                             <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" />
@@ -1562,6 +1601,7 @@ export default function CashBoxPage() {
                                             );
                                         })
                                     )}
+                                    </div>
                                 </div>
 
                                 {/* Paginación */}
@@ -1660,7 +1700,44 @@ export default function CashBoxPage() {
                                             </div>
 
                                             {/* Vista Móvil: Tarjetas compactas */}
-                                            <div className="sm:hidden divide-y divide-border/60">
+                                            <div className="sm:hidden">
+                                                {paginatedIngresos.length > 0 && (
+                                                    <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/20 border-b border-border/60 overflow-x-auto no-scrollbar">
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0 mr-1">Ordenar:</span>
+                                                        {[
+                                                            { key: 'fecha', label: 'Fecha' },
+                                                            { key: 'monto', label: 'Monto' },
+                                                            { key: 'concepto', label: 'Concepto' },
+                                                        ].map((col) => {
+                                                            const isActive = sortConfigIngresos?.key === col.key;
+                                                            return (
+                                                                <button
+                                                                    key={col.key}
+                                                                    type="button"
+                                                                    onClick={() => requestSortIngresos(col.key)}
+                                                                    className={cn(
+                                                                        "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors shrink-0 border",
+                                                                        isActive
+                                                                            ? "bg-[#202A49] text-white border-blue-500 shadow-xs"
+                                                                            : "bg-card/60 text-muted-foreground border-border/60 hover:text-foreground"
+                                                                    )}
+                                                                >
+                                                                    <span>{col.label}</span>
+                                                                    {isActive ? (
+                                                                        sortConfigIngresos.direction === 'asc' ? (
+                                                                            <ArrowUp className="h-3 w-3 text-blue-400" />
+                                                                        ) : (
+                                                                            <ArrowDown className="h-3 w-3 text-blue-400" />
+                                                                        )
+                                                                    ) : (
+                                                                        <ArrowUpDown className="h-3 w-3 text-slate-400/60" />
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                                <div className="divide-y divide-border/60">
                                                 {paginatedIngresos.length === 0 ? (
                                                     <div className="text-center py-10 text-xs text-muted-foreground">
                                                         No hay otros ingresos para el período seleccionado.
@@ -1707,6 +1784,7 @@ export default function CashBoxPage() {
                                                         </div>
                                                     ))
                                                 )}
+                                                </div>
                                             </div>
 
                                             {/* Paginación */}
@@ -1853,7 +1931,45 @@ export default function CashBoxPage() {
                                             </div>
 
                                             {/* Vista Móvil: Tarjetas compactas */}
-                                            <div className="sm:hidden divide-y divide-border/60">
+                                            <div className="sm:hidden">
+                                                {paginatedEgresos.length > 0 && (
+                                                    <div className="flex items-center gap-1.5 px-3 py-2 bg-muted/20 border-b border-border/60 overflow-x-auto no-scrollbar">
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shrink-0 mr-1">Ordenar:</span>
+                                                        {[
+                                                            { key: 'fecha', label: 'Fecha' },
+                                                            { key: 'monto', label: 'Monto' },
+                                                            { key: 'concepto', label: 'Concepto' },
+                                                            { key: 'aQuien', label: 'A quién' },
+                                                        ].map((col) => {
+                                                            const isActive = sortConfigEgresos?.key === col.key;
+                                                            return (
+                                                                <button
+                                                                    key={col.key}
+                                                                    type="button"
+                                                                    onClick={() => requestSortEgresos(col.key)}
+                                                                    className={cn(
+                                                                        "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors shrink-0 border",
+                                                                        isActive
+                                                                            ? "bg-[#202A49] text-white border-blue-500 shadow-xs"
+                                                                            : "bg-card/60 text-muted-foreground border-border/60 hover:text-foreground"
+                                                                    )}
+                                                                >
+                                                                    <span>{col.label}</span>
+                                                                    {isActive ? (
+                                                                        sortConfigEgresos.direction === 'asc' ? (
+                                                                            <ArrowUp className="h-3 w-3 text-blue-400" />
+                                                                        ) : (
+                                                                            <ArrowDown className="h-3 w-3 text-blue-400" />
+                                                                        )
+                                                                    ) : (
+                                                                        <ArrowUpDown className="h-3 w-3 text-slate-400/60" />
+                                                                    )}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                                <div className="divide-y divide-border/60">
                                                 {paginatedEgresos.length === 0 ? (
                                                     <div className="text-center py-10 text-xs text-muted-foreground">
                                                         No hay egresos para el período seleccionado.
@@ -1953,6 +2069,7 @@ export default function CashBoxPage() {
                                                         );
                                                     })
                                                 )}
+                                                </div>
                                             </div>
 
                                             {/* Paginación */}

@@ -17,6 +17,11 @@ const Popover = ({
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled ? controlledOpen : uncontrolledOpen;
   const popoverId = React.useId();
+  const isOpenRef = React.useRef(isOpen);
+
+  React.useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   const handleOpenChange = React.useCallback(
     (nextOpen: boolean) => {
@@ -33,14 +38,14 @@ const Popover = ({
 
   React.useEffect(() => {
     return dropdownCoordinator.subscribe((activeId) => {
-      if (activeId !== popoverId && isOpen) {
+      if (activeId !== popoverId && isOpenRef.current) {
         if (!isControlled) {
           setUncontrolledOpen(false);
         }
         controlledOnOpenChange?.(false);
       }
     });
-  }, [popoverId, isOpen, isControlled, controlledOnOpenChange]);
+  }, [popoverId, isControlled, controlledOnOpenChange]);
 
   return (
     <PopoverPrimitive.Root

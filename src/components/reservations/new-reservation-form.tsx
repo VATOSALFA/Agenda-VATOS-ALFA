@@ -41,7 +41,7 @@ import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { sendManualBookingConfirmation } from '@/lib/actions/booking';
-import { isShortNoticeAppointment, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { isShortNoticeAppointment, isOpeningHourTime, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
@@ -372,6 +372,25 @@ export function NewReservationForm({
   const montoMinimoThreshold = Number(bookingRules.anticipo_monto_minimo) || 190;
   const anticipoPorcentajeDefecto = Number(bookingRules.anticipo_porcentaje_defecto) || 50;
 
+  const isOpeningHourRuleActive = bookingRules.anticipo_horario_apertura_activo !== false;
+  const openingHourTarget = bookingRules.anticipo_horario_apertura_hora || '10:00';
+  const openingHourPorcentaje = Number(bookingRules.anticipo_horario_apertura_porcentaje) || anticipoPorcentajeDefecto;
+  const watchedStartHour = form.watch('hora_inicio_hora');
+  const watchedStartMin = form.watch('hora_inicio_minuto');
+
+  const isOpeningHourSelected = useMemo(() => {
+    const mainTime = `${watchedStartHour || ''}:${watchedStartMin || ''}`;
+    if (watchedStartHour && watchedStartMin && isOpeningHourTime(mainTime, openingHourTarget)) {
+      return true;
+    }
+    return (watchedItems || []).some(
+      (item: any) =>
+        item?.hora_inicio_hora &&
+        item?.hora_inicio_minuto &&
+        isOpeningHourTime(`${item.hora_inicio_hora}:${item.hora_inicio_minuto}`, openingHourTarget)
+    );
+  }, [watchedStartHour, watchedStartMin, watchedItems, openingHourTarget]);
+
   const isNewClient = useMemo(() => {
     if (!selectedClient) return false;
     return clientStats.totalCitas === 0;
@@ -390,13 +409,18 @@ export function NewReservationForm({
     return sum;
   }, [form, watchedItems, servicesMap]);
 
+  const isAnticipoRequiredDueToOpeningHour = isOpeningHourRuleActive && isOpeningHourSelected;
   const isAnticipoRequiredDueToAmount = isMontoMinimoActive && montoMinimoThreshold > 0 && currentTotal >= montoMinimoThreshold;
-  const isAnticipoRequired = isAnticipoRequiredDueToHistory || isAnticipoRequiredDueToAmount;
+  const isAnticipoRequired = isAnticipoRequiredDueToHistory || isAnticipoRequiredDueToOpeningHour || isAnticipoRequiredDueToAmount;
 
   const depositAmountCalculated = useMemo(() => {
-    const pct = isAnticipoRequiredDueToHistory ? penalizacionPorcentaje : anticipoPorcentajeDefecto;
+    const pct = isAnticipoRequiredDueToHistory
+      ? penalizacionPorcentaje
+      : isAnticipoRequiredDueToOpeningHour
+      ? openingHourPorcentaje
+      : anticipoPorcentajeDefecto;
     return Math.round(currentTotal * (pct / 100));
-  }, [currentTotal, isAnticipoRequiredDueToHistory, penalizacionPorcentaje, anticipoPorcentajeDefecto]);
+  }, [currentTotal, isAnticipoRequiredDueToHistory, isAnticipoRequiredDueToOpeningHour, penalizacionPorcentaje, openingHourPorcentaje, anticipoPorcentajeDefecto]);
 
   // Popular / Most sold services calculation
   const [popularCounts, setPopularCounts] = useState<Record<string, number>>({});
@@ -571,7 +595,7 @@ export function NewReservationForm({
   }, [services, serviceCategories, popularServices]);
 
   const timeOptions = useMemo(() => {
-    const hours = Array.from({ length: 12 }, (_, i) => 10 + i); // 10 AM to 9 PM
+    const hours = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00 (supports early/late special hours)
     const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
     return { hours, minutes };
   }, []);
@@ -738,8 +762,8 @@ export function NewReservationForm({
       }
 
       if (!agendaSettings?.resourceOverload) {
-        // Check for breaks (ignore breaks for special journeys)
-        if (profSpecialJourneys.length === 0 && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
+        // Check for breaks on enabled regular schedule (unless covered by an available block or special journey)
+        if (daySchedule?.enabled && daySchedule?.breaks && Array.isArray(daySchedule.breaks)) {
           const breakConflict = daySchedule.breaks.some((brk: any) => {
             if (item_hora_inicio >= brk.end || item_hora_fin <= brk.start) return false; // No overlap
 
@@ -747,7 +771,7 @@ export function NewReservationForm({
             const overlapStart = item_hora_inicio > brk.start ? item_hora_inicio : brk.start;
             const overlapEnd = item_hora_fin < brk.end ? item_hora_fin : brk.end;
 
-            // Is this overlap covered by a special schedule (available block)?
+            // Is this overlap covered by a special schedule (available block or special journey)?
             return !isRangeCovered(overlapStart, overlapEnd);
           });
 
@@ -1288,6 +1312,12 @@ export function NewReservationForm({
             description: `Este cliente acumula ${unattendedCount} inasistencias previas (límite: ${maxInasistenciasPermitidas}). Recuerda cobrarle el anticipo del ${penalizacionPorcentaje}% ($${depositAmountCalculated} MXN).`,
             duration: 10000,
           });
+        } else if (isAnticipoRequiredDueToOpeningHour && !isEditMode) {
+          toast({
+            title: `⏰ Anticipo por Horario de Apertura (${openingHourTarget} AM)`,
+            description: `Todas las citas agendadas a las ${openingHourTarget} AM requieren anticipo obligatorio del ${openingHourPorcentaje}% ($${depositAmountCalculated} MXN).`,
+            duration: 10000,
+          });
         } else if (isAnticipoRequiredDueToAmount && !isEditMode) {
           toast({
             title: '💳 Anticipo Requerido por Monto',
@@ -1795,13 +1825,21 @@ export function NewReservationForm({
                                 "font-black text-xs uppercase tracking-wide flex items-center gap-1.5",
                                 isAnticipoRequiredDueToHistory ? "text-red-800 dark:text-red-200" : "text-blue-800 dark:text-blue-200"
                               )}>
-                                {isAnticipoRequiredDueToHistory ? "🛡️ Escudo Antifraude: Anticipo Obligatorio" : "💳 Regla de Reserva: Anticipo por Monto (+$190 MXN)"}
+                                {isAnticipoRequiredDueToHistory
+                                  ? "🛡️ Escudo Antifraude: Anticipo Obligatorio"
+                                  : isAnticipoRequiredDueToOpeningHour
+                                  ? `⏰ Regla de Reserva: Horario de Apertura (${openingHourTarget} AM)`
+                                  : `💳 Regla de Reserva: Anticipo por Monto (+$${montoMinimoThreshold} MXN)`}
                               </span>
                               <Badge className={cn(
                                 "text-white font-bold text-[10px] px-2 py-0.5 shadow-xs",
                                 isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
                               )}>
-                                {isAnticipoRequiredDueToHistory ? `${penalizacionPorcentaje}% Anticipo` : `${anticipoPorcentajeDefecto}% Anticipo`}
+                                {isAnticipoRequiredDueToHistory
+                                  ? `${penalizacionPorcentaje}% Anticipo`
+                                  : isAnticipoRequiredDueToOpeningHour
+                                  ? `${openingHourPorcentaje}% Anticipo`
+                                  : `${anticipoPorcentajeDefecto}% Anticipo`}
                               </Badge>
                             </div>
                             <p className={cn(
@@ -1810,6 +1848,8 @@ export function NewReservationForm({
                             )}>
                               {isAnticipoRequiredDueToHistory ? (
                                 <>Este cliente acumula <strong>{unattendedCount} inasistencias previas</strong> (límite permitido: {maxInasistenciasPermitidas}). Por regla oficial de Vatos Alfa, <strong>debe pagar anticipo para apartar su cita</strong>.</>
+                              ) : isAnticipoRequiredDueToOpeningHour ? (
+                                <>Todas las citas agendadas a las <strong>{openingHourTarget} AM (horario de apertura)</strong> requieren obligatoriamente un anticipo del <strong>{openingHourPorcentaje}%</strong> para asegurar el primer turno del día.</>
                               ) : (
                                 <>El total de la cita es de <strong>${currentTotal} MXN</strong> (alcanza o supera el mínimo de ${montoMinimoThreshold} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
                               )}
@@ -2403,11 +2443,15 @@ export function NewReservationForm({
                 <DialogTitle className="text-base font-bold text-white tracking-tight">
                   {isAnticipoRequiredDueToHistory
                     ? 'Escudo Antifraude • Anticipo Requerido'
+                    : isAnticipoRequiredDueToOpeningHour
+                    ? `Horario de Apertura (${openingHourTarget} AM) • Anticipo Requerido`
                     : 'Regla de Reserva • Anticipo Requerido'}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-slate-300">
                   {isAnticipoRequiredDueToHistory
                     ? 'Regla de reserva para clientes con historial de inasistencias'
+                    : isAnticipoRequiredDueToOpeningHour
+                    ? `Toda cita a las ${openingHourTarget} AM requiere anticipo obligatorio`
                     : `Cita a partir de $${montoMinimoThreshold} MXN requiere anticipo de garantía`}
                 </DialogDescription>
               </div>
@@ -2430,11 +2474,15 @@ export function NewReservationForm({
               <p className={cn("font-bold text-sm", isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200")}>
                 {isAnticipoRequiredDueToHistory
                   ? `Este cliente tiene ${unattendedCount} inasistencias registradas.`
+                  : isAnticipoRequiredDueToOpeningHour
+                  ? `Cita programada en el horario de apertura (${openingHourTarget} AM).`
                   : `Cita con total de $${currentTotal} MXN (alcanza o supera los $${montoMinimoThreshold} MXN).`}
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 {isAnticipoRequiredDueToHistory
                   ? `Para proteger el tiempo del barbero y los costos operativos, la política de Vatos Alfa exige un anticipo del ${penalizacionPorcentaje}% ($${depositAmountCalculated} MXN).`
+                  : isAnticipoRequiredDueToOpeningHour
+                  ? `Por regla oficial de Vatos Alfa, todas las citas agendadas a las ${openingHourTarget} AM (primer turno del día) requieren un anticipo del ${openingHourPorcentaje}% ($${depositAmountCalculated} MXN) para confirmar el espacio.`
                   : `Según las reglas de reserva de Vatos Alfa, citas de $${montoMinimoThreshold} MXN o más exigen un anticipo del ${anticipoPorcentajeDefecto}% ($${depositAmountCalculated} MXN) para confirmar el lugar.`}
               </p>
             </div>

@@ -88,6 +88,7 @@ export function QuickConsultModal({
 
     const getDaySchedule = (barber: Profesional) => {
       const dateStr = formattedDate;
+      const regSchedule = barber.schedule ? barber.schedule[dayOfWeek as keyof typeof barber.schedule] : null;
 
       // Check for Special Journeys (there may be multiple on the same day)
       const barberJourneys = (specialJourneys || []).filter(
@@ -95,38 +96,78 @@ export function QuickConsultModal({
       );
 
       if (barberJourneys.length > 0) {
-        // Sort journeys by start time
-        const sorted = [...barberJourneys].sort((a: any, b: any) =>
-          a.hora_inicio.localeCompare(b.hora_inicio)
-        );
+        const workingIntervals: { start: number; end: number }[] = [];
 
-        // Merge: overall start is the earliest, overall end is the latest
-        const overallStart = sorted[0].hora_inicio;
-        const overallEnd = sorted.reduce(
-          (latest: string, j: any) => (j.hora_fin > latest ? j.hora_fin : latest),
-          sorted[0].hora_fin
-        );
-
-        // Build break segments for gaps between consecutive journeys
-        const breaks: { start: string; end: string }[] = [];
-        for (let i = 0; i < sorted.length - 1; i++) {
-          const currentEnd = sorted[i].hora_fin;
-          const nextStart = sorted[i + 1].hora_inicio;
-          if (currentEnd < nextStart) {
-            breaks.push({ start: currentEnd, end: nextStart });
+        if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end) {
+          const regStart = parseTime(regSchedule.start);
+          const regEnd = parseTime(regSchedule.end);
+          if (regStart < regEnd) {
+            let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
+            if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
+              regSchedule.breaks.forEach((brk: any) => {
+                if (!brk.start || !brk.end) return;
+                const bStart = parseTime(brk.start);
+                const bEnd = parseTime(brk.end);
+                if (bStart >= bEnd) return;
+                const nextSegs: { start: number; end: number }[] = [];
+                regSegments.forEach(seg => {
+                  if (bEnd <= seg.start || bStart >= seg.end) {
+                    nextSegs.push(seg);
+                  } else {
+                    if (bStart > seg.start) nextSegs.push({ start: seg.start, end: bStart });
+                    if (bEnd < seg.end) nextSegs.push({ start: bEnd, end: seg.end });
+                  }
+                });
+                regSegments = nextSegs;
+              });
+            }
+            workingIntervals.push(...regSegments);
           }
         }
 
-        return {
-          enabled: true,
-          start: overallStart,
-          end: overallEnd,
-          breaks,
-        };
+        barberJourneys.forEach((j: any) => {
+          if (j.hora_inicio && j.hora_fin) {
+            const s = parseTime(j.hora_inicio);
+            const e = parseTime(j.hora_fin);
+            if (s < e) workingIntervals.push({ start: s, end: e });
+          }
+        });
+
+        if (workingIntervals.length > 0) {
+          workingIntervals.sort((a, b) => a.start - b.start);
+          const merged: { start: number; end: number }[] = [];
+          workingIntervals.forEach(iv => {
+            if (merged.length === 0) {
+              merged.push({ ...iv });
+            } else {
+              const last = merged[merged.length - 1];
+              if (iv.start <= last.end) {
+                last.end = Math.max(last.end, iv.end);
+              } else {
+                merged.push({ ...iv });
+              }
+            }
+          });
+
+          const overallStart = formatMins(merged[0].start);
+          const overallEnd = formatMins(merged[merged.length - 1].end);
+          const breaks: { start: string; end: string }[] = [];
+          for (let i = 0; i < merged.length - 1; i++) {
+            if (merged[i].end < merged[i + 1].start) {
+              breaks.push({ start: formatMins(merged[i].end), end: formatMins(merged[i + 1].start) });
+            }
+          }
+
+          return {
+            enabled: true,
+            start: overallStart,
+            end: overallEnd,
+            breaks,
+          };
+        }
       }
 
-      if (!barber.schedule) return null;
-      return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
+      return regSchedule;
     };
 
     const slots: {

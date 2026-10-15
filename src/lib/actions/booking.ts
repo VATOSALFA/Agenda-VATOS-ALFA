@@ -49,13 +49,15 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         dayName = format(parsedDate, 'eeee', { locale: es }).toLowerCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-        // 1.05 Check for Special Journeys (Manual Overrides)
+        // 1.05 Check for Special Journeys (Manual Overrides from Admin -> Profesionales)
         const specialDaysSnap = await db.collection('jornadas_especiales')
             .where('profesionalId', '==', professionalId)
             .where('fecha', '==', date)
             .get();
 
-        // 1.06 Check for Blocks and Enabled Schedules ('bloqueos_horario')
+        // 1.06 Check for Blocking Blocks ('bloqueos_horario')
+        // NOTE: 'available' blocks in 'bloqueos_horario' are created from the internal Agenda
+        // ("Habilitar Horario Especial") and are strictly internal (never exposed on Web or App).
         const blocksSnapshot = await db.collection('bloqueos_horario')
             .where('fecha', '==', date)
             .where('barbero_id', '==', professionalId)
@@ -72,71 +74,24 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             return { h, m };
         };
 
-        const availableBlocks: { start: string, end: string, startM: number, endM: number }[] = [];
         const blockingBlocks: { start: string, end: string, startM: number, endM: number }[] = [];
 
         blocksSnapshot.forEach(doc => {
             const data = doc.data();
+            if (data.type === 'available') {
+                // Internal-only schedule enabled from Agenda; do not expose publicly
+                return;
+            }
             const s = parseTimeSafe(data.hora_inicio);
             const e = parseTimeSafe(data.hora_fin);
             if (s && e) {
                 const startM = s.h * 60 + s.m;
                 const endM = e.h * 60 + e.m;
-                if (data.type === 'available') {
-                    availableBlocks.push({ start: data.hora_inicio, end: data.hora_fin, startM, endM });
-                } else {
-                    blockingBlocks.push({ start: data.hora_inicio, end: data.hora_fin, startM, endM });
-                }
+                blockingBlocks.push({ start: data.hora_inicio, end: data.hora_fin, startM, endM });
             }
         });
 
-        let effectiveScheduleStart = '';
-        let effectiveScheduleEnd = '';
-        let isSpecialJourney = false;
-        const syntheticBreaks: { start: string, end: string }[] = [];
-
-        if (!specialDaysSnap.empty) {
-            const journeys = specialDaysSnap.docs.map(d => d.data());
-            // Sort journeys by start time
-            journeys.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-            
-            effectiveScheduleStart = journeys[0].hora_inicio;
-            effectiveScheduleEnd = journeys.reduce((latest, j) => j.hora_fin > latest ? j.hora_fin : latest, journeys[0].hora_fin);
-            isSpecialJourney = true;
-            
-            // Build synthetic breaks for gaps between separate journeys
-            for (let i = 0; i < journeys.length - 1; i++) {
-                if (journeys[i].hora_fin < journeys[i+1].hora_inicio) {
-                    syntheticBreaks.push({ start: journeys[i].hora_fin, end: journeys[i+1].hora_inicio });
-                }
-            }
-        } else {
-            const scheduleDay = profData.schedule?.[dayName];
-            if (!scheduleDay || !scheduleDay.enabled) {
-                if (availableBlocks.length > 0) {
-                    availableBlocks.sort((a, b) => a.startM - b.startM);
-                    effectiveScheduleStart = availableBlocks[0].start;
-                    effectiveScheduleEnd = availableBlocks.reduce((latest, b) => b.end > latest ? b.end : latest, availableBlocks[0].end);
-                    isSpecialJourney = true;
-                    for (let i = 0; i < availableBlocks.length - 1; i++) {
-                        if (availableBlocks[i].endM < availableBlocks[i+1].startM) {
-                            syntheticBreaks.push({ start: availableBlocks[i].end, end: availableBlocks[i+1].start });
-                        }
-                    }
-                } else {
-                    return { slots: [] }; // Day is closed and no special journey or enabled block
-                }
-            } else {
-                effectiveScheduleStart = scheduleDay.start;
-                effectiveScheduleEnd = scheduleDay.end;
-                availableBlocks.forEach(ab => {
-                    if (ab.start < effectiveScheduleStart) effectiveScheduleStart = ab.start;
-                    if (ab.end > effectiveScheduleEnd) effectiveScheduleEnd = ab.end;
-                });
-            }
-        }
-
-        // 1.0 Fetch Local Schedule to enforce bounds
+        // 1.0 Fetch Local Schedule to enforce bounds on regular schedule
         let localData = null;
         if (profData.local_id) {
             const localDoc = await db.collection('locales').doc(profData.local_id).get();
@@ -148,75 +103,92 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         }
 
         const localScheduleDay = localData?.schedule?.[dayName];
-        
-        // If not a special journey, we must check if local is open
-        if (!isSpecialJourney) {
-            if (!localScheduleDay || !localScheduleDay.enabled) {
-                return { slots: [] }; // Local is closed and this isn't a special override
-            }
-        }
+        const scheduleDay = profData.schedule?.[dayName];
 
-        const profStart = parseTimeSafe(effectiveScheduleStart);
-        const profEnd = parseTimeSafe(effectiveScheduleEnd);
-        
-        let finalStart = profStart;
-        let finalEnd = profEnd;
+        // Build unified working intervals:
+        // (A) Regular schedule (if enabled and local is open, clamped to local hours, minus regular breaks)
+        // (B) Special journeys ('jornadas_especiales' from Admin -> Profesionales, which can be before/after local hours or on closed days)
+        const workingIntervals: { start: number, end: number }[] = [];
 
-        // If not special, intersect with local hours
-        if (!isSpecialJourney && localScheduleDay && localScheduleDay.enabled) {
+        if (scheduleDay && scheduleDay.enabled && localScheduleDay && localScheduleDay.enabled) {
+            const profStart = parseTimeSafe(scheduleDay.start);
+            const profEnd = parseTimeSafe(scheduleDay.end);
             const localStart = parseTimeSafe(localScheduleDay.start);
             const localEnd = parseTimeSafe(localScheduleDay.end);
-            
+
             if (profStart && profEnd && localStart && localEnd) {
-                const startM = Math.max(profStart.h * 60 + profStart.m, localStart.h * 60 + localStart.m);
-                const endM = Math.min(profEnd.h * 60 + profEnd.m, localEnd.h * 60 + localEnd.m);
-                finalStart = { h: Math.floor(startM / 60), m: startM % 60 };
-                finalEnd = { h: Math.floor(endM / 60), m: endM % 60 };
+                const regStartM = Math.max(profStart.h * 60 + profStart.m, localStart.h * 60 + localStart.m);
+                const regEndM = Math.min(profEnd.h * 60 + profEnd.m, localEnd.h * 60 + localEnd.m);
+
+                if (regStartM < regEndM) {
+                    let regSegments: { start: number, end: number }[] = [{ start: regStartM, end: regEndM }];
+
+                    // Subtract regular breaks from regular shift segments
+                    if (scheduleDay.breaks && Array.isArray(scheduleDay.breaks)) {
+                        scheduleDay.breaks.forEach((brk: any) => {
+                            const bs = parseTimeSafe(brk.start);
+                            const be = parseTimeSafe(brk.end);
+                            if (bs && be) {
+                                const brkStartM = bs.h * 60 + bs.m;
+                                const brkEndM = be.h * 60 + be.m;
+                                if (brkStartM < brkEndM) {
+                                    const nextSegments: { start: number, end: number }[] = [];
+                                    regSegments.forEach(seg => {
+                                        if (brkEndM <= seg.start || brkStartM >= seg.end) {
+                                            nextSegments.push(seg);
+                                        } else {
+                                            if (brkStartM > seg.start) nextSegments.push({ start: seg.start, end: brkStartM });
+                                            if (brkEndM < seg.end) nextSegments.push({ start: brkEndM, end: seg.end });
+                                        }
+                                    });
+                                    regSegments = nextSegments;
+                                }
+                            }
+                        });
+                    }
+
+                    workingIntervals.push(...regSegments);
+                }
             }
         }
 
-        if (!finalStart || !finalEnd) return { slots: [] }; // Invalid configuration
-
-        const startTimeLimit = finalStart.h * 60 + finalStart.m;
-        const endTimeLimit = finalEnd.h * 60 + finalEnd.m;
-
-        if (startTimeLimit >= endTimeLimit) return { slots: [] };
-
-        // 1.1 Add Breaks to Busy Intervals
-        const busyIntervals: { start: number, end: number }[] = [];
-
-        if (!isSpecialJourney) {
-            const scheduleDay = profData.schedule?.[dayName];
-            if (scheduleDay?.breaks && Array.isArray(scheduleDay.breaks)) {
-                scheduleDay.breaks.forEach((brk: any) => {
-                    const s = parseTimeSafe(brk.start);
-                    const e = parseTimeSafe(brk.end);
-                    if (s && e) {
-                        const brkStartM = s.h * 60 + s.m;
-                        const brkEndM = e.h * 60 + e.m;
-                        const isOverridden = availableBlocks.some(ab => ab.startM <= brkStartM && ab.endM >= brkEndM);
-                        if (!isOverridden) {
-                            busyIntervals.push({
-                                start: brkStartM,
-                                end: brkEndM
-                            });
-                        }
+        // Add Special Journeys ('jornadas_especiales') - unrestricted by local opening/closing hours
+        if (!specialDaysSnap.empty) {
+            specialDaysSnap.docs.forEach(d => {
+                const j = d.data();
+                const js = parseTimeSafe(j.hora_inicio);
+                const je = parseTimeSafe(j.hora_fin);
+                if (js && je) {
+                    const jStartM = js.h * 60 + js.m;
+                    const jEndM = je.h * 60 + je.m;
+                    if (jStartM < jEndM) {
+                        workingIntervals.push({ start: jStartM, end: jEndM });
                     }
-                });
-            }
-        } else {
-            // Add synthetic breaks from multiple special journeys
-            syntheticBreaks.forEach(brk => {
-                const s = parseTimeSafe(brk.start);
-                const e = parseTimeSafe(brk.end);
-                if (s && e) {
-                    busyIntervals.push({
-                        start: s.h * 60 + s.m,
-                        end: e.h * 60 + e.m
-                    });
                 }
             });
         }
+
+        if (workingIntervals.length === 0) {
+            return { slots: [] };
+        }
+
+        // Merge overlapping or adjacent working intervals
+        workingIntervals.sort((a, b) => a.start - b.start);
+        const mergedWorking: { start: number, end: number }[] = [];
+        workingIntervals.forEach(interval => {
+            if (mergedWorking.length === 0) {
+                mergedWorking.push({ ...interval });
+            } else {
+                const last = mergedWorking[mergedWorking.length - 1];
+                if (interval.start <= last.end) {
+                    last.end = Math.max(last.end, interval.end);
+                } else {
+                    mergedWorking.push({ ...interval });
+                }
+            }
+        });
+
+        const busyIntervals: { start: number, end: number }[] = [];
 
         // 2. Get Busy Slots (Reservations)
         const reservationsSnapshot = await db.collection('reservas')
@@ -257,15 +229,12 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             }
         });
 
-        // 3. Get Busy Slots (Blocking Blocks - Excluding 'available' overrides)
+        // 3. Get Busy Slots (Blocking Blocks)
         blockingBlocks.forEach(blk => {
-            const isOverridden = availableBlocks.some(ab => ab.startM <= blk.startM && ab.endM >= blk.endM);
-            if (!isOverridden) {
-                busyIntervals.push({
-                    start: blk.startM,
-                    end: blk.endM
-                });
-            }
+            busyIntervals.push({
+                start: blk.startM,
+                end: blk.endM
+            });
         });
 
         // 3. Generate Available Slots with Receptionist Intelligence (No Dead Gaps)
@@ -345,42 +314,21 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             currentMinutes = nowH * 60 + nowM;
         }
 
-        // Merge overlapping or adjacent busy intervals clamped to shift bounds
-        const sortedBusy = [...busyIntervals]
-            .map(b => ({
-                start: Math.max(startTimeLimit, b.start),
-                end: Math.min(endTimeLimit, b.end)
-            }))
-            .filter(b => b.start < b.end)
-            .sort((a, b) => a.start - b.start);
-
-        const mergedBusy: { start: number, end: number }[] = [];
-        sortedBusy.forEach(interval => {
-            if (mergedBusy.length === 0) {
-                mergedBusy.push({ ...interval });
-            } else {
-                const last = mergedBusy[mergedBusy.length - 1];
-                if (interval.start <= last.end) {
-                    last.end = Math.max(last.end, interval.end);
+        // Subtract busy intervals (reservations and blocking blocks) from merged working intervals to identify free windows
+        let freeWindows: { start: number, end: number }[] = [...mergedWorking];
+        busyIntervals.forEach(busy => {
+            if (busy.start >= busy.end) return;
+            const nextWindows: { start: number, end: number }[] = [];
+            freeWindows.forEach(win => {
+                if (busy.end <= win.start || busy.start >= win.end) {
+                    nextWindows.push(win);
                 } else {
-                    mergedBusy.push({ ...interval });
+                    if (busy.start > win.start) nextWindows.push({ start: win.start, end: busy.start });
+                    if (busy.end < win.end) nextWindows.push({ start: busy.end, end: win.end });
                 }
-            }
+            });
+            freeWindows = nextWindows;
         });
-
-        // Identify free windows across the workday
-        const freeWindows: { start: number, end: number }[] = [];
-        let cursor = startTimeLimit;
-
-        for (const busy of mergedBusy) {
-            if (busy.start > cursor) {
-                freeWindows.push({ start: cursor, end: busy.start });
-            }
-            cursor = Math.max(cursor, busy.end);
-        }
-        if (cursor < endTimeLimit) {
-            freeWindows.push({ start: cursor, end: endTimeLimit });
-        }
 
         const availableSlotsSet = new Set<string>();
         const gridStep = Math.max(30, GRID_INTERVAL || 30);
@@ -1036,7 +984,9 @@ export async function createPublicReservation(data: any) {
                 ? ` debido a que registras ${evalResult.clientNoShowsCount} inasistencia(s) previa(s)`
                 : (evalResult.reason === 'same_day_accumulation'
                     ? ` (Escudo Anti-Fragmentación: ya cuentas con ${evalResult.sameDayActiveCount} cita(s) activa(s) en esta fecha y tu total acumulado diario alcanza $${(evalResult.sameDayAccumulatedTotal || grandTotal).toFixed(2)} MXN)`
-                    : (evalResult.customRuleMessage ? ` (${evalResult.customRuleMessage})` : ''));
+                    : (evalResult.reason === 'opening_hour'
+                        ? ` por tratarse del horario de apertura (${bookingRules.anticipo_horario_apertura_hora || '10:00'} AM)`
+                        : (evalResult.customRuleMessage ? ` (${evalResult.customRuleMessage})` : '')));
             return {
                 error: `Esta reserva requiere un anticipo del ${depositPercentage}% ($${calculatedDeposit} MXN)${ruleDetail}. Por favor realiza el pago en línea para confirmar tu cita.`,
                 requiresPayment: true,
@@ -1132,6 +1082,9 @@ export async function getPublicServiciosConfig() {
                 anticipo_monto_minimo_activo: true,
                 anticipo_monto_minimo: 190,
                 anticipo_porcentaje_defecto: 50,
+                anticipo_horario_apertura_activo: true,
+                anticipo_horario_apertura_hora: '10:00',
+                anticipo_horario_apertura_porcentaje: 50,
                 penalizacion_inasistencias_activa: true,
                 max_inasistencias_permitidas: 2,
                 penalizacion_anticipo_porcentaje: 50,
@@ -1149,6 +1102,9 @@ export async function getPublicServiciosConfig() {
                 anticipo_monto_minimo_activo: data.anticipo_monto_minimo_activo !== false,
                 anticipo_monto_minimo: Number(data.anticipo_monto_minimo) > 0 ? Number(data.anticipo_monto_minimo) : 190,
                 anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
+                anticipo_horario_apertura_activo: data.anticipo_horario_apertura_activo !== false,
+                anticipo_horario_apertura_hora: data.anticipo_horario_apertura_hora || '10:00',
+                anticipo_horario_apertura_porcentaje: Number(data.anticipo_horario_apertura_porcentaje) > 0 ? Number(data.anticipo_horario_apertura_porcentaje) : 50,
                 penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
                 max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
                 penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
@@ -1167,6 +1123,9 @@ export async function getPublicServiciosConfig() {
                 anticipo_monto_minimo_activo: data.anticipo_monto_minimo_activo !== false,
                 anticipo_monto_minimo: Number(data.anticipo_monto_minimo) > 0 ? Number(data.anticipo_monto_minimo) : 190,
                 anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
+                anticipo_horario_apertura_activo: data.anticipo_horario_apertura_activo !== false,
+                anticipo_horario_apertura_hora: data.anticipo_horario_apertura_hora || '10:00',
+                anticipo_horario_apertura_porcentaje: Number(data.anticipo_horario_apertura_porcentaje) > 0 ? Number(data.anticipo_horario_apertura_porcentaje) : 50,
                 penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
                 max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
                 penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
@@ -1183,6 +1142,9 @@ export async function getPublicServiciosConfig() {
         anticipo_monto_minimo_activo: true,
         anticipo_monto_minimo: 190,
         anticipo_porcentaje_defecto: 50,
+        anticipo_horario_apertura_activo: true,
+        anticipo_horario_apertura_hora: '10:00',
+        anticipo_horario_apertura_porcentaje: 50,
         penalizacion_inasistencias_activa: true,
         max_inasistencias_permitidas: 2,
         penalizacion_anticipo_porcentaje: 50,

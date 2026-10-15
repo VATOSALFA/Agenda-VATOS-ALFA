@@ -158,6 +158,12 @@ export interface ReglasReservasConfig {
   anticipo_porcentaje_defecto: number;
   anticipo_monto_minimo_descripcion?: string;
 
+  // 1.5. Regla de Anticipo Obligatorio en Horario de Apertura (10:00 AM)
+  anticipo_horario_apertura_activo: boolean;
+  anticipo_horario_apertura_hora: string;
+  anticipo_horario_apertura_porcentaje: number;
+  anticipo_horario_apertura_descripcion?: string;
+
   // 2. Regla Antifraude por Inasistencias (No-Shows)
   penalizacion_inasistencias_activa: boolean;
   max_inasistencias_permitidas: number;
@@ -194,6 +200,12 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
   anticipo_monto_minimo_descripcion:
     'Exige anticipo obligatorio en línea del 50% cuando el monto total de los servicios reservados alcance o supere los $190 MXN.',
 
+  anticipo_horario_apertura_activo: true,
+  anticipo_horario_apertura_hora: '10:00',
+  anticipo_horario_apertura_porcentaje: 50,
+  anticipo_horario_apertura_descripcion:
+    'Todas las citas que sean a las 10:00 AM (horario de apertura), ya sea desde la página web, desde la aplicación móvil o desde la misma agenda, requieren obligatoriamente un anticipo de garantía del 50% para asegurar el primer turno del día.',
+
   penalizacion_inasistencias_activa: true,
   max_inasistencias_permitidas: 2,
   penalizacion_anticipo_porcentaje: 50,
@@ -216,11 +228,35 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
   reglas_avisos_agenda: DEFAULT_AVISOS_AGENDA_RULES,
 };
 
+/**
+ * Verifica si una hora dada (ej. '10:00', '10:00 AM', '10:00:00') corresponde al horario de apertura (10:00 AM).
+ */
+export function isOpeningHourTime(
+  time?: string | null,
+  openingHour: string = '10:00'
+): boolean {
+  if (!time || typeof time !== 'string') return false;
+  const cleanTarget = (openingHour || '10:00').trim().slice(0, 5);
+  const raw = time.trim().toLowerCase();
+
+  // Extraer HH:mm de formatos como "10:00", "10:00 am", "10:00:00"
+  const match = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return false;
+
+  let h = parseInt(match[1], 10);
+  const m = match[2];
+  if (raw.includes('pm') && h < 12) h += 12;
+  if (raw.includes('am') && h === 12) h = 0;
+
+  const normalized = `${String(h).padStart(2, '0')}:${m}`;
+  return normalized === cleanTarget;
+}
+
 export interface BookingRulesEvaluation {
   requiresDeposit: boolean;
   depositAmount: number;
   depositPercentage: number;
-  reason: 'client_history' | 'service_specific' | 'custom_rule' | 'global_threshold' | 'same_day_accumulation' | 'none';
+  reason: 'client_history' | 'service_specific' | 'opening_hour' | 'custom_rule' | 'global_threshold' | 'same_day_accumulation' | 'none';
   clientNoShowsCount?: number;
   sameDayActiveCount?: number;
   sameDayActiveTotal?: number;
@@ -235,6 +271,7 @@ export interface BookingRulesEvaluation {
  * Evalúa las reglas de reserva respetando la jerarquía de mayor peso:
  * 1. Regla de Cliente (Máxima Prioridad): Si tiene >= N inasistencias o cancelaciones, siempre paga anticipo.
  * 2. Regla de Servicio Específico: Si un servicio tiene regla propia de anticipo, se respeta.
+ * 2.5. Regla de Horario de Apertura (10:00 AM): Toda cita en el horario de apertura requiere anticipo.
  * 3. Regla General: Si el total supera el monto mínimo configurado (ej. $190), se cobra anticipo.
  * 4. Por defecto: No requiere anticipo.
  */
@@ -341,6 +378,23 @@ export function evaluateDepositRequirement({
       depositPercentage: pct,
       reason: 'service_specific',
     };
+  }
+
+  // --- 2.5. REGLA DE HORARIO DE APERTURA (10:00 AM - ALTA PRIORIDAD) ---
+  if (mergedRules.anticipo_horario_apertura_activo !== false && safeTotal > 0) {
+    const targetOpeningHour = mergedRules.anticipo_horario_apertura_hora || '10:00';
+    if (isOpeningHourTime(time, targetOpeningHour)) {
+      const pct = Number(mergedRules.anticipo_horario_apertura_porcentaje || mergedRules.anticipo_porcentaje_defecto) || 50;
+      const deposit = Math.round(safeTotal * (pct / 100) * 100) / 100;
+      return {
+        requiresDeposit: true,
+        depositAmount: deposit,
+        depositPercentage: pct,
+        reason: 'opening_hour',
+        customRuleName: `Anticipo en Horario de Apertura (${targetOpeningHour} AM)`,
+        customRuleMessage: `Todas las citas agendadas en el horario de apertura (${targetOpeningHour} AM) requieren un anticipo del ${pct}% ($${deposit.toFixed(2)} MXN) para asegurar el primer turno del día.`,
+      };
+    }
   }
 
   // --- 3. REGLAS PERSONALIZADAS DINÁMICAS (ALTA PRIORIDAD) ---

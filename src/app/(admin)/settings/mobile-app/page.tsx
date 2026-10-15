@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,12 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { db } from '@/lib/firebase-client';
+import { collection, onSnapshot } from 'firebase/firestore';
 import type { Client, CanjeBeneficio } from '@/lib/types';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
 import { NivelesAlfaManager } from '@/components/admin/niveles-alfa-manager';
 import { GaleriaCortesManager } from '@/components/admin/galeria-cortes-manager';
 import { AppDownloadLinksCard } from '@/components/admin/app-download-links-card';
+import { BuzonClientesManager } from '@/components/admin/buzon-clientes-manager';
 import PromotionsManager from '../promotions/promotions-manager';
 import { cn } from '@/lib/utils';
 import {
@@ -28,6 +31,7 @@ import {
     ArrowUpRight,
     Search,
     Crown,
+    MessageSquareWarning,
 } from 'lucide-react';
 
 export default function MobileAppSettingsPage() {
@@ -37,8 +41,24 @@ export default function MobileAppSettingsPage() {
     // -- MÉTRICAS & USO DE LA APP MÓVIL --
     const { data: clientsList = [], loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
     const { data: canjesList = [], loading: canjesLoading } = useFirestoreQuery<CanjeBeneficio>('canjes_beneficios');
+    const [pendingFeedbackCount, setPendingFeedbackCount] = useState(0);
     const [selectedClientForDetail, setSelectedClientForDetail] = useState<Client | null>(null);
     const [searchAppClient, setSearchAppClient] = useState('');
+
+    useEffect(() => {
+        const colRef = collection(db, 'settings', 'app_movil', 'opiniones');
+        const unsub = onSnapshot(
+            colRef,
+            (snap) => {
+                const count = snap.docs.filter((d) => d.data()?.estado !== 'atendido').length;
+                setPendingFeedbackCount(count);
+            },
+            () => {
+                setPendingFeedbackCount(0);
+            }
+        );
+        return () => unsub();
+    }, []);
 
     const appClients = useMemo(() => {
         if (!clientsList) return [];
@@ -78,20 +98,29 @@ export default function MobileAppSettingsPage() {
                 <div>
                     <h2 className="text-xl font-bold tracking-tight text-foreground">App Móvil VATOS ALFA</h2>
                     <p className="text-xs text-muted-foreground">
-                        Gestiona el programa Pase Alfa Club, niveles y rangos de lealtad, promociones activas y métricas de la app móvil.
+                        Gestiona el programa Pase Alfa Club, niveles y rangos de lealtad, buzón de opiniones, efectos por temporada y métricas de la app móvil.
                     </p>
                 </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-1 gap-1">
-                    <TabsTrigger value="pase_alfa" className="text-xs sm:text-sm py-1.5 px-1 sm:px-3">Pase Alfa</TabsTrigger>
-                    <TabsTrigger value="niveles" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-1 sm:px-3">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 h-auto p-1 gap-1">
+                    <TabsTrigger value="pase_alfa" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">Pase Alfa</TabsTrigger>
+                    <TabsTrigger value="niveles" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
                         <Crown className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                        <span>Niveles & Rangos</span>
+                        <span className="truncate">Niveles & Rangos</span>
                     </TabsTrigger>
-                    <TabsTrigger value="promociones" className="text-xs sm:text-sm py-1.5 px-1 sm:px-3">Promociones</TabsTrigger>
-                    <TabsTrigger value="metricas" className="flex items-center justify-center gap-1 font-bold text-xs sm:text-sm py-1.5 px-1 sm:px-3">
+                    <TabsTrigger value="promociones" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">Promociones</TabsTrigger>
+                    <TabsTrigger value="buzon" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
+                        <MessageSquareWarning className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
+                        <span className="truncate">Buzón & Quejas</span>
+                        {pendingFeedbackCount > 0 && (
+                            <Badge className="ml-0.5 text-[10px] px-1 py-0 h-3.5 bg-amber-500 text-black font-black font-sans">
+                                {pendingFeedbackCount}
+                            </Badge>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="metricas" className="flex items-center justify-center gap-1 font-bold text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
                         <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:inline" />
                         <span className="truncate">Uso & Descargas</span>
                         {appClients.length > 0 && (
@@ -117,6 +146,11 @@ export default function MobileAppSettingsPage() {
                 {/* PROMOCIONES TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB Y /settings/promotions) */}
                 <TabsContent value="promociones" className="mt-6 space-y-6">
                     <PromotionsManager hideHeader />
+                </TabsContent>
+
+                {/* BUZÓN DE OPINIONES, SUGERENCIAS Y QUEJAS DE CLIENTES */}
+                <TabsContent value="buzon" className="mt-6 space-y-6">
+                    <BuzonClientesManager />
                 </TabsContent>
 
                 {/* MÉTRICAS & USO TAB */}

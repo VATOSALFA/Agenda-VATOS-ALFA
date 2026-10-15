@@ -20,6 +20,7 @@ import {
   KeyRound,
   Tag,
   Smartphone,
+  PartyPopper,
 } from "lucide-react";
 
 interface SettingsLayoutProps {
@@ -40,6 +41,7 @@ const sidebarNavItems = [
   { title: "Códigos de autorización", href: "/settings/auth-codes", icon: KeyRound },
   { title: "Promociones", href: "/settings/promotions", icon: Tag },
   { title: "App Móvil", href: "/settings/mobile-app", icon: Smartphone },
+  { title: "Temporadas", href: "/settings/temporadas", icon: PartyPopper },
 ];
 
 

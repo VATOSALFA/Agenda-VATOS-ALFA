@@ -1,4 +1,5 @@
 import { getDb } from '@/lib/firebase-server';
+import { isOpeningHourTime } from '@/lib/booking-rules';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 
 export interface AnticipoCalculation {
@@ -12,7 +13,8 @@ export interface AnticipoCalculation {
 
 export async function calcularAnticipoParaServicios(
   services: Array<any>,
-  extraProductsAmount: number = 0
+  extraProductsAmount: number = 0,
+  horaInicio?: string
 ): Promise<AnticipoCalculation> {
   const db = getDb();
   let total = Number(extraProductsAmount || 0);
@@ -39,15 +41,21 @@ export async function calcularAnticipoParaServicios(
     }
   }
 
-  // Regla Global: Consultar configuracion/servicios en Firestore
+  // Regla Global: Consultar configuracion/reglas_reservas y configuracion/servicios en Firestore
   let globalMinThreshold = 190;
   let globalDefaultPercent = 50;
   let globalActive = true;
+  let openingHourActive = true;
+  let openingHourTarget = '10:00';
+  let openingHourPercent = 50;
 
   try {
-    const cfgDoc = await db.collection('configuracion').doc('servicios').get();
-    if (cfgDoc.exists) {
-      const cfg = cfgDoc.data()!;
+    const [reglasDoc, cfgDoc] = await Promise.all([
+      db.collection('configuracion').doc('reglas_reservas').get(),
+      db.collection('configuracion').doc('servicios').get(),
+    ]);
+    const cfg = reglasDoc.exists ? reglasDoc.data()! : (cfgDoc.exists ? cfgDoc.data()! : null);
+    if (cfg) {
       if (typeof cfg.anticipo_monto_minimo_activo === 'boolean') {
         globalActive = cfg.anticipo_monto_minimo_activo;
       }
@@ -57,6 +65,17 @@ export async function calcularAnticipoParaServicios(
       if (Number(cfg.anticipo_porcentaje_defecto) > 0) {
         globalDefaultPercent = Number(cfg.anticipo_porcentaje_defecto);
       }
+      if (typeof cfg.anticipo_horario_apertura_activo === 'boolean') {
+        openingHourActive = cfg.anticipo_horario_apertura_activo;
+      }
+      if (cfg.anticipo_horario_apertura_hora) {
+        openingHourTarget = String(cfg.anticipo_horario_apertura_hora);
+      }
+      if (Number(cfg.anticipo_horario_apertura_porcentaje) > 0) {
+        openingHourPercent = Number(cfg.anticipo_horario_apertura_porcentaje);
+      } else {
+        openingHourPercent = globalDefaultPercent;
+      }
     }
   } catch (err) {
     console.error('Error fetching global servicios config:', err);
@@ -64,6 +83,14 @@ export async function calcularAnticipoParaServicios(
 
   let finalUpfront = upfrontFromServices;
   let motivo = '';
+
+  if (openingHourActive && horaInicio && isOpeningHourTime(horaInicio, openingHourTarget) && total > 0) {
+    const openingUpfront = total * (openingHourPercent / 100);
+    if (finalUpfront < openingUpfront) {
+      finalUpfront = openingUpfront;
+      motivo = `Aplica anticipo del ${openingHourPercent}% por tratarse del horario de apertura (${openingHourTarget} AM).`;
+    }
+  }
 
   if (globalActive && total >= globalMinThreshold) {
     const thresholdUpfront = total * (globalDefaultPercent / 100);

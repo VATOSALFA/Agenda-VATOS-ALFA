@@ -39,9 +39,14 @@ export function EnableScheduleModal({ isOpen, onOpenChange, onFormSubmit, initia
                 const [h, m] = initialData.hora_inicio.split(':');
                 setStartHour(h);
                 setStartMinute(m);
-                // Default 1 hour duration
-                setEndHour(String(parseInt(h) + 1).padStart(2, '0'));
-                setEndMinute(m);
+                const nextH = parseInt(h, 10) + 1;
+                if (nextH >= 24) {
+                    setEndHour('23');
+                    setEndMinute('59');
+                } else {
+                    setEndHour(String(nextH).padStart(2, '0'));
+                    setEndMinute(m);
+                }
             } else {
                 setStartHour('12');
                 setStartMinute('00');

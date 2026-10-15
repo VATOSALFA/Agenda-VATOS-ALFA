@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,7 @@ import { EnableScheduleModal } from '../reservations/enable-schedule-modal';
 import { ClientDetailModal } from '../clients/client-detail-modal';
 import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
+import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
 
 
@@ -370,6 +371,7 @@ export default function AgendaView() {
 
   const [whatsappConfirmationAnimation, setWhatsappConfirmationAnimation] = useState(true);
   const [whatsappReminderAnimation, setWhatsappReminderAnimation] = useState(true);
+  const [isBookingRulesModalOpen, setIsBookingRulesModalOpen] = useState(false);
 
   useEffect(() => {
     if (!db) return;
@@ -431,58 +433,6 @@ export default function AgendaView() {
 
   const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales', `special-${date ? format(date, 'yyyy-MM-dd') : ''}-${selectedLocalId}-${queryKey}`, ...(date ? [where('fecha', '==', format(date, 'yyyy-MM-dd'))] : []));
 
-  const { timeSlots, startHour, endHour } = useMemo(() => {
-    if (!selectedLocal || !selectedLocal.schedule) {
-      return { timeSlots: [], startHour: 10, endHour: 21 };
-    }
-    const dayOfWeek = date ? format(date, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : 'lunes';
-    const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
-
-    let sH = 10, sM = 0, eH = 21, eM = 0;
-    let anyEnabled = daySchedule.enabled;
-
-    if (daySchedule.enabled) {
-      [sH, sM] = daySchedule.start.split(':').map(Number);
-      [eH, eM] = daySchedule.end.split(':').map(Number);
-    }
-
-    // Check if any professional has a special journey today that might be outside local hours or if local is closed
-    specialJourneys.forEach(sj => {
-        const [sjStartH, sjStartM] = sj.hora_inicio.split(':').map(Number);
-        const [sjEndH, sjEndM] = sj.hora_fin.split(':').map(Number);
-        
-        if (!anyEnabled) {
-            sH = sjStartH; sM = sjStartM;
-            eH = sjEndH; eM = sjEndM;
-            anyEnabled = true;
-        } else {
-            if (sjStartH < sH || (sjStartH === sH && sjStartM < sM)) {
-                sH = sjStartH; sM = sjStartM;
-            }
-            if (sjEndH > eH || (sjEndH === eH && sjEndM > eM)) {
-                eH = sjEndH; eM = sjEndM;
-            }
-        }
-    });
-
-    if (!anyEnabled) {
-      return { timeSlots: [], startHour: 10, endHour: 21 };
-    }
-
-    const slots = [];
-    let currentTimeLoop = set(new Date(), { hours: sH, minutes: sM, seconds: 0 });
-    const endTime = set(new Date(), { hours: eH, minutes: eM, seconds: 0 });
-
-    while (currentTimeLoop < endTime) {
-      slots.push(format(currentTimeLoop, 'HH:mm'));
-      currentTimeLoop = addMinutes(currentTimeLoop, slotDurationMinutes);
-    }
-    slots.push(format(endTime, 'HH:mm'));
-
-    return { timeSlots: slots, startHour: sH, endHour: eH };
-  }, [date, selectedLocal, slotDurationMinutes, specialJourneys]);
-
-
   const reservationsQueryConstraint = useMemo(() => {
     if (!date || !selectedLocalId) return undefined;
     return [
@@ -501,6 +451,76 @@ export default function AgendaView() {
     ...(reservationsQueryConstraint || [])
   );
   const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
+
+  const { timeSlots, startHour, endHour } = useMemo(() => {
+    if (!selectedLocal || !selectedLocal.schedule) {
+      return { timeSlots: [], startHour: 10, endHour: 21 };
+    }
+    const dayOfWeek = date ? format(date, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : 'lunes';
+    const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
+
+    let sH = 10, sM = 0, eH = 21, eM = 0;
+    let anyEnabled = daySchedule.enabled;
+
+    if (daySchedule.enabled) {
+      [sH, sM] = daySchedule.start.split(':').map(Number);
+      [eH, eM] = daySchedule.end.split(':').map(Number);
+    }
+
+    const expandBounds = (startStr?: string, endStr?: string) => {
+      if (!startStr || !endStr) return;
+      const [stH, stM] = startStr.split(':').map(Number);
+      const [enH, enM] = endStr.split(':').map(Number);
+      if (isNaN(stH) || isNaN(stM) || isNaN(enH) || isNaN(enM)) return;
+
+      if (!anyEnabled) {
+        sH = stH; sM = stM;
+        eH = enH; eM = enM;
+        anyEnabled = true;
+      } else {
+        if (stH < sH || (stH === sH && stM < sM)) {
+          sH = stH; sM = stM;
+        }
+        if (enH > eH || (enH === eH && enM > eM)) {
+          eH = enH; eM = enM;
+        }
+      }
+    };
+
+    // 1. Expand for Special Journeys ('jornadas_especiales' from Admin -> Profesionales)
+    (specialJourneys || []).forEach(sj => {
+      if (!sj.local_id || !selectedLocalId || sj.local_id === selectedLocalId) {
+        expandBounds(sj.hora_inicio, sj.hora_fin);
+      }
+    });
+
+    // 2. Expand for internal Special Schedules ('bloqueos_horario' with type === 'available' from Agenda)
+    (timeBlocks || []).forEach(tb => {
+      if ((tb as any).type === 'available') {
+        expandBounds(tb.hora_inicio, tb.hora_fin);
+      }
+    });
+
+    if (!anyEnabled) {
+      return { timeSlots: [], startHour: 10, endHour: 21 };
+    }
+
+    const startTotalMins = sH * 60;
+    const rawEndMins = eH * 60 + eM;
+    const alignedEndMins = Math.min(
+      24 * 60,
+      Math.max(startTotalMins + slotDurationMinutes, Math.ceil(rawEndMins / slotDurationMinutes) * slotDurationMinutes)
+    );
+
+    const slots: string[] = [];
+    for (let m = startTotalMins; m <= alignedEndMins; m += slotDurationMinutes) {
+      const h = Math.floor(m / 60);
+      const min = m % 60;
+      slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+    }
+
+    return { timeSlots: slots, startHour: sH, endHour: alignedEndMins / 60 };
+  }, [date, selectedLocal, selectedLocalId, slotDurationMinutes, specialJourneys, timeBlocks]);
 
   // Fast on-demand batched client fetcher (loads only clients for current day's reservations)
   const [clientsMap, setClientsMap] = useState<Map<string, Client>>(new Map());
@@ -783,6 +803,22 @@ export default function AgendaView() {
         hora_inicio: popoverState.time
       });
       setIsBlockScheduleModalOpen(true);
+      setPopoverState(null);
+    }
+  };
+
+  const handleOpenEnableScheduleFromPopover = () => {
+    if (!canSee('bloquear_horarios')) return;
+    if (popoverState && date) {
+      const barber = professionals.find(p => p.id === popoverState.barberId);
+      setEnableScheduleInitialData({
+        barbero_id: popoverState.barberId,
+        barberName: barber?.publicName || barber?.name,
+        fecha: date,
+        hora_inicio: popoverState.time,
+        local_id: selectedLocalId,
+      });
+      setIsEnableScheduleModalOpen(true);
       setPopoverState(null);
     }
   };
@@ -1274,49 +1310,110 @@ export default function AgendaView() {
     if (!date) return null;
 
     const dateStr = format(date, 'yyyy-MM-dd');
+    const dayOfWeek = format(date, 'eeee', { locale: es })
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    const regSchedule = barber.schedule ? barber.schedule[dayOfWeek as keyof typeof barber.schedule] : null;
 
     // Check for Special Journeys (there may be multiple on the same day)
-    const barberJourneys = specialJourneys.filter(
+    const barberJourneys = (specialJourneys || []).filter(
       (s: any) => s.profesionalId === barber.id && s.fecha === dateStr
     );
 
     if (barberJourneys.length > 0) {
-      // Sort journeys by start time
-      const sorted = [...barberJourneys].sort((a: any, b: any) =>
-        a.hora_inicio.localeCompare(b.hora_inicio)
-      );
+      const parseMins = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+      };
+      const fmtMins = (mins: number) => {
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      };
 
-      // Merge: overall start is the earliest, overall end is the latest
-      const overallStart = sorted[0].hora_inicio;
-      const overallEnd = sorted.reduce(
-        (latest: string, j: any) => (j.hora_fin > latest ? j.hora_fin : latest),
-        sorted[0].hora_fin
-      );
+      const workingIntervals: { start: number; end: number }[] = [];
 
-      // Build break segments for gaps between consecutive journeys
-      const breaks: { start: string; end: string }[] = [];
-      for (let i = 0; i < sorted.length - 1; i++) {
-        const currentEnd = sorted[i].hora_fin;
-        const nextStart = sorted[i + 1].hora_inicio;
-        if (currentEnd < nextStart) {
-          breaks.push({ start: currentEnd, end: nextStart });
+      // 1. Include regular shift if enabled on this day (clamped to local hours if local is open)
+      const localDay = selectedLocal?.schedule?.[dayOfWeek as keyof typeof selectedLocal.schedule];
+      const isLocalOpen = localDay ? localDay.enabled !== false : true;
+
+      if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && isLocalOpen) {
+        let regStart = parseMins(regSchedule.start);
+        let regEnd = parseMins(regSchedule.end);
+        if (localDay && localDay.enabled && localDay.start && localDay.end) {
+          regStart = Math.max(regStart, parseMins(localDay.start));
+          regEnd = Math.min(regEnd, parseMins(localDay.end));
+        }
+        if (regStart < regEnd) {
+          let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
+          if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
+            regSchedule.breaks.forEach((brk: any) => {
+              if (!brk.start || !brk.end) return;
+              const bStart = parseMins(brk.start);
+              const bEnd = parseMins(brk.end);
+              if (bStart >= bEnd) return;
+              const nextSegs: { start: number; end: number }[] = [];
+              regSegments.forEach(seg => {
+                if (bEnd <= seg.start || bStart >= seg.end) {
+                  nextSegs.push(seg);
+                } else {
+                  if (bStart > seg.start) nextSegs.push({ start: seg.start, end: bStart });
+                  if (bEnd < seg.end) nextSegs.push({ start: bEnd, end: seg.end });
+                }
+              });
+              regSegments = nextSegs;
+            });
+          }
+          workingIntervals.push(...regSegments);
         }
       }
 
-      return {
-        enabled: true,
-        start: overallStart,
-        end: overallEnd,
-        breaks,
-      };
+      // 2. Include all Special Journeys (unclamped to local hours so before/after opening works)
+      barberJourneys.forEach((j: any) => {
+        if (j.hora_inicio && j.hora_fin) {
+          const s = parseMins(j.hora_inicio);
+          const e = parseMins(j.hora_fin);
+          if (s < e) workingIntervals.push({ start: s, end: e });
+        }
+      });
+
+      if (workingIntervals.length > 0) {
+        workingIntervals.sort((a, b) => a.start - b.start);
+        const merged: { start: number; end: number }[] = [];
+        workingIntervals.forEach(iv => {
+          if (merged.length === 0) {
+            merged.push({ ...iv });
+          } else {
+            const last = merged[merged.length - 1];
+            if (iv.start <= last.end) {
+              last.end = Math.max(last.end, iv.end);
+            } else {
+              merged.push({ ...iv });
+            }
+          }
+        });
+
+        const overallStart = fmtMins(merged[0].start);
+        const overallEnd = fmtMins(merged[merged.length - 1].end);
+        const breaks: { start: string; end: string }[] = [];
+        for (let i = 0; i < merged.length - 1; i++) {
+          if (merged[i].end < merged[i + 1].start) {
+            breaks.push({ start: fmtMins(merged[i].end), end: fmtMins(merged[i + 1].start) });
+          }
+        }
+
+        return {
+          enabled: true,
+          start: overallStart,
+          end: overallEnd,
+          breaks,
+        };
+      }
     }
 
-    if (!barber.schedule) return null;
-    const dayOfWeek = format(date, 'eeee', { locale: es })
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, ""); // Remove accents
-    return barber.schedule[dayOfWeek as keyof typeof barber.schedule];
+    return regSchedule;
   };
 
   const selectedDateFormatted = useMemo(() => {
@@ -1589,9 +1686,26 @@ export default function AgendaView() {
                     reservations={effectiveReservations}
                     professionals={professionals}
                     clients={clients}
+                    selectedLocalId={selectedLocalId}
                     onUpdateStatus={handleUpdateStatus}
                     onSelectReservation={handleOpenDetailModal}
+                    onOpenBookingRules={() => setIsBookingRulesModalOpen(true)}
                   />
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setIsBookingRulesModalOpen(true)}
+                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
+                        title="Reglas de Agendamiento"
+                      >
+                        <BookOpen className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Reglas de Agendamiento</TooltipContent>
+                  </Tooltip>
 
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -1977,7 +2091,12 @@ export default function AgendaView() {
                                   <Trash2 className="w-4 h-4 mr-2" /> Eliminar Horario
                                 </Button>
                               ) : (
-                                <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
+                                <>
+                                  <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenBlockModal}><Lock className="w-4 h-4 mr-2" /> Bloquear horario</Button>
+                                  {canSee('bloquear_horarios') && (
+                                    <Button variant="ghost" className="w-full justify-start h-8" onClick={handleOpenEnableScheduleFromPopover}><Clock className="w-4 h-4 mr-2" /> Habilitar horario especial</Button>
+                                  )}
+                                </>
                               )}
                             </CardContent>
                           </Card>
@@ -2253,17 +2372,23 @@ export default function AgendaView() {
         initialData={enableScheduleInitialData}
       />
       {!isStaff && (
-        <QuickConsultModal
-          isOpen={isQuickConsultOpen}
-          onClose={() => setIsQuickConsultOpen(false)}
-          services={services || []}
-          professionals={filteredProfessionals}
-          reservations={reservations || []}
-          timeBlocks={timeBlocks || []}
-          date={date}
-          onSelectSlot={handleSelectQuickConsultSlot}
-          specialJourneys={specialJourneys || []}
-        />
+        <>
+          <QuickConsultModal
+            isOpen={isQuickConsultOpen}
+            onClose={() => setIsQuickConsultOpen(false)}
+            services={services || []}
+            professionals={filteredProfessionals}
+            reservations={reservations || []}
+            timeBlocks={timeBlocks || []}
+            date={date}
+            onSelectSlot={handleSelectQuickConsultSlot}
+            specialJourneys={specialJourneys || []}
+          />
+          <BookingRulesCheatSheetModal
+            isOpen={isBookingRulesModalOpen}
+            onClose={() => setIsBookingRulesModalOpen(false)}
+          />
+        </>
       )}
     </TooltipProvider >
   );

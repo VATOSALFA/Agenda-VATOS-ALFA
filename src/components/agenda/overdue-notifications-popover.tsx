@@ -12,22 +12,27 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Send,
+  Globe,
   Calendar,
   AlertCircle,
+  BookOpen,
 } from 'lucide-react';
 import type { Reservation, Profesional, Client } from '@/lib/types';
 import { formatClientName } from './agenda-utils';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { db } from '@/lib/firebase-client';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import {
   DEFAULT_BOOKING_RULES,
   DEFAULT_AVISOS_AGENDA_RULES,
   ReglasReservasConfig,
   isShortNoticeAppointment,
 } from '@/lib/booking-rules';
+import { playStrongNotificationAlert } from '@/lib/notification-sound';
+import { useToast } from '@/hooks/use-toast';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // Icono limpio de WhatsApp sin contenedor de fondo
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -51,18 +56,23 @@ interface OverdueNotificationsPopoverProps {
   reservations: Reservation[];
   professionals: Profesional[];
   clients: Client[];
+  selectedLocalId?: string | null;
   onUpdateStatus: (reservationId: string, status: string) => void;
   onSelectReservation: (reservation: any) => void;
+  onOpenBookingRules?: () => void;
 }
 
 export function OverdueNotificationsPopover({
   reservations,
   professionals,
   clients,
+  selectedLocalId,
   onUpdateStatus,
   onSelectReservation,
+  onOpenBookingRules,
 }: OverdueNotificationsPopoverProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const isStaff = Boolean(
     user?.role &&
       (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero'))
@@ -72,12 +82,15 @@ export function OverdueNotificationsPopover({
   const [todayStr, setTodayStr] = useState<string>('');
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [activeTab, setActiveTab] = useState<'all' | 'whatsapp' | 'overdue'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'online' | 'whatsapp' | 'overdue'>('all');
 
   // Reglas de reserva cargadas en tiempo real desde Firestore
   const [rules, setRules] = useState<ReglasReservasConfig>(DEFAULT_BOOKING_RULES);
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
     '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_'
+  );
+  const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState<string>(
+    '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 2 horas antes. Favor de llegar 5 minutos antes de tu cita._'
   );
 
   // Escuchar configuración de reglas de reserva y plantilla WhatsApp
@@ -106,6 +119,9 @@ export function OverdueNotificationsPopover({
           const d = snap.data();
           if (d.whatsappReminderTemplate) {
             setWhatsappTemplate(d.whatsappReminderTemplate);
+          }
+          if (d.whatsappConfirmationTemplate || d.whatsappTemplate) {
+            setWhatsappConfirmationTemplate(d.whatsappConfirmationTemplate || d.whatsappTemplate);
           }
         }
       },
@@ -154,6 +170,151 @@ export function OverdueNotificationsPopover({
     return () => clearInterval(interval);
   }, [isStaff]);
 
+  // Escuchar en tiempo real reservas online (web_publica, app_movil, chatbot) desde hoy en adelante
+  const [onlineReservationsFromDb, setOnlineReservationsFromDb] = useState<Reservation[]>([]);
+
+  useEffect(() => {
+    if (!db || isStaff || !todayStr) return;
+
+    const isLocalhost =
+      typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    const qOnline = query(
+      collection(db, 'reservas'),
+      where('fecha', '>=', todayStr)
+    );
+
+    const unsub = onSnapshot(
+      qOnline,
+      (snap) => {
+        const list: Reservation[] = [];
+        snap.forEach((d) => {
+          const res = { id: d.id, ...d.data() } as unknown as Reservation;
+          if (
+            selectedLocalId &&
+            selectedLocalId !== 'todos' &&
+            res.local_id &&
+            res.local_id !== selectedLocalId
+          ) {
+            return;
+          }
+
+          const canal = (res.canal_reserva || res.origen || '').toLowerCase();
+          const isOnline =
+            canal.startsWith('web') ||
+            canal.startsWith('app') ||
+            canal.startsWith('mobile') ||
+            canal.startsWith('chat') ||
+            canal.startsWith('janet');
+
+          if (!isOnline) return;
+
+          // Excluir canceladas, completadas o no asiste
+          if (
+            res.estado === 'Cancelado' ||
+            res.estado === 'No asiste' ||
+            res.estado === 'Completado' ||
+            res.estado === 'Venta completada'
+          ) {
+            return;
+          }
+
+          // Citas pendientes de confirmación por recepción
+          if (!res.whatsappConfirmationSent && res.estado !== 'Confirmado') {
+            list.push(res);
+          }
+        });
+
+        setOnlineReservationsFromDb(list);
+      },
+      (err) => {
+        console.error('Error escuchando citas online en tiempo real:', err);
+      }
+    );
+
+    let unsubSandbox: (() => void) | undefined;
+    if (isLocalhost) {
+      try {
+        const qSandbox = query(
+          collection(db, 'reservas_sandbox'),
+          where('fecha', '>=', todayStr)
+        );
+        unsubSandbox = onSnapshot(qSandbox, (snap) => {
+          const sandboxList: Reservation[] = [];
+          snap.forEach((d) => {
+            const res = { id: d.id, ...d.data(), isSandbox: true } as unknown as Reservation;
+            const canal = (res.canal_reserva || res.origen || '').toLowerCase();
+            const isOnline =
+              canal.startsWith('web') ||
+              canal.startsWith('app') ||
+              canal.startsWith('mobile') ||
+              canal.startsWith('chat') ||
+              canal.startsWith('janet');
+            if (
+              isOnline &&
+              !res.whatsappConfirmationSent &&
+              res.estado !== 'Confirmado' &&
+              res.estado !== 'Cancelado' &&
+              res.estado !== 'No asiste' &&
+              res.estado !== 'Completado'
+            ) {
+              sandboxList.push(res);
+            }
+          });
+          if (sandboxList.length > 0) {
+            setOnlineReservationsFromDb((prev) => {
+              const combined = [...prev, ...sandboxList];
+              return Array.from(new Map(combined.map((r) => [r.id, r])).values());
+            });
+          }
+        });
+      } catch (e) {
+        console.warn('Sandbox listener omitido:', e);
+      }
+    }
+
+    return () => {
+      unsub();
+      if (unsubSandbox) unsubSandbox();
+    };
+  }, [isStaff, todayStr, selectedLocalId]);
+
+  // Consolidar citas en línea pendientes de confirmación
+  const allOnlineReservations = useMemo(() => {
+    if (isStaff) return [];
+
+    const map = new Map<string, Reservation>();
+    onlineReservationsFromDb.forEach((r) => map.set(r.id, r));
+
+    (reservations || []).forEach((r) => {
+      const canal = (r.canal_reserva || r.origen || '').toLowerCase();
+      const isOnline =
+        canal.startsWith('web') ||
+        canal.startsWith('app') ||
+        canal.startsWith('mobile') ||
+        canal.startsWith('chat') ||
+        canal.startsWith('janet');
+
+      if (
+        isOnline &&
+        !r.whatsappConfirmationSent &&
+        r.estado !== 'Confirmado' &&
+        r.estado !== 'Cancelado' &&
+        r.estado !== 'No asiste' &&
+        r.estado !== 'Completado' &&
+        r.estado !== 'Venta completada'
+      ) {
+        map.set(r.id, r);
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+      return (a.hora_inicio || '').localeCompare(b.hora_inicio || '');
+    });
+  }, [isStaff, onlineReservationsFromDb, reservations]);
+
   // Desglosar reglas aplicables
   const avisosList =
     rules.reglas_avisos_agenda && rules.reglas_avisos_agenda.length > 0
@@ -182,13 +343,9 @@ export function OverdueNotificationsPopover({
     }
 
     return reservations.filter((res) => {
-      // Debe ser cita de hoy
       if (res.fecha !== todayStr) return false;
-
-      // No recordar si ya se envió el recordatorio
       if (res.whatsappReminderSent) return false;
 
-      // No recordar si la cita está cancelada o no asistió
       if (
         res.estado === 'Cancelado' ||
         res.estado === 'No asiste' ||
@@ -198,10 +355,8 @@ export function OverdueNotificationsPopover({
         return false;
       }
 
-      // Omitir si se agendó con poca anticipación (ej. <= 45 min)
       if (isShortNoticeAppointment(res, omitirCreacionMinutos)) return false;
 
-      // Calcular hora de inicio en minutos
       if (!res.hora_inicio || typeof res.hora_inicio !== 'string') return false;
       const parts = res.hora_inicio.split(':');
       if (parts.length < 2) return false;
@@ -212,7 +367,6 @@ export function OverdueNotificationsPopover({
       const startMin = h * 60 + m;
       const minsUntilStart = startMin - nowMinutes;
 
-      // Debe faltar <= anticipacionMinutos (ej. 120 min) y que no haya pasado de la hora de inicio hace más de 10 min
       return minsUntilStart <= anticipacionMinutos && minsUntilStart >= -10;
     });
   }, [
@@ -257,23 +411,115 @@ export function OverdueNotificationsPopover({
     });
   }, [isStaff, reservations, todayStr, nowMinutes, isAtrasadaActive, toleranciaAtrasadaMinutos]);
 
-  const totalCount = whatsappReminderReservations.length + overdueReservations.length;
+  const totalCount =
+    allOnlineReservations.length +
+    whatsappReminderReservations.length +
+    overdueReservations.length;
 
-  // Autoexpandir si llega un nuevo aviso mientras está minimizado
+  // Autoexpandir al centro y reproducir alerta sonora de alta penetración al recibir un nuevo aviso
   const prevCountRef = useRef(totalCount);
   useEffect(() => {
     if (isStaff) return;
     if (totalCount > prevCountRef.current && totalCount > 0) {
       setIsMinimized(false);
+      playStrongNotificationAlert();
     }
     prevCountRef.current = totalCount;
   }, [totalCount, isStaff]);
+
+  // Acción: Enviar confirmación por WhatsApp a cita en línea
+  const handleSendOnlineConfirmation = async (res: Reservation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
+    const phoneRaw =
+      client?.telefono ||
+      (res as any).cliente_telefono ||
+      (res as any).telefono ||
+      '';
+    const phone = phoneRaw.replace(/\D/g, '');
+    const formattedPhone = phone.length === 10 ? '52' + phone : phone;
+
+    const prof = professionals.find(
+      (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
+    );
+    const profName = prof ? prof.publicName || prof.name : 'tu barbero';
+
+    let servicesText = '';
+    if (res.items && res.items.length > 0) {
+      servicesText = res.items.map((i) => i.nombre || i.servicio).join(', ');
+    } else {
+      servicesText = (res as any).servicio || 'Servicio';
+    }
+
+    const clientName = formatClientName(client?.nombre, client?.apellido);
+    const locationStr = 'Suc. Sombrerete';
+
+    let datePretty = res.fecha;
+    try {
+      datePretty = format(parseISO(res.fecha), "EEEE, dd 'de' MMMM", { locale: es });
+      datePretty = datePretty.charAt(0).toUpperCase() + datePretty.slice(1);
+    } catch (_) {}
+
+    const message = whatsappConfirmationTemplate
+      .replace(/{nombre}/g, clientName)
+      .replace(/{servicios}/g, servicesText)
+      .replace(/{fecha}/g, datePretty)
+      .replace(/{hora}/g, res.hora_inicio || '')
+      .replace(/{profesional}/g, profName)
+      .replace(/{ubicacion}/g, locationStr);
+
+    if (formattedPhone) {
+      window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
+    }
+
+    try {
+      if (db) {
+        const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+        await updateDoc(doc(db, targetCol, res.id), {
+          whatsappConfirmationSent: true,
+          estado: 'Confirmado',
+        });
+      }
+      onUpdateStatus(res.id, 'Confirmado');
+      toast({
+        title: 'Confirmación Enviada',
+        description: `WhatsApp abierto para ${clientName}. La cita se marcó como confirmada.`,
+      });
+    } catch (err) {
+      console.error('Error al confirmar cita online:', err);
+    }
+  };
+
+  // Acción directa: Confirmar cita en línea sin abrir WhatsApp
+  const handleConfirmDirectly = async (res: Reservation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (db) {
+        const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+        await updateDoc(doc(db, targetCol, res.id), {
+          whatsappConfirmationSent: true,
+          estado: 'Confirmado',
+        });
+      }
+      onUpdateStatus(res.id, 'Confirmado');
+      toast({
+        title: 'Cita Confirmada',
+        description: 'La cita fue marcada como confirmada en la agenda.',
+      });
+    } catch (err) {
+      console.error('Error al confirmar directamente:', err);
+    }
+  };
 
   // Acción directa: Enviar recordatorio por WhatsApp y marcar como enviado
   const handleSendReminderWhatsApp = async (res: Reservation, e: React.MouseEvent) => {
     e.stopPropagation();
     const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
-    const phoneRaw = client?.telefono || (res as any).telefono || '';
+    const phoneRaw =
+      client?.telefono ||
+      (res as any).cliente_telefono ||
+      (res as any).telefono ||
+      '';
     const phone = phoneRaw.replace(/\D/g, '');
     const formattedPhone = phone.length === 10 ? '52' + phone : phone;
 
@@ -306,12 +552,29 @@ export function OverdueNotificationsPopover({
 
     try {
       if (db) {
-        await updateDoc(doc(db, 'reservas', res.id), {
+        const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+        await updateDoc(doc(db, targetCol, res.id), {
           whatsappReminderSent: true,
         });
       }
+      toast({
+        title: 'Recordatorio Enviado',
+        description: `Se abrió WhatsApp para recordar la cita de ${clientName}.`,
+      });
     } catch (err) {
       console.error('Error al actualizar whatsappReminderSent:', err);
+    }
+  };
+
+  const formatReservationDay = (dateStr: string) => {
+    if (!dateStr) return '';
+    if (dateStr === todayStr) return 'Hoy';
+    try {
+      const d = parseISO(dateStr);
+      const formatted = format(d, "EEE dd 'de' MMM", { locale: es });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } catch (_) {
+      return dateStr;
     }
   };
 
@@ -320,6 +583,8 @@ export function OverdueNotificationsPopover({
   }
 
   // Filtrado según la pestaña seleccionada
+  const filteredOnline =
+    activeTab === 'all' || activeTab === 'online' ? allOnlineReservations : [];
   const filteredReminders =
     activeTab === 'all' || activeTab === 'whatsapp' ? whatsappReminderReservations : [];
   const filteredOverdues =
@@ -327,14 +592,19 @@ export function OverdueNotificationsPopover({
 
   return (
     <>
-      {/* 1. Botón de Campanita en la Barra Superior */}
+      {/* 1. Botón de Campanita en la Barra Superior de la Agenda */}
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
             size="icon"
+            onClick={() => {
+              if (totalCount > 0) {
+                setIsMinimized(false);
+              }
+            }}
             className="relative h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
-            title="Avisos operativos de agenda"
+            title={`Avisos de Agenda ${totalCount > 0 ? `(${totalCount} pendientes)` : ''}`}
           >
             <Bell className={cn('h-4 w-4', totalCount > 0 && 'text-blue-500')} />
 
@@ -346,36 +616,128 @@ export function OverdueNotificationsPopover({
           </Button>
         </PopoverTrigger>
 
-        <PopoverContent
-          className="w-84 sm:w-96 p-0 shadow-2xl border-2 border-blue-500 rounded-xl bg-background overflow-hidden"
-          align="end"
-        >
-          {/* Cabecera Oficial */}
-          <div className="p-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bell className="h-4 w-4 text-blue-400" />
-              <h4 className="font-bold text-sm text-white">Avisos de Agenda ({totalCount})</h4>
+        {/* Solo abrir Popover cuando totalCount === 0 (para informar que todo está al día) */}
+        {totalCount === 0 && (
+          <PopoverContent
+            className="w-80 p-0 shadow-2xl border-2 border-blue-500 rounded-xl bg-background overflow-hidden"
+            align="end"
+          >
+            <div className="p-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-blue-400" />
+                <h4 className="font-bold text-sm text-white">Avisos de Agenda</h4>
+              </div>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-bold bg-white/10 text-slate-300 border-white/20"
+              >
+                Al día
+              </Badge>
             </div>
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-[10px] font-bold',
-                totalCount > 0
-                  ? 'bg-blue-500/20 text-blue-300 border-blue-400/40'
-                  : 'bg-white/10 text-slate-300 border-white/20'
-              )}
-            >
-              {totalCount > 0 ? 'Acción Requerida' : 'Al día'}
-            </Badge>
-          </div>
 
-          {/* Selector de Pestañas si hay diferentes avisos */}
-          {totalCount > 0 && (
-            <div className="flex items-center border-b border-border/60 bg-muted/20 px-2 py-1.5 gap-1 text-xs">
+            <div className="p-5 text-center text-muted-foreground space-y-2">
+              <CheckCircle2 className="h-8 w-8 text-blue-500 mx-auto opacity-80" />
+              <p className="text-xs font-semibold text-foreground">¡Todo al día en la agenda!</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                No hay reservas en línea por confirmar, recordatorios pendientes ni citas retrasadas.
+              </p>
+            </div>
+
+            {onOpenBookingRules && (
+              <div className="p-2.5 bg-muted/30 border-t border-border/60 flex items-center justify-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenBookingRules();
+                  }}
+                  className="text-xs text-blue-400 hover:text-blue-300 gap-1.5 h-8 font-semibold"
+                >
+                  <BookOpen className="w-3.5 h-3.5" />
+                  <span>Consultar Reglas de Agendamiento</span>
+                </Button>
+              </div>
+            )}
+          </PopoverContent>
+        )}
+      </Popover>
+
+      {/* 2. MODAL DE AVISOS CENTRADO EN PANTALLA CON FONDO DIFUMINADO (BACKDROP BLUR) */}
+      {totalCount > 0 && !isMinimized && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsMinimized(true);
+            }
+          }}
+        >
+          <div
+            className="relative w-full max-w-lg bg-background rounded-2xl shadow-2xl border-2 border-blue-500 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Cabecera Oficial VATOS ALFA con Franja Azul y Haz de Luz Oblicuo */}
+            <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-blue-500/30 relative overflow-hidden">
+              <div className="header-light-beam" aria-hidden="true" />
+              <div className="relative z-10 flex items-center gap-2.5">
+                <Bell className="h-4 w-4 text-blue-400 animate-bounce" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm sm:text-base text-white tracking-wide">
+                      Avisos de Recepción y Agenda
+                    </h3>
+                    <Badge
+                      variant="outline"
+                      className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] font-bold px-1.5 py-0.5 animate-pulse"
+                    >
+                      {totalCount} {totalCount === 1 ? 'pendiente' : 'pendientes'}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-blue-200/80 font-normal mt-0.5">
+                    Acción requerida para mantener la agenda sincronizada
+                  </p>
+                </div>
+              </div>
+
+              {/* Acciones de la Cabecera */}
+              <div className="relative z-10 flex items-center gap-1.5">
+                {onOpenBookingRules && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={onOpenBookingRules}
+                    className="h-8 px-2 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1.5 text-xs font-semibold"
+                    title="Consultar Reglas de Agendamiento"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-blue-300" />
+                    <span className="hidden sm:inline">Reglas</span>
+                  </Button>
+                )}
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsMinimized(true)}
+                  className="h-8 px-2.5 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1 text-xs font-semibold"
+                  title="Minimizar modal de avisos"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  <span>Minimizar</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Selector de Pestañas */}
+            <div className="flex items-center border-b border-border/60 bg-muted/20 px-3 py-2 gap-1.5 text-xs overflow-x-auto">
               <button
+                type="button"
                 onClick={() => setActiveTab('all')}
                 className={cn(
-                  'px-2.5 py-1 rounded-md font-semibold transition-colors',
+                  'px-2.5 py-1 rounded-md font-semibold transition-colors shrink-0',
                   activeTab === 'all'
                     ? 'bg-[#202A49] text-white'
                     : 'text-muted-foreground hover:text-foreground'
@@ -384,271 +746,178 @@ export function OverdueNotificationsPopover({
                 Todos ({totalCount})
               </button>
 
+              {allOnlineReservations.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('online')}
+                  className={cn(
+                    'px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shrink-0',
+                    activeTab === 'online'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <Globe className="w-3 h-3 text-blue-400" />
+                  En Línea ({allOnlineReservations.length})
+                </button>
+              )}
+
               {whatsappReminderReservations.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => setActiveTab('whatsapp')}
                   className={cn(
-                    'px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1',
+                    'px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shrink-0',
                     activeTab === 'whatsapp'
                       ? 'bg-blue-600 text-white'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <WhatsAppIcon className="w-3 h-3" />
+                  <WhatsAppIcon className="w-3 h-3 text-blue-400" />
                   Recordatorios ({whatsappReminderReservations.length})
                 </button>
               )}
 
               {overdueReservations.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => setActiveTab('overdue')}
                   className={cn(
-                    'px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1',
+                    'px-2.5 py-1 rounded-md font-semibold transition-colors flex items-center gap-1 shrink-0',
                     activeTab === 'overdue'
                       ? 'bg-red-600 text-white'
                       : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <AlertCircle className="w-3 h-3" />
+                  <AlertCircle className="w-3 h-3 text-red-300" />
                   Por Etiquetar ({overdueReservations.length})
                 </button>
               )}
             </div>
-          )}
 
-          {/* Lista de Avisos */}
-          <div className="max-h-[380px] overflow-y-auto divide-y divide-border/60">
-            {totalCount === 0 ? (
-              <div className="p-6 text-center text-muted-foreground space-y-2">
-                <CheckCircle2 className="h-8 w-8 text-blue-500 mx-auto opacity-80" />
-                <p className="text-xs font-semibold text-foreground">¡Todo al día en la agenda!</p>
-                <p className="text-[11px] text-muted-foreground">
-                  No hay recordatorios pendientes ni citas retrasadas sin registrar.
-                </p>
-              </div>
-            ) : (
-              <>
-                {/* 1. SECCIÓN RECORDATORIOS WHATSAPP */}
-                {filteredReminders.map((res) => {
-                  const [h, m] = res.hora_inicio.split(':').map(Number);
-                  const startMin = h * 60 + m;
-                  const minsUntil = startMin - nowMinutes;
-                  const isUrgent = minsUntil <= urgenteMinutos;
+            {/* Listado con Barra de Desplazamiento Estilizada */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 max-h-[58vh]">
+              {/* 1. SECCIÓN: CITAS AGENDADAS EN LÍNEA PENDIENTES DE CONFIRMACIÓN */}
+              {filteredOnline.map((res) => {
+                const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
+                const prof = professionals.find(
+                  (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
+                );
+                const canal = (res.canal_reserva || res.origen || 'web_publica').toLowerCase();
+                const canalLabel = canal.includes('app')
+                  ? 'App Móvil'
+                  : canal.includes('chat') || canal.includes('janet')
+                  ? 'Janet'
+                  : 'Web';
 
-                  const prof = professionals.find(
-                    (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
-                  );
-                  const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
+                const isDepositPaid =
+                  res.pago_estado === 'deposit_paid' ||
+                  res.pago_estado === 'anticipo_pagado' ||
+                  Number((res as any).anticipo_pagado || 0) > 0;
 
-                  return (
+                const dayLabel = formatReservationDay(res.fecha);
+
+                let servicesText = '';
+                if (res.items && res.items.length > 0) {
+                  servicesText = res.items.map((i) => i.nombre || i.servicio).join(', ');
+                } else {
+                  servicesText = (res as any).servicio || 'Servicio';
+                }
+
+                return (
+                  <div
+                    key={`online_${res.id}`}
+                    className="p-3.5 bg-card rounded-xl border border-blue-500/40 hover:border-blue-500 shadow-xs flex flex-col gap-2.5 transition-all group"
+                  >
                     <div
-                      key={`rem_${res.id}`}
-                      className="p-3 hover:bg-muted/40 transition-colors flex flex-col gap-2 group cursor-pointer"
+                      className="flex items-start justify-between gap-2 cursor-pointer"
                       onClick={() => {
                         onSelectReservation(res);
-                        setIsOpen(false);
+                        setIsMinimized(true);
                       }}
+                      title="Ver detalles completos de la reserva"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5 truncate">
-                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm text-foreground group-hover:text-blue-400 transition-colors flex items-center gap-1.5 truncate">
+                            <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">
                               {formatClientName(client?.nombre, client?.apellido)}
                             </span>
-                          </p>
-                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-                            <span className="font-semibold text-foreground">
-                              {res.hora_inicio} - {res.hora_fin}
-                            </span>
-                            {prof && (
-                              <span className="ml-1 text-[10px] text-muted-foreground truncate">
-                                ({prof.publicName || prof.name})
-                              </span>
-                            )}
-                          </p>
-                        </div>
+                          </span>
 
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] font-bold shrink-0',
-                            isUrgent
-                              ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
-                              : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                          <Badge
+                            variant="outline"
+                            className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px] font-semibold py-0 px-1.5 flex items-center gap-1"
+                          >
+                            <Globe className="w-3 h-3" />
+                            {canalLabel}
+                          </Badge>
+
+                          {isDepositPaid && (
+                            <Badge
+                              variant="outline"
+                              className="bg-blue-500/15 text-blue-300 border-blue-400/40 text-[10px] font-bold py-0 px-1.5"
+                            >
+                              Anticipo Pagado
+                            </Badge>
                           )}
-                        >
-                          {isUrgent
-                            ? `URGENTE • en ${Math.max(0, minsUntil)}m`
-                            : `Recordatorio • en ${minsUntil}m`}
-                        </Badge>
-                      </div>
-
-                      {/* Botón de Acción Directa WhatsApp */}
-                      <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-7 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 border-blue-300/50 font-bold gap-1 rounded-lg"
-                          onClick={(e) => handleSendReminderWhatsApp(res, e)}
-                        >
-                          <WhatsAppIcon className="w-3.5 h-3.5 text-blue-600" />
-                          Enviar WhatsApp
-                        </Button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* 2. SECCIÓN CITAS ATRASADAS POR ETIQUETAR */}
-                {filteredOverdues.map((res) => {
-                  const [h, m] = res.hora_inicio.split(':').map(Number);
-                  const startMin = h * 60 + m;
-                  const overdueMins = Math.max(0, nowMinutes - startMin);
-
-                  const prof = professionals.find(
-                    (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
-                  );
-                  const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
-
-                  return (
-                    <div
-                      key={`over_${res.id}`}
-                      className="p-3 hover:bg-muted/40 transition-colors flex flex-col gap-2 group cursor-pointer"
-                      onClick={() => {
-                        onSelectReservation(res);
-                        setIsOpen(false);
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-1.5 truncate">
-                            <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate">
-                              {formatClientName(client?.nombre, client?.apellido)}
-                            </span>
-                          </p>
-                          <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
-                            <span className="font-semibold text-foreground">
-                              {res.hora_inicio} - {res.hora_fin}
-                            </span>
-                            {prof && (
-                              <span className="ml-1 text-[10px] text-muted-foreground truncate">
-                                ({prof.publicName || prof.name})
-                              </span>
-                            )}
-                          </p>
                         </div>
 
-                        <Badge
-                          variant="outline"
-                          className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] font-bold shrink-0"
-                        >
-                          +{overdueMins} min tarde
-                        </Badge>
-                      </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 flex-wrap">
+                          <span className="flex items-center gap-1 font-semibold text-foreground">
+                            <Calendar className="h-3 w-3 text-slate-400 shrink-0" />
+                            {dayLabel}
+                          </span>
+                          <span className="flex items-center gap-1 font-semibold text-foreground">
+                            <Clock className="h-3 w-3 text-slate-400 shrink-0" />
+                            {res.hora_inicio} - {res.hora_fin}
+                          </span>
+                          {prof && (
+                            <span className="text-slate-400 text-[11px] truncate">
+                              Barbero: <strong className="text-foreground">{prof.publicName || prof.name}</strong>
+                            </span>
+                          )}
+                        </div>
 
-                      <div className="flex items-center gap-2 pt-1 border-t border-border/40">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-7 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-border/60 font-semibold rounded-lg"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateStatus(res.id, 'No asiste');
-                          }}
-                        >
-                          <XCircle className="w-3.5 h-3.5 mr-1 text-slate-500" />
-                          No Asistió
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-7 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30 font-semibold rounded-lg"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateStatus(res.id, 'Confirmado');
-                          }}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-blue-500" />
-                          Confirmar
-                        </Button>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                          {servicesText} • <strong className="text-foreground">${Number(res.total || 0).toFixed(2)} MXN</strong>
+                        </p>
                       </div>
                     </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
 
-      {/* 2. Ventanita Flotante Persistente en la Esquina Inferior Derecha */}
-      {totalCount > 0 &&
-        (isMinimized ? (
-          /* Estado Minimizado */
-          <div
-            onClick={() => setIsMinimized(false)}
-            className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2.5 px-4 py-2.5 bg-[#10172b] hover:bg-[#1a233a] text-white rounded-full shadow-[0_12px_35px_rgba(16,23,43,0.5)] border-2 border-blue-500 cursor-pointer transition-all animate-in slide-in-from-bottom-5 duration-300 group hover:scale-[1.03] active:scale-[0.98]"
-            title="Click para ver avisos operativos de agenda"
-          >
-            <div className="relative flex items-center justify-center">
-              <Bell className="w-4 h-4 text-blue-400 animate-bounce" />
-              <span className="absolute -top-2 -right-2.5 bg-red-600 text-white text-[10px] font-black rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-md animate-pulse">
-                {totalCount}
-              </span>
-            </div>
-            <span className="text-xs font-bold tracking-wide">
-              {totalCount === 1 ? '1 aviso pendiente' : `${totalCount} avisos pendientes`}
-            </span>
-            <ChevronUp className="w-4 h-4 text-blue-300 group-hover:-translate-y-0.5 transition-transform ml-1" />
-          </div>
-        ) : (
-          /* Estado Expandido */
-          <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-96 max-w-sm bg-background/95 dark:bg-slate-900/95 rounded-2xl shadow-[0_18px_50px_rgba(16,23,43,0.45)] border-2 border-blue-500 backdrop-blur-xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
-            {/* Cabecera Oficial */}
-            <div className="p-3 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-blue-500/30">
-              <div className="flex items-center gap-2.5">
-                <Bell className="h-4 w-4 text-blue-400 animate-bounce" />
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="font-bold text-xs sm:text-sm text-white tracking-wide">
-                      Avisos de Agenda
-                    </h4>
-                    <span className="bg-red-600 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full shadow-sm animate-pulse">
-                      {totalCount}
-                    </span>
+                    {/* Botones de acción directa */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/40">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => handleSendOnlineConfirmation(res, e)}
+                        className="flex-1 h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30 font-bold rounded-lg transition-colors gap-1.5"
+                        title="Enviar confirmación oficial por WhatsApp y marcar como confirmada"
+                      >
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Mandar Confirmación</span>
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => handleConfirmDirectly(res, e)}
+                        className="h-8 px-3 text-xs text-slate-300 hover:text-white hover:bg-white/10 border border-border/60 rounded-lg transition-colors gap-1 font-semibold"
+                        title="Marcar confirmada sin abrir WhatsApp"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Confirmar</span>
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-blue-200/80 font-medium">
-                    {whatsappReminderReservations.length > 0 && overdueReservations.length > 0
-                      ? `${whatsappReminderReservations.length} WhatsApp • ${overdueReservations.length} Por etiquetar`
-                      : whatsappReminderReservations.length > 0
-                      ? 'Recordatorios de WhatsApp pendientes'
-                      : 'Citas por etiquetar'}
-                  </p>
-                </div>
-              </div>
+                );
+              })}
 
-              {/* Botón Minimizar */}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsMinimized(true)}
-                className="h-7 px-2 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1 text-[11px] font-semibold"
-                title="Minimizar ventanita de aviso"
-              >
-                <ChevronDown className="w-4 h-4" />
-                <span>Minimizar</span>
-              </Button>
-            </div>
-
-            {/* Contenido de la Ventanita Flotante */}
-            <div className="max-h-[300px] overflow-y-auto divide-y divide-border/60 p-2.5 space-y-2">
-              {/* Recordatorios WhatsApp */}
-              {whatsappReminderReservations.map((res) => {
+              {/* 2. SECCIÓN: RECORDATORIOS WHATSAPP */}
+              {filteredReminders.map((res) => {
                 const [h, m] = res.hora_inicio.split(':').map(Number);
                 const startMin = h * 60 + m;
                 const minsUntil = startMin - nowMinutes;
@@ -661,25 +930,31 @@ export function OverdueNotificationsPopover({
 
                 return (
                   <div
-                    key={`float_rem_${res.id}`}
-                    className="p-3 bg-card dark:bg-slate-950/60 rounded-xl border border-border/80 hover:border-blue-500/50 shadow-xs flex flex-col gap-2 transition-all cursor-pointer group"
-                    onClick={() => onSelectReservation(res)}
+                    key={`rem_${res.id}`}
+                    className="p-3.5 bg-card rounded-xl border border-border/80 hover:border-blue-500/50 shadow-xs flex flex-col gap-2.5 transition-all group"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div
+                      className="flex items-start justify-between gap-2 cursor-pointer"
+                      onClick={() => {
+                        onSelectReservation(res);
+                        setIsMinimized(true);
+                      }}
+                      title="Ver detalles de la cita"
+                    >
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-xs sm:text-sm text-foreground group-hover:text-blue-500 transition-colors flex items-center gap-1.5 truncate">
-                          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <p className="font-bold text-sm text-foreground group-hover:text-blue-400 transition-colors flex items-center gap-1.5 truncate">
+                          <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
                             {formatClientName(client?.nombre, client?.apellido)}
                           </span>
                         </p>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Clock className="h-3 w-3 text-slate-400 shrink-0" />
                           <span className="font-semibold text-foreground">
                             {res.hora_inicio} - {res.hora_fin}
                           </span>
                           {prof && (
-                            <span className="ml-1 text-[10px] text-muted-foreground truncate">
+                            <span className="ml-1 text-[11px] text-slate-400 truncate">
                               ({prof.publicName || prof.name})
                             </span>
                           )}
@@ -691,8 +966,8 @@ export function OverdueNotificationsPopover({
                         className={cn(
                           'text-[10px] font-bold shrink-0',
                           isUrgent
-                            ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30'
-                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
+                            ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                            : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                         )}
                       >
                         {isUrgent
@@ -701,23 +976,25 @@ export function OverdueNotificationsPopover({
                       </Badge>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/40">
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
-                        className="flex-1 h-8 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 dark:text-blue-300 border-blue-300/50 font-bold gap-1 rounded-lg"
+                        className="flex-1 h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30 font-bold gap-1.5 rounded-lg transition-colors"
                         onClick={(e) => handleSendReminderWhatsApp(res, e)}
+                        title="Abrir WhatsApp para enviar recordatorio preventivo"
                       >
-                        <WhatsAppIcon className="w-3.5 h-3.5 text-blue-600" />
-                        Enviar WhatsApp
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Enviar Recordatorio</span>
                       </Button>
                     </div>
                   </div>
                 );
               })}
 
-              {/* Citas Atrasadas */}
-              {overdueReservations.map((res) => {
+              {/* 3. SECCIÓN: CITAS ATRASADAS SIN REGISTRAR ASISTENCIA */}
+              {filteredOverdues.map((res) => {
                 const [h, m] = res.hora_inicio.split(':').map(Number);
                 const startMin = h * 60 + m;
                 const overdueMins = Math.max(0, nowMinutes - startMin);
@@ -729,25 +1006,31 @@ export function OverdueNotificationsPopover({
 
                 return (
                   <div
-                    key={`float_over_${res.id}`}
-                    className="p-3 bg-card dark:bg-slate-950/60 rounded-xl border border-border/80 hover:border-blue-500/50 shadow-xs flex flex-col gap-2 transition-all cursor-pointer group"
-                    onClick={() => onSelectReservation(res)}
+                    key={`over_${res.id}`}
+                    className="p-3.5 bg-card rounded-xl border border-red-500/30 hover:border-red-500/60 shadow-xs flex flex-col gap-2.5 transition-all group"
                   >
-                    <div className="flex items-start justify-between gap-2">
+                    <div
+                      className="flex items-start justify-between gap-2 cursor-pointer"
+                      onClick={() => {
+                        onSelectReservation(res);
+                        setIsMinimized(true);
+                      }}
+                      title="Ver detalles de la cita"
+                    >
                       <div className="min-w-0 flex-1">
-                        <p className="font-bold text-xs sm:text-sm text-foreground group-hover:text-blue-500 transition-colors flex items-center gap-1.5 truncate">
-                          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <p className="font-bold text-sm text-foreground group-hover:text-red-400 transition-colors flex items-center gap-1.5 truncate">
+                          <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
                             {formatClientName(client?.nombre, client?.apellido)}
                           </span>
                         </p>
-                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Clock className="h-3 w-3 text-slate-400 shrink-0" />
                           <span className="font-semibold text-foreground">
                             {res.hora_inicio} - {res.hora_fin}
                           </span>
                           {prof && (
-                            <span className="ml-1 text-[10px] text-muted-foreground truncate">
+                            <span className="ml-1 text-[11px] text-slate-400 truncate">
                               ({prof.publicName || prof.name})
                             </span>
                           )}
@@ -756,14 +1039,15 @@ export function OverdueNotificationsPopover({
 
                       <Badge
                         variant="outline"
-                        className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] font-bold shrink-0"
+                        className="bg-red-500/10 text-red-400 border-red-500/30 text-[10px] font-bold shrink-0"
                       >
                         +{overdueMins} min tarde
                       </Badge>
                     </div>
 
-                    <div className="flex items-center gap-2 pt-1 border-t border-border/40">
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/40">
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
                         className="flex-1 h-8 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-border/60 font-semibold rounded-lg"
@@ -772,20 +1056,21 @@ export function OverdueNotificationsPopover({
                           onUpdateStatus(res.id, 'No asiste');
                         }}
                       >
-                        <XCircle className="w-3.5 h-3.5 mr-1 text-slate-500" />
+                        <XCircle className="w-3.5 h-3.5 mr-1 text-slate-400" />
                         No Asistió
                       </Button>
 
                       <Button
+                        type="button"
                         size="sm"
                         variant="outline"
-                        className="flex-1 h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30 font-semibold rounded-lg"
+                        className="flex-1 h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30 font-semibold rounded-lg"
                         onClick={(e) => {
                           e.stopPropagation();
                           onUpdateStatus(res.id, 'Confirmado');
                         }}
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-blue-500" />
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-blue-400" />
                         Confirmar
                       </Button>
                     </div>
@@ -794,15 +1079,44 @@ export function OverdueNotificationsPopover({
               })}
             </div>
 
-            {/* Pie informativo */}
-            <div className="px-3 py-2 bg-muted/40 border-t border-border/60 text-[10px] text-muted-foreground flex items-center justify-between">
-              <span>💡 Resuelve los avisos enviando recordatorio o etiquetando</span>
-              <span className="font-bold text-foreground">
-                {totalCount} {totalCount === 1 ? 'pendiente' : 'pendientes'}
+            {/* Pie Informativo */}
+            <div className="p-3 bg-muted/30 border-t border-border/60 text-xs text-muted-foreground flex items-center justify-between">
+              <span className="text-[11px]">
+                💡 Envía confirmación o etiqueta el estado de la cita
               </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMinimized(true)}
+                className="h-7 text-xs px-3 rounded-lg border-border/60 font-semibold"
+              >
+                Minimizar
+              </Button>
             </div>
           </div>
-        ))}
+        </div>
+      )}
+
+      {/* 3. DOCK FLOTANTE MINIMIZADO EN LA ESQUINA INFERIOR DERECHA */}
+      {totalCount > 0 && isMinimized && (
+        <div
+          onClick={() => setIsMinimized(false)}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2.5 px-3.5 py-2.5 bg-[#10172b] hover:bg-[#1a233a] text-white rounded-xl shadow-[0_10px_30px_rgba(16,23,43,0.5)] border-2 border-blue-500 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 group animate-in slide-in-from-bottom-5"
+          title="Click para abrir avisos de agenda"
+        >
+          <div className="relative flex items-center justify-center">
+            <Bell className="w-4 h-4 text-blue-400 animate-bounce" />
+            <span className="absolute -top-2 -right-2.5 bg-red-600 text-white text-[10px] font-bold rounded-full h-4 min-w-[16px] px-1 flex items-center justify-center shadow-md animate-pulse">
+              {totalCount}
+            </span>
+          </div>
+          <span className="text-xs font-bold tracking-wide">
+            {totalCount === 1 ? '1 aviso pendiente' : `${totalCount} avisos pendientes`}
+          </span>
+          <ChevronUp className="w-4 h-4 text-blue-300 group-hover:-translate-y-0.5 transition-transform ml-1" />
+        </div>
+      )}
     </>
   );
 }

@@ -63,7 +63,7 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         hideCloseButton={true}
-        className="max-w-2xl bg-background p-0 rounded-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-border"
+        className="max-w-2xl bg-background p-0 rounded-2xl max-h-[88vh] flex flex-col shadow-2xl overflow-hidden border-2 border-blue-500"
       >
         {/* Cabecera sobria VATOS ALFA */}
         <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 relative overflow-hidden">
@@ -140,6 +140,9 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
               </div>
               <ul className="list-disc pl-4 space-y-1 text-muted-foreground leading-relaxed">
                 <li>
+                  <strong className="text-foreground">Horario de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM):</strong> Todas las citas agendadas a las <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_hora || '10:00'} AM</span> (primer turno del día) requieren obligatoriamente el <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo</span> sin importar el servicio o canal (Página Web, App Móvil o Agenda).
+                </li>
+                <li>
                   <strong className="text-foreground">Umbral de cobro:</strong> Si la suma de servicios reservados es igual o mayor a <span className="font-bold text-foreground">${rules.anticipo_monto_minimo || 190} MXN</span>, o son servicios especiales de 60+ min, se exige el {rules.anticipo_porcentaje_defecto || 50}% de anticipo para confirmar.
                 </li>
                 <li>
@@ -203,6 +206,9 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
                 </Badge>
               </div>
               <ul className="list-disc pl-4 space-y-1.5 text-muted-foreground leading-relaxed">
+                <li>
+                  <strong className="text-foreground">Citas agendadas en línea (Web / App):</strong> Cada vez que un cliente reserva desde el sitio web público o la aplicación móvil, el sistema notifica de inmediato al centro de la pantalla para que recepción envíe la confirmación oficial por WhatsApp y verifique su cita con un clic.
+                </li>
                 <li>
                   <strong className="text-foreground">Recordatorios de WhatsApp:</strong> La campana de avisos notifica cuando faltan <span className="font-semibold text-foreground">{Math.round((whatsappRule?.tiempo_anticipacion_minutos || 120) / 60)} horas</span> antes de la cita para enviar el recordatorio preventivo al cliente con un clic. A los <span className="font-semibold text-foreground">{whatsappRule?.tiempo_urgente_minutos || 60} minutos</span> antes, la alerta se resalta como prioritaria.
                 </li>

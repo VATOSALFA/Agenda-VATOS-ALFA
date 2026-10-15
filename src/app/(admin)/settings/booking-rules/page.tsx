@@ -90,6 +90,7 @@ export default function BookingRulesPage() {
   // Secciones base minimizadas por defecto
   const [openSections, setOpenSections] = useState<{
     general: boolean;
+    openingHour: boolean;
     antifraud: boolean;
     cancellation: boolean;
     timing: boolean;
@@ -97,6 +98,7 @@ export default function BookingRulesPage() {
     customRules: boolean;
   }>({
     general: false,
+    openingHour: false,
     antifraud: false,
     cancellation: false,
     timing: false,
@@ -146,7 +148,7 @@ export default function BookingRulesPage() {
   const [formAvisoCanal, setFormAvisoCanal] = useState<'whatsapp' | 'pantalla' | 'ambos'>('whatsapp');
 
   const toggleSection = (
-    section: 'general' | 'antifraud' | 'cancellation' | 'timing' | 'agendaNotices' | 'customRules'
+    section: 'general' | 'openingHour' | 'antifraud' | 'cancellation' | 'timing' | 'agendaNotices' | 'customRules'
   ) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
@@ -158,6 +160,7 @@ export default function BookingRulesPage() {
   const handleExpandAll = () => {
     setOpenSections({
       general: true,
+      openingHour: true,
       antifraud: true,
       cancellation: true,
       timing: true,
@@ -174,6 +177,7 @@ export default function BookingRulesPage() {
   const handleCollapseAll = () => {
     setOpenSections({
       general: false,
+      openingHour: false,
       antifraud: false,
       cancellation: false,
       timing: false,
@@ -210,6 +214,15 @@ export default function BookingRulesPage() {
           if (Number(sData.anticipo_porcentaje_defecto) > 0) {
             currentRules.anticipo_porcentaje_defecto = Number(sData.anticipo_porcentaje_defecto);
           }
+          if (typeof sData.anticipo_horario_apertura_activo === 'boolean') {
+            currentRules.anticipo_horario_apertura_activo = sData.anticipo_horario_apertura_activo;
+          }
+          if (typeof sData.anticipo_horario_apertura_hora === 'string' && sData.anticipo_horario_apertura_hora.trim()) {
+            currentRules.anticipo_horario_apertura_hora = sData.anticipo_horario_apertura_hora.trim();
+          }
+          if (Number(sData.anticipo_horario_apertura_porcentaje) > 0) {
+            currentRules.anticipo_horario_apertura_porcentaje = Number(sData.anticipo_horario_apertura_porcentaje);
+          }
         }
 
         if (reglasSnap.exists()) {
@@ -243,6 +256,10 @@ export default function BookingRulesPage() {
           currentRules.anticipo_monto_minimo_descripcion =
             DEFAULT_BOOKING_RULES.anticipo_monto_minimo_descripcion;
         }
+        if (!currentRules.anticipo_horario_apertura_descripcion) {
+          currentRules.anticipo_horario_apertura_descripcion =
+            DEFAULT_BOOKING_RULES.anticipo_horario_apertura_descripcion;
+        }
         if (!currentRules.cancelacion_politica_descripcion) {
           currentRules.cancelacion_politica_descripcion =
             DEFAULT_BOOKING_RULES.cancelacion_politica_descripcion;
@@ -274,6 +291,10 @@ export default function BookingRulesPage() {
         anticipo_monto_minimo: Number(rules.anticipo_monto_minimo) || 0,
         anticipo_porcentaje_defecto: Number(rules.anticipo_porcentaje_defecto) || 50,
         anticipo_monto_minimo_descripcion: rules.anticipo_monto_minimo_descripcion || '',
+        anticipo_horario_apertura_activo: rules.anticipo_horario_apertura_activo !== false,
+        anticipo_horario_apertura_hora: (rules.anticipo_horario_apertura_hora || '10:00').trim(),
+        anticipo_horario_apertura_porcentaje: Number(rules.anticipo_horario_apertura_porcentaje) || 50,
+        anticipo_horario_apertura_descripcion: rules.anticipo_horario_apertura_descripcion || '',
         max_inasistencias_permitidas: Math.max(1, Number(rules.max_inasistencias_permitidas) || 2),
         penalizacion_anticipo_porcentaje: Number(rules.penalizacion_anticipo_porcentaje) || 50,
         penalizacion_inasistencias_descripcion: rules.penalizacion_inasistencias_descripcion || '',
@@ -305,6 +326,10 @@ export default function BookingRulesPage() {
           anticipo_monto_minimo: payload.anticipo_monto_minimo,
           anticipo_porcentaje_defecto: payload.anticipo_porcentaje_defecto,
           anticipo_monto_minimo_descripcion: payload.anticipo_monto_minimo_descripcion,
+          anticipo_horario_apertura_activo: payload.anticipo_horario_apertura_activo,
+          anticipo_horario_apertura_hora: payload.anticipo_horario_apertura_hora,
+          anticipo_horario_apertura_porcentaje: payload.anticipo_horario_apertura_porcentaje,
+          anticipo_horario_apertura_descripcion: payload.anticipo_horario_apertura_descripcion,
           penalizacion_inasistencias_activa: payload.penalizacion_inasistencias_activa,
           max_inasistencias_permitidas: payload.max_inasistencias_permitidas,
           penalizacion_anticipo_porcentaje: payload.penalizacion_anticipo_porcentaje,
@@ -895,6 +920,118 @@ export default function BookingRulesPage() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Documenta la política general de anticipo por monto acumulado para claridad del equipo.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* BLOQUE 1.5: ANTICIPO OBLIGATORIO EN HORARIO DE APERTURA (10:00 AM) */}
+      <Card className="border border-border/70 shadow-xs transition-all overflow-hidden bg-card">
+        <CardHeader
+          className="py-3 px-4 cursor-pointer select-none hover:bg-muted/20 transition-colors"
+          onClick={() => toggleSection('openingHour')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+              <CardTitle className="text-sm font-semibold tracking-tight text-foreground truncate">
+                Anticipo Obligatorio en Horario de Apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM)
+              </CardTitle>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0">
+              <div onClick={(e) => e.stopPropagation()}>
+                <Switch
+                  checked={rules.anticipo_horario_apertura_activo !== false}
+                  onCheckedChange={(checked) =>
+                    setRules((prev) => ({ ...prev, anticipo_horario_apertura_activo: checked }))
+                  }
+                />
+              </div>
+              {openSections.openingHour ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          </div>
+          {!openSections.openingHour && (
+            <p className="text-[11px] text-muted-foreground truncate mt-0.5 pl-6">
+              {rules.anticipo_horario_apertura_activo !== false
+                ? `Activo: Exige ${rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo en todas las citas a las ${rules.anticipo_horario_apertura_hora || '10:00'} AM (Web, App y Agenda)`
+                : 'Desactivado: Las citas de las 10:00 AM siguen únicamente las reglas generales de monto o servicio'}
+            </p>
+          )}
+        </CardHeader>
+
+        {openSections.openingHour && (
+          <CardContent className="pt-0 pb-4 px-4 border-t border-border/40 bg-muted/5">
+            <p className="text-xs text-muted-foreground pt-3 pb-4">
+              Solicita anticipo obligatorio para todas las citas agendadas en el primer turno de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM), sin importar si se registran desde la página web, la aplicación móvil o directamente en la agenda interna.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Horario de apertura sujeto a anticipo (HH:mm)</Label>
+                <Input
+                  type="time"
+                  className="font-medium h-9 text-xs"
+                  value={rules.anticipo_horario_apertura_hora || '10:00'}
+                  disabled={rules.anticipo_horario_apertura_activo === false}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      anticipo_horario_apertura_hora: e.target.value || '10:00',
+                    }))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Hora exacta del primer turno del día que requiere garantía obligatoria (por defecto 10:00).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Porcentaje de anticipo en apertura (%)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  className="font-medium h-9 text-xs"
+                  value={rules.anticipo_horario_apertura_porcentaje ?? 50}
+                  disabled={rules.anticipo_horario_apertura_activo === false}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      anticipo_horario_apertura_porcentaje: Number(e.target.value) || 50,
+                    }))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Porcentaje del total que debe cubrirse como anticipo para citas a las {rules.anticipo_horario_apertura_hora || '10:00'} AM.
+                </p>
+              </div>
+
+              <div className="col-span-1 md:col-span-2 space-y-1.5 pt-1">
+                <Label className="text-xs font-semibold flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+                  Descripción y motivo de la regla (recordatorio del negocio)
+                </Label>
+                <Textarea
+                  rows={2}
+                  className="text-xs font-normal leading-relaxed resize-none"
+                  placeholder="Explica el motivo del anticipo en horario de apertura..."
+                  value={rules.anticipo_horario_apertura_descripcion || ''}
+                  disabled={rules.anticipo_horario_apertura_activo === false}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      anticipo_horario_apertura_descripcion: e.target.value,
+                    }))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Aplica en Página Web, App Móvil y Agenda Interna para proteger la puntualidad y asistencia del primer turno del día.
                 </p>
               </div>
             </div>

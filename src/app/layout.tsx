@@ -15,6 +15,7 @@ import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provi
 import { GoogleAdsScript } from '@/components/providers/google-ads-script';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
 import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
+import { SeasonalEffectsWebOverlay } from '@/components/shared/seasonal-effects-web-overlay';
 
 export const revalidate = 60; // Revalidate every 60 seconds
 
@@ -88,6 +89,7 @@ export default function RootLayout({
                   <RecaptchaProvider>
                     <NetworkStatusIndicator />
                     <PwaUpdateBanner />
+                    <SeasonalEffectsWebOverlay />
                     {children}
                     <Toaster />
                   </RecaptchaProvider>

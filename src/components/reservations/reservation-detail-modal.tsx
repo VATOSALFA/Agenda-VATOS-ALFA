@@ -66,7 +66,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { logAuditAction } from '@/lib/audit-logger';
 import { formatClientName } from '../agenda/agenda-utils';
 import { sendBookingCancellationAction } from '@/lib/actions/booking';
-import { isShortNoticeAppointment, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { isShortNoticeAppointment, isOpeningHourTime, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 
 const addMinutesToTimeStr = (timeStr?: string, mins: number = 60): string => {
   if (!timeStr || !timeStr.includes(':')) return '';
@@ -620,12 +620,13 @@ export function ReservationDetailModal({
     ? 0
     : Math.max(0, totalAmount - depositAmount);
 
-  // Determinar si la cita realmente requiere anticipo (por inasistencias, regla >= $190 o estado)
+  // Determinar si la cita realmente requiere anticipo (por inasistencias, horario de apertura 10:00 AM, regla >= $190 o estado)
   const isAnticipoRequired = Boolean(
     hasUnattendedAlert ||
     reservation.requiere_anticipo ||
     reservation.pago_estado === 'pendiente_anticipo' ||
     (expectedDepositAmount > 0 && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
+    (bookingRules.anticipo_horario_apertura_activo !== false && isOpeningHourTime(reservation.hora_inicio, bookingRules.anticipo_horario_apertura_hora || '10:00') && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 

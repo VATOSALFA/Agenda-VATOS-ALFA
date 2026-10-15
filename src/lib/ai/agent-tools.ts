@@ -749,8 +749,8 @@ export const crearCitaTool = ai.defineTool(
       const resolvedProducts = await resolveProducts(db, productosNombres, productoNombre);
       const extraProductsAmount = resolvedProducts.reduce((sum, p) => sum + (p.precio * (p.cantidad || 1)), 0);
 
-      // Calcular anticipo con servicios + productos
-      const anticipoCalc = await calcularAnticipoParaServicios(selectedServices, extraProductsAmount);
+      // Calcular anticipo con servicios + productos + hora de inicio
+      const anticipoCalc = await calcularAnticipoParaServicios(selectedServices, extraProductsAmount, normalizedTime);
 
       const nameParts = (nombreCliente || 'Cliente').trim().split(/\s+/);
       const firstName = nameParts[0] || 'Cliente';
@@ -1032,7 +1032,7 @@ export const agregarProductoACitaTool = ai.defineTool(
       if (!yaPagado) {
         const productsTotal = currentItems.filter(item => item.tipo === 'producto').reduce((sum, item) => sum + Number(item.precio || 0) * Number(item.cantidad || 1), 0);
         const services = currentItems.filter(item => item.tipo !== 'producto').map(item => ({ ...item, price: Number(item.precio || 0) }));
-        const calculation = await calcularAnticipoParaServicios(services, productsTotal);
+        const calculation = await calcularAnticipoParaServicios(services, productsTotal, resData.hora_inicio);
         montoAnticipo = Math.min(newTotal, Math.max(montoAnticipo, calculation.montoAnticipo));
         if (montoAnticipo > 0) {
           requiereAnticipo = true;

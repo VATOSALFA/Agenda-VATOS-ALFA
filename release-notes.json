@@ -2,10 +2,11 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Mejoras en detalles del cliente para móvil y vinculación de reserva oficial.",
+  "summary": "Anticipo de apertura 10:00 AM, sincronización de horarios especiales y efectos de temporada.",
   "notes": [
-    "Modal de detalles del cliente unificado en móvil con scroll único, continuo y sin recortes.",
-    "Botón 'Nueva Cita' en detalles del cliente vinculado al modal oficial de la Agenda con el cliente preseleccionado.",
-    "Banner de actualización PWA reubicado por encima de la barra inferior de navegación."
+    "Regla de anticipo obligatorio a las 10:00 AM (horario de apertura) en Web pública, App Móvil y Agenda.",
+    "Horarios especiales desde la Agenda configurados como estrictamente internos (con soporte antes/después de apertura).",
+    "Jornadas especiales desde Profesionales públicas en Web, App y Agenda unificadas con el turno regular sin sustituirlo.",
+    "Efectos visuales de temporada optimizados con animación progresiva de pétalos y flores de cempasúchil."
   ]
 }

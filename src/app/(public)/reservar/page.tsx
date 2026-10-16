@@ -660,18 +660,47 @@ export default function BookingPage() {
                     const results = await Promise.all(promises);
                     const newMap: Record<string, string[]> = {};
                     let errorFound: string | null = null;
+                    const workloadMap: Record<string, { appointmentCount: number; busyMinutes: number }> = {};
 
                     results.forEach((res: any, index) => {
+                        const proId = capablePros[index].id;
                         if (res.error) {
                             console.error(`Server error for pro ${capablePros[index].name}:`, res.error);
                             if (!errorFound) errorFound = res.error;
                         }
+
+                        workloadMap[proId] = {
+                            appointmentCount: Number(res?.appointmentCount) || 0,
+                            busyMinutes: Number(res?.busyMinutes) || 0,
+                        };
+
                         if (res && res.slots && Array.isArray(res.slots)) {
                             res.slots.forEach((time: string) => {
                                 if (!newMap[time]) newMap[time] = [];
-                                newMap[time].push(capablePros[index].id);
+                                newMap[time].push(proId);
                             });
                         }
+                    });
+
+                    // Balance equitativo de carga de trabajo:
+                    // En cada horario, ordenamos los profesionales disponibles para que "Primero disponible"
+                    // asigne siempre al profesional con menor carga de trabajo en esa fecha:
+                    // 1) Menor número de citas activas ese día (appointmentCount)
+                    // 2) En caso de empate, menor cantidad de minutos ocupados (busyMinutes)
+                    Object.keys(newMap).forEach((time) => {
+                        newMap[time].sort((aId, bId) => {
+                            const countA = workloadMap[aId]?.appointmentCount ?? 0;
+                            const countB = workloadMap[bId]?.appointmentCount ?? 0;
+                            if (countA !== countB) {
+                                return countA - countB;
+                            }
+                            const minsA = workloadMap[aId]?.busyMinutes ?? 0;
+                            const minsB = workloadMap[bId]?.busyMinutes ?? 0;
+                            if (minsA !== minsB) {
+                                return minsA - minsB;
+                            }
+                            return 0;
+                        });
                     });
 
                     const availableTimes = Object.keys(newMap).sort();
@@ -1944,7 +1973,7 @@ export default function BookingPage() {
                                                         )}
                                                     </div>
                                                     <h3 className="font-bold text-xs text-center leading-tight text-foreground">Primero disponible</h3>
-                                                    <p className="text-[10px] text-muted-foreground text-center line-clamp-1">Automático</p>
+                                                    <p className="text-[10px] text-muted-foreground text-center line-clamp-1">Automático • Equitativo</p>
                                                 </div>
 
                                                 {/* FILTER PROS available at this time */}

@@ -16,7 +16,11 @@ interface GetAvailabilityParams {
     isSandbox?: boolean;
 }
 
-export async function getAvailableSlots({ date, professionalId, durationMinutes, minReservationBufferMinutes, isSandbox }: GetAvailabilityParams) {
+export type GetAvailableSlotsResult = 
+    | { slots: string[]; appointmentCount?: number; busyMinutes?: number }
+    | { error: string };
+
+export async function getAvailableSlots({ date, professionalId, durationMinutes, minReservationBufferMinutes, isSandbox }: GetAvailabilityParams): Promise<GetAvailableSlotsResult> {
     // 0. Strict Input Validation
     if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return { error: 'Formato de fecha inválido. Se requiere AAAA-MM-DD.' };
@@ -25,7 +29,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         return { error: 'ID de profesional inválido.' };
     }
     if (typeof durationMinutes !== 'number' || durationMinutes <= 0) {
-        return { slots: [] }; // No slots for invalid duration
+        return { slots: [] as string[] }; // No slots for invalid duration
     }
 
     try {
@@ -169,7 +173,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         }
 
         if (workingIntervals.length === 0) {
-            return { slots: [] };
+            return { slots: [] as string[] };
         }
 
         // Merge overlapping or adjacent working intervals
@@ -208,6 +212,9 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         }
 
         const nowMs = Date.now();
+        let activeAppointmentCount = 0;
+        let totalBusyMinutes = 0;
+
         allResDocs.forEach(doc => {
             const data = doc.data();
             if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
@@ -229,12 +236,18 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             }
 
             if (isForProf) {
+                activeAppointmentCount++;
                 const s = parseTimeSafe(data.hora_inicio);
                 const e = parseTimeSafe(data.hora_fin);
                 if (s && e) {
+                    const startMin = s.h * 60 + s.m;
+                    const endMin = e.h * 60 + e.m;
+                    if (endMin > startMin) {
+                        totalBusyMinutes += (endMin - startMin);
+                    }
                     busyIntervals.push({
-                        start: s.h * 60 + s.m,
-                        end: e.h * 60 + e.m
+                        start: startMin,
+                        end: endMin
                     });
                 }
             }
@@ -307,7 +320,7 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         const nowDateObj = parse(mexicoDateStr, 'yyyy-MM-dd', new Date());
         const daysDiff = Math.round((queryDateObj.getTime() - nowDateObj.getTime()) / (1000 * 60 * 60 * 24));
         if (daysDiff < 0 || daysDiff > maxDaysFuture) {
-            return { slots: [] };
+            return { slots: [] as string[] };
         }
 
         const isQueryDateToday = (date === mexicoDateStr);
@@ -403,7 +416,11 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         }
 
         const availableSlots = Array.from(availableSlotsSet).sort();
-        return { slots: availableSlots };
+        return {
+            slots: availableSlots,
+            appointmentCount: activeAppointmentCount,
+            busyMinutes: totalBusyMinutes
+        };
 
     } catch (error: any) {
         console.error('CRITICAL Error fetching availability:', error);

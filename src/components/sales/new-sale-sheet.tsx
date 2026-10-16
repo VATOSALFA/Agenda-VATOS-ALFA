@@ -1764,11 +1764,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     if (docSnapshot.exists()) {
                         const data = docSnapshot.data();
                         if (data && data.pago_estado === 'Pagado') {
+                            saleIdRef.current = null;
                             setIsSendingToTerminal(false);
                             setIsWaitingForPayment(false);
 
                             unsubscribe();
                             unsubscribeRef.current = undefined;
+
+                            // Ensure propina_detalles is populated if client added tip directly on the Point terminal
+                            if (Number(data.propina) > 0 && (!Array.isArray(data.propina_detalles) || data.propina_detalles.length === 0)) {
+                                try {
+                                    const allBarberos = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
+                                    const uniqueBarberos = allBarberos.filter(id => professionals?.some(p => p.id === id));
+                                    const targetBarberos = uniqueBarberos.length > 0 ? uniqueBarberos : allBarberos;
+                                    if (targetBarberos.length > 0) {
+                                        const propinaSplit = parseFloat((Number(data.propina) / targetBarberos.length).toFixed(2));
+                                        await updateDoc(saleDocRef, {
+                                            propina_detalles: targetBarberos.map(bId => ({
+                                                barbero_id: bId,
+                                                monto: propinaSplit
+                                            }))
+                                        });
+                                    }
+                                } catch (propErr) {
+                                    console.error("Error updating propina_detalles on terminal snapshot:", propErr);
+                                }
+                            }
 
                             // If there is a reservation linked, update its status too.
                             if (reservationId && db) {
@@ -1969,7 +1990,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }
 
-                // Eliminar la venta fallida para no dejar basura
+                // Guardar respaldo en ventas_canceladas por si el cliente termina pagando en la terminal física
+                // segundos después de que recepción cerró la ventana o canceló la espera.
+                const backupRef = doc(db, 'ventas_canceladas', saleId);
+                transaction.set(backupRef, {
+                    ...saleData,
+                    cancelado_en: Timestamp.now(),
+                    motivo_cancelacion: 'terminal_wait_cancelled'
+                });
+
+                // Eliminar la venta pendiente de la colección principal para no dejar basura
                 transaction.delete(saleRef);
             });
             console.log("Venta revertida y stock restaurado:", saleId);
@@ -2010,6 +2040,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const handleOpenChange = (open: boolean) => {
         if (!open) {
+            if (isWaitingForPayment && saleIdRef.current) {
+                if (!confirm("Hay un cobro activo en la terminal. Si el cliente ya pagó o el ticket ya salió impreso, presiona 'Cancelar' y usa el botón '¿Ya se cobró? Finalizar Manualmente'.\n\n¿Seguro que deseas cancelar la espera y cerrar?")) {
+                    return;
+                }
+            }
             cancelPendingSale();
             // Safety hack: Force unlock body after animation to prevent freezing
             setTimeout(() => {
@@ -3363,6 +3398,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 variant="outline"
                                                                 className="w-full text-destructive hover:text-destructive"
                                                                 onClick={async () => {
+                                                                    if (!confirm("¿Seguro que deseas cancelar la espera en terminal? Si el cliente ya pagó o el ticket ya salió impreso, usa '¿Ya se cobró? Finalizar Manualmente'.")) return;
                                                                     await cancelPendingSale();
                                                                 }}
                                                             >
@@ -3383,11 +3419,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         unsubscribeRef.current = undefined;
                                                                     }
 
-                                                                    // Manually force PAIDO status
-                                                                    if (saleIdRef.current && db) {
+                                                                    // Manually force PAGADO status
+                                                                    const confirmedSaleId = saleIdRef.current;
+                                                                    if (confirmedSaleId && db) {
                                                                         try {
                                                                             setIsSubmitting(true);
-                                                                            const saleRef = doc(db, 'ventas', saleIdRef.current);
+                                                                            saleIdRef.current = null;
+                                                                            const saleRef = doc(db, 'ventas', confirmedSaleId);
                                                                             await updateDoc(saleRef, {
                                                                                 pago_estado: 'Pagado',
                                                                                 metodo_pago: paymentMethod, // Respect initial choice
@@ -3425,11 +3463,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                                     console.error("Error updating reservation status on snapshot:", resErr);
                                                                                 }
                                                                             }
-                                                                            // finalizeSaleProcess usually takes (saleId, items). Passing cart as second arg.
                                                                             await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'));
 
                                                                         } catch (err) {
                                                                             console.error("Error confirming manual payment:", err);
+                                                                            saleIdRef.current = confirmedSaleId;
                                                                             toast({ variant: "destructive", title: "Error", description: "No se pudo confirmar la venta manual." });
                                                                             setIsSubmitting(false);
                                                                         }

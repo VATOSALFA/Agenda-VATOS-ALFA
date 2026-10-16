@@ -440,11 +440,16 @@ exports.mercadoPagoWebhook = onRequest(
       // Logic updated to support both Sales (Ventas) and direct Reservations
       const transactionResult = await admin.firestore().runTransaction(async (t) => {
         const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
-        const ventaDoc = await t.get(ventaRef);
+        const ventaCanceladaRef = admin.firestore().collection('ventas_canceladas').doc(external_reference);
+        const [ventaDoc, ventaCanceladaDoc] = await Promise.all([
+          t.get(ventaRef),
+          t.get(ventaCanceladaRef)
+        ]);
 
-        // CASE 1: It is a SALE (Venta) (Legacy/Terminal flow)
-        if (ventaDoc.exists) {
-          const ventaData = ventaDoc.data();
+        // CASE 1: It is a SALE (Venta) (Legacy/Terminal flow, including recovery if reception closed the modal early)
+        if (ventaDoc.exists || ventaCanceladaDoc.exists) {
+          const isRecoveredFromCancel = !ventaDoc.exists && ventaCanceladaDoc.exists;
+          const ventaData = (ventaDoc.exists ? ventaDoc.data() : ventaCanceladaDoc.data()) || {};
           if (ventaData.pago_estado === 'Pagado') return;
 
           // PRE-READ Linked Reservation (Must be done before ANY write)
@@ -457,25 +462,48 @@ exports.mercadoPagoWebhook = onRequest(
 
           const montoOriginal = Number(ventaData.total || 0);
           const montoPagado = Number(transaction_amount || 0);
-          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
+          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : (Number(ventaData.propina) || 0);
+
+          let propinaDetalles = ventaData.propina_detalles;
+          if (propina > 0 && (!Array.isArray(propinaDetalles) || propinaDetalles.length === 0) && Array.isArray(ventaData.items)) {
+            const uniqueBarberos = Array.from(new Set(ventaData.items.map(i => i.barbero_id).filter(Boolean)));
+            if (uniqueBarberos.length > 0) {
+              const splitAmt = parseFloat((propina / uniqueBarberos.length).toFixed(2));
+              propinaDetalles = uniqueBarberos.map(bId => ({
+                barbero_id: bId,
+                monto: splitAmt
+              }));
+            }
+          }
 
           // Calculate dynamic status for update
           const isFullPay = montoPagado >= (montoOriginal * 0.99); // Tolerance
           const saldoPendiente = montoOriginal > montoPagado ? (montoOriginal - montoPagado) : 0;
 
-          // NOW WRITE to Sale
-          t.update(ventaRef, {
+          const updatedSaleFields = {
             pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
             mercado_pago_status: status,
             mercado_pago_id: String(paymentInfo.id),
             monto_pagado_real: montoPagado,
             saldo_pendiente: saldoPendiente,
             propina: propina,
+            ...(propinaDetalles ? { propina_detalles: propinaDetalles } : {}),
             fecha_pago: new Date(),
             // Add terminal info for tracking
             mp_store_id: paymentInfo.store_id || null,
             mp_pos_id: paymentInfo.pos_id || null
-          });
+          };
+
+          // NOW WRITE to Sale
+          if (isRecoveredFromCancel) {
+            const restoredData = { ...ventaData, ...updatedSaleFields };
+            delete restoredData.cancelado_en;
+            delete restoredData.motivo_cancelacion;
+            t.set(ventaRef, restoredData);
+            t.delete(ventaCanceladaRef);
+          } else {
+            t.update(ventaRef, updatedSaleFields);
+          }
 
           // NOW WRITE to Linked Reservation (CÓDIGO CORREGIDO)
           if (reservaDoc && reservaDoc.exists) {
@@ -494,7 +522,7 @@ exports.mercadoPagoWebhook = onRequest(
               deposit_paid_at: new Date()
             });
           }
-          console.log(`[vFinal] Custom: Venta ${external_reference} updated.`);
+          console.log(`[vFinal] Custom: Venta ${external_reference} updated (recovered=${isRecoveredFromCancel}).`);
           return;
         }
 

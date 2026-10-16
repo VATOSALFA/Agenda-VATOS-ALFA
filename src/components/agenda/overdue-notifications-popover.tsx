@@ -23,7 +23,7 @@ import { formatClientName } from './agenda-utils';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { db } from '@/lib/firebase-client';
-import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, updateDoc, where, getDocs, documentId } from 'firebase/firestore';
 import {
   DEFAULT_BOOKING_RULES,
   DEFAULT_AVISOS_AGENDA_RULES,
@@ -316,6 +316,140 @@ export function OverdueNotificationsPopover({
     });
   }, [isStaff, onlineReservationsFromDb, reservations]);
 
+  // Seguimiento de recordatorios omitidos manualmente en esta sesión
+  const [dismissedReminderIds, setDismissedReminderIds] = useState<Set<string>>(new Set());
+
+  // Mapa de clientes cargados bajo demanda para citas online y recordatorios
+  const [popoverClientsMap, setPopoverClientsMap] = useState<Map<string, Client>>(new Map());
+  const fetchedPopoverClientIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!db || isStaff) return;
+
+    const allIds: string[] = [];
+    (allOnlineReservations || []).forEach((r) => {
+      if (r.cliente_id) allIds.push(r.cliente_id);
+    });
+    (reservations || []).forEach((r) => {
+      if (r.cliente_id) allIds.push(r.cliente_id);
+    });
+
+    const uniqueIds = Array.from(new Set(allIds)).filter((id) => {
+      if (!id || id === 'unknown' || id.startsWith('sandbox_cli_')) return false;
+      if (clients.some((c) => c.id === id)) return false;
+      if (popoverClientsMap.has(id)) return false;
+      if (fetchedPopoverClientIdsRef.current.has(id)) return false;
+      return true;
+    });
+
+    if (uniqueIds.length === 0) return;
+
+    const fetchMissingClients = async () => {
+      try {
+        const CHUNK_SIZE = 30;
+        const chunks: string[][] = [];
+        for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+          chunks.push(uniqueIds.slice(i, i + CHUNK_SIZE));
+        }
+
+        uniqueIds.forEach((id) => fetchedPopoverClientIdsRef.current.add(id));
+
+        const batchPromises = chunks.map((chunk) =>
+          getDocs(query(collection(db, 'clientes'), where(documentId(), 'in', chunk)))
+        );
+        const snapshots = await Promise.all(batchPromises);
+        setPopoverClientsMap((prev) => {
+          const next = new Map(prev);
+          snapshots.forEach((snap) => {
+            snap.docs.forEach((d) => {
+              next.set(d.id, { id: d.id, ...d.data() } as Client);
+            });
+          });
+          return next;
+        });
+      } catch (err) {
+        console.error('Error fetching clients in popover:', err);
+      }
+    };
+
+    fetchMissingClients();
+  }, [allOnlineReservations, reservations, clients, isStaff, popoverClientsMap]);
+
+  // Resolutores seguros para información del cliente
+  const resolveClient = (res: Reservation): Client | null => {
+    if (res.customer && (res.customer.nombre || res.customer.telefono)) {
+      return res.customer;
+    }
+    if (res.cliente_id) {
+      const fromProps = clients.find((c) => c.id === res.cliente_id);
+      if (fromProps) return fromProps;
+      const fromPopover = popoverClientsMap.get(res.cliente_id);
+      if (fromPopover) return fromPopover;
+    }
+    return null;
+  };
+
+  const getClientDisplayName = (res: Reservation): string => {
+    const client = resolveClient(res);
+    if (client?.nombre) {
+      return formatClientName(client.nombre, client.apellido, 'Cliente');
+    }
+
+    // Fallbacks directos desde el documento de la reserva en Firestore
+    const rawName =
+      (res as any).cliente_nombre ||
+      (res as any).client?.nombre ||
+      (res as any).client?.name ||
+      (res as any).customer?.nombre ||
+      (res as any).nombre_cliente;
+
+    if (rawName && typeof rawName === 'string' && rawName.trim().length > 0) {
+      return formatClientName(rawName.trim(), undefined, rawName.trim());
+    }
+
+    if (client?.apellido) {
+      return client.apellido.trim();
+    }
+
+    const phone =
+      (res as any).cliente_telefono ||
+      (res as any).telefono ||
+      client?.telefono;
+
+    if (phone && typeof phone === 'string' && phone.trim().length >= 4) {
+      const last4 = phone.trim().slice(-4);
+      return `Cliente (...${last4})`;
+    }
+
+    return 'Cliente';
+  };
+
+  const getClientPhone = (res: Reservation): string => {
+    const client = resolveClient(res);
+    const phoneRaw =
+      client?.telefono ||
+      (res as any).cliente_telefono ||
+      (res as any).telefono ||
+      '';
+    return phoneRaw.replace(/\D/g, '');
+  };
+
+  const handleCardClick = (res: Reservation) => {
+    const client = resolveClient(res);
+    const clientName = getClientDisplayName(res);
+    const enrichedRes = {
+      ...res,
+      customer: client || (res.customer ? res.customer : ({
+        id: res.cliente_id || 'cliente',
+        nombre: clientName,
+        telefono: (res as any).cliente_telefono || (res as any).telefono || '',
+        correo: (res as any).cliente_email || (res as any).correo || '',
+      } as Client)),
+    };
+    onSelectReservation(enrichedRes);
+    setIsMinimized(true);
+  };
+
   // Desglosar reglas aplicables
   const avisosList =
     rules.reglas_avisos_agenda && rules.reglas_avisos_agenda.length > 0
@@ -344,8 +478,10 @@ export function OverdueNotificationsPopover({
     }
 
     return reservations.filter((res) => {
+      if (dismissedReminderIds.has(res.id)) return false;
       if (res.fecha !== todayStr) return false;
       if (res.whatsappReminderSent) return false;
+      if (res.whatsappReminderNotNeeded) return false;
 
       if (
         res.estado === 'Cancelado' ||
@@ -378,6 +514,7 @@ export function OverdueNotificationsPopover({
     anticipacionMinutos,
     omitirCreacionMinutos,
     nowMinutes,
+    dismissedReminderIds,
   ]);
 
   // 2. Citas atrasadas sin registrar asistencia (> 10 min de cortesía)
@@ -442,13 +579,7 @@ export function OverdueNotificationsPopover({
   // Acción: Enviar confirmación por WhatsApp a cita en línea
   const handleSendOnlineConfirmation = async (res: Reservation, e: React.MouseEvent) => {
     e.stopPropagation();
-    const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
-    const phoneRaw =
-      client?.telefono ||
-      (res as any).cliente_telefono ||
-      (res as any).telefono ||
-      '';
-    const phone = phoneRaw.replace(/\D/g, '');
+    const phone = getClientPhone(res);
     const formattedPhone = phone.length === 10 ? '52' + phone : phone;
 
     const prof = professionals.find(
@@ -463,7 +594,7 @@ export function OverdueNotificationsPopover({
       servicesText = (res as any).servicio || 'Servicio';
     }
 
-    const clientName = formatClientName(client?.nombre, client?.apellido);
+    const clientName = getClientDisplayName(res);
     const locationStr = 'Suc. Sombrerete';
 
     let datePretty = res.fecha;
@@ -526,13 +657,7 @@ export function OverdueNotificationsPopover({
   // Acción directa: Enviar recordatorio por WhatsApp y marcar como enviado
   const handleSendReminderWhatsApp = async (res: Reservation, e: React.MouseEvent) => {
     e.stopPropagation();
-    const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
-    const phoneRaw =
-      client?.telefono ||
-      (res as any).cliente_telefono ||
-      (res as any).telefono ||
-      '';
-    const phone = phoneRaw.replace(/\D/g, '');
+    const phone = getClientPhone(res);
     const formattedPhone = phone.length === 10 ? '52' + phone : phone;
 
     const prof = professionals.find(
@@ -547,7 +672,7 @@ export function OverdueNotificationsPopover({
       servicesText = (res as any).servicio || 'Servicio';
     }
 
-    const clientName = formatClientName(client?.nombre, client?.apellido);
+    const clientName = getClientDisplayName(res);
     const locationStr = 'Suc. Sombrerete';
 
     const message = whatsappTemplate
@@ -575,6 +700,41 @@ export function OverdueNotificationsPopover({
       });
     } catch (err) {
       console.error('Error al actualizar whatsappReminderSent:', err);
+    }
+  };
+
+  // Acción directa: Omitir recordatorio (sin enviar mensaje al cliente)
+  const handleDismissReminder = async (res: Reservation, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const clientName = getClientDisplayName(res);
+
+    // Actualización optimista inmediata en interfaz
+    setDismissedReminderIds((prev) => new Set(prev).add(res.id));
+
+    try {
+      if (db) {
+        const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+        await updateDoc(doc(db, targetCol, res.id), {
+          whatsappReminderSent: true,
+          whatsappReminderNotNeeded: true,
+        });
+      }
+      toast({
+        title: 'Aviso Omitido',
+        description: `Se omitió el recordatorio para ${clientName}.`,
+      });
+    } catch (err) {
+      console.error('Error al omitir recordatorio:', err);
+      setDismissedReminderIds((prev) => {
+        const next = new Set(prev);
+        next.delete(res.id);
+        return next;
+      });
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo omitir el recordatorio.',
+      });
     }
   };
 
@@ -828,7 +988,6 @@ export function OverdueNotificationsPopover({
             <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 max-h-[58vh]">
               {/* 1. SECCIÓN: CITAS AGENDADAS EN LÍNEA PENDIENTES DE CONFIRMACIÓN */}
               {filteredOnline.map((res) => {
-                const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
                 const prof = professionals.find(
                   (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
                 );
@@ -860,10 +1019,7 @@ export function OverdueNotificationsPopover({
                   >
                     <div
                       className="flex items-start justify-between gap-2 cursor-pointer"
-                      onClick={() => {
-                        onSelectReservation(res);
-                        setIsMinimized(true);
-                      }}
+                      onClick={() => handleCardClick(res)}
                       title="Ver detalles completos de la reserva"
                     >
                       <div className="min-w-0 flex-1">
@@ -871,7 +1027,7 @@ export function OverdueNotificationsPopover({
                           <span className="font-bold text-sm text-foreground group-hover:text-blue-400 transition-colors flex items-center gap-1.5 truncate">
                             <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">
-                              {formatClientName(client?.nombre, client?.apellido)}
+                              {getClientDisplayName(res)}
                             </span>
                           </span>
 
@@ -955,7 +1111,6 @@ export function OverdueNotificationsPopover({
                 const prof = professionals.find(
                   (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
                 );
-                const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
 
                 return (
                   <div
@@ -964,17 +1119,14 @@ export function OverdueNotificationsPopover({
                   >
                     <div
                       className="flex items-start justify-between gap-2 cursor-pointer"
-                      onClick={() => {
-                        onSelectReservation(res);
-                        setIsMinimized(true);
-                      }}
+                      onClick={() => handleCardClick(res)}
                       title="Ver detalles de la cita"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-sm text-foreground group-hover:text-blue-400 transition-colors flex items-center gap-1.5 truncate">
                           <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
-                            {formatClientName(client?.nombre, client?.apellido)}
+                            {getClientDisplayName(res)}
                           </span>
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -1017,6 +1169,18 @@ export function OverdueNotificationsPopover({
                         <WhatsAppIcon className="w-3.5 h-3.5 text-blue-400" />
                         <span>Enviar Recordatorio</span>
                       </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={(e) => handleDismissReminder(res, e)}
+                        className="h-8 px-3 text-xs text-slate-300 hover:text-white hover:bg-white/10 border border-border/60 rounded-lg transition-colors gap-1 font-semibold"
+                        title="Omitir envío de recordatorio sin mandar mensaje"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Omitir</span>
+                      </Button>
                     </div>
                   </div>
                 );
@@ -1031,7 +1195,6 @@ export function OverdueNotificationsPopover({
                 const prof = professionals.find(
                   (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
                 );
-                const client = clients.find((c) => c.id === res.cliente_id) || res.customer;
 
                 return (
                   <div
@@ -1040,17 +1203,14 @@ export function OverdueNotificationsPopover({
                   >
                     <div
                       className="flex items-start justify-between gap-2 cursor-pointer"
-                      onClick={() => {
-                        onSelectReservation(res);
-                        setIsMinimized(true);
-                      }}
+                      onClick={() => handleCardClick(res)}
                       title="Ver detalles de la cita"
                     >
                       <div className="min-w-0 flex-1">
                         <p className="font-bold text-sm text-foreground group-hover:text-red-400 transition-colors flex items-center gap-1.5 truncate">
                           <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">
-                            {formatClientName(client?.nombre, client?.apellido)}
+                            {getClientDisplayName(res)}
                           </span>
                         </p>
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">

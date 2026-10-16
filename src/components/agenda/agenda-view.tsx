@@ -896,10 +896,23 @@ export default function AgendaView() {
     }
   }, [allEvents]);
 
-  const handleOpenDetailModal = (event: AgendaEvent) => {
+  const handleOpenDetailModal = (event: AgendaEvent | Reservation | any) => {
     playAgendaClickSound();
-    const fullReservation = allEvents.find(r => r.id === event.id) as Reservation | undefined;
+    const fullReservation = (allEvents.find(r => r.id === event.id) as Reservation | undefined) || event;
     if (fullReservation) {
+      if (!fullReservation.customer && (fullReservation.cliente_nombre || fullReservation.cliente_id)) {
+        const matchedClient = clientsMap.get(fullReservation.cliente_id);
+        if (matchedClient) {
+          fullReservation.customer = matchedClient;
+        } else if (fullReservation.cliente_nombre) {
+          fullReservation.customer = {
+            id: fullReservation.cliente_id || 'online-client',
+            nombre: fullReservation.cliente_nombre,
+            telefono: fullReservation.cliente_telefono || '',
+            correo: fullReservation.cliente_email || '',
+          } as Client;
+        }
+      }
       setSelectedReservation(fullReservation);
       setIsDetailModalOpen(true);
     }

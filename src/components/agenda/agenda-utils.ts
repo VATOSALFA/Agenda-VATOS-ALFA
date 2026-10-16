@@ -26,10 +26,16 @@ export const getStatusColor = (status: string | undefined) => {
     }
 }
 
-export const formatClientName = (nombre?: string, apellido?: string) => {
-    if (!nombre) return 'Cargando datos...';
+export const formatClientName = (nombre?: string, apellido?: string, fallback?: string) => {
+    const rawFirst = (nombre || '').trim();
+    const rawLast = (apellido || '').trim();
 
-    const nameWords = nombre.trim().split(/\s+/).filter(Boolean);
+    if (!rawFirst && !rawLast) {
+        return fallback !== undefined ? fallback : 'Cargando datos...';
+    }
+
+    const nameWords = rawFirst ? rawFirst.split(/\s+/).filter(Boolean) : [];
+    const lastNameWords = rawLast ? rawLast.split(/\s+/).filter(Boolean) : [];
 
     // Caso: El nombre ya tiene 2 o más palabras
     if (nameWords.length >= 2) {
@@ -37,13 +43,21 @@ export const formatClientName = (nombre?: string, apellido?: string) => {
     }
 
     // Caso: El nombre solo tiene 1 palabra, intentamos usar el apellido
-    if (apellido) {
-        const lastNameWords = apellido.trim().split(/\s+/).filter(Boolean);
-        if (lastNameWords.length > 0) {
-            return `${nameWords[0]} ${lastNameWords[0]}`;
-        }
+    if (nameWords.length === 1 && lastNameWords.length > 0) {
+        return `${nameWords[0]} ${lastNameWords[0]}`;
     }
 
-    // Caso: Solo hay una palabra en total
-    return nameWords[0];
+    // Caso: Solo hay una palabra en el nombre
+    if (nameWords.length === 1) {
+        return nameWords[0];
+    }
+
+    // Caso: No hubo nombre, pero hay apellido con 2 o más palabras
+    if (lastNameWords.length >= 2) {
+        return `${lastNameWords[0]} ${lastNameWords[1]}`;
+    }
+
+    // Caso: Solo una palabra en el apellido o fallback
+    return lastNameWords[0] || (fallback !== undefined ? fallback : 'Cliente');
 };
+

@@ -144,6 +144,7 @@ export interface Reservation {
   professional_lock?: boolean;
   whatsappConfirmationSent?: boolean;
   whatsappReminderSent?: boolean;
+  whatsappReminderNotNeeded?: boolean;
   confirmada_por_cliente?: boolean;
   confirmada_en?: any;
   etiqueta_recordatorio?: 'confirmada' | 'reagendada' | 'cancelada';

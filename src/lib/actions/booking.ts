@@ -985,7 +985,7 @@ export async function createPublicReservation(data: any) {
                 : (evalResult.reason === 'same_day_accumulation'
                     ? ` (Escudo Anti-Fragmentación: ya cuentas con ${evalResult.sameDayActiveCount} cita(s) activa(s) en esta fecha y tu total acumulado diario alcanza $${(evalResult.sameDayAccumulatedTotal || grandTotal).toFixed(2)} MXN)`
                     : (evalResult.reason === 'opening_hour'
-                        ? ` por tratarse del horario de apertura (${bookingRules.anticipo_horario_apertura_hora || '10:00'} AM)`
+                        ? ` por tratarse de la franja de apertura (${bookingRules.anticipo_horario_apertura_hora || '10:00'} a ${bookingRules.anticipo_horario_apertura_hora_fin || '10:30'} AM)`
                         : (evalResult.customRuleMessage ? ` (${evalResult.customRuleMessage})` : '')));
             return {
                 error: `Esta reserva requiere un anticipo del ${depositPercentage}% ($${calculatedDeposit} MXN)${ruleDetail}. Por favor realiza el pago en línea para confirmar tu cita.`,
@@ -1084,6 +1084,7 @@ export async function getPublicServiciosConfig() {
                 anticipo_porcentaje_defecto: 50,
                 anticipo_horario_apertura_activo: true,
                 anticipo_horario_apertura_hora: '10:00',
+                anticipo_horario_apertura_hora_fin: '10:30',
                 anticipo_horario_apertura_porcentaje: 50,
                 penalizacion_inasistencias_activa: true,
                 max_inasistencias_permitidas: 2,
@@ -1104,6 +1105,7 @@ export async function getPublicServiciosConfig() {
                 anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
                 anticipo_horario_apertura_activo: data.anticipo_horario_apertura_activo !== false,
                 anticipo_horario_apertura_hora: data.anticipo_horario_apertura_hora || '10:00',
+                anticipo_horario_apertura_hora_fin: data.anticipo_horario_apertura_hora_fin || '10:30',
                 anticipo_horario_apertura_porcentaje: Number(data.anticipo_horario_apertura_porcentaje) > 0 ? Number(data.anticipo_horario_apertura_porcentaje) : 50,
                 penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
                 max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
@@ -1125,6 +1127,7 @@ export async function getPublicServiciosConfig() {
                 anticipo_porcentaje_defecto: Number(data.anticipo_porcentaje_defecto) > 0 ? Number(data.anticipo_porcentaje_defecto) : 50,
                 anticipo_horario_apertura_activo: data.anticipo_horario_apertura_activo !== false,
                 anticipo_horario_apertura_hora: data.anticipo_horario_apertura_hora || '10:00',
+                anticipo_horario_apertura_hora_fin: data.anticipo_horario_apertura_hora_fin || '10:30',
                 anticipo_horario_apertura_porcentaje: Number(data.anticipo_horario_apertura_porcentaje) > 0 ? Number(data.anticipo_horario_apertura_porcentaje) : 50,
                 penalizacion_inasistencias_activa: data.penalizacion_inasistencias_activa !== false,
                 max_inasistencias_permitidas: Number(data.max_inasistencias_permitidas) > 0 ? Number(data.max_inasistencias_permitidas) : 2,
@@ -1144,6 +1147,7 @@ export async function getPublicServiciosConfig() {
         anticipo_porcentaje_defecto: 50,
         anticipo_horario_apertura_activo: true,
         anticipo_horario_apertura_hora: '10:00',
+        anticipo_horario_apertura_hora_fin: '10:30',
         anticipo_horario_apertura_porcentaje: 50,
         penalizacion_inasistencias_activa: true,
         max_inasistencias_permitidas: 2,

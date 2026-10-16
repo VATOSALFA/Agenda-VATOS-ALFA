@@ -379,22 +379,23 @@ export function NewReservationForm({
 
   const isOpeningHourRuleActive = bookingRules.anticipo_horario_apertura_activo !== false;
   const openingHourTarget = bookingRules.anticipo_horario_apertura_hora || '10:00';
+  const openingHourTargetEnd = bookingRules.anticipo_horario_apertura_hora_fin || '10:30';
   const openingHourPorcentaje = Number(bookingRules.anticipo_horario_apertura_porcentaje) || anticipoPorcentajeDefecto;
   const watchedStartHour = form.watch('hora_inicio_hora');
   const watchedStartMin = form.watch('hora_inicio_minuto');
 
   const isOpeningHourSelected = useMemo(() => {
     const mainTime = `${watchedStartHour || ''}:${watchedStartMin || ''}`;
-    if (watchedStartHour && watchedStartMin && isOpeningHourTime(mainTime, openingHourTarget)) {
+    if (watchedStartHour && watchedStartMin && isOpeningHourTime(mainTime, openingHourTarget, openingHourTargetEnd)) {
       return true;
     }
     return (watchedItems || []).some(
       (item: any) =>
         item?.hora_inicio_hora &&
         item?.hora_inicio_minuto &&
-        isOpeningHourTime(`${item.hora_inicio_hora}:${item.hora_inicio_minuto}`, openingHourTarget)
+        isOpeningHourTime(`${item.hora_inicio_hora}:${item.hora_inicio_minuto}`, openingHourTarget, openingHourTargetEnd)
     );
-  }, [watchedStartHour, watchedStartMin, watchedItems, openingHourTarget]);
+  }, [watchedStartHour, watchedStartMin, watchedItems, openingHourTarget, openingHourTargetEnd]);
 
   const isNewClient = useMemo(() => {
     if (!selectedClient) return false;
@@ -1177,7 +1178,7 @@ export function NewReservationForm({
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
-        estado: effectiveDepositPaid ? 'Confirmado' : (data.estado || 'Reservado'),
+        estado: effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : (data.estado || 'Reservado')),
         precio: data.precio,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',

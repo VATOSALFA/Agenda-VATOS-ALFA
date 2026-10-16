@@ -621,24 +621,43 @@ export function ReservationDetailModal({
     ? 0
     : Math.max(0, totalAmount - depositAmount);
 
-  // Determinar si la cita realmente requiere anticipo (por inasistencias, horario de apertura 10:00 AM, regla >= $190 o estado)
+  // Determinar si la cita realmente requiere anticipo (por inasistencias, franja de apertura 10:00 a 10:30 AM, regla >= $190 o estado)
   const isAnticipoRequired = Boolean(
     hasUnattendedAlert ||
     reservation.requiere_anticipo ||
     reservation.pago_estado === 'pendiente_anticipo' ||
     (expectedDepositAmount > 0 && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
-    (bookingRules.anticipo_horario_apertura_activo !== false && isOpeningHourTime(reservation.hora_inicio, bookingRules.anticipo_horario_apertura_hora || '10:00') && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
+    (bookingRules.anticipo_horario_apertura_activo !== false && isOpeningHourTime(reservation.hora_inicio, bookingRules.anticipo_horario_apertura_hora || '10:00', bookingRules.anticipo_horario_apertura_hora_fin || '10:30') && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
-  // Auto-sync estado a 'Confirmado' si la cita tiene anticipo pagado pero seguía en 'Reservado'
-  const effectiveReservationEstado = (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado'))
+  // Tolerancia de 10 minutos para anticipo
+  const rawCreated = reservation.creado_en || (reservation as any).createdAt || (reservation as any).creada_el;
+  let createdMs: number | null = null;
+  if (typeof (rawCreated as any)?.toMillis === 'function') {
+    createdMs = (rawCreated as any).toMillis();
+  } else if (typeof (rawCreated as any)?.toDate === 'function') {
+    createdMs = (rawCreated as any).toDate().getTime();
+  } else if (typeof (rawCreated as any)?.seconds === 'number') {
+    createdMs = (rawCreated as any).seconds * 1000;
+  } else if (typeof rawCreated === 'string' || typeof rawCreated === 'number') {
+    const t = new Date(rawCreated).getTime();
+    if (!isNaN(t)) createdMs = t;
+  }
+
+  const nowMs = Date.now();
+  const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
+  const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(10 - diffMinutes)) : 10;
+  const isDepositExpired = createdMs ? diffMinutes > 10 : false;
+
+  // Auto-sync estado a 'Confirmado' si la cita tiene anticipo pagado pero seguía en 'Reservado' o 'Pendiente de pago'
+  const effectiveReservationEstado = (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado' || reservation.estado === 'Pendiente de pago' || reservation.estado === 'Pendiente de Pago'))
     ? 'Confirmado'
     : (reservation.estado || 'Reservado');
 
   useEffect(() => {
     if (!isOpen || !reservation?.id || !db) return;
-    if (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado')) {
+    if (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado' || reservation.estado === 'Pendiente de pago' || reservation.estado === 'Pendiente de Pago')) {
       const targetCol = (reservation as any).isSandbox ? 'reservas_sandbox' : 'reservas';
       updateDoc(doc(db, targetCol, reservation.id), { estado: 'Confirmado' }).catch(console.error);
     }
@@ -1013,6 +1032,36 @@ export function ReservationDetailModal({
                         </Button>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Alerta de Cita Tentativa en Espera de Anticipo */}
+              {isAnticipoRequired && reservation.pago_estado !== 'Pagado' && !isDepositPaid && (
+                <div className={cn(
+                  "p-3 rounded-xl border-2 flex items-start gap-2.5",
+                  isDepositExpired
+                    ? "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200"
+                    : "border-blue-500/40 bg-blue-500/10 text-foreground"
+                )}>
+                  <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                  <div className="text-xs space-y-1 flex-1">
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <p className="font-bold uppercase tracking-wide text-[11px] text-blue-400">
+                        Cita Tentativa: Esperando Anticipo (${expectedDepositAmount.toFixed(2)} MXN)
+                      </p>
+                      <span className={cn(
+                        "text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap",
+                        isDepositExpired
+                          ? "bg-red-500/20 text-red-300 border-red-500/40"
+                          : "bg-blue-500/20 text-blue-200 border-blue-400/40 animate-pulse"
+                      )}>
+                        {isDepositExpired ? "Tolerancia 10m Vencida" : `${depositMinutesRemaining} min restantes`}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-[11px] leading-snug">
+                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de 10 minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
+                    </p>
                   </div>
                 </div>
               )}

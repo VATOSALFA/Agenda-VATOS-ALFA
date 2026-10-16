@@ -140,7 +140,10 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
               </div>
               <ul className="list-disc pl-4 space-y-1 text-muted-foreground leading-relaxed">
                 <li>
-                  <strong className="text-foreground">Horario de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM):</strong> Todas las citas agendadas a las <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_hora || '10:00'} AM</span> (primer turno del día) requieren obligatoriamente el <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo</span> sin importar el servicio o canal (Página Web, App Móvil o Agenda).
+                  <strong className="text-foreground">Franja de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM):</strong> Todas las citas que inicien en la franja de apertura (<span className="font-bold text-foreground">{rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM</span>, ej. 10:00, 10:10 o 10:30) requieren obligatoriamente el <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo</span> sin importar el servicio o canal (Web, App o Agenda).
+                </li>
+                <li>
+                  <strong className="text-foreground">Citas con anticipo pendiente (Apartado tentativo):</strong> Ocupan únicamente el 50% de la columna en la agenda con textura semitransparente y cuentan con una tolerancia de 10 minutos para recibir el anticipo. Al registrarse el pago, pasan al 100% de la celda formal en estado Confirmado.
                 </li>
                 <li>
                   <strong className="text-foreground">Umbral de cobro:</strong> Si la suma de servicios reservados es igual o mayor a <span className="font-bold text-foreground">${rules.anticipo_monto_minimo || 190} MXN</span>, o son servicios especiales de 60+ min, se exige el {rules.anticipo_porcentaje_defecto || 50}% de anticipo para confirmar.

@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen, Hourglass } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -2141,7 +2141,9 @@ export default function AgendaView() {
                                     ? ((event as any).estado === 'No asiste'
                                       ? "bg-orange-500/20 border-orange-500 text-orange-800 dark:text-orange-200 z-15"
                                       : "bg-gray-500/20 border-gray-400 text-gray-700 dark:text-gray-300 opacity-80 z-15")
-                                    : event.color,
+                                    : (event.layout.isPendingDeposit
+                                      ? "bg-blue-950/25 dark:bg-blue-950/40 border-2 border-dashed border-blue-400/80 text-foreground opacity-85 backdrop-blur-[2px] shadow-sm z-15"
+                                      : event.color),
                                   !event.layout.isMinimized && (event.type === 'appointment' ? 'z-20' : 'z-10'),
                                   (event.type === 'appointment' &&
                                     !event.layout.isMinimized &&
@@ -2164,13 +2166,30 @@ export default function AgendaView() {
                                   <>
                                     <div className={cn(
                                       "flex-grow overflow-hidden min-w-0 pr-1",
-                                      ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') && ((event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid'))
-                                        ? "pr-28"
-                                        : ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') || (event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid')
-                                          ? "pr-20"
-                                          : "pr-14"
+                                      event.layout.isPendingDeposit
+                                        ? "pr-8"
+                                        : (((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') && ((event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid'))
+                                          ? "pr-28"
+                                          : ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') || (event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid')
+                                            ? "pr-20"
+                                            : "pr-14")
                                     )}>
                                       <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
+                                      {event.layout.isPendingDeposit && (
+                                        <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                                          <span className={cn(
+                                            "inline-flex items-center gap-1 px-1 py-0.2 rounded text-[9px] font-bold tracking-tight whitespace-nowrap",
+                                            event.layout.depositExpired
+                                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                                              : "bg-blue-500/20 text-blue-200 border border-blue-400/40"
+                                          )}>
+                                            <Clock className="w-2.5 h-2.5 shrink-0" />
+                                            {event.layout.depositExpired
+                                              ? "Vencido (+10m)"
+                                              : `Anticipo (${event.layout.depositMinutesRemaining ?? 10}m)`}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {event.type === 'appointment' && (
@@ -2218,6 +2237,12 @@ export default function AgendaView() {
                                             )}
                                           </div>
                                         )}
+
+                                        {event.layout.isPendingDeposit && (
+                                          <div className="h-full px-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (10 min tolerancia)">
+                                            <Hourglass className="h-3 w-3 text-blue-400 animate-pulse" />
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </>
@@ -2244,24 +2269,38 @@ export default function AgendaView() {
                                     <Clock className="w-4 h-4" />
                                     <span>{formatHour(event.start)} - {formatHour(event.end)}</span>
                                   </div>
-                                  {event.pago_estado &&
-                                    <div className="flex items-center gap-2 text-sm">
-                                      {event.pago_estado === 'deposit_paid' ? (
-                                        <span className="font-bold text-orange-500">A</span>
-                                      ) : (
-                                        <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
-                                      )}
-                                      <span className={cn(
-                                        event.pago_estado === 'Pagado' ? 'text-green-600' :
-                                          event.pago_estado === 'deposit_paid' ? 'text-orange-600 font-medium' :
-                                            'text-yellow-600'
-                                      )}>
-                                        {event.pago_estado === 'Pagado' ? 'Pago completo' :
-                                          event.pago_estado === 'deposit_paid' ? 'Anticipo pagado' :
-                                            'Pago pendiente'}
-                                      </span>
+                                  {event.layout.isPendingDeposit ? (
+                                    <div className="space-y-1 pt-1.5 border-t border-border/50">
+                                      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
+                                        <Hourglass className="w-3.5 h-3.5 shrink-0" />
+                                        <span>Esperando pago de anticipo</span>
+                                      </div>
+                                      <p className="text-[11px] text-muted-foreground leading-snug">
+                                        {event.layout.depositExpired
+                                          ? "⚠️ Han pasado más de 10 minutos sin recibir el anticipo. Esta cita es tentativa y puede cancelarse para liberar el turno."
+                                          : `⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 10} min para recibir el anticipo y confirmarse formalmente.`}
+                                      </p>
                                     </div>
-                                  }
+                                  ) : (
+                                    event.pago_estado && (
+                                      <div className="flex items-center gap-2 text-sm">
+                                        {event.pago_estado === 'deposit_paid' ? (
+                                          <span className="font-bold text-orange-500">A</span>
+                                        ) : (
+                                          <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
+                                        )}
+                                        <span className={cn(
+                                          event.pago_estado === 'Pagado' ? 'text-green-600' :
+                                            event.pago_estado === 'deposit_paid' ? 'text-orange-600 font-medium' :
+                                              'text-yellow-600'
+                                        )}>
+                                          {event.pago_estado === 'Pagado' ? 'Pago completo' :
+                                            event.pago_estado === 'deposit_paid' ? 'Anticipo pagado' :
+                                              'Pago pendiente'}
+                                        </span>
+                                      </div>
+                                    )
+                                  )}
                                 </div>
                               </TooltipContent>
                             ) : (

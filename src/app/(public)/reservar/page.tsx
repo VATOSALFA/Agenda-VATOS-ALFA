@@ -18,6 +18,7 @@ import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, U
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig, checkClientBookingEligibility } from '@/lib/actions/booking';
+import { isOpeningHourTime } from '@/lib/booking-rules';
 import { trackGoogleAdsReservation } from '@/lib/google-ads';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -88,6 +89,7 @@ export default function BookingPage() {
         anticipo_porcentaje_defecto: 50,
         anticipo_horario_apertura_activo: true,
         anticipo_horario_apertura_hora: '10:00',
+        anticipo_horario_apertura_hora_fin: '10:30',
         anticipo_horario_apertura_porcentaje: 50
     });
 
@@ -401,18 +403,19 @@ export default function BookingPage() {
             }
         }
 
-        // Regla 2: Anticipo Obligatorio en Horario de Apertura (10:00 AM)
+        // Regla 2: Anticipo Obligatorio en Horario de Apertura (10:00 a 10:30 AM)
         let openingHourApplied = false;
         const isOpeningHourActive = serviciosConfig?.anticipo_horario_apertura_activo !== false;
         const targetOpeningHour = String(serviciosConfig?.anticipo_horario_apertura_hora || '10:00').trim();
+        const targetClosingHour = String(serviciosConfig?.anticipo_horario_apertura_hora_fin || '10:30').trim();
         const openingHourPercent = Number(serviciosConfig?.anticipo_horario_apertura_porcentaje) > 0
             ? Number(serviciosConfig.anticipo_horario_apertura_porcentaje)
             : (Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50);
 
         const hasOpeningHourSlot = Object.values(configs || {}).some((cfg: any) => {
             const t = String(cfg?.time || '').trim();
-            return t === targetOpeningHour || t.startsWith(`${targetOpeningHour}:`);
-        }) || (tempTime && (tempTime.trim() === targetOpeningHour || tempTime.trim().startsWith(`${targetOpeningHour}:`)));
+            return isOpeningHourTime(t, targetOpeningHour, targetClosingHour);
+        }) || (tempTime && isOpeningHourTime(tempTime.trim(), targetOpeningHour, targetClosingHour));
 
         if (isOpeningHourActive && hasOpeningHourSlot && total > 0) {
             const pct = openingHourPercent / 100;
@@ -2371,7 +2374,7 @@ export default function BookingPage() {
                                                     <div className="bg-blue-500/10 border border-blue-500/30 text-foreground text-xs p-2.5 rounded-xl flex items-start gap-2 mt-1.5">
                                                         <Clock className="h-4 w-4 shrink-0 text-blue-400 mt-0.5" />
                                                         <span className="text-muted-foreground text-[11px] leading-relaxed">
-                                                            Por tratarse del horario de apertura ({serviciosConfig?.anticipo_horario_apertura_hora || '10:00'} AM), se requiere un anticipo del {serviciosConfig?.anticipo_horario_apertura_porcentaje || serviciosConfig?.anticipo_porcentaje_defecto || 50}% para confirmar tu espacio.
+                                                            Por tratarse de la franja de apertura ({serviciosConfig?.anticipo_horario_apertura_hora || '10:00'} a {serviciosConfig?.anticipo_horario_apertura_hora_fin || '10:30'} AM), se requiere un anticipo del {serviciosConfig?.anticipo_horario_apertura_porcentaje || serviciosConfig?.anticipo_porcentaje_defecto || 50}% para confirmar tu espacio.
                                                         </span>
                                                     </div>
                                                 )}

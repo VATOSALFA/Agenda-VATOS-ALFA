@@ -134,6 +134,7 @@ export interface Reservation {
   monto_anticipo?: number;
   anticipo_esperado?: number;
   requiere_anticipo?: boolean;
+  requiere_pago_anticipado?: boolean;
   metodo_pago_anticipo?: string;
   deposit_paid_at?: any;
   monto_retenido?: number;
@@ -457,10 +458,31 @@ export interface AgendaLayout {
   col: number;
   totalCols: number;
   isMinimized?: boolean;
+  isPendingDeposit?: boolean;
+  depositMinutesRemaining?: number;
+  depositExpired?: boolean;
 }
 
-export type AgendaEvent = (Reservation & { type: 'appointment', duration: number, start: number, end: number, color: string, layout: AgendaLayout }) |
-  (TimeBlock & { type: 'block', duration: number, start: number, end: number, color: string, layout: AgendaLayout, originalType?: string });
+export type AgendaEvent = (Reservation & {
+  type: 'appointment';
+  duration: number;
+  start: number;
+  end: number;
+  color: string;
+  layout: AgendaLayout;
+  isPendingDeposit?: boolean;
+  depositMinutesRemaining?: number;
+  depositExpired?: boolean;
+}) |
+  (TimeBlock & {
+    type: 'block';
+    duration: number;
+    start: number;
+    end: number;
+    color: string;
+    layout: AgendaLayout;
+    originalType?: string;
+  });
 
 export interface SellerSaleDetail {
   saleId: string;

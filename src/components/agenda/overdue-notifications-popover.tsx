@@ -679,40 +679,38 @@ export function OverdueNotificationsPopover({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabecera Oficial VATOS ALFA con Franja Azul y Haz de Luz Oblicuo */}
-            <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-blue-500/30 relative overflow-hidden">
+            <div className="p-3 sm:p-4 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-blue-500/30 relative overflow-hidden gap-2.5">
               <div className="header-light-beam" aria-hidden="true" />
-              <div className="relative z-10 flex items-center gap-2.5">
-                <Bell className="h-4 w-4 text-blue-400 animate-bounce" />
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm sm:text-base text-white tracking-wide">
-                      Avisos de Recepción y Agenda
+              <div className="relative z-10 flex items-center gap-2.5 min-w-0 flex-1">
+                <Bell className="h-4 w-4 text-blue-400 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm sm:text-base text-white tracking-wide whitespace-nowrap">
+                      Avisos de Agenda
                     </h3>
-                    <Badge
-                      variant="outline"
-                      className="bg-red-500/20 text-red-300 border-red-500/40 text-[10px] font-bold px-1.5 py-0.5 animate-pulse"
-                    >
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 border border-white/20 text-[10px] sm:text-[11px] font-bold text-slate-200 whitespace-nowrap shrink-0 shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       {totalCount} {totalCount === 1 ? 'pendiente' : 'pendientes'}
-                    </Badge>
+                    </span>
                   </div>
-                  <p className="text-[11px] text-blue-200/80 font-normal mt-0.5">
+                  <p className="text-[11px] text-slate-300 font-normal mt-0.5 hidden sm:block truncate">
                     Acción requerida para mantener la agenda sincronizada
                   </p>
                 </div>
               </div>
 
               {/* Acciones de la Cabecera */}
-              <div className="relative z-10 flex items-center gap-1.5">
+              <div className="relative z-10 flex items-center gap-1 shrink-0">
                 {onOpenBookingRules && (
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     onClick={onOpenBookingRules}
-                    className="h-8 px-2 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1.5 text-xs font-semibold"
+                    className="h-8 px-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1.5 text-xs font-semibold"
                     title="Consultar Reglas de Agendamiento"
                   >
-                    <BookOpen className="w-3.5 h-3.5 text-blue-300" />
+                    <BookOpen className="w-3.5 h-3.5 text-slate-300" />
                     <span className="hidden sm:inline">Reglas</span>
                   </Button>
                 )}
@@ -722,10 +720,10 @@ export function OverdueNotificationsPopover({
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsMinimized(true)}
-                  className="h-8 px-2.5 text-blue-200 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1 text-xs font-semibold"
+                  className="h-8 px-2.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1 text-xs font-semibold"
                   title="Minimizar modal de avisos"
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-4 h-4 text-slate-300" />
                   <span>Minimizar</span>
                 </Button>
               </div>

@@ -41,7 +41,43 @@ export function useAgendaEvents(
                      res.pago_estado !== 'pendiente' &&
                      Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_anticipo || 0) > 0);
 
-                const effectiveStatus = (isDepositPaid && (!res.estado || res.estado === 'Reservado')) ? 'Confirmado' : (res.estado || 'Reservado');
+                const isPendingDeposit = !isDepositPaid &&
+                    res.pago_estado !== 'Pagado' &&
+                    (res as any).estado !== 'Cancelado' &&
+                    (res as any).estado !== 'Cancelada' &&
+                    (res as any).estado !== 'No asiste' &&
+                    (
+                        res.requiere_pago_anticipado === true ||
+                        (res as any).requiere_anticipo === true ||
+                        Number(res.anticipo_esperado || (res as any).monto_anticipo || 0) > 0 ||
+                        res.pago_estado === 'pendiente_anticipo' ||
+                        res.pago_estado === 'pending_payment' ||
+                        (res as any).estado === 'Pendiente de pago' ||
+                        (res as any).estado === 'Pendiente de Pago' ||
+                        (res as any).estado === 'pendiente de pago'
+                    );
+
+                const rawCreated = res.creado_en || (res as any).createdAt || (res as any).creada_el;
+                let createdMs: number | null = null;
+                if (typeof (rawCreated as any)?.toMillis === 'function') {
+                    createdMs = (rawCreated as any).toMillis();
+                } else if (typeof (rawCreated as any)?.toDate === 'function') {
+                    createdMs = (rawCreated as any).toDate().getTime();
+                } else if (typeof (rawCreated as any)?.seconds === 'number') {
+                    createdMs = (rawCreated as any).seconds * 1000;
+                } else if (typeof rawCreated === 'string' || typeof rawCreated === 'number') {
+                    const t = new Date(rawCreated).getTime();
+                    if (!isNaN(t)) createdMs = t;
+                }
+
+                const nowMs = Date.now();
+                const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
+                const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(10 - diffMinutes)) : 10;
+                const depositExpired = createdMs ? diffMinutes > 10 : false;
+
+                const effectiveStatus = (isDepositPaid && (!res.estado || res.estado === 'Reservado' || res.estado === 'Pendiente de pago' || res.estado === 'Pendiente de Pago'))
+                    ? 'Confirmado'
+                    : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
 
                 if (!res.items || res.items.length === 0) {
                     return [{
@@ -54,7 +90,18 @@ export function useAgendaEvents(
                         end: globalEnd,
                         duration: globalDuration,
                         color: getStatusColor(effectiveStatus),
-                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                        isPendingDeposit,
+                        depositMinutesRemaining,
+                        depositExpired,
+                        layout: {
+                            width: isPendingDeposit ? 50 : 100,
+                            left: 0,
+                            col: 0,
+                            totalCols: 1,
+                            isPendingDeposit,
+                            depositMinutesRemaining,
+                            depositExpired
+                        }
                     }] as AgendaEvent[];
                 }
 
@@ -89,7 +136,18 @@ export function useAgendaEvents(
                         professional_lock: res.professional_lock !== undefined
                             ? res.professional_lock
                             : groupItems.some((i: any) => i.professional_lock === true),
-                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                        isPendingDeposit,
+                        depositMinutesRemaining,
+                        depositExpired,
+                        layout: {
+                            width: isPendingDeposit ? 50 : 100,
+                            left: 0,
+                            col: 0,
+                            totalCols: 1,
+                            isPendingDeposit,
+                            depositMinutesRemaining,
+                            depositExpired
+                        }
                     }] as unknown as AgendaEvent[];
                 }
 
@@ -128,7 +186,18 @@ export function useAgendaEvents(
                         professional_lock: res.professional_lock !== undefined
                             ? res.professional_lock
                             : groupItems.some((i: any) => i.professional_lock === true),
-                        layout: { width: 100, left: 0, col: 0, totalCols: 1 }
+                        isPendingDeposit,
+                        depositMinutesRemaining,
+                        depositExpired,
+                        layout: {
+                            width: isPendingDeposit ? 50 : 100,
+                            left: 0,
+                            col: 0,
+                            totalCols: 1,
+                            isPendingDeposit,
+                            depositMinutesRemaining,
+                            depositExpired
+                        }
                     } as unknown as AgendaEvent);
                 });
 
@@ -179,14 +248,18 @@ export function useAgendaEvents(
 
         const processedEvents: AgendaEvent[] = allEvents.map(event => {
             const isMinimized = event.type === 'appointment' && (event.estado === 'No asiste' || event.estado === 'Cancelado');
+            const isPending = (event as any).isPendingDeposit === true;
             return {
                 ...event,
                 layout: {
-                    width: isMinimized ? DEFAULT_MIN_WIDTH : 100,
+                    width: isMinimized ? DEFAULT_MIN_WIDTH : (isPending ? 50 : 100),
                     left: 0,
                     col: 0,
                     totalCols: 1,
-                    isMinimized
+                    isMinimized,
+                    isPendingDeposit: isPending,
+                    depositMinutesRemaining: (event as any).depositMinutesRemaining,
+                    depositExpired: (event as any).depositExpired
                 }
             };
         });

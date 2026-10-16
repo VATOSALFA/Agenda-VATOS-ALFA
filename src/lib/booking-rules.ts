@@ -158,9 +158,10 @@ export interface ReglasReservasConfig {
   anticipo_porcentaje_defecto: number;
   anticipo_monto_minimo_descripcion?: string;
 
-  // 1.5. Regla de Anticipo Obligatorio en Horario de Apertura (10:00 AM)
+  // 1.5. Regla de Anticipo Obligatorio en Horario de Apertura (10:00 a 10:30 AM)
   anticipo_horario_apertura_activo: boolean;
   anticipo_horario_apertura_hora: string;
+  anticipo_horario_apertura_hora_fin?: string;
   anticipo_horario_apertura_porcentaje: number;
   anticipo_horario_apertura_descripcion?: string;
 
@@ -202,9 +203,10 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
 
   anticipo_horario_apertura_activo: true,
   anticipo_horario_apertura_hora: '10:00',
+  anticipo_horario_apertura_hora_fin: '10:30',
   anticipo_horario_apertura_porcentaje: 50,
   anticipo_horario_apertura_descripcion:
-    'Todas las citas que sean a las 10:00 AM (horario de apertura), ya sea desde la página web, desde la aplicación móvil o desde la misma agenda, requieren obligatoriamente un anticipo de garantía del 50% para asegurar el primer turno del día.',
+    'Todas las citas que inicien dentro de la franja de apertura (de 10:00 a 10:30 AM), ya sea desde la página web, desde la aplicación móvil o desde la misma agenda, requieren obligatoriamente un anticipo de garantía del 50% para asegurar el primer turno del día.',
 
   penalizacion_inasistencias_activa: true,
   max_inasistencias_permitidas: 2,
@@ -229,27 +231,39 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
 };
 
 /**
- * Verifica si una hora dada (ej. '10:00', '10:00 AM', '10:00:00') corresponde al horario de apertura (10:00 AM).
+ * Verifica si una hora dada (ej. '10:00', '10:10', '10:30') corresponde a la franja del horario de apertura (por defecto de 10:00 a 10:30 AM).
  */
 export function isOpeningHourTime(
   time?: string | null,
-  openingHour: string = '10:00'
+  openingHour: string = '10:00',
+  closingHour: string = '10:30'
 ): boolean {
   if (!time || typeof time !== 'string') return false;
-  const cleanTarget = (openingHour || '10:00').trim().slice(0, 5);
   const raw = time.trim().toLowerCase();
 
-  // Extraer HH:mm de formatos como "10:00", "10:00 am", "10:00:00"
+  // Extraer HH:mm de formatos como "10:00", "10:10 am", "10:00:00"
   const match = raw.match(/^(\d{1,2}):(\d{2})/);
   if (!match) return false;
 
   let h = parseInt(match[1], 10);
-  const m = match[2];
+  const m = parseInt(match[2], 10);
   if (raw.includes('pm') && h < 12) h += 12;
   if (raw.includes('am') && h === 12) h = 0;
 
-  const normalized = `${String(h).padStart(2, '0')}:${m}`;
-  return normalized === cleanTarget;
+  const currentMinutes = h * 60 + m;
+
+  const openMatch = (openingHour || '10:00').trim().match(/^(\d{1,2}):(\d{2})/);
+  const openH = openMatch ? parseInt(openMatch[1], 10) : 10;
+  const openM = openMatch ? parseInt(openMatch[2], 10) : 0;
+  const openMinutes = openH * 60 + openM;
+
+  let endMinutes = openMinutes + 30; // 30 min de margen por defecto
+  const closeMatch = (closingHour || '10:30').trim().match(/^(\d{1,2}):(\d{2})/);
+  if (closeMatch) {
+    endMinutes = parseInt(closeMatch[1], 10) * 60 + parseInt(closeMatch[2], 10);
+  }
+
+  return currentMinutes >= openMinutes && currentMinutes <= endMinutes;
 }
 
 export interface BookingRulesEvaluation {
@@ -380,10 +394,11 @@ export function evaluateDepositRequirement({
     };
   }
 
-  // --- 2.5. REGLA DE HORARIO DE APERTURA (10:00 AM - ALTA PRIORIDAD) ---
+  // --- 2.5. REGLA DE HORARIO DE APERTURA (10:00 A 10:30 AM - ALTA PRIORIDAD) ---
   if (mergedRules.anticipo_horario_apertura_activo !== false && safeTotal > 0) {
     const targetOpeningHour = mergedRules.anticipo_horario_apertura_hora || '10:00';
-    if (isOpeningHourTime(time, targetOpeningHour)) {
+    const targetClosingHour = mergedRules.anticipo_horario_apertura_hora_fin || '10:30';
+    if (isOpeningHourTime(time, targetOpeningHour, targetClosingHour)) {
       const pct = Number(mergedRules.anticipo_horario_apertura_porcentaje || mergedRules.anticipo_porcentaje_defecto) || 50;
       const deposit = Math.round(safeTotal * (pct / 100) * 100) / 100;
       return {
@@ -391,8 +406,8 @@ export function evaluateDepositRequirement({
         depositAmount: deposit,
         depositPercentage: pct,
         reason: 'opening_hour',
-        customRuleName: `Anticipo en Horario de Apertura (${targetOpeningHour} AM)`,
-        customRuleMessage: `Todas las citas agendadas en el horario de apertura (${targetOpeningHour} AM) requieren un anticipo del ${pct}% ($${deposit.toFixed(2)} MXN) para asegurar el primer turno del día.`,
+        customRuleName: `Anticipo en Franja de Apertura (${targetOpeningHour} - ${targetClosingHour} AM)`,
+        customRuleMessage: `Todas las citas agendadas en la franja de apertura (${targetOpeningHour} a ${targetClosingHour} AM) requieren un anticipo del ${pct}% ($${deposit.toFixed(2)} MXN) para asegurar el primer turno del día.`,
       };
     }
   }

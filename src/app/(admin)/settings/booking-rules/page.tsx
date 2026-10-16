@@ -220,6 +220,9 @@ export default function BookingRulesPage() {
           if (typeof sData.anticipo_horario_apertura_hora === 'string' && sData.anticipo_horario_apertura_hora.trim()) {
             currentRules.anticipo_horario_apertura_hora = sData.anticipo_horario_apertura_hora.trim();
           }
+          if (typeof sData.anticipo_horario_apertura_hora_fin === 'string' && sData.anticipo_horario_apertura_hora_fin.trim()) {
+            currentRules.anticipo_horario_apertura_hora_fin = sData.anticipo_horario_apertura_hora_fin.trim();
+          }
           if (Number(sData.anticipo_horario_apertura_porcentaje) > 0) {
             currentRules.anticipo_horario_apertura_porcentaje = Number(sData.anticipo_horario_apertura_porcentaje);
           }
@@ -937,7 +940,7 @@ export default function BookingRulesPage() {
             <div className="flex items-center gap-2.5 min-w-0">
               <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
               <CardTitle className="text-sm font-semibold tracking-tight text-foreground truncate">
-                Anticipo Obligatorio en Horario de Apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM)
+                Anticipo Obligatorio en Franja de Apertura ({rules.anticipo_horario_apertura_hora || '10:00'} - {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM)
               </CardTitle>
             </div>
 
@@ -960,8 +963,8 @@ export default function BookingRulesPage() {
           {!openSections.openingHour && (
             <p className="text-[11px] text-muted-foreground truncate mt-0.5 pl-6">
               {rules.anticipo_horario_apertura_activo !== false
-                ? `Activo: Exige ${rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo en todas las citas a las ${rules.anticipo_horario_apertura_hora || '10:00'} AM (Web, App y Agenda)`
-                : 'Desactivado: Las citas de las 10:00 AM siguen únicamente las reglas generales de monto o servicio'}
+                ? `Activo: Exige ${rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo en todas las citas entre ${rules.anticipo_horario_apertura_hora || '10:00'} y ${rules.anticipo_horario_apertura_hora_fin || '10:30'} AM (Web, App y Agenda)`
+                : 'Desactivado: Las citas de apertura siguen únicamente las reglas generales de monto o servicio'}
             </p>
           )}
         </CardHeader>
@@ -969,11 +972,11 @@ export default function BookingRulesPage() {
         {openSections.openingHour && (
           <CardContent className="pt-0 pb-4 px-4 border-t border-border/40 bg-muted/5">
             <p className="text-xs text-muted-foreground pt-3 pb-4">
-              Solicita anticipo obligatorio para todas las citas agendadas en el primer turno de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} AM), sin importar si se registran desde la página web, la aplicación móvil o directamente en la agenda interna.
+              Solicita anticipo obligatorio para todas las citas agendadas dentro de la franja de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM), sin importar si se registran desde la página web, la aplicación móvil o directamente en la agenda interna. Protege los primeros turnos del día ante clientes que agenden a las 10:00, 10:10 o 10:30 AM.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Horario de apertura sujeto a anticipo (HH:mm)</Label>
+                <Label className="text-xs font-semibold">Hora inicio de apertura (HH:mm)</Label>
                 <Input
                   type="time"
                   className="font-medium h-9 text-xs"
@@ -987,7 +990,26 @@ export default function BookingRulesPage() {
                   }
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Hora exacta del primer turno del día que requiere garantía obligatoria (por defecto 10:00).
+                  Hora de inicio del primer turno del día (por defecto 10:00).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Hora fin de franja de apertura (HH:mm)</Label>
+                <Input
+                  type="time"
+                  className="font-medium h-9 text-xs"
+                  value={rules.anticipo_horario_apertura_hora_fin || '10:30'}
+                  disabled={rules.anticipo_horario_apertura_activo === false}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      anticipo_horario_apertura_hora_fin: e.target.value || '10:30',
+                    }))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Límite de la franja de apertura protegida (por defecto 10:30).
                 </p>
               </div>
 
@@ -1008,7 +1030,7 @@ export default function BookingRulesPage() {
                   }
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Porcentaje del total que debe cubrirse como anticipo para citas a las {rules.anticipo_horario_apertura_hora || '10:00'} AM.
+                  Porcentaje exigido de {rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM.
                 </p>
               </div>
 

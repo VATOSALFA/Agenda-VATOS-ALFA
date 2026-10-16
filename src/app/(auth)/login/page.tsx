@@ -209,17 +209,44 @@ export default function LoginPage() {
                                         router.push('/agenda');
                                     }
                                 } catch (error: any) {
-                                    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/user-cancelled' || error.message?.includes('user-cancelled')) {
+                                    console.error("Error Google Auth:", error);
+                                    if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/user-cancelled' || error.code === 'auth/cancelled-popup-request' || error.message?.includes('user-cancelled')) {
                                         console.log("Google login cancelled by user");
                                         return;
                                     }
 
-                                    if (error.message?.includes("ACCESS_DENIED") || error.code === 'auth/user-not-found') {
-                                        setError("Acceso denegado: Tu correo no está registrado como usuario en el sistema.");
-                                    } else {
-                                        console.error("Error Google Auth:", error);
-                                        setError("Error al iniciar sesión con Google. Inténtalo de nuevo.");
+                                    if (error.code === 'auth/popup-blocked') {
+                                        setError("El navegador bloqueó la ventana emergente de Google. Por favor, habilita las ventanas emergentes (pop-ups) en tu navegador para continuar.");
+                                        return;
                                     }
+
+                                    if (error.code === 'auth/unauthorized-domain') {
+                                        setError("Dominio no autorizado en Firebase. Es necesario agregar este dominio a la lista de dominios autorizados en Firebase Console.");
+                                        return;
+                                    }
+
+                                    if (error.code === 'auth/operation-not-allowed') {
+                                        setError("El proveedor de Google no está habilitado en Firebase Authentication.");
+                                        return;
+                                    }
+
+                                    if (error.code === 'auth/account-exists-with-different-credential') {
+                                        setError("Ya existe una cuenta con este correo pero con otro método de acceso.");
+                                        return;
+                                    }
+
+                                    if (error.message?.includes("ACCESS_DENIED") || error.code === 'auth/user-not-found') {
+                                        const emailInfo = error.userEmail ? ` (${error.userEmail})` : '';
+                                        setError(`Acceso denegado: El correo${emailInfo} no está registrado como usuario en el sistema. Contacta al administrador.`);
+                                        return;
+                                    }
+
+                                    if (error.message?.includes("OUTSIDE_HOURS")) {
+                                        setError("Acceso restringido: Las recepcionistas solo pueden acceder dentro del horario de la sucursal.");
+                                        return;
+                                    }
+
+                                    setError(`Error al iniciar sesión con Google: ${error.message || error.code || 'Inténtalo de nuevo'}.`);
                                 } finally {
                                     setIsLoading(false);
                                 }

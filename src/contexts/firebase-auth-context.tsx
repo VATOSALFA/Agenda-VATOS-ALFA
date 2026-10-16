@@ -115,26 +115,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         customData = userDoc.data();
         userRole = customData.role || 'Staff (Sin edición)';
       } else {
-        // 2. Check 'profesionales' collection by UID
-        const profDocRef = fb.doc(fb.db, 'profesionales', firebaseUser.uid);
-        const profDoc = await fb.getDoc(profDocRef);
+        // 1.6 Fallback: check case-insensitively in 'usuarios'
+        if (firebaseUser.email) {
+          const allUsersSnap = await fb.getDocs(usersRef);
+          const targetEmail = firebaseUser.email.toLowerCase().trim();
+          const matchedDoc = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === targetEmail);
+          if (matchedDoc) {
+            userDoc = matchedDoc;
+            customData = userDoc.data();
+            userRole = customData.role || 'Staff (Sin edición)';
+          }
+        }
 
-        if (profDoc.exists()) {
-          customData = profDoc.data();
-          userRole = 'Staff (Sin edición)';
-        } else {
-          // 2.5 Fallback: Check 'profesionales' by email
-          const prosRef = fb.collection(fb.db, 'profesionales');
-          const qPro = fb.query(prosRef, fb.where('email', '==', firebaseUser.email));
-          const querySnapshotPro = await fb.getDocs(qPro);
+        if (!userDoc) {
+          // 2. Check 'profesionales' collection by UID
+          const profDocRef = fb.doc(fb.db, 'profesionales', firebaseUser.uid);
+          const profDoc = await fb.getDoc(profDocRef);
 
-          if (!querySnapshotPro.empty) {
-            customData = querySnapshotPro.docs[0].data();
+          if (profDoc.exists()) {
+            customData = profDoc.data();
             userRole = 'Staff (Sin edición)';
           } else {
-            // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
-            console.warn(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
-            throw new Error("ACCESS_DENIED");
+            // 2.5 Fallback: Check 'profesionales' by email
+            const prosRef = fb.collection(fb.db, 'profesionales');
+            const qPro = fb.query(prosRef, fb.where('email', '==', firebaseUser.email));
+            const querySnapshotPro = await fb.getDocs(qPro);
+
+            if (!querySnapshotPro.empty) {
+              customData = querySnapshotPro.docs[0].data();
+              userRole = 'Staff (Sin edición)';
+            } else {
+              // 2.6 Fallback: check case-insensitively in 'profesionales'
+              if (firebaseUser.email) {
+                const allProsSnap = await fb.getDocs(prosRef);
+                const targetEmail = firebaseUser.email.toLowerCase().trim();
+                const matchedPro = allProsSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === targetEmail);
+                if (matchedPro) {
+                  customData = matchedPro.data();
+                  userRole = 'Staff (Sin edición)';
+                }
+              }
+
+              if (!customData) {
+                // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
+                console.warn(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
+                const accessError: any = new Error("ACCESS_DENIED");
+                accessError.userEmail = firebaseUser.email;
+                throw accessError;
+              }
+            }
           }
         }
       }
@@ -436,6 +465,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signInWithGoogle = async () => {
     const fb = await getFirebase();
     const provider = new fb.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     const userCredential = await fb.signInWithPopup(fb.auth, provider);
 
     // Explicitly validate user immediately to prevent inconsistent UI state

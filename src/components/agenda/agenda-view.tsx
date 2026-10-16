@@ -1014,6 +1014,7 @@ export default function AgendaView() {
       if (!isTerminal) {
         const updateData = {
           total: total,
+          estado: 'Confirmado',
           pago_estado: 'deposit_paid',
           anticipo_esperado: depositAmount,
           monto_anticipo: depositAmount,

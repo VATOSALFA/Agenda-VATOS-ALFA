@@ -29,6 +29,7 @@ import {
   Trash2,
   Eye,
   Lock,
+  Unlock,
   CheckCircle2,
   XCircle,
   DollarSign,
@@ -630,6 +631,77 @@ export function ReservationDetailModal({
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
+  // Auto-sync estado a 'Confirmado' si la cita tiene anticipo pagado pero seguía en 'Reservado'
+  const effectiveReservationEstado = (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado'))
+    ? 'Confirmado'
+    : (reservation.estado || 'Reservado');
+
+  useEffect(() => {
+    if (!isOpen || !reservation?.id || !db) return;
+    if (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado')) {
+      const targetCol = (reservation as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+      updateDoc(doc(db, targetCol, reservation.id), { estado: 'Confirmado' }).catch(console.error);
+    }
+  }, [isOpen, reservation?.id, reservation?.estado, isDepositPaid, db]);
+
+  // Manejo de candado de profesional editable (abrir / fijar)
+  const [isTogglingLock, setIsTogglingLock] = useState(false);
+  const [localLockOverride, setLocalLockOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setLocalLockOverride(null);
+  }, [reservation?.id, isOpen]);
+
+  const defaultIsLocked = Boolean(
+    reservation.professional_lock !== undefined
+      ? reservation.professional_lock
+      : (reservation.canal_reserva?.startsWith('web_publica') ||
+         reservation.origen?.startsWith('web_publica') ||
+         reservation.canal_reserva === 'chatbot' ||
+         reservation.origen === 'chatbot')
+  );
+
+  const currentIsLocked = localLockOverride !== null ? localLockOverride : defaultIsLocked;
+
+  const handleToggleLock = async () => {
+    if (!reservation?.id || !db || isTogglingLock) return;
+    const newLockState = !currentIsLocked;
+    setIsTogglingLock(true);
+    setLocalLockOverride(newLockState);
+
+    try {
+      const targetCol = (reservation as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+      const resRef = doc(db, targetCol, reservation.id);
+
+      const updatedItems = (reservation.items || []).map((item: any) => ({
+        ...item,
+        professional_lock: newLockState,
+      }));
+
+      await updateDoc(resRef, {
+        professional_lock: newLockState,
+        items: updatedItems,
+      });
+
+      toast({
+        title: newLockState ? "Candado cerrado" : "Candado abierto",
+        description: newLockState
+          ? "El profesional quedó fijado exclusivamente para esta cita."
+          : "El candado se abrió. La cita ahora permite reasignación flexible de barbero.",
+      });
+    } catch (err) {
+      console.error("Error toggling professional lock:", err);
+      setLocalLockOverride(currentIsLocked);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo actualizar el estado del candado.",
+      });
+    } finally {
+      setIsTogglingLock(false);
+    }
+  };
+
   // Verificación automática en tiempo real con Mercado Pago si la reserva tiene preferencia o anticipo pendiente
   useEffect(() => {
     if (!isOpen || !reservation?.id) return;
@@ -767,32 +839,43 @@ export function ReservationDetailModal({
                       </Tooltip>
                     </TooltipProvider>
 
-                    {(reservation.canal_reserva?.startsWith('web_publica') || reservation.origen?.startsWith('web_publica') || reservation.professional_lock) && (
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip open={activeHintId === 'barber_lock'}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onMouseEnter={() => setActiveHintId('barber_lock')}
-                              onMouseLeave={() => setActiveHintId(null)}
-                              onTouchStart={() => setActiveHintId(prev => prev === 'barber_lock' ? null : 'barber_lock')}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setActiveHintId(prev => prev === 'barber_lock' ? null : 'barber_lock');
-                              }}
-                              className="p-1 text-slate-400 hover:text-blue-400 transition-colors cursor-help focus:outline-none"
-                              aria-label="Barbero elegido por cliente"
-                              title="Barbero elegido por cliente"
-                            >
-                              <Lock className="w-4 h-4 text-slate-400" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
-                            <p>Barbero elegido por cliente</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
+                    {/* Candado de Preferencia de Profesional (Editable: Clic para abrir o fijar) */}
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleToggleLock();
+                            }}
+                            disabled={isTogglingLock}
+                            className={cn(
+                              "p-1 transition-colors cursor-pointer focus:outline-none rounded-md group flex items-center justify-center",
+                              currentIsLocked ? "text-slate-400 hover:text-blue-400" : "text-blue-400 hover:text-blue-300"
+                            )}
+                            aria-label={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
+                            title={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
+                          >
+                            {isTogglingLock ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                            ) : currentIsLocked ? (
+                              <Lock className="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                            ) : (
+                              <Unlock className="w-4 h-4 text-blue-400 group-hover:text-blue-300 transition-colors" />
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                          <p>
+                            {currentIsLocked
+                              ? "Candado cerrado: Barbero fijado por cliente (Clic para abrir)"
+                              : "Candado abierto: Barbero flexible (Clic para fijar)"}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
                     {reservation.confirmada_por_cliente && (
                       <TooltipProvider delayDuration={100}>
@@ -1184,13 +1267,13 @@ export function ReservationDetailModal({
                   Estado de la Cita:
                 </span>
                 <span className="text-xs font-bold text-foreground">
-                  {statusOptions.find(s => s.status === reservation.estado)?.label || reservation.estado}
+                  {statusOptions.find(s => s.status === effectiveReservationEstado)?.label || effectiveReservationEstado}
                 </span>
               </div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 {statusOptions.map(({ status, hex, label }) => {
                   const hintKey = `status_${status}`;
-                  const isSelected = reservation.estado === status;
+                  const isSelected = effectiveReservationEstado === status;
                   return (
                     <TooltipProvider key={status} delayDuration={80}>
                       <Tooltip open={activeHintId === hintKey}>

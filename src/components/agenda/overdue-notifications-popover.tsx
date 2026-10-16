@@ -667,7 +667,7 @@ export function OverdueNotificationsPopover({
       {/* 2. MODAL DE AVISOS CENTRADO EN PANTALLA CON FONDO DIFUMINADO (BACKDROP BLUR) */}
       {totalCount > 0 && !isMinimized && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsMinimized(true);

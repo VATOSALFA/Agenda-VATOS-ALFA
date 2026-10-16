@@ -2,11 +2,13 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Anticipo de apertura 10:00 AM, sincronización de horarios especiales y efectos de temporada.",
+  "summary": "Monto manual de anticipo, envío de link SPEI/MP, candado editable, estado confirmado y mejoras generales.",
   "notes": [
-    "Regla de anticipo obligatorio a las 10:00 AM (horario de apertura) en Web pública, App Móvil y Agenda.",
-    "Horarios especiales desde la Agenda configurados como estrictamente internos (con soporte antes/después de apertura).",
-    "Jornadas especiales desde Profesionales públicas en Web, App y Agenda unificadas con el turno regular sin sustituirlo.",
-    "Efectos visuales de temporada optimizados con animación progresiva de pétalos y flores de cempasúchil."
+    "Monto manual de anticipo configurable al crear nueva cita en agenda (con activación manual opcional).",
+    "Botón directo de 'Enviar Link de Anticipo' (SPEI / Mercado Pago) vía WhatsApp al agendar.",
+    "Citas con anticipo pagado marcadas automáticamente en amarillo institucional como 'Confirmado'.",
+    "Candado de profesional en el detalle de la reserva editable e interactivo (abrir o fijar con un clic).",
+    "Avisos de recepción elevados al frente con fondo y franja de barberos totalmente difuminados.",
+    "Optimización en inicio de sesión con Google y corrección de desbordamiento en tablets y móviles."
   ]
 }

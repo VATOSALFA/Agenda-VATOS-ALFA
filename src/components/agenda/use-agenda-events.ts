@@ -32,16 +32,28 @@ export function useAgendaEvents(
                     correo: (res as any).cliente_email || ''
                 } as unknown as Client : undefined);
 
+                const isDepositPaid =
+                    res.pago_estado === 'deposit_paid' ||
+                    res.pago_estado === 'anticipo_pagado' ||
+                    (res.pago_estado !== 'pendiente_anticipo' &&
+                     res.pago_estado !== 'pending_payment' &&
+                     res.pago_estado !== 'Pendiente' &&
+                     res.pago_estado !== 'pendiente' &&
+                     Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_anticipo || 0) > 0);
+
+                const effectiveStatus = (isDepositPaid && (!res.estado || res.estado === 'Reservado')) ? 'Confirmado' : (res.estado || 'Reservado');
+
                 if (!res.items || res.items.length === 0) {
                     return [{
                         ...res,
+                        estado: effectiveStatus,
                         type: 'appointment' as const,
                         customer: customer,
                         professionalNames: 'N/A',
                         start: globalStart,
                         end: globalEnd,
                         duration: globalDuration,
-                        color: getStatusColor(res.estado),
+                        color: getStatusColor(effectiveStatus),
                         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
                     }] as AgendaEvent[];
                 }
@@ -65,6 +77,7 @@ export function useAgendaEvents(
                     const primaryProfId = groupItems[0]?.barbero_id || res.barbero_id;
                     return [{
                         ...res,
+                        estado: effectiveStatus,
                         type: 'appointment' as const,
                         customer: customer,
                         professionalNames: professionalMap.get(primaryProfId) || 'N/A',
@@ -72,7 +85,10 @@ export function useAgendaEvents(
                         start: globalStart,
                         end: globalEnd,
                         duration: globalDuration,
-                        color: getStatusColor(res.estado),
+                        color: getStatusColor(effectiveStatus),
+                        professional_lock: res.professional_lock !== undefined
+                            ? res.professional_lock
+                            : groupItems.some((i: any) => i.professional_lock === true),
                         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
                     }] as unknown as AgendaEvent[];
                 }
@@ -100,6 +116,7 @@ export function useAgendaEvents(
 
                     splitEvents.push({
                         ...res,
+                        estado: effectiveStatus,
                         type: 'appointment' as const,
                         customer: customer,
                         professionalNames: professionalMap.get(profId) || 'N/A',
@@ -107,8 +124,10 @@ export function useAgendaEvents(
                         start: startVal,
                         end: endVal,
                         duration: Math.max(0.0833, endVal - startVal),
-                        color: getStatusColor(res.estado),
-                        professional_lock: groupItems.some((i: any) => i.professional_lock === true),
+                        color: getStatusColor(effectiveStatus),
+                        professional_lock: res.professional_lock !== undefined
+                            ? res.professional_lock
+                            : groupItems.some((i: any) => i.professional_lock === true),
                         layout: { width: 100, left: 0, col: 0, totalCols: 1 }
                     } as unknown as AgendaEvent);
                 });

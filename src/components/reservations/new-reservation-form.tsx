@@ -59,6 +59,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { ServiceInput } from './service-input';
+import { SendConfirmationModal } from './send-confirmation-modal';
 
 interface ReminderSettings {
   notifications: Record<string, { enabled: boolean }>;
@@ -215,6 +216,10 @@ export function NewReservationForm({
   const [clientSearchTerm, setClientSearchTerm] = useState('');
   const [depositPaid, setDepositPaid] = useState<boolean>(false);
   const [depositMethod, setDepositMethod] = useState<string>('efectivo');
+  const [manualDepositAmount, setManualDepositAmount] = useState<string>('');
+  const [manualDepositEnabled, setManualDepositEnabled] = useState<boolean>(false);
+  const [isSendLinkModalOpen, setIsSendLinkModalOpen] = useState<boolean>(false);
+  const [createdReservationForLink, setCreatedReservationForLink] = useState<Reservation | null>(null);
   const [showDepositWarningModal, setShowDepositWarningModal] = useState<boolean>(false);
   const [pendingSaveData, setPendingSaveData] = useState<any>(null);
   const { user, db } = useAuth();
@@ -421,6 +426,16 @@ export function NewReservationForm({
       : anticipoPorcentajeDefecto;
     return Math.round(currentTotal * (pct / 100));
   }, [currentTotal, isAnticipoRequiredDueToHistory, isAnticipoRequiredDueToOpeningHour, penalizacionPorcentaje, openingHourPorcentaje, anticipoPorcentajeDefecto]);
+
+  const isAnyAnticipoActive = isAnticipoRequired || manualDepositEnabled;
+
+  const effectiveDepositAmount = useMemo(() => {
+    if (manualDepositAmount !== '') {
+      const parsed = Number(manualDepositAmount);
+      return isNaN(parsed) ? 0 : Math.max(0, parsed);
+    }
+    return depositAmountCalculated;
+  }, [manualDepositAmount, depositAmountCalculated]);
 
   // Popular / Most sold services calculation
   const [popularCounts, setPopularCounts] = useState<Record<string, number>>({});
@@ -882,6 +897,10 @@ export function NewReservationForm({
       );
       setDepositPaid(initialData.pago_estado === 'anticipo_pagado' || initialData.pago_estado === 'deposit_paid' || Boolean((initialData as any).anticipo_pagado));
       setDepositMethod((initialData as any).metodo_pago_anticipo || 'efectivo');
+      if ((initialData as any)?.anticipo_esperado || (initialData as any)?.monto_anticipo) {
+        setManualDepositAmount(String((initialData as any).anticipo_esperado || (initialData as any).monto_anticipo));
+        setManualDepositEnabled(true);
+      }
     } else if (isOpen) {
       form.reset({
         fecha: new Date(),
@@ -898,6 +917,10 @@ export function NewReservationForm({
       });
       setDepositPaid(false);
       setDepositMethod('efectivo');
+      setManualDepositAmount('');
+      setManualDepositEnabled(false);
+      setIsSendLinkModalOpen(false);
+      setCreatedReservationForLink(null);
       setShowDepositWarningModal(false);
       setPendingSaveData(null);
     }
@@ -1138,8 +1161,8 @@ export function NewReservationForm({
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
       const effectiveDepositPaid = data._depositPaidOverride !== undefined ? data._depositPaidOverride : depositPaid;
-      const targetDepositAmount = isAnticipoRequired
-        ? depositAmountCalculated
+      const targetDepositAmount = isAnyAnticipoActive
+        ? effectiveDepositAmount
         : (Number((data as any).monto_anticipo) || 0);
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);
@@ -1154,14 +1177,14 @@ export function NewReservationForm({
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
-        estado: data.estado || 'Reservado',
+        estado: effectiveDepositPaid ? 'Confirmado' : (data.estado || 'Reservado'),
         precio: data.precio,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
-        requiere_anticipo: isAnticipoRequired || (data as any).requiere_anticipo || false,
+        requiere_anticipo: isAnyAnticipoActive || (data as any).requiere_anticipo || false,
         anticipo_esperado: targetDepositAmount,
         ...(effectiveDepositPaid ? {
           pago_estado: 'deposit_paid',
@@ -1174,7 +1197,7 @@ export function NewReservationForm({
           metodo_pago_anticipo: depositMethod,
           deposit_paid_at: Timestamp.now(),
         } : {
-          pago_estado: isAnticipoRequired ? 'pendiente_anticipo' : (data.pago_estado && data.pago_estado !== 'deposit_paid' && data.pago_estado !== 'anticipo_pagado' ? data.pago_estado : 'Pendiente'),
+          pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : (data.pago_estado && data.pago_estado !== 'deposit_paid' && data.pago_estado !== 'anticipo_pagado' ? data.pago_estado : 'Pendiente'),
           monto_anticipo: 0,
           monto_pagado: 0,
           monto_pagado_real: 0,
@@ -1332,10 +1355,44 @@ export function NewReservationForm({
           });
         }
         onFormSubmit(createdReservationObj);
-        if (onOpenChange) onOpenChange(false);
+        if (data._openSendLinkModal && createdReservationObj) {
+          setCreatedReservationForLink(createdReservationObj);
+          setIsSendLinkModalOpen(true);
+        } else {
+          if (onOpenChange) onOpenChange(false);
+        }
       }
     }
   }
+
+  const handleSaveAndSendLink = async () => {
+    setDepositPaid(false);
+    setShowDepositWarningModal(false);
+    const isValid = await form.trigger();
+    if (!isValid) {
+      toast({
+        variant: "destructive",
+        title: "Campos requeridos incompletos",
+        description: "Por favor completa el cliente, servicios y horario antes de enviar el enlace."
+      });
+      return;
+    }
+    const currentValues = form.getValues();
+    if (!validateItemsAvailability(currentValues)) {
+      toast({
+        variant: "destructive",
+        title: "Conflicto de Horario",
+        description: "Uno o más profesionales no están disponibles en el horario seleccionado."
+      });
+      return;
+    }
+    const dataToSubmit = {
+      ...currentValues,
+      _openSendLinkModal: true,
+      _depositPaidOverride: false,
+    };
+    await proceedWithSubmission(dataToSubmit, false);
+  };
 
   const proceedWithSubmission = async (dataToSubmit: any, forceDepositPaid?: boolean) => {
     const isPaid = forceDepositPaid !== undefined ? forceDepositPaid : depositPaid;
@@ -1806,7 +1863,7 @@ export function NewReservationForm({
                     </div>
 
                     {/* BANNERS INTELIGENTES DE ACCIÓN PARA RECEPCIÓN */}
-                    {isAnticipoRequired ? (
+                    {isAnyAnticipoActive ? (
                       <div className={cn(
                         "p-4 rounded-xl border-2 shadow-sm space-y-3",
                         isAnticipoRequiredDueToHistory
@@ -1829,18 +1886,36 @@ export function NewReservationForm({
                                   ? "🛡️ Escudo Antifraude: Anticipo Obligatorio"
                                   : isAnticipoRequiredDueToOpeningHour
                                   ? `⏰ Regla de Reserva: Horario de Apertura (${openingHourTarget} AM)`
-                                  : `💳 Regla de Reserva: Anticipo por Monto (+$${montoMinimoThreshold} MXN)`}
+                                  : isAnticipoRequiredDueToAmount
+                                  ? `💳 Regla de Reserva: Anticipo por Monto (+$${montoMinimoThreshold} MXN)`
+                                  : "💳 Anticipo Manual Personalizado"}
                               </span>
-                              <Badge className={cn(
-                                "text-white font-bold text-[10px] px-2 py-0.5 shadow-xs",
-                                isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
-                              )}>
-                                {isAnticipoRequiredDueToHistory
-                                  ? `${penalizacionPorcentaje}% Anticipo`
-                                  : isAnticipoRequiredDueToOpeningHour
-                                  ? `${openingHourPorcentaje}% Anticipo`
-                                  : `${anticipoPorcentajeDefecto}% Anticipo`}
-                              </Badge>
+                              <div className="flex items-center gap-1.5">
+                                <Badge className={cn(
+                                  "text-white font-bold text-[10px] px-2 py-0.5 shadow-xs",
+                                  isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
+                                )}>
+                                  {isAnticipoRequiredDueToHistory
+                                    ? `${penalizacionPorcentaje}% Anticipo`
+                                    : isAnticipoRequiredDueToOpeningHour
+                                    ? `${openingHourPorcentaje}% Anticipo`
+                                    : isAnticipoRequiredDueToAmount
+                                    ? `${anticipoPorcentajeDefecto}% Anticipo`
+                                    : "Manual"}
+                                </Badge>
+                                {manualDepositEnabled && !isAnticipoRequired && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setManualDepositEnabled(false);
+                                      setManualDepositAmount('');
+                                    }}
+                                    className="text-[10px] text-red-500 hover:underline font-semibold"
+                                  >
+                                    (Quitar)
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <p className={cn(
                               "text-xs leading-snug",
@@ -1850,18 +1925,67 @@ export function NewReservationForm({
                                 <>Este cliente acumula <strong>{unattendedCount} inasistencias previas</strong> (límite permitido: {maxInasistenciasPermitidas}). Por regla oficial de Vatos Alfa, <strong>debe pagar anticipo para apartar su cita</strong>.</>
                               ) : isAnticipoRequiredDueToOpeningHour ? (
                                 <>Todas las citas agendadas a las <strong>{openingHourTarget} AM (horario de apertura)</strong> requieren obligatoriamente un anticipo del <strong>{openingHourPorcentaje}%</strong> para asegurar el primer turno del día.</>
-                              ) : (
+                              ) : isAnticipoRequiredDueToAmount ? (
                                 <>El total de la cita es de <strong>${currentTotal} MXN</strong> (alcanza o supera el mínimo de ${montoMinimoThreshold} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
+                              ) : (
+                                <>Has activado el <strong>anticipo manual</strong> para esta cita. Puedes ajustar libremente la cantidad a solicitar o cobrar.</>
                               )}
                             </p>
                             <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-foreground pt-1 flex-wrap">
                               <span>Total Cita: <strong>${currentTotal} MXN</strong></span>
                               <span>•</span>
                               <span className={isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}>
-                                Anticipo Requerido: <strong>${depositAmountCalculated} MXN</strong>
+                                Anticipo: <strong>${effectiveDepositAmount} MXN</strong>
                               </span>
                             </div>
                           </div>
+                        </div>
+
+                        {/* Campo de Monto Manual de Anticipo y Botón de Enviar Link */}
+                        <div className={cn(
+                          "pt-2.5 border-t flex flex-wrap items-center justify-between gap-2.5",
+                          isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
+                        )}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-semibold text-foreground">Monto Anticipo:</span>
+                            <div className="relative w-28">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">$</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                max={currentTotal}
+                                step="1"
+                                value={manualDepositAmount !== '' ? manualDepositAmount : (effectiveDepositAmount || '')}
+                                onChange={(e) => setManualDepositAmount(e.target.value)}
+                                placeholder={String(depositAmountCalculated || 50)}
+                                className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border"
+                              />
+                            </div>
+                            <span className="text-xs font-bold text-foreground">MXN</span>
+                            {manualDepositAmount !== '' && isAnticipoRequired && (
+                              <button
+                                type="button"
+                                onClick={() => setManualDepositAmount('')}
+                                className="text-[11px] text-blue-500 hover:underline font-medium"
+                              >
+                                (Auto: ${depositAmountCalculated})
+                              </button>
+                            )}
+                          </div>
+
+                          {!depositPaid && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={handleSaveAndSendLink}
+                              disabled={isSubmitting}
+                              className="h-8 px-3 text-xs font-bold border-blue-500/40 text-blue-500 hover:text-white hover:bg-blue-600 gap-1.5 rounded-xl shadow-xs"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>Enviar Link (SPEI / MP)</span>
+                            </Button>
+                          )}
                         </div>
 
                         {/* Control de cobro en recepción */}
@@ -1895,7 +2019,26 @@ export function NewReservationForm({
                           )}
                         </div>
                       </div>
-                    ) : isPenalizacionActive && unattendedCount === (maxInasistenciasPermitidas - 1) && unattendedCount > 0 ? (
+                    ) : (
+                      <div className="flex items-center justify-between pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setManualDepositEnabled(true);
+                            if (manualDepositAmount === '') {
+                              setManualDepositAmount(String(Math.round(currentTotal * 0.5) || 50));
+                            }
+                          }}
+                          className="h-7 px-2 text-xs text-blue-500 hover:text-blue-400 font-semibold gap-1.5"
+                        >
+                          <CreditCard className="w-3.5 h-3.5" />
+                          <span>+ Solicitar / Cobrar Anticipo Manual</span>
+                        </Button>
+                      </div>
+                    )}
+                    {isPenalizacionActive && unattendedCount === (maxInasistenciasPermitidas - 1) && unattendedCount > 0 && !isAnyAnticipoActive ? (
                       <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex items-start gap-2.5">
                         <AlertTriangle className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
                         <div className="space-y-0.5 text-xs">
@@ -2235,22 +2378,34 @@ export function NewReservationForm({
           </ScrollArea>
 
           {/* BARRA INFERIOR DE ACCIONES VATOS ALFA */}
-          <div className="flex-shrink-0 p-4 sm:p-5 border-t bg-muted/10 mt-auto flex items-center justify-between">
+          <div className="flex-shrink-0 p-3 sm:p-4 border-t bg-muted/10 mt-auto flex items-center justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 flex-wrap">
               <span>Total:</span>
               <span className="text-sm font-bold text-foreground">${formatMoney(currentTotal)} MXN</span>
-              {isAnticipoRequired && (
+              {isAnyAnticipoActive && (
                 <Badge variant="outline" className={cn("text-[10px] font-bold py-0 ml-1.5", depositPaid ? "bg-blue-500/10 text-blue-400 border-blue-500/30" : "bg-red-500/10 text-red-400 border-red-500/30")}>
-                  {depositPaid ? `Anticipo $${formatMoney(depositAmountCalculated)} Pagado` : `Anticipo $${formatMoney(depositAmountCalculated)} Pendiente`}
+                  {depositPaid ? `Anticipo $${formatMoney(effectiveDepositAmount)} Pagado` : `Anticipo $${formatMoney(effectiveDepositAmount)} Pendiente`}
                 </Badge>
               )}
             </div>
 
             <div className="flex items-center gap-2">
+              {isAnyAnticipoActive && !depositPaid && !isEditMode && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={isSubmitting}
+                  className="rounded-xl h-9 sm:h-10 px-3 sm:px-4 text-xs font-bold border-blue-500/40 text-blue-500 hover:bg-blue-600 hover:text-white hidden sm:flex items-center gap-1.5"
+                  onClick={handleSaveAndSendLink}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Enviar Link</span>
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
-                className="rounded-xl h-10 px-4 text-xs font-semibold"
+                className="rounded-xl h-9 sm:h-10 px-3 sm:px-4 text-xs font-semibold"
                 onClick={() => onOpenChange && onOpenChange(false)}
               >
                 Cancelar
@@ -2258,7 +2413,7 @@ export function NewReservationForm({
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="rounded-xl h-10 px-6 text-xs font-bold btn-vatos-alfa"
+                className="rounded-xl h-9 sm:h-10 px-4 sm:px-6 text-xs font-bold btn-vatos-alfa"
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Reserva')}
               </Button>
@@ -2503,7 +2658,7 @@ export function NewReservationForm({
                   }
                 }}
               >
-                ✓ Ya cobré el anticipo (${depositAmountCalculated} MXN)
+                ✓ Ya cobré el anticipo (${effectiveDepositAmount} MXN)
               </Button>
 
               <Button
@@ -2514,7 +2669,7 @@ export function NewReservationForm({
                   setDepositPaid(false);
                   setShowDepositWarningModal(false);
                   if (pendingSaveData) {
-                    await proceedWithSubmission(pendingSaveData, false);
+                    await proceedWithSubmission({ ...pendingSaveData, _openSendLinkModal: true }, false);
                   }
                 }}
               >
@@ -2553,18 +2708,52 @@ export function NewReservationForm({
   );
 
   if (isDialogChild) {
-    return formContent;
+    return (
+      <>
+        {formContent}
+        <SendConfirmationModal
+          isOpen={isSendLinkModalOpen}
+          onOpenChange={(open) => {
+            setIsSendLinkModalOpen(open);
+            if (!open) {
+              setCreatedReservationForLink(null);
+              if (onOpenChange) onOpenChange(false);
+            }
+          }}
+          reservation={createdReservationForLink}
+          forceAnticipoMode={true}
+        />
+      </>
+    );
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent
-        hideCloseButton={true}
-        className="max-w-2xl h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
-        onOpenAutoFocus={(e) => e.preventDefault()}
-      >
-        {formContent}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={isOpen && !isSendLinkModalOpen} onOpenChange={(open) => {
+        if (isSendLinkModalOpen) return;
+        onOpenChange && onOpenChange(open);
+      }}>
+        <DialogContent
+          hideCloseButton={true}
+          className="max-w-2xl max-h-[85dvh] sm:max-h-[88dvh] h-auto flex flex-col p-0 gap-0 rounded-2xl overflow-hidden shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          {formContent}
+        </DialogContent>
+      </Dialog>
+
+      <SendConfirmationModal
+        isOpen={isSendLinkModalOpen}
+        onOpenChange={(open) => {
+          setIsSendLinkModalOpen(open);
+          if (!open) {
+            setCreatedReservationForLink(null);
+            if (onOpenChange) onOpenChange(false);
+          }
+        }}
+        reservation={createdReservationForLink}
+        forceAnticipoMode={true}
+      />
+    </>
   );
 }

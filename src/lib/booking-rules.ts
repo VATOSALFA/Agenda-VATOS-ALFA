@@ -151,6 +151,128 @@ export function isShortNoticeAppointment(
   return false;
 }
 
+/**
+ * Determina si una reserva se encuentra actualmente esperando el pago de su anticipo
+ * (estado preliminar de 10 minutos de tolerancia).
+ */
+export function isPendingDepositReservation(res: any): boolean {
+  if (!res) return false;
+
+  const estado = String(res.estado || '').trim();
+  if (
+    estado === 'Cancelado' ||
+    estado === 'Cancelada' ||
+    estado === 'No asiste' ||
+    estado === 'Completado' ||
+    estado === 'Venta completada' ||
+    estado === 'Asiste' ||
+    estado === 'En espera'
+  ) {
+    return false;
+  }
+
+  const pagoEstado = String(res.pago_estado || '').trim();
+  if (pagoEstado === 'Pagado') return false;
+
+  const isExplicitlyUnpaid =
+    pagoEstado === 'pendiente_anticipo' ||
+    pagoEstado === 'pending_payment' ||
+    pagoEstado === 'Pendiente' ||
+    pagoEstado === 'pendiente';
+
+  const isDepositPaid =
+    pagoEstado === 'deposit_paid' ||
+    pagoEstado === 'anticipo_pagado' ||
+    (!isExplicitlyUnpaid &&
+      Number(
+        res.anticipo_pagado ||
+          res.anticipoPagado ||
+          res.monto_pagado_real ||
+          res.monto_pagado ||
+          0
+      ) > 0);
+
+  if (isDepositPaid) return false;
+
+  return Boolean(
+    res.requiere_pago_anticipado === true ||
+      res.requiere_anticipo === true ||
+      Number(res.anticipo_esperado || 0) > 0 ||
+      pagoEstado === 'pendiente_anticipo' ||
+      pagoEstado === 'pending_payment' ||
+      estado === 'Pendiente de pago' ||
+      estado === 'Pendiente de Pago' ||
+      estado === 'pendiente de pago'
+  );
+}
+
+/**
+ * Calcula el tiempo transcurrido y si ya vencieron los 10 minutos de tolerancia
+ * para una cita con anticipo pendiente.
+ */
+export function getPendingDepositTiming(
+  res: any,
+  nowMs: number = Date.now(),
+  toleranceMinutes: number = 10
+): {
+  isPendingDeposit: boolean;
+  createdMs: number | null;
+  diffMinutes: number;
+  depositMinutesRemaining: number;
+  depositExpired: boolean;
+} {
+  const isPending = isPendingDepositReservation(res);
+  if (!isPending) {
+    return {
+      isPendingDeposit: false,
+      createdMs: null,
+      diffMinutes: 0,
+      depositMinutesRemaining: 0,
+      depositExpired: false,
+    };
+  }
+
+  const rawCreated = res?.creado_en || res?.createdAt || res?.creada_el;
+  let createdMs: number | null = null;
+
+  if (typeof rawCreated?.toMillis === 'function') {
+    createdMs = rawCreated.toMillis();
+  } else if (typeof rawCreated?.toDate === 'function') {
+    createdMs = rawCreated.toDate().getTime();
+  } else if (typeof rawCreated?.seconds === 'number') {
+    createdMs = rawCreated.seconds * 1000;
+  } else if (typeof rawCreated === 'string' || typeof rawCreated === 'number') {
+    const parsed = new Date(rawCreated).getTime();
+    if (!isNaN(parsed)) createdMs = parsed;
+  }
+
+  const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
+  const depositMinutesRemaining = createdMs
+    ? Math.max(0, Math.ceil(toleranceMinutes - diffMinutes))
+    : toleranceMinutes;
+  const depositExpired = Boolean(createdMs && diffMinutes >= toleranceMinutes);
+
+  return {
+    isPendingDeposit: true,
+    createdMs,
+    diffMinutes,
+    depositMinutesRemaining,
+    depositExpired,
+  };
+}
+
+/**
+ * Devuelve true si la cita requería anticipo, no ha sido pagada y ya superó los 10 minutos de tolerancia.
+ */
+export function isExpiredPendingDepositReservation(
+  res: any,
+  nowMs: number = Date.now(),
+  toleranceMinutes: number = 10
+): boolean {
+  return getPendingDepositTiming(res, nowMs, toleranceMinutes).depositExpired;
+}
+
+
 export interface ReglasReservasConfig {
   // 1. Regla Global de Anticipo por Monto
   anticipo_monto_minimo_activo: boolean;

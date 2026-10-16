@@ -434,7 +434,7 @@ export default function AgendaDisplayPage() {
                                                 className={cn(
                                                     "absolute rounded-lg border-l-4 flex items-center text-left p-2.5 overflow-hidden select-none",
                                                     event.layout.isPendingDeposit
-                                                        ? "bg-blue-950/25 border-2 border-dashed border-blue-400/80 text-foreground opacity-85 backdrop-blur-[2px]"
+                                                        ? "bg-red-500/20 border-2 border-dashed border-red-500 text-red-950 dark:text-red-100 opacity-90 backdrop-blur-[2px]"
                                                         : event.color,
                                                     event.type === 'appointment' ? 'z-20' : 'z-10'
                                                 )}
@@ -446,11 +446,6 @@ export default function AgendaDisplayPage() {
                                                             ? (event.customer?.nombre || 'Cargando datos...')
                                                             : event.motivo}
                                                     </p>
-                                                    {event.layout.isPendingDeposit && (
-                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-300 mt-0.5">
-                                                            ⏳ Esperando Anticipo
-                                                        </span>
-                                                    )}
                                                 </div>
                                             </div>
                                         ))}

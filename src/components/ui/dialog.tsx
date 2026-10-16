@@ -30,6 +30,32 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+export function enforceModalStackIsolation() {
+  if (typeof document === 'undefined') return;
+  const dialogs = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+    )
+  );
+  dialogs.forEach((dialogEl, idx) => {
+    const isTopMost = idx === dialogs.length - 1;
+    const baseZ = 60 + idx * 20;
+    const prevSibling = dialogEl.previousElementSibling as HTMLElement | null;
+    if (prevSibling && prevSibling.hasAttribute("data-state")) {
+      prevSibling.style.zIndex = String(baseZ);
+      prevSibling.style.pointerEvents = isTopMost ? "auto" : "none";
+    }
+    dialogEl.style.zIndex = String(baseZ + 1);
+    if (isTopMost) {
+      dialogEl.style.pointerEvents = "auto";
+      dialogEl.removeAttribute("inert");
+    } else {
+      dialogEl.style.pointerEvents = "none";
+      dialogEl.setAttribute("inert", "");
+    }
+  });
+}
+
 function DialogBodyScrollLock() {
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -42,10 +68,16 @@ function DialogBodyScrollLock() {
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
 
+    // 3. Aislar capas de modales: solo el modal superior puede recibir clics
+    enforceModalStackIsolation();
+    const timer = setTimeout(enforceModalStackIsolation, 30);
+
     return () => {
-      // Verificar si aún queda algún otro modal abierto antes de reactivar scroll
+      clearTimeout(timer);
+      // Verificar si aún queda algún otro modal abierto antes de reactivar scroll y restaurar interactividad al nuevo modal superior
       setTimeout(() => {
-        const stillHasModal = !!document.querySelector('[role="dialog"]');
+        enforceModalStackIsolation();
+        const stillHasModal = !!document.querySelector('[role="dialog"], [role="alertdialog"]');
         if (!stillHasModal) {
           document.documentElement.style.overflow = "";
           document.body.style.overflow = "";

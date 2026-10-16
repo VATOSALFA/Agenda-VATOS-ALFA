@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, limit } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, setDoc, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -35,13 +35,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown, AlertTriangle, CalendarPlus, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, CreditCard, DollarSign } from 'lucide-react';
+import { User, Scissors, Tag, Calendar as CalendarIcon, Clock, Loader2, RefreshCw, Circle, UserPlus, Lock, Unlock, Edit, X, Mail, Phone, Bell, Plus, Trash2, Check, ChevronsUpDown, ChevronDown, ChevronUp, AlertTriangle, CalendarPlus, ShieldAlert, CheckCircle2, AlertCircle, Sparkles, CreditCard, DollarSign } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local, SaleItem as SaleItemType, Product } from '@/lib/types';
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { sendManualBookingConfirmation } from '@/lib/actions/booking';
-import { isShortNoticeAppointment, isOpeningHourTime, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { isShortNoticeAppointment, isOpeningHourTime, isExpiredPendingDepositReservation, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
@@ -222,6 +222,8 @@ export function NewReservationForm({
   const [createdReservationForLink, setCreatedReservationForLink] = useState<Reservation | null>(null);
   const [showDepositWarningModal, setShowDepositWarningModal] = useState<boolean>(false);
   const [pendingSaveData, setPendingSaveData] = useState<any>(null);
+  const [isClientStatsExpanded, setIsClientStatsExpanded] = useState<boolean>(false);
+  const [isDepositRuleExpanded, setIsDepositRuleExpanded] = useState<boolean>(false);
   const { user, db } = useAuth();
   const { selectedLocalId } = useLocal();
 
@@ -629,9 +631,12 @@ export function NewReservationForm({
     const hora_fin = `${hora_fin_hora}:${hora_fin_minuto}`;
     const formattedDate = format(fecha, 'yyyy-MM-dd');
 
+    const nowMs = Date.now();
+
     if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
       const clientConflict = allReservations.some(r => {
         if (r.estado === 'Cancelado' || r.estado === 'No asiste' || r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+        if (isExpiredPendingDepositReservation(r, nowMs, 10)) return false;
         return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
       });
       if (clientConflict) {
@@ -642,7 +647,8 @@ export function NewReservationForm({
         return false;
       }
     }
-    const globalStartMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
+
+    const globalStartMins = parseInt(hora_inicio_hora, 10) * 60 + parseInt(hora_inicio_minuto, 10);
     const profCurrentStartMins = new Map<string, number>();
 
     let allItemsValid = true;    items.forEach((item, index) => {
@@ -748,6 +754,18 @@ export function NewReservationForm({
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
           if (r.estado === 'Cancelado' || r.estado === 'No asiste' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
+          if (isExpiredPendingDepositReservation(r, nowMs, 10)) {
+            if (db && r.id) {
+              const targetCol = (r as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+              updateDoc(doc(db, targetCol, r.id), {
+                estado: 'Cancelado',
+                motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                cancelada_automaticamente: true,
+                cancelado_en: Timestamp.now(),
+              }).catch(() => {});
+            }
+            return false;
+          }
           const profItems = r.items.filter(i => i.barbero_id === item.barbero_id);
           if (profItems.length === 0) return false;
 
@@ -896,10 +914,26 @@ export function NewReservationForm({
           ? initialData.professional_lock
           : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
       );
-      setDepositPaid(initialData.pago_estado === 'anticipo_pagado' || initialData.pago_estado === 'deposit_paid' || Boolean((initialData as any).anticipo_pagado));
-      setDepositMethod((initialData as any).metodo_pago_anticipo || 'efectivo');
-      if ((initialData as any)?.anticipo_esperado || (initialData as any)?.monto_anticipo) {
-        setManualDepositAmount(String((initialData as any).anticipo_esperado || (initialData as any).monto_anticipo));
+      const existingPaidAmt = Number(
+        (initialData as any).anticipo_pagado ||
+        (initialData as any).anticipoPagado ||
+        (initialData as any).monto_pagado_real ||
+        (initialData as any).monto_pagado ||
+        (initialData as any).monto_anticipo ||
+        0
+      );
+      const isAlreadyPaidOrDeposit =
+        initialData.pago_estado === 'Pagado' ||
+        initialData.pago_estado === 'anticipo_pagado' ||
+        initialData.pago_estado === 'deposit_paid' ||
+        existingPaidAmt > 0;
+      setDepositPaid(isAlreadyPaidOrDeposit);
+      setDepositMethod((initialData as any).metodo_pago_anticipo || (initialData as any).metodo_pago || 'efectivo');
+      const initExpectedOrPaid = existingPaidAmt > 0
+        ? existingPaidAmt
+        : Number((initialData as any)?.anticipo_esperado || (initialData as any)?.monto_anticipo || 0);
+      if (initExpectedOrPaid > 0) {
+        setManualDepositAmount(String(initExpectedOrPaid));
         setManualDepositEnabled(true);
       }
     } else if (isOpen) {
@@ -1161,10 +1195,22 @@ export function NewReservationForm({
 
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
-      const effectiveDepositPaid = data._depositPaidOverride !== undefined ? data._depositPaidOverride : depositPaid;
+      const isInitialAlreadyPaid = isEditMode && initialData?.pago_estado === 'Pagado';
+      const effectiveDepositPaid = data._depositPaidOverride !== undefined
+        ? data._depositPaidOverride
+        : (depositPaid || isInitialAlreadyPaid);
+      const totalPrecioNum = Number(data.precio) || 0;
       const targetDepositAmount = isAnyAnticipoActive
         ? effectiveDepositAmount
-        : (Number((data as any).monto_anticipo) || 0);
+        : (Number((data as any).monto_anticipo || (initialData as any)?.anticipo_pagado || (initialData as any)?.monto_pagado_real || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
+
+      const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
+      const preservedStatuses = ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
+      const resolvedEstado = preservedStatuses.includes(data.estado)
+        ? data.estado
+        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : (data.estado || 'Reservado')));
+
+      const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);
       const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string } = {
@@ -1178,7 +1224,7 @@ export function NewReservationForm({
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
-        estado: effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : (data.estado || 'Reservado')),
+        estado: resolvedEstado,
         precio: data.precio,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
@@ -1188,15 +1234,15 @@ export function NewReservationForm({
         requiere_anticipo: isAnyAnticipoActive || (data as any).requiere_anticipo || false,
         anticipo_esperado: targetDepositAmount,
         ...(effectiveDepositPaid ? {
-          pago_estado: 'deposit_paid',
+          pago_estado: isFullPaymentCovered || isInitialAlreadyPaid ? 'Pagado' : 'deposit_paid',
           monto_anticipo: targetDepositAmount,
           monto_pagado: targetDepositAmount,
           monto_pagado_real: targetDepositAmount,
           anticipo_pagado: targetDepositAmount,
           anticipoPagado: targetDepositAmount,
-          saldo_pendiente: Math.max(0, (Number(data.precio) || 0) - targetDepositAmount),
+          saldo_pendiente: Math.max(0, totalPrecioNum - targetDepositAmount),
           metodo_pago_anticipo: depositMethod,
-          deposit_paid_at: Timestamp.now(),
+          deposit_paid_at: paidTimestamp,
         } : {
           pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : (data.pago_estado && data.pago_estado !== 'deposit_paid' && data.pago_estado !== 'anticipo_pagado' ? data.pago_estado : 'Pendiente'),
           monto_anticipo: 0,
@@ -1204,7 +1250,7 @@ export function NewReservationForm({
           monto_pagado_real: 0,
           anticipo_pagado: 0,
           anticipoPagado: 0,
-          saldo_pendiente: Number(data.precio) || 0,
+          saldo_pendiente: totalPrecioNum,
         }),
       };
 
@@ -1268,6 +1314,55 @@ export function NewReservationForm({
             correo: data.cliente_email || '',
           },
         };
+      }
+
+      // Sincronizar documento en `ventas` cuando se marca anticipo o pago completo en recepción
+      const isSandboxBooking = isEditMode ? Boolean((initialData as any)?.isSandbox) : isTargetSandbox;
+      if (!isSandboxBooking && effectiveDepositPaid && targetDepositAmount > 0 && reservationId) {
+        const depositSaleId = (initialData as any)?.deposit_payment_id || `deposit_${reservationId}_${Date.now()}`;
+        const saleRef = doc(db, 'ventas', depositSaleId);
+        const existingSaleSnap = await getDoc(saleRef).catch(() => null);
+        if (!existingSaleSnap || !existingSaleSnap.exists()) {
+          await setDoc(saleRef, {
+            id: depositSaleId,
+            reservationId: reservationId,
+            cliente_id: data.cliente_id || '',
+            cliente_nombre: dataToSave.cliente_nombre || '',
+            local_id: data.local_id || selectedLocalId || 'default',
+            fecha_hora_venta: paidTimestamp,
+            fecha_pago: paidTimestamp,
+            creado_en: paidTimestamp,
+            tipo_venta: 'anticipo',
+            total: totalPrecioNum,
+            subtotal: totalPrecioNum,
+            anticipo_esperado: targetDepositAmount,
+            monto_pagado_real: targetDepositAmount,
+            monto_anticipo: targetDepositAmount,
+            anticipoPagado: targetDepositAmount,
+            anticipo_pagado: targetDepositAmount,
+            monto_pagado: targetDepositAmount,
+            pago_efectivo: depositMethod === 'efectivo' ? targetDepositAmount : 0,
+            pago_tarjeta: depositMethod === 'tarjeta' ? targetDepositAmount : 0,
+            pago_transferencia: depositMethod === 'transferencia' ? targetDepositAmount : 0,
+            saldo_pendiente: Math.max(0, totalPrecioNum - targetDepositAmount),
+            pago_estado: isFullPaymentCovered ? 'Pagado' : 'deposit_paid',
+            status: 'completed',
+            metodo_pago: depositMethod,
+            items: itemsToSave.map((it: any) => ({
+              ...it,
+              precio_unitario: it.precio || 0,
+              cantidad: 1,
+              subtotal: it.precio || 0,
+              descuento: { valor: 0, tipo: 'fixed', monto: 0 },
+            })),
+            creado_por: user?.displayName || user?.email || 'recepcion',
+            creado_por_id: user?.uid || '',
+            creado_por_nombre: user?.displayName || user?.email || 'Recepción',
+          }, { merge: true });
+
+          const resRef = doc(db, 'reservas', reservationId);
+          await updateDoc(resRef, { deposit_payment_id: depositSaleId }).catch(() => {});
+        }
       }
 
       // Trigger Email Notification (Server Action) - only for production real bookings
@@ -1454,21 +1549,21 @@ export function NewReservationForm({
   const formContent = (
     <>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow flex flex-col overflow-hidden">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* CABECERA OFICIAL VATOS ALFA */}
-          <div className="p-4 sm:p-5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 flex-shrink-0 relative overflow-hidden">
+          <div className="px-4 sm:px-5 py-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 flex-shrink-0 relative overflow-hidden">
             {/* Haz de luz animado sutil */}
             <div className="header-light-beam" aria-hidden="true" />
 
             <div className="relative z-10 flex items-center justify-between w-full">
               <div className="flex items-center gap-3">
-                <CalendarPlus className="h-6 w-6 text-white shrink-0" />
+                <CalendarPlus className="h-5 w-5 text-white shrink-0" />
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
                       {isEditMode ? 'Editar Cita' : 'Nueva Cita en Agenda'}
                     </DialogTitle>
-                    <Badge variant="outline" className="bg-white/10 text-slate-200 border-white/20 text-[10px] py-0 px-2 font-mono">
+                    <Badge variant="outline" className="bg-white/10 text-slate-200 border-white/20 text-[10px] py-0 px-2 font-sans">
                       {currentLocal?.name || 'Vatos Alfa'}
                     </Badge>
                     {isTargetSandbox && (
@@ -1477,7 +1572,7 @@ export function NewReservationForm({
                       </Badge>
                     )}
                   </div>
-                  <DialogDescription className="text-xs text-slate-300 font-normal mt-0.5">
+                  <DialogDescription className="text-xs text-slate-300 font-normal mt-0.5 hidden sm:block">
                     {isEditMode ? 'Modifica el horario, profesional o servicios de la reserva.' : 'Registra la cita en la agenda verificando historial del cliente.'}
                   </DialogDescription>
                 </div>
@@ -1552,372 +1647,401 @@ export function NewReservationForm({
             </div>
           </div>
 
-          <ScrollArea className="flex-grow">
-            <div className="space-y-6 px-6 py-4">
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                  <FormField
-                    control={form.control}
-                    name="fecha"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Fecha</FormLabel>
-                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                className={cn(
-                                  "w-full h-10 justify-start text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 hover:border-blue-500/50 capitalize transition-all shadow-xs",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
-                                {field.value ? (
-                                  format(field.value, "EEEE dd 'de' MMMM", { locale: es })
-                                ) : (
-                                  format(new Date(), "EEEE dd 'de' MMMM", { locale: es })
-                                )}
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-                            <Calendar
-                              locale={es}
-                              mode="single"
-                              selected={field.value || new Date()}
-                              onSelect={(date) => {
-                                if (date) {
-                                  field.onChange(date);
-                                  setIsCalendarOpen(false);
-                                }
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-3.5 space-y-3.5">
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                <FormField
+                  control={form.control}
+                  name="fecha"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col space-y-1">
+                      <FormLabel className="text-xs">Fecha</FormLabel>
+                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full h-10 justify-start text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 hover:border-blue-500/50 capitalize transition-all shadow-xs",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4 text-blue-500" />
+                              {field.value ? (
+                                format(field.value, "EEEE dd 'de' MMMM", { locale: es })
+                              ) : (
+                                format(new Date(), "EEEE dd 'de' MMMM", { locale: es })
+                              )}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+                          <Calendar
+                            locale={es}
+                            mode="single"
+                            selected={field.value || new Date()}
+                            onSelect={(date) => {
+                              if (date) {
+                                field.onChange(date);
+                                setIsCalendarOpen(false);
+                              }
+                            }}
+                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                            required
+                            initialFocus
+                          />
+                          {/* Botones de selección rápida Vatos Alfa */}
+                          <div className="p-2 border-t border-border/40 flex items-center justify-between gap-2 bg-muted/15">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1"
+                              onClick={() => {
+                                field.onChange(new Date());
+                                setIsCalendarOpen(false);
                               }}
-                              disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                              required
-                              initialFocus
-                            />
-                            {/* Botones de selección rápida Vatos Alfa */}
-                            <div className="p-2 border-t border-border/40 flex items-center justify-between gap-2 bg-muted/15">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1"
-                                onClick={() => {
-                                  field.onChange(new Date());
-                                  setIsCalendarOpen(false);
+                            >
+                              Hoy
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1"
+                              onClick={() => {
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                field.onChange(tomorrow);
+                                setIsCalendarOpen(false);
+                              }}
+                            >
+                              Mañana
+                            </Button>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="space-y-1">
+                  <FormLabel className="text-xs">Horario</FormLabel>
+                  <div className="flex items-center gap-2">
+                    {/* Horario Inicio */}
+                    <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-0.5">Inicio</p>
+                      <div className="flex items-center justify-center gap-1">
+                        <FormField
+                          control={form.control}
+                          name="hora_inicio_hora"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  form.setValue('hora_inicio_minuto', '00');
                                 }}
+                                value={field.value}
                               >
-                                Hoy
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1"
-                                onClick={() => {
-                                  const tomorrow = new Date();
-                                  tomorrow.setDate(tomorrow.getDate() + 1);
-                                  field.onChange(tomorrow);
-                                  setIsCalendarOpen(false);
-                                }}
-                              >
-                                Mañana
-                              </Button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="space-y-2">
-                    <FormLabel>Horario</FormLabel>
-                    <div className="flex items-center gap-2">
-                      {/* Horario Inicio */}
-                      <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-1">Inicio</p>
-                        <div className="flex items-center justify-center gap-1">
-                          <FormField
-                            control={form.control}
-                            name="hora_inicio_hora"
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  onValueChange={(value) => {
-                                    field.onChange(value);
-                                    form.setValue('hora_inicio_minuto', '00');
-                                  }}
-                                  value={field.value}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
-                                      <SelectValue placeholder="HH" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                    {timeOptions.hours.map(h => (
-                                      <SelectItem key={h} value={String(h).padStart(2, '0')}>
-                                        {String(h).padStart(2, '0')}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-                          <span className="font-bold text-muted-foreground text-xs">:</span>
-                          <FormField
-                            control={form.control}
-                            name="hora_inicio_minuto"
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
-                                      <SelectValue placeholder="MM" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                    {timeOptions.minutes.map(m => (
-                                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-
-                      <span className="text-xs font-semibold text-muted-foreground px-0.5">a</span>
-
-                      {/* Horario Fin */}
-                      <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-1">Fin</p>
-                        <div className="flex items-center justify-center gap-1">
-                          <FormField
-                            control={form.control}
-                            name="hora_fin_hora"
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value}
-                                  disabled={!watchedItems?.some(item => !!item.servicio)}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
-                                      <SelectValue placeholder="HH" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                    {timeOptions.hours.map(h => (
-                                      <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>
-                                        {String(h).padStart(2, '0')}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-                          <span className="font-bold text-muted-foreground text-xs">:</span>
-                          <FormField
-                            control={form.control}
-                            name="hora_fin_minuto"
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <Select
-                                  onValueChange={field.onChange}
-                                  value={field.value}
-                                  disabled={!watchedItems?.some(item => !!item.servicio)}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="h-8.5 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
-                                      <SelectValue placeholder="MM" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                    {timeOptions.minutes.map(m => (
-                                      <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
+                                <FormControl>
+                                  <SelectTrigger className="h-8 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                    <SelectValue placeholder="HH" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                  {timeOptions.hours.map(h => (
+                                    <SelectItem key={h} value={String(h).padStart(2, '0')}>
+                                      {String(h).padStart(2, '0')}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                        <span className="font-bold text-muted-foreground text-xs">:</span>
+                        <FormField
+                          control={form.control}
+                          name="hora_inicio_minuto"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-8 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                    <SelectValue placeholder="MM" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                  {timeOptions.minutes.map(m => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
                       </div>
                     </div>
-                    <FormMessage className="text-center text-xs">
-                      {form.formState.errors.hora_inicio_hora?.message}
-                    </FormMessage>
-                  </div>
-                </div>
 
-                {selectedClient ? (
-                  <div className="space-y-3">
-                    {/* Tarjeta de Cliente Estilizada Vatos Alfa */}
-                    <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 border border-border shrink-0">
-                            <AvatarFallback className="bg-[#1a233a] text-white font-bold text-xs">
-                              {selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-bold text-sm text-foreground">
-                                {selectedClient.nombre} {selectedClient.apellido}
-                              </p>
-                              {isNewClient ? (
-                                <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                                  Nuevo
-                                </Badge>
-                              ) : isAnticipoRequired ? (
-                                <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
-                                  🚨 Anticipo Requerido
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                                  ✓ Frecuente
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 font-mono">
-                              <span>{selectedClient.telefono}</span>
-                              {selectedClient.correo && (
-                                <>
-                                  <span>•</span>
-                                  <span className="truncate max-w-[200px]">{selectedClient.correo}</span>
-                                </>
-                              )}
+                    <span className="text-xs font-semibold text-muted-foreground px-0.5">a</span>
+
+                    {/* Horario Fin */}
+                    <div className="flex-1 bg-card border border-border/80 rounded-xl p-1.5 shadow-xs">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground text-center mb-0.5">Fin</p>
+                      <div className="flex items-center justify-center gap-1">
+                        <FormField
+                          control={form.control}
+                          name="hora_fin_hora"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!watchedItems?.some(item => !!item.servicio)}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="h-8 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                    <SelectValue placeholder="HH" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                  {timeOptions.hours.map(h => (
+                                    <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>
+                                      {String(h).padStart(2, '0')}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                        <span className="font-bold text-muted-foreground text-xs">:</span>
+                        <FormField
+                          control={form.control}
+                          name="hora_fin_minuto"
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={!watchedItems?.some(item => !!item.servicio)}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="h-8 px-2 text-center font-bold text-xs sm:text-sm rounded-lg bg-muted/20 border-border/60 hover:bg-muted/30 focus:border-blue-500">
+                                    <SelectValue placeholder="MM" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                  {timeOptions.minutes.map(m => (
+                                    <SelectItem key={`end-m-${m}`} value={m}>{m}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <FormMessage className="text-center text-xs">
+                    {form.formState.errors.hora_inicio_hora?.message}
+                  </FormMessage>
+                </div>
+              </div>
+
+              {selectedClient ? (
+                <div className="space-y-2">
+                  {/* Tarjeta de Cliente Minimizada por Defecto Vatos Alfa */}
+                  <div className="p-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <Avatar className="h-8 w-8 border border-border shrink-0">
+                          <AvatarFallback className="bg-[#1a233a] text-white font-bold text-[11px]">
+                            {selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          <p className="font-bold text-xs sm:text-sm text-foreground truncate">
+                            {selectedClient.nombre} {selectedClient.apellido}
+                          </p>
+                          <span className="text-xs text-muted-foreground font-sans shrink-0">
+                            • {selectedClient.telefono}
+                          </span>
+                          {isNewClient ? (
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold shrink-0">
+                              Nuevo
+                            </Badge>
+                          ) : isAnticipoRequired ? (
+                            <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold shrink-0">
+                              🚨 Anticipo Requerido
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold shrink-0">
+                              ✓ Frecuente
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground rounded-lg gap-1"
+                          onClick={() => setIsClientStatsExpanded(prev => !prev)}
+                          title={isClientStatsExpanded ? "Ocultar historial de citas" : "Ver historial de citas"}
+                        >
+                          <span className="hidden sm:inline">Historial ({clientStats.totalCitas})</span>
+                          {isClientStatsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+                          onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                          title="Editar datos del cliente"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
+                          onClick={() => {
+                            form.setValue('cliente_id', '');
+                            setDepositPaid(false);
+                          }}
+                          title="Cambiar cliente"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Mini-Métricas de Asistencia y Fidelidad Desplegables */}
+                    {isClientStatsExpanded && (
+                      <div className="mt-2.5 pt-2.5 border-t border-border/60 space-y-2 animate-in fade-in duration-150">
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          <div className="bg-muted/30 rounded-lg p-1.5">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase">Citas</p>
+                            <p className="text-xs font-bold text-foreground font-sans">{clientStats.totalCitas}</p>
+                          </div>
+                          <div className="bg-blue-500/5 rounded-lg p-1.5 border border-blue-500/15">
+                            <p className="text-[10px] text-blue-400/80 font-medium uppercase">Asistidas</p>
+                            <p className="text-xs font-bold text-blue-400 font-sans">{clientStats.asistidasCount}</p>
+                          </div>
+                          <div className={cn(
+                            "rounded-lg p-1.5 border transition-colors",
+                            unattendedCount >= maxInasistenciasPermitidas
+                              ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
+                              : unattendedCount > 0
+                              ? "bg-slate-500/10 border-slate-500/20 text-slate-700 dark:text-slate-300"
+                              : "bg-muted/30 border-transparent text-muted-foreground"
+                          )}>
+                            <p className="text-[10px] font-medium uppercase">Inasistencias</p>
+                            <p className={cn("text-xs font-black font-sans", unattendedCount >= maxInasistenciasPermitidas && "animate-pulse")}>
+                              {unattendedCount}
                             </p>
+                          </div>
+                          <div className="bg-muted/30 rounded-lg p-1.5">
+                            <p className="text-[10px] text-muted-foreground font-medium uppercase">Canceladas</p>
+                            <p className="text-xs font-bold text-muted-foreground font-sans">{clientStats.canceladasCount}</p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
-                            onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
-                            title="Editar datos del cliente"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
-                            onClick={() => {
-                              form.setValue('cliente_id', '');
-                              setDepositPaid(false);
-                            }}
-                            title="Cambiar cliente"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
+                        {selectedClient.correo && (
+                          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                            <span className="font-semibold text-foreground shrink-0">Correo:</span>
+                            <span className="truncate">{selectedClient.correo}</span>
+                          </div>
+                        )}
+
+                        {selectedClient.notas && (
+                          <div className="text-[11px] text-muted-foreground flex items-start gap-1.5">
+                            <span className="font-semibold text-foreground shrink-0">Nota del perfil:</span>
+                            <span className="italic truncate">{selectedClient.notas}</span>
+                          </div>
+                        )}
                       </div>
+                    )}
+                  </div>
 
-                      {/* Mini-Métricas de Asistencia y Fidelidad para Recepción */}
-                      <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-border/60 text-center">
-                        <div className="bg-muted/30 rounded-lg p-1.5">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase">Citas</p>
-                          <p className="text-xs font-bold text-foreground">{clientStats.totalCitas}</p>
-                        </div>
-                        <div className="bg-blue-500/5 rounded-lg p-1.5 border border-blue-500/15">
-                          <p className="text-[10px] text-blue-400/80 font-medium uppercase">Asistidas</p>
-                          <p className="text-xs font-bold text-blue-400">{clientStats.asistidasCount}</p>
-                        </div>
-                        <div className={cn(
-                          "rounded-lg p-1.5 border transition-colors",
-                          unattendedCount >= maxInasistenciasPermitidas
-                            ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
-                            : unattendedCount > 0
-                            ? "bg-slate-500/10 border-slate-500/20 text-slate-700 dark:text-slate-300"
-                            : "bg-muted/30 border-transparent text-muted-foreground"
-                        )}>
-                          <p className="text-[10px] font-medium uppercase">Inasistencias</p>
-                          <p className={cn("text-xs font-black", unattendedCount >= maxInasistenciasPermitidas && "animate-pulse")}>
-                            {unattendedCount}
-                          </p>
-                        </div>
-                        <div className="bg-muted/30 rounded-lg p-1.5">
-                          <p className="text-[10px] text-muted-foreground font-medium uppercase">Canceladas</p>
-                          <p className="text-xs font-bold text-muted-foreground">{clientStats.canceladasCount}</p>
-                        </div>
-                      </div>
-
-                      {/* Nota del perfil si existe */}
-                      {selectedClient.notas && (
-                        <div className="mt-2.5 pt-2 border-t border-border/40 text-[11px] text-muted-foreground flex items-start gap-1.5">
-                          <span className="font-semibold text-foreground shrink-0">Nota del perfil:</span>
-                          <span className="italic truncate">{selectedClient.notas}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* BANNERS INTELIGENTES DE ACCIÓN PARA RECEPCIÓN */}
-                    {isAnyAnticipoActive ? (
-                      <div className={cn(
-                        "p-4 rounded-xl border-2 shadow-sm space-y-3",
-                        isAnticipoRequiredDueToHistory
-                          ? "border-red-500/50 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10"
-                          : "border-blue-500/50 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-blue-500/10"
-                      )}>
-                        <div className="flex items-start gap-3">
+                  {/* REGLA DE RESERVA / ANTICIPO MINIMIZADA POR DEFECTO CON OPCIÓN DE EXPANDIR */}
+                  {isAnyAnticipoActive ? (
+                    <div className={cn(
+                      "rounded-xl border-2 shadow-xs overflow-hidden transition-all",
+                      isAnticipoRequiredDueToHistory
+                        ? "border-red-500/50 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10"
+                        : "border-blue-500/50 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-blue-500/10"
+                    )}>
+                      {/* Cabecera compacta siempre visible */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setIsDepositRuleExpanded(prev => !prev)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setIsDepositRuleExpanded(prev => !prev);
+                          }
+                        }}
+                        className="p-2.5 px-3 flex items-center justify-between gap-2 cursor-pointer select-none hover:bg-white/5 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           {isAnticipoRequiredDueToHistory ? (
-                            <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                            <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
                           ) : (
-                            <CreditCard className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                            <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
                           )}
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
-                              <span className={cn(
-                                "font-black text-xs uppercase tracking-wide flex items-center gap-1.5",
-                                isAnticipoRequiredDueToHistory ? "text-red-800 dark:text-red-200" : "text-blue-800 dark:text-blue-200"
-                              )}>
-                                {isAnticipoRequiredDueToHistory
-                                  ? "🛡️ Escudo Antifraude: Anticipo Obligatorio"
-                                  : isAnticipoRequiredDueToOpeningHour
-                                  ? `⏰ Regla de Reserva: Horario de Apertura (${openingHourTarget} AM)`
-                                  : isAnticipoRequiredDueToAmount
-                                  ? `💳 Regla de Reserva: Anticipo por Monto (+$${montoMinimoThreshold} MXN)`
-                                  : "💳 Anticipo Manual Personalizado"}
-                              </span>
-                              <div className="flex items-center gap-1.5">
-                                <Badge className={cn(
-                                  "text-white font-bold text-[10px] px-2 py-0.5 shadow-xs",
-                                  isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
-                                )}>
-                                  {isAnticipoRequiredDueToHistory
-                                    ? `${penalizacionPorcentaje}% Anticipo`
-                                    : isAnticipoRequiredDueToOpeningHour
-                                    ? `${openingHourPorcentaje}% Anticipo`
-                                    : isAnticipoRequiredDueToAmount
-                                    ? `${anticipoPorcentajeDefecto}% Anticipo`
-                                    : "Manual"}
-                                </Badge>
-                                {manualDepositEnabled && !isAnticipoRequired && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setManualDepositEnabled(false);
-                                      setManualDepositAmount('');
-                                    }}
-                                    className="text-[10px] text-red-500 hover:underline font-semibold"
-                                  >
-                                    (Quitar)
-                                  </button>
-                                )}
-                              </div>
-                            </div>
+                          <span className={cn(
+                            "font-black text-[11px] sm:text-xs uppercase tracking-wide truncate",
+                            isAnticipoRequiredDueToHistory ? "text-red-800 dark:text-red-200" : "text-blue-800 dark:text-blue-200"
+                          )}>
+                            {isAnticipoRequiredDueToHistory
+                              ? "🛡️ Escudo Antifraude: Anticipo Obligatorio"
+                              : isAnticipoRequiredDueToOpeningHour
+                              ? `⏰ Regla de Reserva: Horario de Apertura (${openingHourTarget} AM)`
+                              : isAnticipoRequiredDueToAmount
+                              ? `💳 Regla de Reserva: Anticipo por Monto (+$${formatMoney(montoMinimoThreshold)})`
+                              : "💳 Anticipo Manual Personalizado"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge className={cn(
+                            "text-white font-bold text-[10px] px-2 py-0 shadow-xs font-sans",
+                            isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
+                          )}>
+                            {isAnticipoRequiredDueToHistory
+                              ? `${penalizacionPorcentaje}% Anticipo`
+                              : isAnticipoRequiredDueToOpeningHour
+                              ? `${openingHourPorcentaje}% Anticipo`
+                              : isAnticipoRequiredDueToAmount
+                              ? `${anticipoPorcentajeDefecto}% Anticipo`
+                              : "Manual"}
+                          </Badge>
+                          <span className="text-xs font-bold text-foreground font-sans hidden sm:inline">
+                            (${formatMoney(effectiveDepositAmount)})
+                          </span>
+                          {isDepositRuleExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Contenido expandible de la regla de reserva */}
+                      {isDepositRuleExpanded && (
+                        <div className={cn(
+                          "px-3 pb-3 pt-2 border-t space-y-2.5 animate-in fade-in duration-150",
+                          isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
+                        )}>
+                          <div className="space-y-1">
                             <p className={cn(
                               "text-xs leading-snug",
                               isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200"
@@ -1925,458 +2049,443 @@ export function NewReservationForm({
                               {isAnticipoRequiredDueToHistory ? (
                                 <>Este cliente acumula <strong>{unattendedCount} inasistencias previas</strong> (límite permitido: {maxInasistenciasPermitidas}). Por regla oficial de Vatos Alfa, <strong>debe pagar anticipo para apartar su cita</strong>.</>
                               ) : isAnticipoRequiredDueToOpeningHour ? (
-                                <>Todas las citas agendadas a las <strong>{openingHourTarget} AM (horario de apertura)</strong> requieren obligatoriamente un anticipo del <strong>{openingHourPorcentaje}%</strong> para asegurar el primer turno del día.</>
+                                <>Todas las citas agendadas en la ventana de apertura de las <strong>{openingHourTarget} AM</strong> requieren obligatoriamente un anticipo del <strong>{openingHourPorcentaje}%</strong> para asegurar el primer turno del día.</>
                               ) : isAnticipoRequiredDueToAmount ? (
-                                <>El total de la cita es de <strong>${currentTotal} MXN</strong> (alcanza o supera el mínimo de ${montoMinimoThreshold} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
+                                <>El total de la cita es de <strong>${formatMoney(currentTotal)} MXN</strong> (alcanza o supera el mínimo de ${formatMoney(montoMinimoThreshold)} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
                               ) : (
                                 <>Has activado el <strong>anticipo manual</strong> para esta cita. Puedes ajustar libremente la cantidad a solicitar o cobrar.</>
                               )}
                             </p>
-                            <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-foreground pt-1 flex-wrap">
-                              <span>Total Cita: <strong>${currentTotal} MXN</strong></span>
-                              <span>•</span>
-                              <span className={isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}>
-                                Anticipo: <strong>${effectiveDepositAmount} MXN</strong>
-                              </span>
+                            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground pt-1 flex-wrap font-sans">
+                              <div className="flex items-center gap-2">
+                                <span>Total Cita: <strong>${formatMoney(currentTotal)} MXN</strong></span>
+                                <span>•</span>
+                                <span className={isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}>
+                                  Anticipo: <strong>${formatMoney(effectiveDepositAmount)} MXN</strong>
+                                </span>
+                              </div>
+                              {manualDepositEnabled && !isAnticipoRequired && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManualDepositEnabled(false);
+                                    setManualDepositAmount('');
+                                  }}
+                                  className="text-[10px] text-red-500 hover:underline font-semibold"
+                                >
+                                  (Quitar anticipo manual)
+                                </button>
+                              )}
                             </div>
                           </div>
-                        </div>
 
-                        {/* Campo de Monto Manual de Anticipo y Botón de Enviar Link */}
-                        <div className={cn(
-                          "pt-2.5 border-t flex flex-wrap items-center justify-between gap-2.5",
-                          isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
-                        )}>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs font-semibold text-foreground">Monto Anticipo:</span>
-                            <div className="relative w-28">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">$</span>
-                              <Input
-                                type="number"
-                                min="0"
-                                max={currentTotal}
-                                step="1"
-                                value={manualDepositAmount !== '' ? manualDepositAmount : (effectiveDepositAmount || '')}
-                                onChange={(e) => setManualDepositAmount(e.target.value)}
-                                placeholder={String(depositAmountCalculated || 50)}
-                                className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border"
-                              />
+                          {/* Campo de Monto Manual de Anticipo y Botón de Enviar Link */}
+                          <div className={cn(
+                            "pt-2 border-t flex flex-wrap items-center justify-between gap-2",
+                            isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
+                          )}>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-semibold text-foreground">Monto Anticipo:</span>
+                              <div className="relative w-28">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">$</span>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  max={currentTotal}
+                                  step="1"
+                                  value={manualDepositAmount !== '' ? manualDepositAmount : (effectiveDepositAmount || '')}
+                                  onChange={(e) => setManualDepositAmount(e.target.value)}
+                                  placeholder={String(depositAmountCalculated || 50)}
+                                  className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border font-sans"
+                                />
+                              </div>
+                              <span className="text-xs font-bold text-foreground font-sans">MXN</span>
+                              {manualDepositAmount !== '' && isAnticipoRequired && (
+                                <button
+                                  type="button"
+                                  onClick={() => setManualDepositAmount('')}
+                                  className="text-[11px] text-blue-500 hover:underline font-medium font-sans"
+                                >
+                                  (Auto: ${formatMoney(depositAmountCalculated)})
+                                </button>
+                              )}
                             </div>
-                            <span className="text-xs font-bold text-foreground">MXN</span>
-                            {manualDepositAmount !== '' && isAnticipoRequired && (
-                              <button
+
+                            {!depositPaid && (
+                              <Button
                                 type="button"
-                                onClick={() => setManualDepositAmount('')}
-                                className="text-[11px] text-blue-500 hover:underline font-medium"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSaveAndSendLink}
+                                disabled={isSubmitting}
+                                className="h-8 px-3 text-xs font-bold border-blue-500/40 text-blue-500 hover:text-white hover:bg-blue-600 gap-1.5 rounded-xl shadow-xs"
                               >
-                                (Auto: ${depositAmountCalculated})
-                              </button>
+                                <CreditCard className="w-3.5 h-3.5" />
+                                <span>Enviar Link (SPEI / MP)</span>
+                              </Button>
                             )}
                           </div>
 
-                          {!depositPaid && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSaveAndSendLink}
-                              disabled={isSubmitting}
-                              className="h-8 px-3 text-xs font-bold border-blue-500/40 text-blue-500 hover:text-white hover:bg-blue-600 gap-1.5 rounded-xl shadow-xs"
-                            >
-                              <CreditCard className="w-3.5 h-3.5" />
-                              <span>Enviar Link (SPEI / MP)</span>
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Control de cobro en recepción */}
-                        <div className={cn("pt-2 border-t flex flex-wrap items-center justify-between gap-2", isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20")}>
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={depositPaid}
-                              onChange={(e) => setDepositPaid(e.target.checked)}
-                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                            />
-                            <span className="text-xs font-bold text-foreground">
-                              {depositPaid ? '✓ Anticipo marcado como PAGADO en recepción' : 'Marcar Anticipo como PAGADO en recepción'}
-                            </span>
-                          </label>
-
-                          {depositPaid && (
-                            <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
-                              <span className="text-[11px] text-muted-foreground font-medium">Método:</span>
-                              <Select value={depositMethod} onValueChange={setDepositMethod}>
-                                <SelectTrigger className="h-7 text-xs w-32 bg-background border-border">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="efectivo">Efectivo</SelectItem>
-                                  <SelectItem value="tarjeta">Tarjeta (Terminal)</SelectItem>
-                                  <SelectItem value="transferencia">Transferencia</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between pt-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setManualDepositEnabled(true);
-                            if (manualDepositAmount === '') {
-                              setManualDepositAmount(String(Math.round(currentTotal * 0.5) || 50));
-                            }
-                          }}
-                          className="h-7 px-2 text-xs text-blue-500 hover:text-blue-400 font-semibold gap-1.5"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" />
-                          <span>+ Solicitar / Cobrar Anticipo Manual</span>
-                        </Button>
-                      </div>
-                    )}
-                    {isPenalizacionActive && unattendedCount === (maxInasistenciasPermitidas - 1) && unattendedCount > 0 && !isAnyAnticipoActive ? (
-                      <div className="p-3 bg-muted/40 border border-border/70 rounded-xl flex items-start gap-2.5">
-                        <AlertTriangle className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-                        <div className="space-y-0.5 text-xs">
-                          <p className="font-bold text-foreground flex items-center gap-1.5">
-                            ⚠️ Atención: 1 Inasistencia Previa Registrada
-                          </p>
-                          <p className="text-[11px] text-muted-foreground leading-tight">
-                            Si este cliente acumula una falta más ({maxInasistenciasPermitidas} en total), el sistema le exigirá anticipo obligatorio del {penalizacionPorcentaje}% en todas sus próximas reservas. Recuerda confirmarle su asistencia por WhatsApp.
-                          </p>
-                        </div>
-                      </div>
-                    ) : isNewClient ? (
-                      <div className="p-2.5 px-3 bg-blue-500/10 border border-blue-500/25 rounded-xl flex items-center gap-2.5 text-xs">
-                        <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
-                        <p className="text-[11px] text-blue-700 dark:text-blue-300 font-medium">
-                          <strong>Primera visita del cliente:</strong> Asegúrate de verificar su teléfono para el envío automático de confirmaciones.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="p-2.5 px-3 bg-blue-500/5 border border-blue-500/15 rounded-xl flex items-center gap-2 text-xs">
-                        <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0" />
-                        <p className="text-[11px] text-blue-400 font-medium">
-                          Cliente confiable sin inasistencias previas ({clientStats.totalCitas} citas registradas).
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                    <FormItem>
-                      <div className="flex justify-between items-center mb-1">
-                        <FormLabel>Cliente</FormLabel>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/30 transition-colors"
-                          onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}
-                          title="Registrar nuevo cliente"
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <ClientCombobox
-                        clients={clients}
-                        loading={clientsLoading}
-                        value={field.value}
-                        onChange={(val) => {
-                          field.onChange(val);
-                          setDepositPaid(false);
-                        }}
-                        onSearchChange={setClientSearchTerm}
-                      />
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                )}
-
-
-
-
-                <div className="space-y-4">
-                  {fields.map((field, index) => {
-                    const currentItem = watchedItems?.[index];
-                    const currentItemId = currentItem?.servicio || form.getValues(`items.${index}.servicio`);
-                    const isProduct = products?.some(p => p.id === currentItemId) ||
-                      (initialData?.items?.[index] && (initialData.items[index] as any).tipo === 'producto');
-
-                    const currentService = servicesMap.get(currentItemId);
-
-                    // Filter professionals based on the selected service
-                    const rowProfessionals = filteredProfessionals.filter(p => {
-                      if (isProduct) return true; // Professionals can generally sell products
-                      if (!currentItemId) return true; // If no service selected, show all available in this context
-
-                      // STRICT VALIDATION: Priority to Professional's list
-                      // If the professional has a defined 'services' list, we strictly check against it.
-                      if (Array.isArray(p.services)) {
-                        return p.services.includes(currentItemId);
-                      }
-
-                      // Fallback for legacy records without 'services' array: check the service's list of professionals
-                      if (currentService?.professionals && Array.isArray(currentService.professionals)) {
-                        return currentService.professionals.includes(p.id);
-                      }
-
-                      // If neither has explicit lists (highly unlikely in current version), default to allow to avoid blocking old data
-                      return true;
-                    });
-
-                    return (
-                      <Card key={field.id} className="p-4 relative bg-muted/50">
-                        <div className={cn("grid grid-cols-1 gap-3 items-start", fields.length > 1 ? "md:grid-cols-[1fr_1fr_110px]" : "md:grid-cols-2")}>
-                          <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
-                            <FormItem>
-                              <ServiceInput
-                                value={field.value}
-                                onChange={(val) => {
-                                  field.onChange(val);
-                                  const srv = servicesMap.get(val);
-                                  if (srv) {
-                                    const profId = form.getValues(`items.${index}.barbero_id`);
-                                    const customDur = profId ? srv.durationPorProfesional?.[profId] : undefined;
-                                    form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
-                                  } else {
-                                    form.setValue(`items.${index}.duracion`, 0, { shouldValidate: true });
-                                  }
-                                }}
-                                groupedServices={groupedServices}
-                                products={products}
-                                isProduct={isProduct}
-                                loading={servicesLoading}
+                          {/* Control de cobro en recepción */}
+                          <div className={cn("pt-2 border-t flex flex-wrap items-center justify-between gap-2", isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20")}>
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={depositPaid}
+                                onChange={(e) => setDepositPaid(e.target.checked)}
+                                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                               />
+                              <span className="text-xs font-bold text-foreground">
+                                {depositPaid ? '✓ Anticipo marcado como PAGADO en recepción' : 'Marcar Anticipo como PAGADO en recepción'}
+                              </span>
+                            </label>
+
+                            {depositPaid && (
+                              <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
+                                <span className="text-[11px] text-muted-foreground font-medium">Método:</span>
+                                <Select value={depositMethod} onValueChange={setDepositMethod}>
+                                  <SelectTrigger className="h-7 text-xs w-32 bg-background border-border">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                                    <SelectItem value="tarjeta">Tarjeta (Terminal)</SelectItem>
+                                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setManualDepositEnabled(true);
+                          setIsDepositRuleExpanded(true);
+                          if (manualDepositAmount === '') {
+                            setManualDepositAmount(String(Math.round(currentTotal * 0.5) || 50));
+                          }
+                        }}
+                        className="h-7 px-2 text-xs text-blue-500 hover:text-blue-400 font-semibold gap-1.5"
+                      >
+                        <CreditCard className="w-3.5 h-3.5" />
+                        <span>+ Solicitar / Cobrar Anticipo Manual</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <FormField control={form.control} name="cliente_id" render={({ field }) => (
+                  <FormItem>
+                    <div className="flex justify-between items-center mb-1">
+                      <FormLabel className="text-xs">Cliente</FormLabel>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/30 transition-colors"
+                        onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}
+                        title="Registrar nuevo cliente"
+                      >
+                        <UserPlus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <ClientCombobox
+                      clients={clients}
+                      loading={clientsLoading}
+                      value={field.value}
+                      onChange={(val) => {
+                        field.onChange(val);
+                        setDepositPaid(false);
+                      }}
+                      onSearchChange={setClientSearchTerm}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+
+              <div className="space-y-3">
+                {fields.map((field, index) => {
+                  const currentItem = watchedItems?.[index];
+                  const currentItemId = currentItem?.servicio || form.getValues(`items.${index}.servicio`);
+                  const isProduct = products?.some(p => p.id === currentItemId) ||
+                    (initialData?.items?.[index] && (initialData.items[index] as any).tipo === 'producto');
+
+                  const currentService = servicesMap.get(currentItemId);
+
+                  // Filter professionals based on the selected service
+                  const rowProfessionals = filteredProfessionals.filter(p => {
+                    if (isProduct) return true; // Professionals can generally sell products
+                    if (!currentItemId) return true; // If no service selected, show all available in this context
+
+                    // STRICT VALIDATION: Priority to Professional's list
+                    // If the professional has a defined 'services' list, we strictly check against it.
+                    if (Array.isArray(p.services)) {
+                      return p.services.includes(currentItemId);
+                    }
+
+                    // Fallback for legacy records without 'services' array: check the service's list of professionals
+                    if (currentService?.professionals && Array.isArray(currentService.professionals)) {
+                      return currentService.professionals.includes(p.id);
+                    }
+
+                    // If neither has explicit lists (highly unlikely in current version), default to allow to avoid blocking old data
+                    return true;
+                  });
+
+                  return (
+                    <Card key={field.id} className="p-3 sm:p-3.5 relative bg-muted/50">
+                      <div className={cn("grid grid-cols-1 gap-3 items-start", fields.length > 1 ? "md:grid-cols-[1fr_1fr_110px]" : "md:grid-cols-2")}>
+                        <FormField control={form.control} name={`items.${index}.servicio`} render={({ field }) => (
+                          <FormItem>
+                            <ServiceInput
+                              value={field.value}
+                              onChange={(val) => {
+                                field.onChange(val);
+                                const srv = servicesMap.get(val);
+                                if (srv) {
+                                  const profId = form.getValues(`items.${index}.barbero_id`);
+                                  const customDur = profId ? srv.durationPorProfesional?.[profId] : undefined;
+                                  form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                } else {
+                                  form.setValue(`items.${index}.duracion`, 0, { shouldValidate: true });
+                                }
+                              }}
+                              groupedServices={groupedServices}
+                              products={products}
+                              isProduct={isProduct}
+                              loading={servicesLoading}
+                            />
+                            <FormMessage />
+                          </FormItem>
+                        )} />
+
+                        <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => {
+                          const itemLock = form.watch(`items.${index}.professional_lock`) ?? false;
+                          return (
+                            <FormItem>
+                              <div className="flex items-center gap-2">
+                                <Select 
+                                  onValueChange={(val) => {
+                                    field.onChange(val);
+                                    const srv = servicesMap.get(currentItemId);
+                                    if (srv) {
+                                      const customDur = srv.durationPorProfesional?.[val];
+                                      form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                    }
+                                  }} 
+                                  value={field.value} 
+                                  disabled={itemLock}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className={cn(
+                                      "h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm flex-1",
+                                      availabilityErrors[index] && 'border-destructive'
+                                    )}>
+                                      <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent className="max-h-60 p-1.5 min-w-[210px]">
+                                    {rowProfessionals.length > 0 ? (
+                                      rowProfessionals.map((barber) => (
+                                        <SelectItem
+                                          key={barber.id}
+                                          value={barber.id}
+                                          textValue={barber.publicName || barber.name}
+                                          className="py-1.5 px-2 rounded-lg cursor-pointer my-0.5"
+                                        >
+                                          <div className="flex items-center gap-2.5">
+                                            <Avatar className="h-6 w-6 border border-border/60 shrink-0">
+                                              <AvatarImage src={barber.avatarUrl} alt={barber.publicName || barber.name} />
+                                              <AvatarFallback className="bg-[#202A49] text-white font-bold text-[9px]">
+                                                {(barber.publicName || barber.name || 'P').substring(0, 2).toUpperCase()}
+                                              </AvatarFallback>
+                                            </Avatar>
+                                            <div className="flex flex-col text-left">
+                                              <span className="font-semibold text-xs text-inherit leading-tight">
+                                                {barber.publicName || barber.name}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      <div className="p-3 text-xs text-muted-foreground text-center">
+                                        No hay profesionales disponibles para este servicio.
+                                      </div>
+                                    )}
+                                  </SelectContent>
+                                </Select>
+
+                                {/* Icono de candado a la derecha de Selecciona un profesional */}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className={cn(
+                                    "h-10 w-10 shrink-0 rounded-xl border bg-card transition-all",
+                                    itemLock
+                                      ? "border-blue-500/40 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20"
+                                      : "border-border/80 text-slate-400 hover:text-foreground hover:bg-muted/30"
+                                  )}
+                                  onClick={() => form.setValue(`items.${index}.professional_lock`, !itemLock, { shouldValidate: true })}
+                                  title={itemLock ? "Desbloquear selección de profesional" : "Bloquear profesional para que no se reasigne"}
+                                >
+                                  {itemLock ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                                </Button>
+                              </div>
+                              <FormMessage />
+                              {availabilityErrors[index] && <p className="text-destructive text-xs font-medium mt-1">{availabilityErrors[index]}</p>}
+                            </FormItem>
+                          );
+                        }} />
+
+                        {!isProduct && fields.length > 1 && (
+                          <FormField control={form.control} name={`items.${index}.duracion`} render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <div className="relative">
+                                  <Input
+                                    type="number"
+                                    className="h-10 rounded-xl pr-8 font-semibold"
+                                    placeholder="Duración"
+                                    value={field.value || 0}
+                                    onChange={(e) => field.onChange(Number(e.target.value))}
+                                    min={0}
+                                  />
+                                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
+                                    m
+                                  </span>
+                                </div>
+                              </FormControl>
                               <FormMessage />
                             </FormItem>
                           )} />
-
-                          <FormField control={form.control} name={`items.${index}.barbero_id`} render={({ field }) => {
-                            const itemLock = form.watch(`items.${index}.professional_lock`) ?? false;
-                            return (
+                        )}
+                      </div>
+                      {fields.length > 1 && (
+                        <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.hora_inicio_hora`}
+                            render={({ field }) => (
                               <FormItem>
+                                <FormLabel>Hora de inicio específica (opcional)</FormLabel>
                                 <div className="flex items-center gap-2">
-                                  <Select 
+                                  <Select
                                     onValueChange={(val) => {
-                                      field.onChange(val);
-                                      const srv = servicesMap.get(currentItemId);
-                                      if (srv) {
-                                        const customDur = srv.durationPorProfesional?.[val];
-                                        form.setValue(`items.${index}.duracion`, customDur !== undefined ? customDur : (srv.duration || 0), { shouldValidate: true });
+                                      const actualVal = val === "default" ? "" : val;
+                                      field.onChange(actualVal);
+                                      if (actualVal && !form.getValues(`items.${index}.hora_inicio_minuto`)) {
+                                        form.setValue(`items.${index}.hora_inicio_minuto`, '00');
                                       }
-                                    }} 
-                                    value={field.value} 
-                                    disabled={itemLock}
+                                    }}
+                                    value={field.value || "default"}
                                   >
                                     <FormControl>
-                                      <SelectTrigger className={cn(
-                                        "h-10 rounded-xl border-border/80 bg-card hover:bg-muted/20 focus:border-blue-500 font-medium text-xs sm:text-sm flex-1",
-                                        availabilityErrors[index] && 'border-destructive'
-                                      )}>
-                                        <SelectValue placeholder={professionalsLoading ? 'Cargando...' : 'Selecciona un profesional'} />
+                                      <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
+                                        <SelectValue placeholder="Global / Por defecto" />
                                       </SelectTrigger>
                                     </FormControl>
-                                    <SelectContent className="max-h-60 p-1.5 min-w-[210px]">
-                                      {rowProfessionals.length > 0 ? (
-                                        rowProfessionals.map((barber) => (
-                                          <SelectItem
-                                            key={barber.id}
-                                            value={barber.id}
-                                            textValue={barber.publicName || barber.name}
-                                            className="py-1.5 px-2 rounded-lg cursor-pointer my-0.5"
-                                          >
-                                            <div className="flex items-center gap-2.5">
-                                              <Avatar className="h-6 w-6 border border-border/60 shrink-0">
-                                                <AvatarImage src={barber.avatarUrl} alt={barber.publicName || barber.name} />
-                                                <AvatarFallback className="bg-[#202A49] text-white font-bold text-[9px]">
-                                                  {(barber.publicName || barber.name || 'P').substring(0, 2).toUpperCase()}
-                                                </AvatarFallback>
-                                              </Avatar>
-                                              <div className="flex flex-col text-left">
-                                                <span className="font-semibold text-xs text-inherit leading-tight">
-                                                  {barber.publicName || barber.name}
-                                                </span>
-                                              </div>
-                                            </div>
-                                          </SelectItem>
-                                        ))
-                                      ) : (
-                                        <div className="p-3 text-xs text-muted-foreground text-center">
-                                          No hay profesionales disponibles para este servicio.
-                                        </div>
-                                      )}
+                                    <SelectContent className="max-h-48 p-1">
+                                      <SelectItem value="default">Global / Por defecto</SelectItem>
+                                      {timeOptions.hours.map(h => {
+                                        const val = String(h).padStart(2, '0');
+                                        return <SelectItem key={`item-h-${index}-${val}`} value={val}>{val}</SelectItem>;
+                                      })}
                                     </SelectContent>
                                   </Select>
-
-                                  {/* Icono de candado a la derecha de Selecciona un profesional */}
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className={cn(
-                                      "h-10 w-10 shrink-0 rounded-xl border bg-card transition-all",
-                                      itemLock
-                                        ? "border-blue-500/40 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20"
-                                        : "border-border/80 text-slate-400 hover:text-foreground hover:bg-muted/30"
+                                  <span className="font-bold text-muted-foreground text-xs">:</span>
+                                  <FormField
+                                    control={form.control}
+                                    name={`items.${index}.hora_inicio_minuto`}
+                                    render={({ field: minField }) => (
+                                      <Select
+                                        onValueChange={(val) => {
+                                          const actualVal = val === "default" ? "" : val;
+                                          minField.onChange(actualVal);
+                                        }}
+                                        value={minField.value || "default"}
+                                        disabled={!field.value}
+                                      >
+                                        <FormControl>
+                                          <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
+                                            <SelectValue placeholder="MM" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
+                                          <SelectItem value="default">MM</SelectItem>
+                                          {timeOptions.minutes.map(m => (
+                                            <SelectItem key={`item-m-${index}-${m}`} value={m}>{m}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
                                     )}
-                                    onClick={() => form.setValue(`items.${index}.professional_lock`, !itemLock, { shouldValidate: true })}
-                                    title={itemLock ? "Desbloquear selección de profesional" : "Bloquear profesional para que no se reasigne"}
-                                  >
-                                    {itemLock ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-                                  </Button>
+                                  />
                                 </div>
-                                <FormMessage />
-                                {availabilityErrors[index] && <p className="text-destructive text-sm mt-1">{availabilityErrors[index]}</p>}
                               </FormItem>
-                            );
-                          }} />
-
-                          {!isProduct && fields.length > 1 && (
-                            <FormField control={form.control} name={`items.${index}.duracion`} render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <div className="relative">
-                                    <Input
-                                      type="number"
-                                      className="h-10 rounded-xl pr-8 font-semibold"
-                                      placeholder="Duración"
-                                      value={field.value || 0}
-                                      onChange={(e) => field.onChange(Number(e.target.value))}
-                                      min={0}
-                                    />
-                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">
-                                      m
-                                    </span>
-                                  </div>
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )} />
-                          )}
+                            )}
+                          />
                         </div>
-                        {fields.length > 1 && (
-                          <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              control={form.control}
-                              name={`items.${index}.hora_inicio_hora`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Hora de inicio específica (opcional)</FormLabel>
-                                  <div className="flex items-center gap-2">
-                                    <Select
-                                      onValueChange={(val) => {
-                                        const actualVal = val === "default" ? "" : val;
-                                        field.onChange(actualVal);
-                                        if (actualVal && !form.getValues(`items.${index}.hora_inicio_minuto`)) {
-                                          form.setValue(`items.${index}.hora_inicio_minuto`, '00');
-                                        }
-                                      }}
-                                      value={field.value || "default"}
-                                    >
-                                      <FormControl>
-                                        <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
-                                          <SelectValue placeholder="Global / Por defecto" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent className="max-h-48 p-1">
-                                        <SelectItem value="default">Global / Por defecto</SelectItem>
-                                        {timeOptions.hours.map(h => {
-                                          const val = String(h).padStart(2, '0');
-                                          return <SelectItem key={`item-h-${index}-${val}`} value={val}>{val}</SelectItem>;
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                    <span className="font-bold text-muted-foreground text-xs">:</span>
-                                    <FormField
-                                      control={form.control}
-                                      name={`items.${index}.hora_inicio_minuto`}
-                                      render={({ field: minField }) => (
-                                        <Select
-                                          onValueChange={(val) => {
-                                            const actualVal = val === "default" ? "" : val;
-                                            minField.onChange(actualVal);
-                                          }}
-                                          value={minField.value || "default"}
-                                          disabled={!field.value}
-                                        >
-                                          <FormControl>
-                                            <SelectTrigger className="h-9 rounded-xl border-border/80 bg-card hover:bg-muted/20 text-xs font-medium">
-                                              <SelectValue placeholder="MM" />
-                                            </SelectTrigger>
-                                          </FormControl>
-                                          <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                            <SelectItem value="default">MM</SelectItem>
-                                            {timeOptions.minutes.map(m => (
-                                              <SelectItem key={`item-m-${index}-${m}`} value={m}>{m}</SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      )}
-                                    />
-                                  </div>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        )}
-                        {fields.length > 1 && (
-                          <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </Card>
-                    );
-                  })}
-                  <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '', duracion: 0, professional_lock: false })} className="w-full">
-                    <Plus className="mr-2 h-4 w-4" /> Agregar otro servicio
-                  </Button>
-                </div>
+                      )}
+                      {fields.length > 1 && (
+                        <Button type="button" variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 text-destructive" onClick={() => remove(index)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </Card>
+                  );
+                })}
+                <Button type="button" variant="outline" size="sm" onClick={() => append({ servicio: '', barbero_id: '', duracion: 0, professional_lock: false })} className="w-full h-9 text-xs">
+                  <Plus className="mr-2 h-3.5 w-3.5" /> Agregar otro servicio
+                </Button>
               </div>
-
-              <Accordion type="single" collapsible className="w-full border-t">
-                <AccordionItem value="info" className="border-none">
-                  <AccordionTrigger className="px-6 py-4 text-sm font-medium hover:no-underline">Información adicional</AccordionTrigger>
-                  <AccordionContent className="px-6 pb-4 space-y-4">
-                    <FormField control={form.control} name="notifications.email_notification" render={({ field }) => (
-                      <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-white">
-                        <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel className="cursor-pointer">Enviar confirmación por correo</FormLabel>
-                        </div>
-                      </FormItem>
-                    )} />
-
-                    <FormField control={form.control} name="precio" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Precio</FormLabel>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                          <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-
-                    <FormField control={form.control} name="nota_interna" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nota interna</FormLabel>
-                        <FormControl><Textarea rows={4} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
             </div>
-          </ScrollArea>
+
+            <Accordion type="single" collapsible className="w-full border-t">
+              <AccordionItem value="info" className="border-none">
+                <AccordionTrigger className="py-3 text-xs sm:text-sm font-medium hover:no-underline">Información adicional</AccordionTrigger>
+                <AccordionContent className="pb-3 space-y-3">
+                  <FormField control={form.control} name="notifications.email_notification" render={({ field }) => (
+                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-3 bg-card">
+                      <FormControl>
+                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                      <div className="space-y-1 leading-none">
+                        <FormLabel className="cursor-pointer text-xs">Enviar confirmación por correo</FormLabel>
+                      </div>
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="precio" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Precio</FormLabel>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                        <FormControl><Input type="number" className="pl-6" placeholder="0" {...field} /></FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+
+                  <FormField control={form.control} name="nota_interna" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">Nota interna</FormLabel>
+                      <FormControl><Textarea rows={3} placeholder="Estas notas son solo para uso interno" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
 
           {/* BARRA INFERIOR DE ACCIONES VATOS ALFA */}
           <div className="flex-shrink-0 p-3 sm:p-4 border-t bg-muted/10 mt-auto flex items-center justify-between pb-[max(0.75rem,env(safe-area-inset-bottom))]">

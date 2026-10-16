@@ -16,6 +16,7 @@ import { es } from 'date-fns/locale';
 import { Zap, Clock, User, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
 
 interface QuickConsultModalProps {
   isOpen: boolean;
@@ -261,6 +262,7 @@ export function QuickConsultModal({
       // Reservations
       reservations.forEach(res => {
         if (res.estado === 'Cancelado' || res.fecha !== formattedDate) return;
+        if (isExpiredPendingDepositReservation(res)) return;
 
         let isForProf = res.barbero_id === prof.id;
         if (!isForProf && Array.isArray(res.items)) {

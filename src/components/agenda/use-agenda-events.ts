@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Reservation, TimeBlock, Client, Profesional, AgendaEvent, SaleItem } from '@/lib/types';
 import { getStatusColor } from './agenda-utils';
+import { getPendingDepositTiming } from '@/lib/booking-rules';
 
 export function useAgendaEvents(
     reservations: Reservation[],
@@ -8,6 +9,14 @@ export function useAgendaEvents(
     clients: Client[],
     professionals: Profesional[]
 ) {
+    const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setNowMs(Date.now());
+        }, 15000);
+        return () => clearInterval(timer);
+    }, []);
 
     const allEvents: AgendaEvent[] = useMemo(() => {
         if (!reservations || !timeBlocks || !clients || !professionals) return [];
@@ -39,45 +48,18 @@ export function useAgendaEvents(
                      res.pago_estado !== 'pending_payment' &&
                      res.pago_estado !== 'Pendiente' &&
                      res.pago_estado !== 'pendiente' &&
-                     Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_anticipo || 0) > 0);
+                     Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_pagado || 0) > 0);
 
-                const isPendingDeposit = !isDepositPaid &&
-                    res.pago_estado !== 'Pagado' &&
-                    (res as any).estado !== 'Cancelado' &&
-                    (res as any).estado !== 'Cancelada' &&
-                    (res as any).estado !== 'No asiste' &&
-                    (
-                        res.requiere_pago_anticipado === true ||
-                        (res as any).requiere_anticipo === true ||
-                        Number(res.anticipo_esperado || (res as any).monto_anticipo || 0) > 0 ||
-                        res.pago_estado === 'pendiente_anticipo' ||
-                        res.pago_estado === 'pending_payment' ||
-                        (res as any).estado === 'Pendiente de pago' ||
-                        (res as any).estado === 'Pendiente de Pago' ||
-                        (res as any).estado === 'pendiente de pago'
-                    );
+                const timing = getPendingDepositTiming(res, nowMs, 10);
+                const isPendingDeposit = timing.isPendingDeposit && !timing.depositExpired;
+                const depositMinutesRemaining = timing.depositMinutesRemaining;
+                const depositExpired = timing.depositExpired;
 
-                const rawCreated = res.creado_en || (res as any).createdAt || (res as any).creada_el;
-                let createdMs: number | null = null;
-                if (typeof (rawCreated as any)?.toMillis === 'function') {
-                    createdMs = (rawCreated as any).toMillis();
-                } else if (typeof (rawCreated as any)?.toDate === 'function') {
-                    createdMs = (rawCreated as any).toDate().getTime();
-                } else if (typeof (rawCreated as any)?.seconds === 'number') {
-                    createdMs = (rawCreated as any).seconds * 1000;
-                } else if (typeof rawCreated === 'string' || typeof rawCreated === 'number') {
-                    const t = new Date(rawCreated).getTime();
-                    if (!isNaN(t)) createdMs = t;
-                }
-
-                const nowMs = Date.now();
-                const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
-                const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(10 - diffMinutes)) : 10;
-                const depositExpired = createdMs ? diffMinutes > 10 : false;
-
-                const effectiveStatus = (isDepositPaid && (!res.estado || res.estado === 'Reservado' || res.estado === 'Pendiente de pago' || res.estado === 'Pendiente de Pago'))
-                    ? 'Confirmado'
-                    : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
+                const effectiveStatus = depositExpired
+                    ? 'Cancelado'
+                    : (isDepositPaid && (!res.estado || res.estado === 'Reservado' || res.estado === 'Pendiente de pago' || res.estado === 'Pendiente de Pago'))
+                        ? 'Confirmado'
+                        : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
 
                 if (!res.items || res.items.length === 0) {
                     return [{
@@ -241,7 +223,7 @@ export function useAgendaEvents(
         });
 
         return [...appointmentEvents, ...validBlockEvents];
-    }, [reservations, timeBlocks, clients, professionals]);
+    }, [reservations, timeBlocks, clients, professionals, nowMs]);
 
     const eventsWithLayout: AgendaEvent[] = useMemo(() => {
         const DEFAULT_MIN_WIDTH = 22; // 22% left strip width for a single No asiste / Cancelado

@@ -32,10 +32,36 @@ const AlertDialogContent = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
 >(({ className, ...props }, ref) => {
   React.useEffect(() => {
+    const syncStack = () => {
+      const dialogs = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+        )
+      );
+      dialogs.forEach((dialogEl, idx) => {
+        const isTopMost = idx === dialogs.length - 1;
+        if (isTopMost) {
+          dialogEl.style.pointerEvents = "auto";
+          dialogEl.removeAttribute("inert");
+        } else {
+          dialogEl.style.pointerEvents = "none";
+          dialogEl.setAttribute("inert", "");
+        }
+      });
+    };
+
+    syncStack();
+    const timer = setTimeout(syncStack, 30);
+
     return () => {
+      clearTimeout(timer);
       setTimeout(() => {
-        document.body.style.pointerEvents = "";
-        document.body.style.overflow = "";
+        syncStack();
+        const stillHasModal = !!document.querySelector('[role="dialog"], [role="alertdialog"]');
+        if (!stillHasModal) {
+          document.body.style.pointerEvents = "";
+          document.body.style.overflow = "";
+        }
       }, 50);
     };
   }, []);

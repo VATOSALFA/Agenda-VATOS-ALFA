@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
-import { evaluateDepositRequirement, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { evaluateDepositRequirement, DEFAULT_BOOKING_RULES, ReglasReservasConfig, isExpiredPendingDepositReservation } from '@/lib/booking-rules';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -207,9 +207,20 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             }
         }
 
+        const nowMs = Date.now();
         allResDocs.forEach(doc => {
             const data = doc.data();
             if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
+
+            if (isExpiredPendingDepositReservation(data, nowMs, 10)) {
+                doc.ref.update({
+                    estado: 'Cancelado',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                    cancelada_automaticamente: true,
+                    cancelado_en: FieldValue.serverTimestamp(),
+                }).catch(() => {});
+                return;
+            }
 
             // Robust check for professional match
             let isForProf = data.barbero_id === professionalId;
@@ -776,9 +787,20 @@ export async function createPublicReservation(data: any) {
             }
         }
 
+        const nowCheckMs = Date.now();
         const hasReservationConflict = allReservationsToCheck.some(doc => {
             const res = doc.data();
             if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
+
+            if (isExpiredPendingDepositReservation(res, nowCheckMs, 10)) {
+                doc.ref.update({
+                    estado: 'Cancelado',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                    cancelada_automaticamente: true,
+                    cancelado_en: FieldValue.serverTimestamp(),
+                }).catch(() => {});
+                return false;
+            }
 
             // Check if it's the same professional
             const isForProf = res.barbero_id === data.professionalId || (res.items && res.items.some((i: any) => i.barbero_id === data.professionalId));

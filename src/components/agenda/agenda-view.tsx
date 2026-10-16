@@ -69,6 +69,7 @@ import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
+import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
 
 
 
@@ -135,7 +136,7 @@ const useCurrentTime = () => {
 
     const timer = setInterval(() => {
       setTime(new Date());
-    }, 60000); // Update every minute
+    }, 15000); // Update every 15 seconds for responsive deposit expiration
 
     return () => clearInterval(timer);
   }, []);
@@ -640,8 +641,35 @@ export default function AgendaView() {
 
   const { allEvents, eventsWithLayout } = useAgendaEvents(effectiveReservations, timeBlocks, clients, professionals);
 
+  // Auto-cancelar citas pendientes de anticipo que superaron los 10 minutos de tolerancia
+  const autoCancellingIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!db || !effectiveReservations || effectiveReservations.length === 0) return;
+    const nowMs = Date.now();
 
+    effectiveReservations.forEach((res) => {
+      if (!res?.id || res.estado === 'Cancelado') return;
+      if (autoCancellingIdsRef.current.has(res.id)) return;
 
+      if (isExpiredPendingDepositReservation(res, nowMs, 10)) {
+        autoCancellingIdsRef.current.add(res.id);
+        const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+        updateDoc(doc(db, targetCol, res.id), {
+          estado: 'Cancelado',
+          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+          cancelada_automaticamente: true,
+          cancelado_en: Timestamp.now(),
+        })
+          .then(() => {
+            onDataRefresh();
+          })
+          .catch((err) => {
+            console.error('Error auto-cancelando cita por anticipo vencido:', err);
+            autoCancellingIdsRef.current.delete(res.id);
+          });
+      }
+    });
+  }, [effectiveReservations, currentTime, db]);
 
   const handleSetToday = () => setDate(new Date());
   const handlePrevDay = () => setDate(d => subDays(d || new Date(), 1));
@@ -1698,21 +1726,6 @@ export default function AgendaView() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setIsBookingRulesModalOpen(true)}
-                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
-                        title="Reglas de Agendamiento"
-                      >
-                        <BookOpen className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Reglas de Agendamiento</TooltipContent>
-                  </Tooltip>
-
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
                         onClick={() => setIsQuickConsultOpen(true)}
                         className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
                       >
@@ -1723,6 +1736,22 @@ export default function AgendaView() {
                   </Tooltip>
                 </>
               )}
+
+              {/* Botón de Reglas de Reserva (Librito) visible para todo el equipo (incluyendo Staff) al lado de Ayuda */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsBookingRulesModalOpen(true)}
+                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors"
+                    title="Reglas de Reserva • Guía Rápida"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Reglas de Reserva</TooltipContent>
+              </Tooltip>
 
               <Popover>
                 <PopoverTrigger asChild>
@@ -2142,7 +2171,7 @@ export default function AgendaView() {
                                       ? "bg-orange-500/20 border-orange-500 text-orange-800 dark:text-orange-200 z-15"
                                       : "bg-gray-500/20 border-gray-400 text-gray-700 dark:text-gray-300 opacity-80 z-15")
                                     : (event.layout.isPendingDeposit
-                                      ? "bg-blue-950/25 dark:bg-blue-950/40 border-2 border-dashed border-blue-400/80 text-foreground opacity-85 backdrop-blur-[2px] shadow-sm z-15"
+                                      ? "bg-red-500/20 dark:bg-red-950/40 border-2 border-dashed border-red-500 text-red-950 dark:text-red-100 opacity-90 backdrop-blur-[2px] shadow-sm z-15"
                                       : event.color),
                                   !event.layout.isMinimized && (event.type === 'appointment' ? 'z-20' : 'z-10'),
                                   (event.type === 'appointment' &&
@@ -2167,7 +2196,7 @@ export default function AgendaView() {
                                     <div className={cn(
                                       "flex-grow overflow-hidden min-w-0 pr-1",
                                       event.layout.isPendingDeposit
-                                        ? "pr-8"
+                                        ? "pr-12"
                                         : (((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') && ((event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid'))
                                           ? "pr-28"
                                           : ((event as any).items?.some((i: SaleItem) => i.tipo === 'producto') || (event as any).pago_estado === 'Pagado' || (event as any).pago_estado === 'deposit_paid')
@@ -2175,21 +2204,6 @@ export default function AgendaView() {
                                             : "pr-14")
                                     )}>
                                       <p className="font-bold text-xs truncate leading-tight">{event.type === 'appointment' ? formatClientName(event.customer?.nombre, event.customer?.apellido) : event.motivo}</p>
-                                      {event.layout.isPendingDeposit && (
-                                        <div className="flex items-center gap-1 mt-0.5 min-w-0">
-                                          <span className={cn(
-                                            "inline-flex items-center gap-1 px-1 py-0.2 rounded text-[9px] font-bold tracking-tight whitespace-nowrap",
-                                            event.layout.depositExpired
-                                              ? "bg-red-500/20 text-red-300 border border-red-500/40"
-                                              : "bg-blue-500/20 text-blue-200 border border-blue-400/40"
-                                          )}>
-                                            <Clock className="w-2.5 h-2.5 shrink-0" />
-                                            {event.layout.depositExpired
-                                              ? "Vencido (+10m)"
-                                              : `Anticipo (${event.layout.depositMinutesRemaining ?? 10}m)`}
-                                          </span>
-                                        </div>
-                                      )}
                                     </div>
 
                                     {event.type === 'appointment' && (
@@ -2239,8 +2253,8 @@ export default function AgendaView() {
                                         )}
 
                                         {event.layout.isPendingDeposit && (
-                                          <div className="h-full px-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (10 min tolerancia)">
-                                            <Hourglass className="h-3 w-3 text-blue-400 animate-pulse" />
+                                          <div className="h-full pr-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (10 min tolerancia)">
+                                            <Hourglass className="h-3.5 w-3.5 text-red-600 dark:text-red-400 animate-pulse" />
                                           </div>
                                         )}
                                       </div>
@@ -2271,14 +2285,12 @@ export default function AgendaView() {
                                   </div>
                                   {event.layout.isPendingDeposit ? (
                                     <div className="space-y-1 pt-1.5 border-t border-border/50">
-                                      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-400">
+                                      <div className="flex items-center gap-1.5 text-xs font-semibold text-red-500">
                                         <Hourglass className="w-3.5 h-3.5 shrink-0" />
-                                        <span>Esperando pago de anticipo</span>
+                                        <span>Pendiente de pago de anticipo</span>
                                       </div>
                                       <p className="text-[11px] text-muted-foreground leading-snug">
-                                        {event.layout.depositExpired
-                                          ? "⚠️ Han pasado más de 10 minutos sin recibir el anticipo. Esta cita es tentativa y puede cancelarse para liberar el turno."
-                                          : `⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 10} min para recibir el anticipo y confirmarse formalmente.`}
+                                        {`⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 10} min para recibir el anticipo y confirmarse formalmente.`}
                                       </p>
                                     </div>
                                   ) : (
@@ -2412,24 +2424,22 @@ export default function AgendaView() {
         initialData={enableScheduleInitialData}
       />
       {!isStaff && (
-        <>
-          <QuickConsultModal
-            isOpen={isQuickConsultOpen}
-            onClose={() => setIsQuickConsultOpen(false)}
-            services={services || []}
-            professionals={filteredProfessionals}
-            reservations={reservations || []}
-            timeBlocks={timeBlocks || []}
-            date={date}
-            onSelectSlot={handleSelectQuickConsultSlot}
-            specialJourneys={specialJourneys || []}
-          />
-          <BookingRulesCheatSheetModal
-            isOpen={isBookingRulesModalOpen}
-            onClose={() => setIsBookingRulesModalOpen(false)}
-          />
-        </>
+        <QuickConsultModal
+          isOpen={isQuickConsultOpen}
+          onClose={() => setIsQuickConsultOpen(false)}
+          services={services || []}
+          professionals={filteredProfessionals}
+          reservations={reservations || []}
+          timeBlocks={timeBlocks || []}
+          date={date}
+          onSelectSlot={handleSelectQuickConsultSlot}
+          specialJourneys={specialJourneys || []}
+        />
       )}
+      <BookingRulesCheatSheetModal
+        isOpen={isBookingRulesModalOpen}
+        onClose={() => setIsBookingRulesModalOpen(false)}
+      />
     </TooltipProvider >
   );
 }

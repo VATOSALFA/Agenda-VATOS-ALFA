@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -421,7 +422,18 @@ export function OverdueNotificationsPopover({
   useEffect(() => {
     if (isStaff) return;
     if (totalCount > prevCountRef.current && totalCount > 0) {
-      setIsMinimized(false);
+      const hasOtherOpenDialog =
+        typeof document !== 'undefined' &&
+        Boolean(
+          document.querySelector(
+            '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+          )
+        );
+      if (hasOtherOpenDialog) {
+        setIsMinimized(true);
+      } else {
+        setIsMinimized(false);
+      }
       playStrongNotificationAlert();
     }
     prevCountRef.current = totalCount;
@@ -664,20 +676,30 @@ export function OverdueNotificationsPopover({
         )}
       </Popover>
 
-      {/* 2. MODAL DE AVISOS CENTRADO EN PANTALLA CON FONDO DIFUMINADO (BACKDROP BLUR) */}
-      {totalCount > 0 && !isMinimized && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsMinimized(true);
-            }
+      {/* 2. MODAL DE AVISOS CENTRADO EN PANTALLA CON PORTAL Y BLOQUEO DE CAPAS INFERIORES */}
+      <Dialog
+        open={totalCount > 0 && !isMinimized}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsMinimized(true);
+          }
+        }}
+      >
+        <DialogContent
+          hideCloseButton={true}
+          className="w-full max-w-lg bg-background rounded-2xl shadow-2xl border-2 border-blue-500 p-0 overflow-hidden flex flex-col max-h-[88vh] gap-0 pointer-events-auto"
+          onPointerDownOutside={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsMinimized(true);
           }}
+          onInteractOutside={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsMinimized(true);
+          }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="relative w-full max-w-lg bg-background rounded-2xl shadow-2xl border-2 border-blue-500 overflow-hidden flex flex-col max-h-[88vh] animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
             {/* Cabecera Oficial VATOS ALFA con Franja Azul y Haz de Luz Oblicuo */}
             <div className="p-3 sm:p-4 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-blue-500/30 relative overflow-hidden gap-2.5">
               <div className="header-light-beam" aria-hidden="true" />
@@ -685,17 +707,17 @@ export function OverdueNotificationsPopover({
                 <Bell className="h-4 w-4 text-blue-400 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-sm sm:text-base text-white tracking-wide whitespace-nowrap">
+                    <DialogTitle className="font-bold text-sm sm:text-base text-white tracking-wide whitespace-nowrap">
                       Avisos de Agenda
-                    </h3>
+                    </DialogTitle>
                     <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/10 border border-white/20 text-[10px] sm:text-[11px] font-bold text-slate-200 whitespace-nowrap shrink-0 shadow-xs">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                       {totalCount} {totalCount === 1 ? 'pendiente' : 'pendientes'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-300 font-normal mt-0.5 hidden sm:block truncate">
+                  <DialogDescription className="text-[11px] text-slate-300 font-normal mt-0.5 hidden sm:block truncate">
                     Acción requerida para mantener la agenda sincronizada
-                  </p>
+                  </DialogDescription>
                 </div>
               </div>
 
@@ -706,7 +728,12 @@ export function OverdueNotificationsPopover({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={onOpenBookingRules}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsMinimized(true);
+                      onOpenBookingRules();
+                    }}
                     className="h-8 px-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1.5 text-xs font-semibold"
                     title="Consultar Reglas de Agendamiento"
                   >
@@ -719,7 +746,11 @@ export function OverdueNotificationsPopover({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setIsMinimized(true)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsMinimized(true);
+                  }}
                   className="h-8 px-2.5 text-slate-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors gap-1 text-xs font-semibold"
                   title="Minimizar modal de avisos"
                 >
@@ -1086,21 +1117,28 @@ export function OverdueNotificationsPopover({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setIsMinimized(true)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsMinimized(true);
+                }}
                 className="h-7 text-xs px-3 rounded-lg border-border/60 font-semibold"
               >
                 Minimizar
               </Button>
             </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* 3. DOCK FLOTANTE MINIMIZADO EN LA ESQUINA INFERIOR DERECHA */}
       {totalCount > 0 && isMinimized && (
         <div
-          onClick={() => setIsMinimized(false)}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 flex items-center gap-2.5 px-3.5 py-2.5 bg-[#10172b] hover:bg-[#1a233a] text-white rounded-xl shadow-[0_10px_30px_rgba(16,23,43,0.5)] border-2 border-blue-500 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 group animate-in slide-in-from-bottom-5"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsMinimized(false);
+          }}
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 flex items-center gap-2.5 px-3.5 py-2.5 bg-[#10172b] hover:bg-[#1a233a] text-white rounded-xl shadow-[0_10px_30px_rgba(16,23,43,0.5)] border-2 border-blue-500 cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95 group animate-in slide-in-from-bottom-5"
           title="Click para abrir avisos de agenda"
         >
           <div className="relative flex items-center justify-center">

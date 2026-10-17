@@ -56,9 +56,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { cn } from '@/lib/utils';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment } from 'firebase/firestore';
+import { doc, getDoc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { Loader2 } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
 import { SaleDetailModal } from '../sales/sale-detail-modal';
 import { functions, httpsCallable } from '@/lib/firebase-client';
@@ -446,6 +446,40 @@ export function ReservationDetailModal({
         title: "Error",
         description: "No se pudo cancelar la reserva. Inténtalo de nuevo.",
       });
+    }
+  };
+
+  const [isReactivating, setIsReactivating] = useState(false);
+
+  const handleReactivateReservation = async (newStatus: string = 'Confirmado') => {
+    if (!reservation?.id || !db || isReactivating) return;
+    setIsReactivating(true);
+    try {
+      const targetCol = (reservation as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+      const resRef = doc(db, targetCol, reservation.id);
+      await updateDoc(resRef, {
+        estado: newStatus,
+        anticipo_en_sucursal: true,
+        cancelada_automaticamente: deleteField(),
+        motivo_cancelacion: deleteField(),
+        cancelado_en: deleteField(),
+      });
+
+      toast({
+        title: 'Cita Reactivada',
+        description: `La cita ha sido reactivada en estado "${newStatus}". Se permite el pago del anticipo en sucursal.`,
+      });
+
+      onUpdateStatus(reservation.id, newStatus);
+    } catch (err: any) {
+      console.error('Error reactivando cita:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo reactivar la cita. Inténtalo de nuevo.',
+      });
+    } finally {
+      setIsReactivating(false);
     }
   };
 
@@ -1328,6 +1362,11 @@ export function ReservationDetailModal({
                 <span className="text-xs font-bold text-foreground">
                   {statusOptions.find(s => s.status === effectiveReservationEstado)?.label || effectiveReservationEstado}
                 </span>
+                {reservation.estado === 'Cancelado' && (
+                  <span className="text-[11px] text-blue-400 font-medium hidden sm:inline">
+                    (Toca un color para reactivar)
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 {statusOptions.map(({ status, hex, label }) => {
@@ -1365,6 +1404,8 @@ export function ReservationDetailModal({
                               if (reservation.pago_estado === 'Pagado') return;
                               if (status === 'Cancelado') {
                                 handleCancelClick();
+                              } else if (reservation.estado === 'Cancelado') {
+                                handleReactivateReservation(status);
                               } else {
                                 onUpdateStatus(reservation.id, status);
                               }
@@ -1448,10 +1489,29 @@ export function ReservationDetailModal({
               )}
 
               {reservation.estado === 'Cancelado' ? (
-                <Button disabled variant="outline" size="sm" className="rounded-xl opacity-60 cursor-not-allowed border-gray-300 text-gray-500 text-xs h-9">
-                  <XCircle className="mr-1.5 h-3.5 w-3.5 text-gray-400" />
-                  Cita Cancelada
-                </Button>
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl border-blue-500/60 text-blue-400 hover:bg-blue-500/10 font-bold text-xs h-9 px-2.5"
+                    onClick={() => setIsDepositModalOpen(true)}
+                  >
+                    <DollarSign className="mr-1 h-3.5 w-3.5 text-blue-400" /> Registrar Anticipo
+                  </Button>
+                  <Button
+                    onClick={() => handleReactivateReservation('Confirmado')}
+                    disabled={isReactivating}
+                    size="sm"
+                    className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
+                  >
+                    {isReactivating ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    Reactivar Cita
+                  </Button>
+                </div>
               ) : reservation.pago_estado !== 'Pagado' ? (
                 <Button
                   onClick={onPay}

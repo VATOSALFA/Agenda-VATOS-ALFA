@@ -158,6 +158,14 @@ export function isShortNoticeAppointment(
 export function isPendingDepositReservation(res: any): boolean {
   if (!res) return false;
 
+  if (
+    res.anticipo_en_sucursal === true ||
+    res.tolerancia_anticipo_extendida === true ||
+    res.exento_anticipo === true
+  ) {
+    return false;
+  }
+
   const estado = String(res.estado || '').trim();
   if (
     estado === 'Cancelado' ||
@@ -166,6 +174,7 @@ export function isPendingDepositReservation(res: any): boolean {
     estado === 'Completado' ||
     estado === 'Venta completada' ||
     estado === 'Asiste' ||
+    estado === 'Confirmado' ||
     estado === 'En espera'
   ) {
     return false;

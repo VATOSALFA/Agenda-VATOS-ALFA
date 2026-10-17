@@ -47,7 +47,7 @@ import {
 
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '../ui/skeleton';
-import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp, collection, query, getDocs, documentId } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, runTransaction, increment, getDoc, setDoc, Timestamp, collection, query, getDocs, documentId, deleteField } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 import { Label } from '../ui/label';
@@ -649,6 +649,8 @@ export default function AgendaView() {
 
     effectiveReservations.forEach((res) => {
       if (!res?.id || res.estado === 'Cancelado') return;
+      if ((res as any).anticipo_en_sucursal === true || (res as any).tolerancia_anticipo_extendida === true || (res as any).exento_anticipo === true) return;
+      if (res.estado === 'Confirmado' || res.estado === 'Asiste' || res.estado === 'Completado') return;
       if (autoCancellingIdsRef.current.has(res.id)) return;
 
       if (isExpiredPendingDepositReservation(res, nowMs, 10)) {
@@ -1066,7 +1068,11 @@ export default function AgendaView() {
           monto_pagado_real: depositAmount,
           metodo_pago_anticipo: paymentMethod,
           deposit_payment_id: depositSaleId,
-          deposit_paid_at: Timestamp.now()
+          deposit_paid_at: Timestamp.now(),
+          anticipo_en_sucursal: true,
+          motivo_cancelacion: deleteField(),
+          cancelada_automaticamente: deleteField(),
+          cancelado_en: deleteField()
         };
 
         await updateDoc(resRef, updateData);
@@ -1199,13 +1205,35 @@ export default function AgendaView() {
         }
       }
 
-      await updateDoc(resRef, { estado: newStatus });
+      const wasCancelled = resData?.estado === 'Cancelado';
+      const isReactivating = wasCancelled && newStatus !== 'Cancelado';
+
+      const updateData: any = { estado: newStatus };
+      if (isReactivating) {
+        updateData.motivo_cancelacion = deleteField();
+        updateData.cancelada_automaticamente = deleteField();
+        updateData.cancelado_en = deleteField();
+        updateData.anticipo_en_sucursal = true;
+      }
+
+      await updateDoc(resRef, updateData);
       toast({
-        title: isSandboxRes ? 'Estado actualizado (Sandbox)' : 'Estado actualizado',
-        description: `La reserva ahora está en estado: ${newStatus}`
+        title: isReactivating ? 'Cita reactivada' : (isSandboxRes ? 'Estado actualizado (Sandbox)' : 'Estado actualizado'),
+        description: isReactivating
+          ? `La cita fue reactivada en estado: ${newStatus}`
+          : `La reserva ahora está en estado: ${newStatus}`
       });
       if (selectedReservation && selectedReservation.id === reservationId) {
-        setSelectedReservation({ ...selectedReservation, estado: newStatus });
+        setSelectedReservation({
+          ...selectedReservation,
+          estado: newStatus,
+          ...(isReactivating ? {
+            motivo_cancelacion: undefined,
+            cancelada_automaticamente: undefined,
+            cancelado_en: undefined,
+            anticipo_en_sucursal: true
+          } : {})
+        });
       }
     } catch (err: any) {
       console.error('Error actualizando estado:', err);

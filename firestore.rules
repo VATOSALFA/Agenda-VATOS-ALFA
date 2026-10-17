@@ -14,6 +14,10 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isNotAppAnonymousSync() {
+      return isAuthenticated() && request.auth.token.email != 'app_client_sync@vatosalfa.com';
+    }
+
     // ---------------------------------------------------------
     // RULES
     // ---------------------------------------------------------
@@ -21,97 +25,101 @@ service cloud.firestore {
     // 1. Business Configuration (Public Read for Login/Branding)
     match /empresa/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated(); 
+      allow write: if isNotAppAnonymousSync(); 
     }
-    match /settings/{document=**} {
+    // Private customer feedback subcollection: anyone authenticated can submit, only staff/real users can read/manage
+    match /settings/app_movil/opiniones/{opinionId} {
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isNotAppAnonymousSync();
+    }
+    match /settings/{docId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /configuracion/{docId} {
       allow read: if docId in ['servicios', 'agenda', 'pase_alfa', 'app_movil', 'reglas_reservas', 'inspiracion_alfa'] || isAuthenticated();
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /locales/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /ajustes_sitio/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /promociones/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /app_avisos/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /app_promociones/{document=**} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     match /opiniones_app/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isNotAppAnonymousSync();
     }
 
-    // 2. User Profiles
+    // 2. User Profiles (Staff & Admin)
     match /usuarios/{userId} {
       allow read, update: if isOwner(userId);
-      allow create: if isAuthenticated(); 
-      // Allow general read/write for Staff access logic (since we lack custom claims for now)
-      allow read, write: if isAuthenticated();
+      allow create: if isNotAppAnonymousSync(); 
+      allow read, write: if isNotAppAnonymousSync();
     }
 
-    // 3. Professionals (Staff) - MODIFICADO PARA ACCESO PÚBLICO
+    // 3. Professionals (Staff) - Acceso público de lectura para catálogo/agenda
     match /profesionales/{profId} {
-      allow read: if true;  // <--- ¡Esto es la clave! Cualquiera puede ver la lista
-      allow write: if isAuthenticated(); // Solo el dueño puede editar/borrar
+      allow read: if true;
+      allow write: if isNotAppAnonymousSync();
     }
 
     // 4. Roles & Permissions
     match /roles/{roleId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read: if isNotAppAnonymousSync();
+      allow write: if isNotAppAnonymousSync();
     }
 
     // 5. Services & Products (Catalog)
     match /servicios/{document=**} { 
       allow read: if true; 
-      allow write: if isAuthenticated(); 
+      allow write: if isNotAppAnonymousSync(); 
     }
     
-    // Lo demás de productos lo dejamos protegido
     match /categorias_servicios/{document=**} { 
       allow read: if true; 
-      allow write: if isAuthenticated(); 
+      allow write: if isNotAppAnonymousSync(); 
     }
     match /products/{document=**} { 
       allow read: if true;
-      allow write: if isAuthenticated(); 
+      allow write: if isNotAppAnonymousSync(); 
     }
     match /productos/{document=**} { 
       allow read: if true;
-      allow write: if isAuthenticated(); 
+      allow write: if isNotAppAnonymousSync(); 
     } 
-    match /brands/{document=**} { allow read, write: if isAuthenticated(); }
-    match /presentations/{document=**} { allow read, write: if isAuthenticated(); }
-    match /categories/{document=**} { allow read, write: if isAuthenticated(); }
+    match /brands/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
+    match /presentations/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
+    match /categories/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
 
-    // 6. Business Logic (Sales, Clients, Finance)
+    // 6. Business Logic (Reservations, Clients, Finance)
     match /reservas/{document=**} { allow read, write: if isAuthenticated(); }
     match /reservas_sandbox/{document=**} { allow read, write: if true; }
-    match /bloqueos_horario/{document=**} { allow read, write: if isAuthenticated(); }
+    match /bloqueos_horario/{document=**} { allow read: if isAuthenticated(); allow write: if isNotAppAnonymousSync(); }
     match /jornadas_especiales/{id} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow write: if isNotAppAnonymousSync();
     }
     
-    match /sales/{document=**} { allow read, write: if isAuthenticated(); }
-    match /ventas/{document=**} { allow read, write: if isAuthenticated(); } // Added for Spanish collection name
-    match /ventas_canceladas/{document=**} { allow read, write: if isAuthenticated(); }
+    match /sales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /ventas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /ventas_canceladas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
-    match /caja/{document=**} { allow read, write: if isAuthenticated(); }   // Added for cash register
+    match /caja/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     
     match /clientes/{document=**} { allow read, write: if isAuthenticated(); } 
     match /clients/{document=**} { allow read, write: if isAuthenticated(); } 
@@ -122,37 +130,37 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     } 
 
-    match /finanzas/{document=**} { allow read, write: if isAuthenticated(); }
-    match /finanzas_mensuales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /finanzas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /finanzas_mensuales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // 7. Communications
-    match /conversaciones/{document=**} { allow read, write: if isAuthenticated(); }
-    match /conversations/{document=**} { allow read, write: if isAuthenticated(); }
-    match /whatsapp_configuraciones/{document=**} { allow read, write: if isAuthenticated(); }
+    match /conversaciones/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /conversations/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /whatsapp_configuraciones/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // 8. Other Business Data (Spanish naming conventions found in code)
-    match /terminales/{document=**} { allow read, write: if isAuthenticated(); }
-    match /codigos_autorizacion/{document=**} { allow read, write: if isAuthenticated(); }
-    match /egresos/{document=**} { allow read, write: if isAuthenticated(); }
-    match /ingresos_manuales/{document=**} { allow read, write: if isAuthenticated(); }
-    match /liquidaciones_admin/{document=**} { allow read, write: if isAuthenticated(); }
-    match /cortes_caja/{document=**} { allow read, write: if isAuthenticated(); }
+    match /terminales/{document=**} { allow read: if isAuthenticated(); allow write: if isNotAppAnonymousSync(); }
+    match /codigos_autorizacion/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /codigos_verificacion/{document=**} { allow read, write: if isAuthenticated(); }
+    match /egresos/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /ingresos_manuales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /liquidaciones_admin/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /cortes_caja/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     
     // Product Catalog (Spanish)
-    match /categorias_productos/{document=**} { allow read, write: if isAuthenticated(); }
-    match /formatos_productos/{document=**} { allow read, write: if isAuthenticated(); }
-    match /marcas_productos/{document=**} { allow read, write: if isAuthenticated(); }
-    match /movimientos_inventario/{document=**} { allow read, write: if isAuthenticated(); }
+    match /categorias_productos/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
+    match /formatos_productos/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
+    match /marcas_productos/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }
+    match /movimientos_inventario/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     
-    // Payments (Generic catch-all if needed, though usually covered by sales/caja)
+    // Payments
     match /pagos/{document=**} { allow read, write: if isAuthenticated(); }
-    match /audit_logs/{document=**} { allow read, write: if isAuthenticated(); }
+    match /audit_logs/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     
     // Work Sessions (Nómina)
-    match /sesiones_trabajo/{document=**} { allow read, write: if isAuthenticated(); }
-    match /pagos_nomina/{document=**} { allow read, write: if isAuthenticated(); }
+    match /sesiones_trabajo/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /pagos_nomina/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // DENY ALL OTHERS BY DEFAULT
-    // No catch-all rule here.
   }
 }

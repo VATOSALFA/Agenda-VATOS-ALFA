@@ -162,6 +162,7 @@ export function SeasonalEffectsWebOverlay() {
 
   return (
     <div
+      key={`${effectiveTheme}-${config.intensidad}`}
       className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden select-none"
       aria-hidden="true"
     >
@@ -273,7 +274,7 @@ export function SeasonalEffectsWebOverlay() {
         <>
           {/* Telaraña Fija Compacta en la Esquina Superior Izquierda */}
           <div
-            className="fixed top-0 left-0 w-16 h-16 sm:w-20 sm:h-20 z-[9999]"
+            className="fixed top-0 left-0 w-14 h-14 sm:w-16 sm:h-16 z-[9999]"
             style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }}
           >
             <svg width="100%" height="100%" viewBox="0 0 100 100">

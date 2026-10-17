@@ -1,8 +1,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import type { DateRange } from "react-day-picker";
-import { startOfDay, endOfDay } from "date-fns";
-import { where, Timestamp, doc, onSnapshot } from "firebase/firestore";
+import { startOfDay, endOfDay, format } from "date-fns";
+import { where, Timestamp, doc, onSnapshot, collection, getDocs, query } from "firebase/firestore";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { db } from "@/lib/firebase-client";
 import type { Sale, CommissionRowData, ProfessionalCommissionSummary, Local, Profesional, Service, Product, Client } from "@/lib/types";
@@ -57,9 +57,84 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
     const dataLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading || clientsLoading;
 
+    const [combinedSales, setCombinedSales] = useState<Sale[]>([]);
+
+    useEffect(() => {
+        if (dataLoading || !sales) {
+            setCombinedSales([]);
+            return;
+        }
+
+        let isCancelled = false;
+
+        const syncSales = async () => {
+            if (!activeFilters.dateRange?.from) {
+                setCombinedSales(sales);
+                return;
+            }
+
+            const startStr = format(startOfDay(activeFilters.dateRange.from), 'yyyy-MM-dd');
+            const endStr = format(endOfDay(activeFilters.dateRange.to || activeFilters.dateRange.from), 'yyyy-MM-dd');
+
+            const salesMap = new Map<string, Sale>();
+            sales.forEach(s => salesMap.set(s.id, s));
+
+            try {
+                const resConstraints = [
+                    where('fecha', '>=', startStr),
+                    where('fecha', '<=', endStr),
+                    where('estado', '==', 'Asiste')
+                ];
+                if (activeFilters.local !== 'todos') {
+                    resConstraints.push(where('local_id', '==', activeFilters.local));
+                }
+                const qRes = query(collection(db, 'reservas'), ...resConstraints);
+                const resSnap = await getDocs(qRes);
+
+                const candidateSaleIds = new Set<string>();
+                resSnap.forEach(d => {
+                    const r = d.data();
+                    if (r.deposit_payment_id && !salesMap.has(r.deposit_payment_id)) {
+                        candidateSaleIds.add(r.deposit_payment_id);
+                    }
+                    if (!salesMap.has(d.id)) {
+                        candidateSaleIds.add(d.id);
+                    }
+                });
+
+                if (candidateSaleIds.size > 0) {
+                    const idsToFetch = Array.from(candidateSaleIds);
+                    for (let i = 0; i < idsToFetch.length; i += 30) {
+                        const chunk = idsToFetch.slice(i, i + 30);
+                        const qSales = query(collection(db, 'ventas'), where('__name__', 'in', chunk));
+                        const salesChunkSnap = await getDocs(qSales);
+                        salesChunkSnap.forEach(sDoc => {
+                            if (sDoc.exists()) {
+                                const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
+                                salesMap.set(saleData.id, saleData);
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching attended reservations for commissions report:", err);
+            }
+
+            if (!isCancelled) {
+                setCombinedSales(Array.from(salesMap.values()));
+            }
+        };
+
+        syncSales();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [dataLoading, sales, activeFilters.dateRange, activeFilters.local]);
+
     // 3. Compute Commissions
     useEffect(() => {
-        if (dataLoading || !sales || !professionals || !services || !products || !clients) {
+        if (dataLoading || !professionals || !services || !products || !clients) {
             setCommissionData([]);
             setIsComputing(true);
             return;
@@ -70,7 +145,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
         const productMap = new Map(products.map(p => [p.id, p]));
         const clientMap = new Map(clients.map(c => [c.id, c]));
 
-        let filteredSales = sales;
+        let filteredSales = combinedSales;
         if (activeFilters.local !== 'todos') {
             filteredSales = filteredSales.filter(s => s.local_id === activeFilters.local);
         }

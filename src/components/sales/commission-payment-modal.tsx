@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnapshot } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnapshot, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -86,6 +86,76 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
     const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
 
+    const [combinedSales, setCombinedSales] = useState<Sale[]>([]);
+
+    useEffect(() => {
+        if (isLoading || !isOpen) return;
+
+        let isCancelled = false;
+
+        const syncCombinedSales = async () => {
+            const start = dateRange?.from ? startOfDay(dateRange.from) : todayStart;
+            const end = dateRange?.to ? endOfDay(dateRange.to) : (dateRange?.from ? endOfDay(dateRange.from) : todayEnd);
+            const startStr = format(start, 'yyyy-MM-dd');
+            const endStr = format(end, 'yyyy-MM-dd');
+
+            const salesMap = new Map<string, Sale>();
+            sales.forEach(s => salesMap.set(s.id, s));
+
+            try {
+                // Fetch attended appointments in the selected date range to include any advance payments paid on prior dates
+                const resConstraints = [
+                    where('fecha', '>=', startStr),
+                    where('fecha', '<=', endStr),
+                    where('estado', '==', 'Asiste')
+                ];
+                if (localId && localId !== 'todos') {
+                    resConstraints.push(where('local_id', '==', localId));
+                }
+                const qRes = query(collection(db, 'reservas'), ...resConstraints);
+                const resSnap = await getDocs(qRes);
+
+                const candidateSaleIds = new Set<string>();
+                resSnap.forEach(d => {
+                    const r = d.data();
+                    if (r.deposit_payment_id && !salesMap.has(r.deposit_payment_id)) {
+                        candidateSaleIds.add(r.deposit_payment_id);
+                    }
+                    if (!salesMap.has(d.id)) {
+                        candidateSaleIds.add(d.id);
+                    }
+                });
+
+                if (candidateSaleIds.size > 0) {
+                    const idsToFetch = Array.from(candidateSaleIds);
+                    for (let i = 0; i < idsToFetch.length; i += 30) {
+                        const chunk = idsToFetch.slice(i, i + 30);
+                        const qSales = query(collection(db, 'ventas'), where('__name__', 'in', chunk));
+                        const salesChunkSnap = await getDocs(qSales);
+                        salesChunkSnap.forEach(sDoc => {
+                            if (sDoc.exists()) {
+                                const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
+                                salesMap.set(saleData.id, saleData);
+                            }
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching attended reservations for advance commissions:", err);
+            }
+
+            if (!isCancelled) {
+                setCombinedSales(Array.from(salesMap.values()));
+            }
+        };
+
+        syncCombinedSales();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [isLoading, isOpen, sales, dateRange, localId, todayStart, todayEnd]);
+
     useEffect(() => {
         if (isLoading || !isOpen) return;
 
@@ -95,7 +165,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
-        sales.forEach(sale => {
+        combinedSales.forEach(sale => {
             const saleTip = (sale as any).propina || 0;
             const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
             const professionalsInSale = allSellersInSale.filter(id => id && professionalMap.has(id));
@@ -208,7 +278,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setCommissionData(commissionList);
         setSelectedProfessionals([]);
 
-    }, [isOpen, sales, professionals, services, products, isLoading, discountsAffectCommissions]);
+    }, [isOpen, combinedSales, professionals, services, products, isLoading, discountsAffectCommissions]);
 
     useEffect(() => {
         const unsubscribe = onSnapshot(doc(db, 'settings', 'commissions'), (docSnap) => {
@@ -260,7 +330,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     // Mark items as paid (accumulate changes in salesToUpdate map declared outside the loop)
                     comm.saleItemIds.forEach(idPair => {
                         if (!salesToUpdate.has(idPair.saleId)) {
-                            const originalSale = sales.find(s => s.id === idPair.saleId);
+                            const originalSale = combinedSales.find(s => s.id === idPair.saleId);
                             if (originalSale) {
                                 // Deep copy to avoid modifying original state
                                 salesToUpdate.set(idPair.saleId, JSON.parse(JSON.stringify(originalSale)));
@@ -275,7 +345,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     // Collect tips to mark as paid
                     comm.tipSaleIds.forEach(saleId => {
                         if (!tipsToUpdate.has(saleId)) {
-                            const originalSale = sales.find(s => s.id === saleId);
+                            const originalSale = combinedSales.find(s => s.id === saleId);
                             tipsToUpdate.set(saleId, new Set(originalSale?.tipsPaidTo || []));
                         }
                         tipsToUpdate.get(saleId)!.add(comm.professionalId);
@@ -295,7 +365,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 const professionalIds = Array.from(professionalIdsSet);
                 
                 // Determine if everyone in the sale has been paid for their tip
-                const originalSale = sales.find(s => s.id === saleId);
+                const originalSale = combinedSales.find(s => s.id === saleId);
                 const allSellersInSale = Array.from(new Set(originalSale?.items?.map(i => i.barbero_id).filter(Boolean)));
                 const validProfessionalsIds = allSellersInSale.filter(id => id && professionalMapForSave.has(id));
                 

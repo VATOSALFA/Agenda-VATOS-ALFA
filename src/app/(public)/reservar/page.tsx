@@ -40,6 +40,7 @@ interface AppointmentConfig {
     time: string;
     professional: any;
     professionalId?: string;
+    professional_lock?: boolean;
 }
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -735,13 +736,13 @@ export default function BookingPage() {
     const handleTimeSelected = (time: string) => {
         setTempTime(time);
         if (preSelectedProId) {
-            handleProSelected(preSelectedProId, time);
+            handleProSelected(preSelectedProId, time, true);
         } else {
             setConfigStep(2); // Go to Pro selection
         }
     };
 
-    const handleProSelected = (proId: string, overrideTime?: string) => {
+    const handleProSelected = (proId: string, overrideTime?: string, locked: boolean = true) => {
         const timeToUse = overrideTime || tempTime;
         if (!activeConfigId || !tempDate || !timeToUse) return;
 
@@ -751,7 +752,8 @@ export default function BookingPage() {
             date: tempDate,
             time: timeToUse,
             professionalId: proId,
-            professional: pro
+            professional: pro,
+            professional_lock: locked
         };
 
         setConfigs(prev => ({ ...prev, [activeConfigId]: config }));
@@ -807,6 +809,8 @@ export default function BookingPage() {
                 const endTime = format(endDate, 'HH:mm');
                 const serviceNames = cart.map(c => c.service.name);
 
+                const isLocked = cfg.professional_lock ?? true;
+
                 // Prepare Items (Services + Products)
                 const itemsPayload = [
                     ...cart.map(c => {
@@ -817,7 +821,8 @@ export default function BookingPage() {
                             tipo: 'servicio',
                             precio: Number(c.service.price || 0),
                             barbero_id: cfg.professionalId,
-                            duracion: Number(customDur !== undefined ? customDur : (c.service.duration || 0))
+                            duracion: Number(customDur !== undefined ? customDur : (c.service.duration || 0)),
+                            professional_lock: isLocked
                         };
                     }),
                     ...productCart.map(p => ({
@@ -839,6 +844,7 @@ export default function BookingPage() {
                     servicePrices: cart.map(c => Number(c.service.price || 0)),
                     items: itemsPayload, // <--- NEW: Explicit items array
                     professionalId: cfg.professionalId,
+                    professional_lock: isLocked,
                     date: format(cfg.date, 'yyyy-MM-dd'),
                     time: cfg.time,
                     endTime: endTime,
@@ -873,6 +879,7 @@ export default function BookingPage() {
                     const startTimeDate = parse(cfg.time, 'HH:mm', new Date());
                     const endDate = addMinutes(startTimeDate, duration);
                     const endTime = format(endDate, 'HH:mm');
+                    const isLocked = cfg.professional_lock ?? true;
 
                     bookingsPayload.push({
                         id: generateId(),
@@ -887,9 +894,11 @@ export default function BookingPage() {
                             tipo: 'servicio',
                             precio: Number(item.service.price || 0),
                             barbero_id: cfg.professionalId,
-                            duracion: duration
+                            duracion: duration,
+                            professional_lock: isLocked
                         }],
                         professionalId: cfg.professionalId,
+                        professional_lock: isLocked,
                         date: format(cfg.date, 'yyyy-MM-dd'),
                         time: cfg.time,
                         endTime: endTime,
@@ -1946,8 +1955,8 @@ export default function BookingPage() {
                                                     onClick={() => {
                                                         const availableParams = tempSlotMap[tempTime || ''];
                                                         if (availableParams && availableParams.length > 0) {
-                                                            // Auto-select the first one
-                                                            handleProSelected(availableParams[0]);
+                                                            // Auto-select the first one without locking professional
+                                                            handleProSelected(availableParams[0], undefined, false);
                                                         }
                                                     }}
                                                 >
@@ -1984,7 +1993,7 @@ export default function BookingPage() {
                                                         <div
                                                             key={pro.id}
                                                             className="flex flex-col items-center p-3 rounded-2xl border-2 border-border/70 cursor-pointer hover:border-blue-500 hover:bg-blue-500/5 transition-all group"
-                                                            onClick={() => handleProSelected(pro.id)}
+                                                            onClick={() => handleProSelected(pro.id, undefined, true)}
                                                         >
                                                             <div className="w-full aspect-square rounded-xl bg-muted overflow-hidden mb-2 border border-border/50 relative shadow-xs">
                                                                 {pro.avatarUrl ? (

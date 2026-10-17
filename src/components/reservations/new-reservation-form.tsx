@@ -828,13 +828,21 @@ export function NewReservationForm({
       const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
       const [endHour = '', endMinute = ''] = initialData.hora_fin?.split(':') || [];
 
+      const defaultOnlineLock = Boolean(
+        isEditMode && (
+          initialData.canal_reserva?.startsWith('web_publica') ||
+          initialData.origen?.startsWith('web_publica') ||
+          initialData.canal_reserva === 'chatbot' ||
+          initialData.origen === 'chatbot'
+        )
+      );
       let itemsToSet: { servicio: string; barbero_id: string; duracion: number; hora_inicio_hora?: string; hora_inicio_minuto?: string; professional_lock?: boolean }[] = [];
       if (isEditMode && initialData.items && Array.isArray(initialData.items)) {
         itemsToSet = initialData.items.map((i: SaleItemType) => {
           const [itemH = '', itemM = ''] = (i as any).hora_inicio?.split(':') || [];
           const itemLock = (i as any).professional_lock !== undefined
             ? (i as any).professional_lock
-            : (initialData.professional_lock ?? false);
+            : (initialData.professional_lock !== undefined ? initialData.professional_lock : defaultOnlineLock);
           // Try to match with a service
           const service = services?.find(s => s.id === i.id || s.name === i.servicio || s.name === i.nombre);
           if (service) {

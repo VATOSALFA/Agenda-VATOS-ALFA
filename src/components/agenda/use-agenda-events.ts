@@ -61,6 +61,22 @@ export function useAgendaEvents(
                         ? 'Confirmado'
                         : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
 
+                const isOnlineOrigin = Boolean(
+                    res.canal_reserva?.startsWith('web_publica') ||
+                    res.origen?.startsWith('web_publica') ||
+                    res.canal_reserva === 'chatbot' ||
+                    res.origen === 'chatbot'
+                );
+
+                const resolveGroupLock = (groupItems: any[]) => {
+                    if (res.professional_lock !== undefined) return Boolean(res.professional_lock);
+                    const hasExplicitItemLock = groupItems.some((i: any) => i.professional_lock !== undefined);
+                    if (hasExplicitItemLock) {
+                        return groupItems.some((i: any) => i.professional_lock === true);
+                    }
+                    return isOnlineOrigin ? true : false;
+                };
+
                 if (!res.items || res.items.length === 0) {
                     return [{
                         ...res,
@@ -72,6 +88,7 @@ export function useAgendaEvents(
                         end: globalEnd,
                         duration: globalDuration,
                         color: getStatusColor(effectiveStatus),
+                        professional_lock: res.professional_lock !== undefined ? Boolean(res.professional_lock) : isOnlineOrigin,
                         isPendingDeposit,
                         depositMinutesRemaining,
                         depositExpired,
@@ -115,9 +132,7 @@ export function useAgendaEvents(
                         end: globalEnd,
                         duration: globalDuration,
                         color: getStatusColor(effectiveStatus),
-                        professional_lock: res.professional_lock !== undefined
-                            ? res.professional_lock
-                            : groupItems.some((i: any) => i.professional_lock === true),
+                        professional_lock: resolveGroupLock(groupItems),
                         isPendingDeposit,
                         depositMinutesRemaining,
                         depositExpired,
@@ -165,9 +180,7 @@ export function useAgendaEvents(
                         end: endVal,
                         duration: Math.max(0.0833, endVal - startVal),
                         color: getStatusColor(effectiveStatus),
-                        professional_lock: res.professional_lock !== undefined
-                            ? res.professional_lock
-                            : groupItems.some((i: any) => i.professional_lock === true),
+                        professional_lock: resolveGroupLock(groupItems),
                         isPendingDeposit,
                         depositMinutesRemaining,
                         depositExpired,

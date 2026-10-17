@@ -613,10 +613,20 @@ export function ReservationDetailModal({
         Number(reservation.monto_pagado_real) > 0 ||
         Number(reservation.monto_pagado) > 0));
 
+  const expectedDepositAmount = Number((reservation as any).anticipo_esperado || reservation.monto_anticipo || 0);
+  const rawDepositPaid = Number(
+    reservation.anticipo_pagado ||
+    reservation.anticipoPagado ||
+    reservation.monto_pagado_real ||
+    reservation.monto_pagado ||
+    reservation.monto_anticipo ||
+    0
+  );
   const depositAmount = isDepositPaid
-    ? Number(reservation.anticipo_pagado ?? reservation.anticipoPagado ?? reservation.monto_pagado_real ?? reservation.monto_pagado ?? reservation.monto_anticipo ?? 0)
+    ? (rawDepositPaid > 0
+        ? rawDepositPaid
+        : (expectedDepositAmount > 0 ? expectedDepositAmount : Math.round(totalAmount * 0.5)))
     : 0;
-  const expectedDepositAmount = Number((reservation as any).anticipo_esperado ?? reservation.monto_anticipo ?? 0);
   const balancePending = reservation.pago_estado === 'Pagado'
     ? 0
     : Math.max(0, totalAmount - depositAmount);

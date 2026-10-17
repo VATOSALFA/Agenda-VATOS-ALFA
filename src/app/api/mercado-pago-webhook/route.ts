@@ -230,6 +230,7 @@ async function processApprovedPayment(
                         client: booking.client || {},
                         serviceIds: booking.serviceIds || [],
                         professionalId: booking.professionalId,
+                        professional_lock: booking.professional_lock !== undefined ? Boolean(booking.professional_lock) : true,
                         locationId: booking.locationId,
                         canal_reserva: booking.canal_reserva || 'web_publica',
                     };

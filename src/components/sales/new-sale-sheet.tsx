@@ -1370,17 +1370,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     Number(res.monto_pagado_real) > 0 ||
                                     Number(res.monto_pagado) > 0));
 
+                        const rawDbDeposit = Number(
+                            res.anticipoPagado ||
+                            res.anticipo_pagado ||
+                            res.monto_pagado_real ||
+                            res.monto_pagado ||
+                            res.monto_anticipo ||
+                            (res.total && res.saldo_pendiente !== undefined && Number(res.total) > Number(res.saldo_pendiente)
+                                ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
+                                : 0) ||
+                            res.anticipo_esperado ||
+                            0
+                        );
                         const dbDeposit = isResDepositPaid
-                            ? (Number(
-                                res.anticipoPagado ||
-                                res.anticipo_pagado ||
-                                res.monto_pagado_real ||
-                                res.monto_pagado ||
-                                res.monto_anticipo ||
-                                (res.total && res.saldo_pendiente !== undefined
-                                    ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
-                                    : 0)
-                            ) || 0)
+                            ? (rawDbDeposit > 0 ? rawDbDeposit : Math.round(Number(res.total || 0) * 0.5))
                             : 0;
                         setAnticipoPagado(dbDeposit);
                     }

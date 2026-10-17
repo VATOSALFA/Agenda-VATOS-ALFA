@@ -731,6 +731,7 @@ exports.mercadoPagoWebhook = onRequest(
 
               const newResRef = admin.firestore().collection('reservas').doc(resId);
 
+              const isBookingLocked = booking.professional_lock !== undefined ? Boolean(booking.professional_lock) : true;
               // Items Mapping
               let resItems = [];
               if (booking.items && Array.isArray(booking.items) && booking.items.length > 0) {
@@ -741,6 +742,7 @@ exports.mercadoPagoWebhook = onRequest(
                   // Best to concat names in main 'servicio' field later. Here keep clean.
                   servicio: i.tipo === 'servicio' ? i.nombre : null,
                   barbero_id: i.barbero_id || booking.professionalId, // Use specific pro or booking pro
+                  professional_lock: i.professional_lock !== undefined ? Boolean(i.professional_lock) : isBookingLocked,
                   nombre: i.nombre,
                   tipo: i.tipo || 'servicio',
                   precio: Number(i.precio || 0)
@@ -751,6 +753,7 @@ exports.mercadoPagoWebhook = onRequest(
                   id: sid,
                   servicio: booking.serviceNames[idx],
                   barbero_id: booking.professionalId,
+                  professional_lock: isBookingLocked,
                   nombre: booking.serviceNames[idx],
                   tipo: 'servicio',
                   precio: Number(booking.servicePrices?.[idx] || 0)
@@ -796,6 +799,8 @@ exports.mercadoPagoWebhook = onRequest(
                 cliente_id: clientId,
                 local_id: booking.locationId,
                 professional_id: booking.professionalId, // Main pro
+                barbero_id: booking.professionalId,
+                professional_lock: isBookingLocked,
                 fecha: booking.date,
                 hora_inicio: booking.time,
                 hora_fin: booking.endTime, // We added this to payload
@@ -816,7 +821,8 @@ exports.mercadoPagoWebhook = onRequest(
                 metodo_pago_anticipo: 'mercadopago',
 
                 creado_en: admin.firestore.FieldValue.serverTimestamp(),
-                origen: 'web_publica_pago_anticipado'
+                origen: 'web_publica_pago_anticipado',
+                canal_reserva: 'web_publica'
               };
 
               t.set(newResRef, reservaToCreate);

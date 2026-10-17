@@ -837,6 +837,7 @@ export async function createPublicReservation(data: any) {
         if (hasBlockConflict) return { error: 'El profesional tiene un bloqueo en este horario.' };
 
 
+        const isProfLocked = data.professional_lock !== undefined ? Boolean(data.professional_lock) : true;
         let firstOverridden = false;
         const items: any[] = validServices.map((s: any) => {
             const customDur = s.durationPorProfesional?.[data.professionalId];
@@ -852,6 +853,7 @@ export async function createPublicReservation(data: any) {
                 precio: s.price,
                 duracion: itemDur,
                 barbero_id: data.professionalId,
+                professional_lock: isProfLocked,
                 tipo: 'servicio'
             };
         });
@@ -1045,6 +1047,7 @@ export async function createPublicReservation(data: any) {
             cliente_telefono: data.client.phone || '',
             cliente_nombre: `${data.client.name || ''} ${data.client.lastName || ''}`.trim(),
             barbero_id: data.professionalId, // Main professional
+            professional_lock: isProfLocked,
             fecha: data.date,
             hora_inicio: data.time,
             hora_fin: endTimeStr,

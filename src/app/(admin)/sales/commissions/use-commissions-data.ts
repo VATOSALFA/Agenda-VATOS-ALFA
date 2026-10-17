@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { DateRange } from "react-day-picker";
 import { startOfDay, endOfDay, format } from "date-fns";
-import { where, Timestamp, doc, onSnapshot, collection, getDocs, query } from "firebase/firestore";
+import { where, Timestamp, doc, onSnapshot, collection, getDocs, getDoc, query } from "firebase/firestore";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import { db } from "@/lib/firebase-client";
 import type { Sale, CommissionRowData, ProfessionalCommissionSummary, Local, Profesional, Service, Product, Client } from "@/lib/types";
@@ -104,17 +104,18 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
                 if (candidateSaleIds.size > 0) {
                     const idsToFetch = Array.from(candidateSaleIds);
-                    for (let i = 0; i < idsToFetch.length; i += 30) {
-                        const chunk = idsToFetch.slice(i, i + 30);
-                        const qSales = query(collection(db, 'ventas'), where('__name__', 'in', chunk));
-                        const salesChunkSnap = await getDocs(qSales);
-                        salesChunkSnap.forEach(sDoc => {
-                            if (sDoc.exists()) {
-                                const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                                salesMap.set(saleData.id, saleData);
-                            }
-                        });
-                    }
+                    const docSnaps = await Promise.all(
+                        idsToFetch.map(id => getDoc(doc(db, 'ventas', id)).catch(err => {
+                            console.error("Error fetching candidate sale for commissions report:", id, err);
+                            return null;
+                        }))
+                    );
+                    docSnaps.forEach(sDoc => {
+                        if (sDoc && sDoc.exists()) {
+                            const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
+                            salesMap.set(saleData.id, saleData);
+                        }
+                    });
                 }
             } catch (err) {
                 console.error("Error fetching attended reservations for commissions report:", err);
@@ -163,7 +164,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             }
 
             const client = clientMap.get(sale.cliente_id);
-            const clientName = client ? `${client.nombre} ${client.apellido}` : 'Cliente desconocido';
+            const clientName = client ? `${client.nombre} ${client.apellido}` : (sale.cliente_nombre || 'Cliente desconocido');
 
             sale.items?.forEach(item => {
                 if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
@@ -262,7 +263,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
         setCommissionData(commissionRows);
         setIsComputing(false);
 
-    }, [sales, professionals, services, products, clients, dataLoading, activeFilters, discountsAffectCommissions]);
+    }, [combinedSales, professionals, services, products, clients, dataLoading, activeFilters, discountsAffectCommissions]);
 
 
     // 4. Calculate Summaries

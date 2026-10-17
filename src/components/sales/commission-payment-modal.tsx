@@ -128,17 +128,18 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                 if (candidateSaleIds.size > 0) {
                     const idsToFetch = Array.from(candidateSaleIds);
-                    for (let i = 0; i < idsToFetch.length; i += 30) {
-                        const chunk = idsToFetch.slice(i, i + 30);
-                        const qSales = query(collection(db, 'ventas'), where('__name__', 'in', chunk));
-                        const salesChunkSnap = await getDocs(qSales);
-                        salesChunkSnap.forEach(sDoc => {
-                            if (sDoc.exists()) {
-                                const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                                salesMap.set(saleData.id, saleData);
-                            }
-                        });
-                    }
+                    const docSnaps = await Promise.all(
+                        idsToFetch.map(id => getDoc(doc(db, 'ventas', id)).catch(err => {
+                            console.error("Error fetching candidate sale for payment modal:", id, err);
+                            return null;
+                        }))
+                    );
+                    docSnaps.forEach(sDoc => {
+                        if (sDoc && sDoc.exists()) {
+                            const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
+                            salesMap.set(saleData.id, saleData);
+                        }
+                    });
                 }
             } catch (err) {
                 console.error("Error fetching attended reservations for advance commissions:", err);

@@ -922,28 +922,41 @@ export function NewReservationForm({
           ? initialData.professional_lock
           : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
       );
-      const existingPaidAmt = Number(
+      const existingPaidAmt = isEditMode ? Number(
         (initialData as any).anticipo_pagado ||
         (initialData as any).anticipoPagado ||
         (initialData as any).monto_pagado_real ||
         (initialData as any).monto_pagado ||
         (initialData as any).monto_anticipo ||
         0
+      ) : 0;
+      const isAlreadyPaidOrDeposit = Boolean(
+        isEditMode && (
+          initialData.pago_estado === 'Pagado' ||
+          initialData.pago_estado === 'anticipo_pagado' ||
+          initialData.pago_estado === 'deposit_paid' ||
+          existingPaidAmt > 0
+        )
       );
-      const isAlreadyPaidOrDeposit =
-        initialData.pago_estado === 'Pagado' ||
-        initialData.pago_estado === 'anticipo_pagado' ||
-        initialData.pago_estado === 'deposit_paid' ||
-        existingPaidAmt > 0;
       setDepositPaid(isAlreadyPaidOrDeposit);
-      setDepositMethod((initialData as any).metodo_pago_anticipo || (initialData as any).metodo_pago || 'efectivo');
-      const initExpectedOrPaid = existingPaidAmt > 0
-        ? existingPaidAmt
-        : Number((initialData as any)?.anticipo_esperado || (initialData as any)?.monto_anticipo || 0);
-      if (initExpectedOrPaid > 0) {
-        setManualDepositAmount(String(initExpectedOrPaid));
+      setDepositMethod(isEditMode ? ((initialData as any).metodo_pago_anticipo || (initialData as any).metodo_pago || 'efectivo') : 'efectivo');
+
+      if (isEditMode && isAlreadyPaidOrDeposit && existingPaidAmt > 0) {
+        setManualDepositAmount(String(existingPaidAmt));
+        setManualDepositEnabled(false);
+      } else if (isEditMode && (initialData as any).manual_deposit === true) {
+        const initManualAmt = Number((initialData as any)?.anticipo_esperado || (initialData as any)?.monto_anticipo || 0);
+        setManualDepositAmount(initManualAmt > 0 ? String(initManualAmt) : '');
         setManualDepositEnabled(true);
+      } else {
+        setManualDepositAmount('');
+        setManualDepositEnabled(false);
       }
+      setIsDepositRuleExpanded(false);
+      setIsSendLinkModalOpen(false);
+      setCreatedReservationForLink(null);
+      setShowDepositWarningModal(false);
+      setPendingSaveData(null);
     } else if (isOpen) {
       form.reset({
         fecha: new Date(),
@@ -962,8 +975,16 @@ export function NewReservationForm({
       setDepositMethod('efectivo');
       setManualDepositAmount('');
       setManualDepositEnabled(false);
+      setIsDepositRuleExpanded(false);
       setIsSendLinkModalOpen(false);
       setCreatedReservationForLink(null);
+      setShowDepositWarningModal(false);
+      setPendingSaveData(null);
+    } else {
+      setDepositPaid(false);
+      setManualDepositAmount('');
+      setManualDepositEnabled(false);
+      setIsDepositRuleExpanded(false);
       setShowDepositWarningModal(false);
       setPendingSaveData(null);
     }
@@ -1214,14 +1235,17 @@ export function NewReservationForm({
 
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
       const preservedStatuses = ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
+      const cleanInitialEstado = (data.estado === 'Pendiente de pago' || data.estado === 'Pendiente de Pago')
+        ? 'Reservado'
+        : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
         ? data.estado
-        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : (data.estado || 'Reservado')));
+        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);
-      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string } = {
+      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean } = {
         cliente_id: data.cliente_id,
         cliente_nombre: selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : (data.cliente_nombre || ''),
         cliente_telefono: selectedClient?.telefono || data.cliente_telefono || '',
@@ -1239,8 +1263,9 @@ export function NewReservationForm({
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
-        requiere_anticipo: isAnyAnticipoActive || (data as any).requiere_anticipo || false,
-        anticipo_esperado: targetDepositAmount,
+        requiere_anticipo: Boolean(isAnyAnticipoActive),
+        manual_deposit: Boolean(manualDepositEnabled),
+        anticipo_esperado: (isAnyAnticipoActive || effectiveDepositPaid) ? targetDepositAmount : 0,
         ...(effectiveDepositPaid ? {
           pago_estado: isFullPaymentCovered || isInitialAlreadyPaid ? 'Pagado' : 'deposit_paid',
           monto_anticipo: targetDepositAmount,
@@ -1252,7 +1277,7 @@ export function NewReservationForm({
           metodo_pago_anticipo: depositMethod,
           deposit_paid_at: paidTimestamp,
         } : {
-          pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : (data.pago_estado && data.pago_estado !== 'deposit_paid' && data.pago_estado !== 'anticipo_pagado' ? data.pago_estado : 'Pendiente'),
+          pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : 'Pendiente',
           monto_anticipo: 0,
           monto_pagado: 0,
           monto_pagado_real: 0,
@@ -1922,6 +1947,8 @@ export function NewReservationForm({
                           onClick={() => {
                             form.setValue('cliente_id', '');
                             setDepositPaid(false);
+                            setManualDepositEnabled(false);
+                            setManualDepositAmount('');
                           }}
                           title="Cambiar cliente"
                         >

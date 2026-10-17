@@ -1395,6 +1395,12 @@ export function NewReservationForm({
 
           const resRef = doc(db, 'reservas', reservationId);
           await updateDoc(resRef, { deposit_payment_id: depositSaleId }).catch(() => {});
+        } else if (isFullPaymentCovered && existingSaleSnap.data()?.pago_estado !== 'Pagado') {
+          await updateDoc(saleRef, {
+            pago_estado: 'Pagado',
+            status: 'completed',
+            saldo_pendiente: 0,
+          }).catch(() => {});
         }
       }
 

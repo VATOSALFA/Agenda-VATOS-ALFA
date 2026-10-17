@@ -1019,6 +1019,8 @@ export default function AgendaView() {
       const resId = selectedReservation.id;
       const total = (computedTotal && computedTotal > 0) ? computedTotal : (selectedReservation.total || selectedReservation.precio || 0);
       const saldoPendiente = Math.max(0, total - depositAmount);
+      const isFullyPaid = total > 0 && depositAmount >= total;
+      const resolvedPagoEstado = isFullyPaid ? 'Pagado' : 'deposit_paid';
 
       const isTerminal = paymentMethod === 'mercadopago';
       const depositSaleId = `deposit_${resId}_${Date.now()}`;
@@ -1028,6 +1030,14 @@ export default function AgendaView() {
       // Create deposit sale record in 'ventas' (only for real bookings, never in sandbox)
       if (!isSandboxRes) {
         const saleRef = doc(db, 'ventas', depositSaleId);
+        const normalizedItems = (selectedReservation.items || []).map((it: any) => ({
+          ...it,
+          precio: Number(it.precio || it.subtotal) || 0,
+          precio_unitario: Number(it.precio_unitario || it.precio || it.subtotal) || 0,
+          subtotal: Number(it.subtotal || it.precio) || 0,
+          cantidad: Number(it.cantidad) || 1,
+          descuento: it.descuento || { valor: 0, tipo: 'fixed', monto: 0 },
+        }));
         const saleData = {
           id: depositSaleId,
           reservationId: resId,
@@ -1036,6 +1046,7 @@ export default function AgendaView() {
           local_id: selectedReservation.local_id || selectedLocalId || 'default',
           fecha_hora_venta: Timestamp.now(),
           tipo_venta: 'anticipo',
+          subtotal: total,
           total: total,
           anticipo_esperado: depositAmount,
           monto_pagado_real: isTerminal ? 0 : depositAmount,
@@ -1043,22 +1054,26 @@ export default function AgendaView() {
           anticipoPagado: isTerminal ? 0 : depositAmount,
           anticipo_pagado: isTerminal ? 0 : depositAmount,
           monto_pagado: isTerminal ? 0 : depositAmount,
+          pago_efectivo: !isTerminal && paymentMethod === 'efectivo' ? depositAmount : 0,
+          pago_tarjeta: !isTerminal && (paymentMethod === 'tarjeta' || paymentMethod === 'mercadopago') ? depositAmount : 0,
+          pago_transferencia: !isTerminal && paymentMethod === 'transferencia' ? depositAmount : 0,
           saldo_pendiente: isTerminal ? total : saldoPendiente,
-          pago_estado: isTerminal ? 'Pendiente' : 'deposit_paid',
+          pago_estado: isTerminal ? 'Pendiente' : resolvedPagoEstado,
+          status: isTerminal ? 'pending' : 'completed',
           metodo_pago: paymentMethod,
-          items: selectedReservation.items || [],
+          items: normalizedItems,
           creado_por: user?.email || 'recepcion'
         };
 
         await setDoc(saleRef, saleData);
       }
 
-      // For cash / bank transfer, update reservation immediately as deposit_paid
+      // For cash / bank transfer, update reservation immediately
       if (!isTerminal) {
         const updateData = {
           total: total,
           estado: 'Confirmado',
-          pago_estado: 'deposit_paid',
+          pago_estado: resolvedPagoEstado,
           anticipo_esperado: depositAmount,
           monto_anticipo: depositAmount,
           anticipo_pagado: depositAmount,

@@ -1401,7 +1401,7 @@ export function ReservationDetailModal({
                                 isLongPressRef.current = false;
                                 return;
                               }
-                              if (reservation.pago_estado === 'Pagado') return;
+                              if (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste')) return;
                               if (status === 'Cancelado') {
                                 handleCancelClick();
                               } else if (reservation.estado === 'Cancelado') {
@@ -1417,7 +1417,7 @@ export function ReservationDetailModal({
                               isSelected
                                 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
                                 : 'hover:scale-110 opacity-80 hover:opacity-100',
-                              reservation.pago_estado === 'Pagado' && 'cursor-not-allowed opacity-40'
+                              reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && 'cursor-not-allowed opacity-40'
                             )}
                           >
                             <span

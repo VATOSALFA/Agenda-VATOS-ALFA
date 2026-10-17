@@ -62,8 +62,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     const { toast } = useToast();
     const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([]);
 
-    const todayStart = startOfDay(new Date());
-    const todayEnd = endOfDay(new Date());
+    const todayStart = useMemo(() => startOfDay(new Date()), []);
+    const todayEnd = useMemo(() => endOfDay(new Date()), []);
 
     const salesQueryConstraints = useMemo(() => {
         const start = dateRange?.from ? startOfDay(dateRange.from) : todayStart;
@@ -277,9 +277,16 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
         const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0 || c.totalTips > 0);
         setCommissionData(commissionList);
-        setSelectedProfessionals([]);
+        const validProfIds = new Set(commissionList.map(c => c.professionalId));
+        setSelectedProfessionals(prev => prev.filter(id => validProfIds.has(id)));
 
     }, [isOpen, combinedSales, professionals, services, products, isLoading, discountsAffectCommissions]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setSelectedProfessionals([]);
+        }
+    }, [isOpen, dateRange, localId]);
 
     useEffect(() => {
         const unsubscribe = onSnapshot(doc(db, 'settings', 'commissions'), (docSnap) => {

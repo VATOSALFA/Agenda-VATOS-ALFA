@@ -36,6 +36,10 @@ export function enforceModalStackIsolation() {
     document.querySelectorAll<HTMLElement>(
       '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
     )
+  ).filter(
+    (el) =>
+      !el.hasAttribute('data-radix-popover-content') &&
+      !el.closest('[data-radix-popper-content-wrapper]')
   );
   dialogs.forEach((dialogEl, idx) => {
     const isTopMost = idx === dialogs.length - 1;

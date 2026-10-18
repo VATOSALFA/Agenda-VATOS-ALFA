@@ -978,9 +978,11 @@ export function NewReservationForm({
       setIsDepositRuleExpanded(false);
       setIsSendLinkModalOpen(false);
       setCreatedReservationForLink(null);
+      setIsCalendarOpen(false);
       setShowDepositWarningModal(false);
       setPendingSaveData(null);
     } else {
+      setIsCalendarOpen(false);
       setDepositPaid(false);
       setManualDepositAmount('');
       setManualDepositEnabled(false);
@@ -1695,10 +1697,11 @@ export function NewReservationForm({
                   render={({ field }) => (
                     <FormItem className="flex flex-col space-y-1">
                       <FormLabel className="text-xs">Fecha</FormLabel>
-                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
+                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={false}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
+                              type="button"
                               variant="outline"
                               className={cn(
                                 "w-full h-10 justify-start text-left font-semibold rounded-xl border-border/80 bg-card hover:bg-muted/20 hover:border-blue-500/50 capitalize transition-all shadow-xs",
@@ -1714,7 +1717,7 @@ export function NewReservationForm({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+                        <PopoverContent className="z-[250] w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start">
                           <Calendar
                             locale={es}
                             mode="single"

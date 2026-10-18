@@ -280,6 +280,7 @@ export interface CartItem {
 export interface Sale {
   id: string;
   cliente_id: string;
+  cliente_nombre?: string;
   client?: Client; // Transient property
   fecha_hora_venta: any;
   items: SaleItem[];

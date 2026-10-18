@@ -106,10 +106,11 @@ async function processApprovedPayment(
 
             t.update(reservaRef, {
                 pago_estado: newPaymentStatus,
-                estado: newPaymentStatus === 'Pagado' ? 'Asiste' : 'Confirmado',
+                estado: (data.estado === 'Asiste' || data.estado === 'Completado') ? data.estado : 'Confirmado',
                 total: realTotal,
                 precio: realTotal,
-                deposit_payment_id: String(paymentInfo.id),
+                deposit_payment_id: external_reference || String(paymentInfo.id),
+                mercado_pago_id: String(paymentInfo.id),
                 deposit_paid_at: paidAtDate,
                 anticipo_esperado: data.anticipo_esperado || paid,
                 monto_pagado: paid,
@@ -315,9 +316,10 @@ async function processApprovedPayment(
             });
 
             if (linkedReservaRef && linkedReservaDoc && linkedReservaDoc.exists) {
+                const existingResData = linkedReservaDoc.data() || {};
                 t.update(linkedReservaRef, {
                     pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
-                    estado: isFullPay ? 'Asiste' : 'Confirmado',
+                    estado: (existingResData.estado === 'Asiste' || existingResData.estado === 'Completado') ? existingResData.estado : 'Confirmado',
                     saldo_pendiente: saldoPendiente,
                     anticipo_pagado: montoPagado,
                     anticipoPagado: montoPagado,
@@ -325,7 +327,8 @@ async function processApprovedPayment(
                     monto_pagado: montoPagado,
                     monto_pagado_real: montoPagado,
                     metodo_pago_anticipo: 'mercadopago',
-                    deposit_payment_id: String(paymentInfo.id),
+                    deposit_payment_id: external_reference || String(paymentInfo.id),
+                    mercado_pago_id: String(paymentInfo.id),
                     deposit_paid_at: new Date(),
                 });
             }

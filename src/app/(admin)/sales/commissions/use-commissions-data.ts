@@ -77,7 +77,20 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             const endStr = format(endOfDay(activeFilters.dateRange.to || activeFilters.dateRange.from), 'yyyy-MM-dd');
 
             const salesMap = new Map<string, Sale>();
-            sales.forEach(s => salesMap.set(s.id, s));
+            sales.forEach(s => {
+                // If this sale was absorbed into another sale (e.g. advance liquidated at POS), ignore it to avoid duplicate commissions
+                if ((s as any).absorbed_in_sale_id) {
+                    return;
+                }
+                // Advance payments (tipo_venta === 'anticipo' or id starts with 'deposit_')
+                // MUST NOT be awarded commission on the payment date (fecha_hora_venta).
+                // They are only awarded on the appointment date once the client actually attended (estado === 'Asiste').
+                // Retained deposits (tipo_venta === 'anticipo_retenido') are recognized on the date they were retained.
+                if (s.tipo_venta === 'anticipo' || (s.id.startsWith('deposit_') && s.tipo_venta !== 'anticipo_retenido')) {
+                    return;
+                }
+                salesMap.set(s.id, s);
+            });
 
             try {
                 const resConstraints = [
@@ -91,21 +104,23 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                 const qRes = query(collection(db, 'reservas'), ...resConstraints);
                 const resSnap = await getDocs(qRes);
 
-                const candidateSaleIds = new Set<string>();
+                const attendedResIds: string[] = [];
+                const directSaleIds = new Set<string>();
+
                 resSnap.forEach(d => {
                     const r = d.data();
-                    if (r.deposit_payment_id && !salesMap.has(r.deposit_payment_id)) {
-                        candidateSaleIds.add(r.deposit_payment_id);
+                    attendedResIds.push(d.id);
+                    if (r.deposit_payment_id) {
+                        directSaleIds.add(r.deposit_payment_id);
                     }
-                    if (!salesMap.has(d.id)) {
-                        candidateSaleIds.add(d.id);
-                    }
+                    directSaleIds.add(d.id);
                 });
 
-                if (candidateSaleIds.size > 0) {
-                    const idsToFetch = Array.from(candidateSaleIds);
+                // 1. Fetch direct sale IDs if not already in salesMap
+                const missingDirectIds = Array.from(directSaleIds).filter(id => !salesMap.has(id));
+                if (missingDirectIds.length > 0) {
                     const docSnaps = await Promise.all(
-                        idsToFetch.map(id => getDoc(doc(db, 'ventas', id)).catch(err => {
+                        missingDirectIds.map(id => getDoc(doc(db, 'ventas', id)).catch(err => {
                             console.error("Error fetching candidate sale for commissions report:", id, err);
                             return null;
                         }))
@@ -113,9 +128,41 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                     docSnaps.forEach(sDoc => {
                         if (sDoc && sDoc.exists()) {
                             const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                            salesMap.set(saleData.id, saleData);
+                            if (!(saleData as any).absorbed_in_sale_id) {
+                                salesMap.set(saleData.id, saleData);
+                            }
                         }
                     });
+                }
+
+                // 2. Query sales by reservationId in chunks of 30 for all attended reservations
+                // This guarantees finding any deposit sale (e.g. deposit_ujT2... or Point terminal sales)
+                if (attendedResIds.length > 0) {
+                    const chunkSize = 30;
+                    for (let i = 0; i < attendedResIds.length; i += chunkSize) {
+                        const chunk = attendedResIds.slice(i, i + chunkSize);
+                        try {
+                            const qLinked = query(
+                                collection(db, 'ventas'),
+                                where('reservationId', 'in', chunk)
+                            );
+                            const linkedSnap = await getDocs(qLinked);
+                            linkedSnap.forEach(sDoc => {
+                                const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
+                                if ((saleData as any).absorbed_in_sale_id) {
+                                    return;
+                                }
+                                const hasFinalSale = Array.from(salesMap.values()).some(
+                                    existing => existing.reservationId === saleData.reservationId && existing.tipo_venta !== 'anticipo' && !existing.id.startsWith('deposit_')
+                                );
+                                if (!hasFinalSale && !salesMap.has(saleData.id)) {
+                                    salesMap.set(saleData.id, saleData);
+                                }
+                            });
+                        } catch (err) {
+                            console.error("Error fetching linked sales by reservationId for commissions report:", err);
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching attended reservations for commissions report:", err);

@@ -837,8 +837,7 @@ export function ReservationDetailModal({
                   <button
                     type="button"
                     onClick={onEdit}
-                    disabled={reservation.pago_estado === 'Pagado'}
-                    className="p-1 text-slate-300 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="p-1 text-slate-300 hover:text-white transition-colors"
                     title="Editar cita"
                     aria-label="Editar"
                   >

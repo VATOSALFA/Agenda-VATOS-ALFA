@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Zap, Clock, User, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react';
-import type { Profesional, Service as ServiceType, Reservation, TimeBlock } from '@/lib/types';
+import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Schedule } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
 
@@ -28,6 +28,7 @@ interface QuickConsultModalProps {
   date: Date | undefined;
   onSelectSlot: (time: string, barberId: string, serviceId: string) => void;
   specialJourneys?: any[];
+  localSchedule?: Schedule;
 }
 
 export function QuickConsultModal({
@@ -40,6 +41,7 @@ export function QuickConsultModal({
   date,
   onSelectSlot,
   specialJourneys = [],
+  localSchedule,
 }: QuickConsultModalProps) {
   const { user } = useAuth();
   const isStaff = Boolean(user?.role && (user.role.toLowerCase().includes('staff') || user.role.toLowerCase().includes('barbero')));
@@ -90,6 +92,8 @@ export function QuickConsultModal({
     const getDaySchedule = (barber: Profesional) => {
       const dateStr = formattedDate;
       const regSchedule = barber.schedule ? barber.schedule[dayOfWeek as keyof typeof barber.schedule] : null;
+      const localDay = localSchedule?.[dayOfWeek as keyof typeof localSchedule];
+      const isLocalOpen = localDay ? localDay.enabled !== false : true;
 
       // Check for Special Journeys (there may be multiple on the same day)
       const barberJourneys = (specialJourneys || []).filter(
@@ -99,9 +103,13 @@ export function QuickConsultModal({
       if (barberJourneys.length > 0) {
         const workingIntervals: { start: number; end: number }[] = [];
 
-        if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end) {
-          const regStart = parseTime(regSchedule.start);
-          const regEnd = parseTime(regSchedule.end);
+        if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && isLocalOpen) {
+          let regStart = parseTime(regSchedule.start);
+          let regEnd = parseTime(regSchedule.end);
+          if (localDay && localDay.enabled && localDay.start && localDay.end) {
+            regStart = Math.max(regStart, parseTime(localDay.start));
+            regEnd = Math.min(regEnd, parseTime(localDay.end));
+          }
           if (regStart < regEnd) {
             let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
             if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
@@ -166,6 +174,23 @@ export function QuickConsultModal({
             breaks,
           };
         }
+      }
+
+      if (!isLocalOpen) {
+        return { enabled: false, start: localDay?.start || '10:00', end: localDay?.end || '20:00' };
+      }
+
+      if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && localDay?.enabled && localDay?.start && localDay?.end) {
+        const clampedStart = regSchedule.start > localDay.start ? regSchedule.start : localDay.start;
+        const clampedEnd = regSchedule.end < localDay.end ? regSchedule.end : localDay.end;
+        if (clampedStart >= clampedEnd) {
+          return { ...regSchedule, enabled: false };
+        }
+        return {
+          ...regSchedule,
+          start: clampedStart,
+          end: clampedEnd,
+        };
       }
 
       return regSchedule;
@@ -381,7 +406,7 @@ export function QuickConsultModal({
 
     // Sort all slots by start time (mins) ascending
     return slots.sort((a, b) => a.mins - b.mins);
-  }, [selectedService, date, professionals, reservations, timeBlocks, specialJourneys]);
+  }, [selectedService, date, professionals, reservations, timeBlocks, specialJourneys, localSchedule]);
 
   const handleSelectSlot = (time: string, barberId: string) => {
     if (selectedServiceId) {

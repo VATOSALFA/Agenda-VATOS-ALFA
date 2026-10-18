@@ -2,6 +2,8 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Mejoras generales y correcciones en la plataforma.",
-  "notes": []
+  "summary": "Ajuste en el selector de horarios de la agenda.",
+  "notes": [
+    "El selector de horas al crear o editar citas ahora muestra únicamente el horario operativo de la sucursal y horarios especiales habilitados."
+  ]
 }

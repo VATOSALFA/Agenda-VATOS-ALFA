@@ -1543,6 +1543,24 @@ export default function AgendaView() {
       }
     }
 
+    const localDay = selectedLocal?.schedule?.[dayOfWeek as keyof typeof selectedLocal.schedule];
+    const isLocalOpen = localDay ? localDay.enabled !== false : true;
+    if (!isLocalOpen) {
+      return { enabled: false, start: localDay?.start || '10:00', end: localDay?.end || '20:00' };
+    }
+    if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && localDay?.enabled && localDay?.start && localDay?.end) {
+      const clampedStart = regSchedule.start > localDay.start ? regSchedule.start : localDay.start;
+      const clampedEnd = regSchedule.end < localDay.end ? regSchedule.end : localDay.end;
+      if (clampedStart >= clampedEnd) {
+        return { ...regSchedule, enabled: false };
+      }
+      return {
+        ...regSchedule,
+        start: clampedStart,
+        end: clampedEnd,
+      };
+    }
+
     return regSchedule;
   };
 
@@ -2547,6 +2565,7 @@ export default function AgendaView() {
           date={date}
           onSelectSlot={handleSelectQuickConsultSlot}
           specialJourneys={specialJourneys || []}
+          localSchedule={selectedLocal?.schedule}
         />
       )}
       <BookingRulesCheatSheetModal

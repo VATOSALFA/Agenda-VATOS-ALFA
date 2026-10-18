@@ -289,10 +289,15 @@ export function NewReservationForm({
 
   const reminderSettings = reminderSettingsData?.[0];
   const agendaSettings = agendaSettingsData?.[0];
+  const watchedLocalId = form.watch('local_id');
   const currentLocal = useMemo(() => {
-    const locId = form.watch('local_id') || selectedLocalId;
-    return locales?.find(l => l.id === locId);
-  }, [locales, form, selectedLocalId]);
+    const locId = watchedLocalId || selectedLocalId;
+    if (locId && locId !== 'todos') {
+      const found = locales?.find(l => l.id === locId);
+      if (found) return found;
+    }
+    return locales?.[0];
+  }, [locales, watchedLocalId, selectedLocalId]);
   const bookingRules = bookingRulesData?.[0] || DEFAULT_BOOKING_RULES;
   const maxInasistenciasPermitidas = Math.max(1, Number(bookingRules.max_inasistencias_permitidas) || 2);
   const penalizacionPorcentaje = Number(bookingRules.penalizacion_anticipo_porcentaje) || 50;
@@ -613,10 +618,96 @@ export function NewReservationForm({
   }, [services, serviceCategories, popularServices]);
 
   const timeOptions = useMemo(() => {
-    const hours = Array.from({ length: 24 }, (_, i) => i); // 00:00 to 23:00 (supports early/late special hours)
+    const targetDate = safeParseDate(watchedDate) || new Date();
+    const formattedDate = format(targetDate, 'yyyy-MM-dd');
+    const dayOfWeek = format(targetDate, 'eeee', { locale: es })
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+    const localDaySchedule =
+      currentLocal?.schedule?.[dayOfWeek as keyof typeof currentLocal.schedule] ||
+      currentLocal?.schedule?.lunes;
+
+    let baseSH = 10, baseSM = 0;
+    let baseEH = dayOfWeek === 'domingo' ? 20 : 21, baseEM = 0;
+    const baseEnabled = localDaySchedule ? Boolean(localDaySchedule.enabled) : true;
+
+    if (localDaySchedule?.enabled && localDaySchedule?.start && localDaySchedule?.end) {
+      const [parsedSH, parsedSM] = localDaySchedule.start.split(':').map(Number);
+      const [parsedEH, parsedEM] = localDaySchedule.end.split(':').map(Number);
+      if (!isNaN(parsedSH) && !isNaN(parsedSM)) {
+        baseSH = parsedSH;
+        baseSM = parsedSM;
+      }
+      if (!isNaN(parsedEH) && !isNaN(parsedEM)) {
+        baseEH = parsedEH;
+        baseEM = parsedEM;
+      }
+    }
+
+    const computeBoundsForProfs = (profIds: string[]) => {
+      let sH = baseSH, sM = baseSM;
+      let eH = baseEH, eM = baseEM;
+      let anyEnabled = baseEnabled;
+
+      const expandBounds = (startStr?: string, endStr?: string) => {
+        if (!startStr || !endStr) return;
+        const [stH, stM] = startStr.split(':').map(Number);
+        const [enH, enM] = endStr.split(':').map(Number);
+        if (isNaN(stH) || isNaN(stM) || isNaN(enH) || isNaN(enM)) return;
+
+        if (!anyEnabled) {
+          sH = stH; sM = stM;
+          eH = enH; eM = enM;
+          anyEnabled = true;
+        } else {
+          if (stH < sH || (stH === sH && stM < sM)) {
+            sH = stH; sM = stM;
+          }
+          if (enH > eH || (enH === eH && enM > eM)) {
+            eH = enH; eM = enM;
+          }
+        }
+      };
+
+      // 1. Expandir si existen Jornadas Especiales ('jornadas_especiales') para la fecha, sucursal y profesional(es)
+      (specialJourneys || []).forEach((sj: any) => {
+        const matchesLocal = !sj.local_id || !currentLocal?.id || sj.local_id === currentLocal.id;
+        const matchesProf = profIds.length === 0 || (sj.barbero_id && profIds.includes(sj.barbero_id));
+        if (sj.fecha === formattedDate && matchesLocal && matchesProf) {
+          expandBounds(sj.hora_inicio, sj.hora_fin);
+        }
+      });
+
+      // 2. Expandir si existen Horarios Especiales habilitados desde Agenda ('bloqueos_horario' con type === 'available')
+      (allTimeBlocks || []).forEach((tb: any) => {
+        const matchesLocal = !tb.local_id || !currentLocal?.id || tb.local_id === currentLocal.id;
+        const matchesProf = profIds.length === 0 || (tb.barbero_id && profIds.includes(tb.barbero_id));
+        if (tb.fecha === formattedDate && tb.type === 'available' && matchesLocal && matchesProf) {
+          expandBounds(tb.hora_inicio, tb.hora_fin);
+        }
+      });
+
+      const maxStartHour = eM > 0 ? eH : Math.max(sH, eH - 1);
+      const startHours = Array.from({ length: Math.max(1, maxStartHour - sH + 1) }, (_, i) => sH + i);
+      const endHours = Array.from({ length: Math.max(1, eH - sH + 1) }, (_, i) => sH + i);
+      return { startHours, endHours };
+    };
+
+    const selectedProfIds = Array.from(
+      new Set((watchedItems || []).map((i: any) => i?.barbero_id).filter(Boolean))
+    ) as string[];
+
+    const { startHours, endHours } = computeBoundsForProfs(selectedProfIds);
+    const getStartHoursForProf = (profId?: string) => {
+      return computeBoundsForProfs(profId ? [profId] : selectedProfIds).startHours;
+    };
+
     const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
-    return { hours, minutes };
-  }, []);
+
+    return { hours: startHours, startHours, endHours, getStartHoursForProf, minutes };
+  }, [watchedDate, currentLocal, specialJourneys, allTimeBlocks, watchedItems]);
 
   const validateItemsAvailability = useCallback((values: ReservationFormData) => {
     const { items, fecha, hora_inicio_hora, hora_inicio_minuto, hora_fin_hora, hora_fin_minuto } = values;
@@ -693,6 +784,10 @@ export function NewReservationForm({
 
       const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
+      const localDaySchedule = currentLocal?.schedule?.[dayOfWeek as keyof typeof currentLocal.schedule];
+      const isLocalOpen = localDaySchedule ? localDaySchedule.enabled !== false : true;
+      const localStart = localDaySchedule?.start || '10:00';
+      const localEnd = localDaySchedule?.end || (dayOfWeek === 'domingo' ? '20:00' : '21:00');
 
       // Get all available blocks for this professional on this date
       const availableBlocks = allTimeBlocks.filter(b => 
@@ -707,7 +802,12 @@ export function NewReservationForm({
 
       // Helper function to check if a specific time range is fully covered by an available block or special journey
       const isRangeCovered = (start: string, end: string) => {
-        if (start >= end) return true;
+        if (start > end) return false;
+        if (start === end) {
+          const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin > start);
+          const coveredBySpecial = profSpecialJourneys.some((sj: any) => sj.hora_inicio <= start && sj.hora_fin > start);
+          return coveredByBlock || coveredBySpecial;
+        }
         const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
         const coveredBySpecial = profSpecialJourneys.some((sj: any) => sj.hora_inicio <= start && sj.hora_fin >= end);
         return coveredByBlock || coveredBySpecial;
@@ -727,6 +827,27 @@ export function NewReservationForm({
         return;
       }
 
+      // 1. Respetar siempre el horario operativo de la sucursal (salvo que exista horario especial habilitado)
+      if (!isLocalOpen) {
+        if (!isRangeCovered(item_hora_inicio, item_hora_fin)) {
+          errors[index] = `La sucursal está cerrada en este día (requiere habilitar horario especial).`;
+          allItemsValid = false;
+          return;
+        }
+      } else {
+        if (item_hora_inicio < localStart && !isRangeCovered(item_hora_inicio, item_hora_fin < localStart ? item_hora_fin : localStart)) {
+          errors[index] = `Fuera del horario operativo de la sucursal (${localStart} a ${localEnd}). Habilita un horario especial para agendar antes.`;
+          allItemsValid = false;
+          return;
+        }
+        if ((item_hora_fin > localEnd || item_hora_inicio >= localEnd) && !isRangeCovered(item_hora_inicio > localEnd ? item_hora_inicio : localEnd, item_hora_fin)) {
+          errors[index] = `Fuera del horario operativo de la sucursal (${localStart} a ${localEnd}). Habilita un horario especial para agendar después del cierre.`;
+          allItemsValid = false;
+          return;
+        }
+      }
+
+      // 2. Validar horario laboral del profesional (acotado al horario de la sucursal, salvo horario especial)
       if (!agendaSettings?.resourceOverload) {
         if (!daySchedule || !daySchedule.enabled) {
           // If schedule is disabled, the entire reservation must be covered by a special schedule
@@ -736,14 +857,17 @@ export function NewReservationForm({
             return;
           }
         } else {
+          const effectiveStart = daySchedule.start > localStart ? daySchedule.start : localStart;
+          const effectiveEnd = daySchedule.end < localEnd ? daySchedule.end : localEnd;
+
           // Check if any part before schedule start is uncovered
-          if (item_hora_inicio < daySchedule.start && !isRangeCovered(item_hora_inicio, item_hora_fin < daySchedule.start ? item_hora_fin : daySchedule.start)) {
+          if (item_hora_inicio < effectiveStart && !isRangeCovered(item_hora_inicio, item_hora_fin < effectiveStart ? item_hora_fin : effectiveStart)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
           }
           // Check if any part after schedule end is uncovered
-          if (item_hora_fin > daySchedule.end && !isRangeCovered(item_hora_inicio > daySchedule.end ? item_hora_inicio : daySchedule.end, item_hora_fin)) {
+          if ((item_hora_fin > effectiveEnd || item_hora_inicio >= effectiveEnd) && !isRangeCovered(item_hora_inicio > effectiveEnd ? item_hora_inicio : effectiveEnd, item_hora_fin)) {
             errors[index] = `El profesional no está disponible en este horario.`;
             allItemsValid = false;
             return;
@@ -825,7 +949,7 @@ export function NewReservationForm({
     });
     setAvailabilityErrors(errors);
     return allItemsValid;
-  }, [filteredProfessionals, allReservations, allTimeBlocks, specialJourneys, isEditMode, initialData, agendaSettings]);
+  }, [filteredProfessionals, allReservations, allTimeBlocks, specialJourneys, isEditMode, initialData, agendaSettings, currentLocal, servicesMap, db]);
 
   useEffect(() => {
     if (initialData && form) {
@@ -1186,6 +1310,7 @@ export function NewReservationForm({
         let item_hora_inicio = undefined;
         let item_hora_fin = undefined;
         const profId = item.barbero_id || 'unassigned';
+        const hasAnyCustomStartTime = data.items.some((i: any) => Boolean(i.hora_inicio_hora && i.hora_inicio_minuto));
         let startMins;
 
         if (item.hora_inicio_hora && item.hora_inicio_minuto) {
@@ -1201,6 +1326,15 @@ export function NewReservationForm({
           startMins = sh * 60 + sm;
         } else {
           startMins = profCurrentStartMins.get(profId) ?? globalStartMins;
+          if (hasAnyCustomStartTime) {
+            const sh = String(Math.floor(startMins / 60)).padStart(2, '0');
+            const sm = String(startMins % 60).padStart(2, '0');
+            const endTotal = startMins + duracion;
+            const eh = String(Math.floor(endTotal / 60)).padStart(2, '0');
+            const em = String(endTotal % 60).padStart(2, '0');
+            item_hora_inicio = `${sh}:${sm}`;
+            item_hora_fin = `${eh}:${em}`;
+          }
         }
 
         const endMins = startMins + duracion;
@@ -1878,7 +2012,7 @@ export function NewReservationForm({
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent className="min-w-[4.5rem] max-h-48 p-1">
-                                  {timeOptions.hours.map(h => (
+                                  {timeOptions.endHours.map(h => (
                                     <SelectItem key={`end-h-${h}`} value={String(h).padStart(2, '0')}>
                                       {String(h).padStart(2, '0')}
                                     </SelectItem>
@@ -2470,7 +2604,7 @@ export function NewReservationForm({
                                     </FormControl>
                                     <SelectContent className="max-h-48 p-1">
                                       <SelectItem value="default">Global / Por defecto</SelectItem>
-                                      {timeOptions.hours.map(h => {
+                                      {timeOptions.getStartHoursForProf(currentItem?.barbero_id).map(h => {
                                         const val = String(h).padStart(2, '0');
                                         return <SelectItem key={`item-h-${index}-${val}`} value={val}>{val}</SelectItem>;
                                       })}

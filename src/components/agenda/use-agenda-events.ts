@@ -25,9 +25,21 @@ export function useAgendaEvents(
         const professionalMap = new Map(professionals.map(p => [p.id, p.publicName || p.name]));
 
         const appointmentEvents: AgendaEvent[] = reservations
+            .filter(res => Boolean(res && res.hora_inicio))
             .flatMap(res => {
-                const [startH, startM] = res.hora_inicio.split(':').map(Number);
-                const [endH, endM] = res.hora_fin.split(':').map(Number);
+                const [startH = 0, startM = 0] = (res.hora_inicio || '00:00').split(':').map(Number);
+                let endH = startH;
+                let endM = startM + 30;
+                if (res.hora_fin) {
+                    const [eh = 0, em = 0] = res.hora_fin.split(':').map(Number);
+                    endH = eh;
+                    endM = em;
+                } else if ((res as any).duracion || res.duration) {
+                    const dur = Number((res as any).duracion || res.duration);
+                    const totalMins = startH * 60 + startM + dur;
+                    endH = Math.floor(totalMins / 60);
+                    endM = totalMins % 60;
+                }
                 const globalStart = startH + startM / 60;
                 const globalEnd = endH + endM / 60;
                 const globalDuration = Math.max(0.0833, globalEnd - globalStart);
@@ -157,8 +169,8 @@ export function useAgendaEvents(
                     let startVal = globalStart;
                     let endVal = globalEnd;
 
-                    if (itemStartStr) {
-                        const [sh, sm] = itemStartStr.split(':').map(Number);
+                    if (itemStartStr && typeof itemStartStr === 'string' && itemStartStr.includes(':')) {
+                        const [sh = 0, sm = 0] = itemStartStr.split(':').map(Number);
                         startVal = sh + sm / 60;
                         
                         const totalProfDurationMins = groupItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
@@ -199,12 +211,14 @@ export function useAgendaEvents(
                 return splitEvents;
             });
 
-        const mappedBlockEvents: AgendaEvent[] = timeBlocks.map(block => {
-            const [startH, startM] = block.hora_inicio.split(':').map(Number);
-            const [endH, endM] = block.hora_fin.split(':').map(Number);
-            const start = startH + startM / 60;
-            const end = endH + endM / 60;
-            const isAvailable = block.type === 'available';
+        const mappedBlockEvents: AgendaEvent[] = timeBlocks
+            .filter(block => Boolean(block && block.hora_inicio))
+            .map(block => {
+                const [startH = 0, startM = 0] = (block.hora_inicio || '00:00').split(':').map(Number);
+                const [endH = startH, endM = startM + 30] = (block.hora_fin || '').includes(':') ? block.hora_fin.split(':').map(Number) : [startH, startM + 30];
+                const start = startH + startM / 60;
+                const end = endH + endM / 60;
+                const isAvailable = block.type === 'available';
 
             return {
                 ...block,

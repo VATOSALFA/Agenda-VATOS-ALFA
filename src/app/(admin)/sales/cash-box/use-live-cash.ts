@@ -81,9 +81,6 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
             .filter(s => isAfterCut(s.fecha_hora_venta))
             .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
             .reduce((sum, sale) => {
-                // Skip deposit sale records that were already absorbed into a final sale in the same shift
-                if ((sale as any).absorbed_in_sale_id) return sum;
-
                 // If this sale had a deposit paid in cash BEFORE this cut, don't count that prior deposit again in this shift
                 const priorDepositPaidBeforeCut = (sale.deposit_paid_at && !isAfterCut(sale.deposit_paid_at) && (sale.anticipoPagado || sale.monto_anticipo))
                     ? Number(sale.anticipoPagado || sale.monto_anticipo || 0)

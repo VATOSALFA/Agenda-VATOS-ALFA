@@ -455,15 +455,39 @@ export function ReservationDetailModal({
     if (!reservation?.id || !db || isReactivating) return;
     setIsReactivating(true);
     try {
-      const targetCol = (reservation as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+      const isSandboxRes = Boolean((reservation as any).isSandbox);
+      const targetCol = isSandboxRes ? 'reservas_sandbox' : 'reservas';
       const resRef = doc(db, targetCol, reservation.id);
-      await updateDoc(resRef, {
+      const updatePayload: any = {
         estado: newStatus,
         anticipo_en_sucursal: true,
+        requiere_anticipo: false,
+        anticipo_esperado: 0,
         cancelada_automaticamente: deleteField(),
         motivo_cancelacion: deleteField(),
         cancelado_en: deleteField(),
-      });
+      };
+      if (reservation.pago_estado === 'pendiente_anticipo') {
+        updatePayload.pago_estado = 'Pendiente';
+      }
+
+      await updateDoc(resRef, updatePayload);
+
+      // Decrementar citas_canceladas en el perfil del cliente si aplica
+      if (!isSandboxRes && reservation.cliente_id) {
+        try {
+          const clientRef = doc(db, 'clientes', reservation.cliente_id);
+          const cSnap = await getDoc(clientRef);
+          if (cSnap.exists()) {
+            const currentCancelled = Number(cSnap.data()?.citas_canceladas) || 0;
+            if (currentCancelled > 0) {
+              await updateDoc(clientRef, { citas_canceladas: increment(-1) });
+            }
+          }
+        } catch (cErr) {
+          console.warn('Error decrementando citas_canceladas del cliente:', cErr);
+        }
+      }
 
       toast({
         title: 'Cita Reactivada',

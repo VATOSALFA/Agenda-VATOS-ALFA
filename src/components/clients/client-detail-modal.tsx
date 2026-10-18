@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, type LucideIcon } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, type LucideIcon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { Client, Profesional, CanjeBeneficio } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -22,12 +22,14 @@ import { useAuth } from '@/contexts/firebase-auth-context';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowUpDown } from 'lucide-react';
+import { NewClientForm } from './new-client-form';
 
 interface ClientDetailModalProps {
   client: Client;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onNewReservation?: () => void;
+  onClientUpdated?: (updatedClient: Client) => void;
 }
 
 interface Reservation {
@@ -70,7 +72,7 @@ const StatCard = ({ title, value, icon: Icon, description }: { title: string, va
   </div>
 );
 
-export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservation }: ClientDetailModalProps) {
+export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservation, onClientUpdated }: ClientDetailModalProps) {
   const { data: reservations, loading: reservationsLoading } = useFirestoreQuery<Reservation>(
     'reservas',
     isOpen ? where('cliente_id', '==', client.id) : undefined
@@ -84,6 +86,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales', isOpen);
 
   const [liveClient, setLiveClient] = useState<Client>(client);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   useEffect(() => {
     setLiveClient(client);
@@ -388,6 +391,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent hideCloseButton={true} className="sm:max-w-6xl h-[92vh] max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background">
         {/* HEADER ESTILO VATOS ALFA */}
@@ -465,7 +469,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   <button
                     type="button"
                     onClick={onNewReservation}
-                    className="sm:hidden p-1.5 text-slate-300 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                    className="sm:hidden h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
                     title="Agendar Cita"
                     aria-label="Agendar Cita"
                   >
@@ -474,12 +478,23 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                 </>
               )}
 
+              {/* Botón Editar Cliente - Icono de lápiz sin contenedor */}
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(true)}
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                title="Editar Cliente"
+                aria-label="Editar Cliente"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+
               {liveClient.telefono && canViewPhone && (
                 <a
                   href={`https://wa.me/${liveClient.telefono.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="p-1.5 text-slate-300 hover:text-[#25D366] transition-colors rounded-lg hover:bg-white/5"
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-[#25D366] hover:bg-white/10 flex items-center justify-center transition-colors"
                   title="Enviar WhatsApp"
                   aria-label="WhatsApp"
                 >
@@ -490,11 +505,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="p-1.5 text-slate-300 hover:text-white transition-colors rounded-lg hover:bg-white/5"
+                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
                 aria-label="Cerrar modal"
                 title="Cerrar"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -512,9 +527,20 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     {liveClient.nombre?.charAt(0)}{liveClient.apellido?.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <h3 className="font-bold text-base text-foreground leading-tight">
-                  {liveClient.nombre} {liveClient.apellido}
-                </h3>
+                <div className="flex items-center justify-center gap-1.5">
+                  <h3 className="font-bold text-base text-foreground leading-tight">
+                    {liveClient.nombre} {liveClient.apellido}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="text-slate-400 hover:text-foreground transition-colors p-1"
+                    title="Editar Cliente"
+                    aria-label="Editar Cliente"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <span className="text-[11px] font-mono text-muted-foreground mt-0.5">
                   Cliente #{liveClient.numero_cliente || 'N/A'}
                 </span>
@@ -979,5 +1005,55 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* MODAL EDITAR CLIENTE */}
+    <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+      <DialogContent
+        hideCloseButton={true}
+        className="sm:max-w-xl p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-background"
+      >
+        {/* Cabecera Oficial Vatos Alfa */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between relative overflow-hidden">
+          <div className="header-light-beam" aria-hidden="true" />
+
+          <div className="relative z-10 flex items-center justify-between w-full">
+            <div className="flex items-center gap-2.5">
+              <Pencil className="h-4 w-4 text-slate-300 shrink-0" />
+              <div>
+                <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
+                  Editar Cliente
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300">
+                  Modifica los datos del cliente.
+                </DialogDescription>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(false)}
+              className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 max-h-[80vh] overflow-y-auto custom-scrollbar">
+          <NewClientForm
+            client={liveClient}
+            onFormSubmit={() => {
+              setIsEditModalOpen(false);
+              onClientUpdated?.(liveClient);
+            }}
+            onCancel={() => {
+              setIsEditModalOpen(false);
+            }}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }

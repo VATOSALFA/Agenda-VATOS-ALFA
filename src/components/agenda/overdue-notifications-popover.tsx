@@ -1103,7 +1103,7 @@ export function OverdueNotificationsPopover({
 
               {/* 2. SECCIÓN: RECORDATORIOS WHATSAPP */}
               {filteredReminders.map((res) => {
-                const [h, m] = res.hora_inicio.split(':').map(Number);
+                const [h = 0, m = 0] = (res.hora_inicio || '00:00').split(':').map(Number);
                 const startMin = h * 60 + m;
                 const minsUntil = startMin - nowMinutes;
                 const isUrgent = minsUntil <= urgenteMinutos;
@@ -1188,7 +1188,7 @@ export function OverdueNotificationsPopover({
 
               {/* 3. SECCIÓN: CITAS ATRASADAS SIN REGISTRAR ASISTENCIA */}
               {filteredOverdues.map((res) => {
-                const [h, m] = res.hora_inicio.split(':').map(Number);
+                const [h = 0, m = 0] = (res.hora_inicio || '00:00').split(':').map(Number);
                 const startMin = h * 60 + m;
                 const overdueMins = Math.max(0, nowMinutes - startMin);
 

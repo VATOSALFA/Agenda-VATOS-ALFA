@@ -2344,7 +2344,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || (depositSaleData ? Number(depositSaleData.monto_pagado_real || depositSaleData.monto_anticipo || depositSaleData.anticipoPagado || 0) : 0),
                     monto_pagado_real: isDepositLiquidation
-                        ? (amountBeingPaid + propinaToSave)
+                        ? amountBeingPaid
                         : Math.min(
                             grandTotal + propinaToSave,
                             (((isUpdate && existingSaleData?.pago_estado !== 'Pendiente') ? Number(existingSaleData?.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid + propinaToSave)
@@ -2561,11 +2561,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={!isMinimized}>
                 <SheetContent
                     className={cn(
-                        "w-full sm:max-w-[1100px] h-[100dvh] max-h-[100dvh] flex flex-col p-0 gap-0 transition-transform duration-300 ease-in-out border-l-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background overflow-hidden",
+                        "w-full sm:max-w-[1100px] h-[100dvh] max-h-[100dvh] flex flex-col p-0 gap-0 transition-transform duration-300 ease-in-out border-l-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background overflow-hidden z-[150]",
                         isMinimized && "translate-x-[100%] shadow-none border-none pointer-events-none"
                     )}
                     hideCloseButton
                     hideOverlay={isMinimized}
+                    overlayClassName="z-[140]"
+                    data-minimized={isMinimized ? "true" : "false"}
                     onCloseAutoFocus={(e) => e.preventDefault()}
                     onInteractOutside={(e) => {
                         if (isMinimized) {
@@ -2597,7 +2599,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     {/* Pestañita Oficial Vatos Alfa con doble efecto de luz para restaurar venta minimizada */}
                     <div
                         className={cn(
-                            "absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 z-[101] pointer-events-auto",
+                            "absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 z-[160] pointer-events-auto",
                             "flex h-28 w-11 sm:w-12 items-center justify-center cursor-pointer select-none transition-transform duration-200 hover:-translate-x-[calc(100%+4px)] group",
                             !isMinimized && "hidden"
                         )}
@@ -3000,7 +3002,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                         {step === 2 && (
                             <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                                <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6 px-3 sm:px-6 py-3 flex-1 min-h-0 overflow-y-auto">
+                                <div className="flex flex-col md:grid md:grid-cols-2 gap-4 md:gap-6 px-3 sm:px-6 py-3 pb-8 flex-1 min-h-0 overflow-y-auto">
                                     <div className="space-y-3 shrink-0 md:shrink">
 
                                         {selectedClient ? (
@@ -3824,7 +3826,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         clientLevelInfo={clientLevelInfo}
                                     />
                                 </div>
-                                <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3">
+                                <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -3836,7 +3838,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     <Button
                                         type="submit"
                                         variant="alfa"
-                                        className="h-9 sm:h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl"
+                                        className="h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl flex-1 sm:flex-initial"
                                         disabled={isSubmitting || isStepTransitioning || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
                                         onClick={(e) => {
                                             if (isStepTransitioning) {
@@ -3894,7 +3896,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     </Form>
 
                     {step === 1 && (
-                        <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 flex flex-row items-center justify-between gap-2 sm:gap-4 shrink-0 mt-auto">
+                        <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 flex flex-row items-center justify-between gap-2 sm:gap-4 shrink-0 mt-auto relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">
                             <div className="text-xs text-muted-foreground font-medium flex items-center gap-1 sm:gap-1.5 flex-wrap min-w-0">
                                 <span>Total:</span>
                                 <span className="text-xs sm:text-sm font-bold text-foreground font-sans">
@@ -3918,7 +3920,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 <Button
                                     type="button"
                                     variant="alfa"
-                                    className="h-9 sm:h-10 px-4 sm:px-5 text-xs font-semibold rounded-xl"
+                                    className="h-10 px-4 sm:px-5 text-xs font-semibold rounded-xl"
                                     onClick={handleNextStep}
                                     disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
                                 >

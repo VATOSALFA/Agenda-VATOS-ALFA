@@ -216,7 +216,6 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
     const ingresosManualesTotal = useMemo(() => roundMoney(ingresos.reduce((sum, i) => sum + i.monto, 0)), [ingresos]);
 
     const totalVentasFacturadas = useMemo(() => roundMoney(salesWithClientData.reduce((sum, sale) => {
-        if ((sale as any).absorbed_in_sale_id) return sum;
         const depositDate = sale.deposit_paid_at?.toDate?.() || (sale.deposit_paid_at instanceof Date ? sale.deposit_paid_at : null);
         const fromDate = dateRange?.from ? startOfDay(dateRange.from) : null;
         const depositPaidBeforeRange = (depositDate && fromDate && depositDate < fromDate && (sale.anticipoPagado || sale.monto_anticipo))

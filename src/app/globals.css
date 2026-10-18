@@ -549,4 +549,10 @@
   margin-bottom: 0.5rem;
 }
 
+/* Asegurar que los contenedores emergentes (Popovers, Calendarios, Dropdowns) siempre se posicionen por encima de los modales y reciban correctamente los clics */
+[data-radix-popper-content-wrapper] {
+  z-index: 250 !important;
+}
+
+
 

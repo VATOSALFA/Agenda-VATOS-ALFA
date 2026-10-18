@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, setDoc, limit } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, setDoc, limit, increment } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -756,13 +756,19 @@ export function NewReservationForm({
           if (r.estado === 'Cancelado' || r.estado === 'No asiste' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
           if (isExpiredPendingDepositReservation(r, nowMs, 10)) {
             if (db && r.id) {
-              const targetCol = (r as any).isSandbox ? 'reservas_sandbox' : 'reservas';
+              const isSandbox = Boolean((r as any).isSandbox);
+              const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
               updateDoc(doc(db, targetCol, r.id), {
                 estado: 'Cancelado',
                 motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
                 cancelada_automaticamente: true,
                 cancelado_en: Timestamp.now(),
               }).catch(() => {});
+              if (!isSandbox && r.cliente_id) {
+                updateDoc(doc(db, 'clientes', r.cliente_id), {
+                  citas_canceladas: increment(1)
+                }).catch(() => {});
+              }
             }
             return false;
           }
@@ -1717,7 +1723,27 @@ export function NewReservationForm({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="z-[250] w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover" align="start">
+                        {isCalendarOpen && (
+                          <div
+                            className="fixed inset-0 z-[240] bg-transparent"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsCalendarOpen(false);
+                            }}
+                            onPointerDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setIsCalendarOpen(false);
+                            }}
+                          />
+                        )}
+                        <PopoverContent
+                          className="z-[250] w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover relative"
+                          align="start"
+                          onPointerDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <Calendar
                             locale={es}
                             mode="single"
@@ -1739,7 +1765,9 @@ export function NewReservationForm({
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 field.onChange(new Date());
                                 setIsCalendarOpen(false);
                               }}
@@ -1751,7 +1779,9 @@ export function NewReservationForm({
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 const tomorrow = new Date();
                                 tomorrow.setDate(tomorrow.getDate() + 1);
                                 field.onChange(tomorrow);

@@ -226,6 +226,11 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});
+                if (!isSandbox && data.cliente_id) {
+                    db.collection('clientes').doc(data.cliente_id).update({
+                        citas_canceladas: FieldValue.increment(1)
+                    }).catch(() => {});
+                }
                 return;
             }
 
@@ -816,6 +821,11 @@ export async function createPublicReservation(data: any) {
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});
+                if (!data.isSandbox && res.cliente_id) {
+                    db.collection('clientes').doc(res.cliente_id).update({
+                        citas_canceladas: FieldValue.increment(1)
+                    }).catch(() => {});
+                }
                 return false;
             }
 

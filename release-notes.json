@@ -2,13 +2,6 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Citas tentativas con anticipo pendiente (50% de espacio), franja de apertura 10:00-10:30 AM y optimizaciones visuales.",
-  "notes": [
-    "Citas con anticipo pendiente ahora se muestran a mitad de espacio (50% de ancho) y semitransparentes en la agenda.",
-    "Temporizador de tolerancia de 10 minutos con indicador visual para citas en espera de anticipo.",
-    "Promoción automática a cita formal sólida al 100% de ancho una vez confirmado el anticipo.",
-    "Ampliación de la regla de horario de apertura a la franja completa de 10:00 a 10:30 AM (10:10, 10:15, 10:20, 10:30).",
-    "Banner informativo con cuenta regresiva y botones de acción rápida dentro del detalle de la cita tentativa.",
-    "Rediseño visual sobrio y elegante en el indicador del modal de avisos de recepción."
-  ]
+  "summary": "Mejoras generales y correcciones en la plataforma.",
+  "notes": []
 }

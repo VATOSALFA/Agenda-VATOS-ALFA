@@ -36,8 +36,8 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isNotAppAnonymousSync();
     }
-    match /configuracion/{docId} {
-      allow read: if docId in ['servicios', 'agenda', 'pase_alfa', 'app_movil', 'reglas_reservas', 'inspiracion_alfa'] || isAuthenticated();
+    match /configuracion/{document=**} {
+      allow read: if true;
       allow write: if isNotAppAnonymousSync();
     }
     match /locales/{document=**} {

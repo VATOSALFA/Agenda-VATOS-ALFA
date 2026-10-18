@@ -28,7 +28,7 @@ service cloud.firestore {
       allow write: if isAuthenticated();
     }
     match /configuracion/{document=**} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isAuthenticated();
     }
     match /locales/{document=**} {

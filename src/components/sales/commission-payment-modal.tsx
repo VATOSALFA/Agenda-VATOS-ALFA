@@ -116,16 +116,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             });
 
             try {
-                // Fetch attended appointments in the selected date range to include any advance payments paid on prior dates
-                const resConstraints = [
+                // Fetch appointments in the selected date range and filter attended in memory (avoids composite index errors)
+                const qRes = query(
+                    collection(db, 'reservas'),
                     where('fecha', '>=', startStr),
-                    where('fecha', '<=', endStr),
-                    where('estado', '==', 'Asiste')
-                ];
-                if (localId && localId !== 'todos') {
-                    resConstraints.push(where('local_id', '==', localId));
-                }
-                const qRes = query(collection(db, 'reservas'), ...resConstraints);
+                    where('fecha', '<=', endStr)
+                );
                 const resSnap = await getDocs(qRes);
 
                 const attendedResIds: string[] = [];
@@ -133,6 +129,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                 resSnap.forEach(d => {
                     const r = d.data();
+                    if (r.estado !== 'Asiste') return;
+                    if (localId && localId !== 'todos' && r.local_id !== localId) return;
+
                     attendedResIds.push(d.id);
                     if (r.deposit_payment_id) {
                         directSaleIds.add(r.deposit_payment_id);

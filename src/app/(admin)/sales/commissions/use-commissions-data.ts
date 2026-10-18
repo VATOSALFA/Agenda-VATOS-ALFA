@@ -93,15 +93,12 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             });
 
             try {
-                const resConstraints = [
+                // Query by fecha range only (uses Firestore single-field index, avoiding index requirement errors)
+                const qRes = query(
+                    collection(db, 'reservas'),
                     where('fecha', '>=', startStr),
-                    where('fecha', '<=', endStr),
-                    where('estado', '==', 'Asiste')
-                ];
-                if (activeFilters.local !== 'todos') {
-                    resConstraints.push(where('local_id', '==', activeFilters.local));
-                }
-                const qRes = query(collection(db, 'reservas'), ...resConstraints);
+                    where('fecha', '<=', endStr)
+                );
                 const resSnap = await getDocs(qRes);
 
                 const attendedResIds: string[] = [];
@@ -109,6 +106,9 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
                 resSnap.forEach(d => {
                     const r = d.data();
+                    if (r.estado !== 'Asiste') return;
+                    if (activeFilters.local !== 'todos' && r.local_id !== activeFilters.local) return;
+
                     attendedResIds.push(d.id);
                     if (r.deposit_payment_id) {
                         directSaleIds.add(r.deposit_payment_id);

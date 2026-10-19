@@ -217,7 +217,7 @@ export default function CommissionsPage() {
 
     return (
         <>
-            <div className="flex-1 space-y-4 p-3 sm:p-6 md:p-8 pt-4 sm:pt-6">
+            <div className="flex-1 space-y-4 p-3 sm:p-6 md:p-8 pt-4 sm:pt-6 pb-28 sm:pb-36 min-h-full">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                     <div>
@@ -545,15 +545,15 @@ export default function CommissionsPage() {
                     </CardHeader>
                     <CardContent className="p-0">
                         {/* VISTA ESCRITORIO: TABLA */}
-                        <div className="hidden sm:block overflow-x-auto">
+                        <div className="hidden sm:block overflow-x-auto touch-pan-y scrollbar-thin">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="border-b border-border/60 hover:bg-transparent">
-                                        <TableHead className="font-semibold text-xs sm:text-sm">Profesional / Staff</TableHead>
-                                        <TableHead className="font-semibold text-xs sm:text-sm">Periodo</TableHead>
-                                        <TableHead className="font-semibold text-xs sm:text-sm text-right">Venta total</TableHead>
-                                        <TableHead className="font-semibold text-xs sm:text-sm text-right">Monto comisión</TableHead>
-                                        <TableHead className="font-semibold text-xs sm:text-sm text-right">Acciones</TableHead>
+                                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                        <TableHead className="py-1 px-3 text-xs font-semibold">Profesional / Staff</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold">Periodo</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right">Venta total</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right">Monto comisión</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -571,44 +571,43 @@ export default function CommissionsPage() {
                                             </TableCell>
                                         </TableRow>
                                     ) : summaryByProfessional.map((row) => (
-                                        <TableRow key={row.professionalId} className="hover:bg-muted/30 transition-colors">
-                                            <TableCell className="font-semibold text-xs sm:text-sm text-foreground">
+                                        <TableRow key={row.professionalId} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                            <TableCell className="py-1.5 px-3 font-semibold text-xs text-foreground">
                                                 {row.professionalName}
                                             </TableCell>
-                                            <TableCell className="text-xs text-muted-foreground">
+                                            <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
                                                 {periodString}
                                             </TableCell>
-                                            <TableCell className="text-right text-xs sm:text-sm font-medium">
+                                            <TableCell className="py-1.5 px-3 text-right text-xs font-medium">
                                                 ${row.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
-                                            <TableCell className="text-right text-xs sm:text-sm font-bold text-blue-500 dark:text-blue-400">
+                                            <TableCell className="py-1.5 px-3 text-right text-xs font-bold text-blue-500 dark:text-blue-400">
                                                 ${row.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
-                                            <TableCell className="text-right">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors ml-auto" 
+                                            <TableCell className="py-1.5 px-3 text-right">
+                                                <button 
+                                                    type="button" 
+                                                    className="text-slate-400 hover:text-white transition-colors p-1" 
                                                     onClick={() => handleViewDetails(row)}
                                                     title="Ver detalles"
                                                 >
                                                     <Eye className="h-4 w-4" />
-                                                </Button>
+                                                </button>
                                             </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
                                 <TableFooter className="bg-muted/30 border-t border-border/60 font-bold">
-                                    <TableRow className="hover:bg-transparent">
-                                        <TableCell className="font-bold text-xs sm:text-sm">Totales</TableCell>
-                                        <TableCell></TableCell>
-                                        <TableCell className="text-right font-bold text-xs sm:text-sm">
+                                    <TableRow className="h-9 hover:bg-transparent">
+                                        <TableCell className="py-1.5 px-3 font-bold text-xs">Totales</TableCell>
+                                        <TableCell className="py-1.5 px-3"></TableCell>
+                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs">
                                             ${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
-                                        <TableCell className="text-right font-bold text-xs sm:text-sm text-blue-500 dark:text-blue-400">
+                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-500 dark:text-blue-400">
                                             ${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
-                                        <TableCell></TableCell>
+                                        <TableCell className="py-1.5 px-3"></TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
@@ -636,15 +635,14 @@ export default function CommissionsPage() {
                                                         {periodString}
                                                     </span>
                                                 </div>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 transition-colors shrink-0" 
+                                                <button 
+                                                    type="button" 
+                                                    className="text-slate-400 hover:text-foreground transition-colors p-1 shrink-0" 
                                                     onClick={() => handleViewDetails(row)}
                                                     title="Ver detalles"
                                                 >
                                                     <Eye className="h-4 w-4" />
-                                                </Button>
+                                                </button>
                                             </div>
 
                                             <div className="flex items-center justify-between text-xs pt-0.5">

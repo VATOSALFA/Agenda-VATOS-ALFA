@@ -556,7 +556,7 @@ export interface Conversation {
   fecha_ultimo_mensaje?: any;
   mensajes_no_leidos?: number;
   modo_atencion: 'bot_activo' | 'humano_al_mando' | 'requiere_atencion';
-  canal: 'whatsapp' | 'simulador' | 'web';
+  canal: 'whatsapp' | 'simulador' | 'web' | 'app';
   etiquetas?: string[];
   notas_internas?: string;
   created_at?: any;
@@ -569,7 +569,7 @@ export interface ChatMessage {
   de: 'cliente' | 'bot' | 'recepcion';
   texto: string;
   timestamp: any;
-  tipo?: 'texto' | 'audio' | 'imagen' | 'accion' | 'sistema' | 'nota_interna';
+  tipo?: 'texto' | 'audio' | 'imagen' | 'archivo' | 'accion' | 'sistema' | 'nota_interna';
   estado?: 'enviado' | 'entregado' | 'leido';
   mediaUrl?: string;
   metadata?: {
@@ -579,6 +579,10 @@ export interface ChatMessage {
     action_type?: string;
     reservation_id?: string;
     staffName?: string;
+    fileName?: string;
+    fileSize?: number;
+    fileMimeType?: string;
+    transcripcion?: string;
     [key: string]: any;
   };
 }

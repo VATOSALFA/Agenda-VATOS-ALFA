@@ -158,9 +158,9 @@ async function processApprovedPayment(
                     mercado_pago_status: 'approved',
                     detalle_pago_combinado: {
                         efectivo: 0,
-                        tarjeta: paid,
+                        tarjeta: 0,
                         transferencia: 0,
-                        pagos_en_linea: 0,
+                        pagos_en_linea: paid,
                     },
                 });
             } else {

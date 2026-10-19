@@ -6,6 +6,8 @@ import AppInitializer from "./app-initializer";
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { usePathname } from 'next/navigation';
 
+import { cn } from '@/lib/utils';
+
 interface AppLayoutProps {
   children: React.ReactNode
 }
@@ -25,11 +27,14 @@ export default function AppLayout({ children }: AppLayoutProps) {
     return <main className="min-h-screen">{children}</main>;
   }
 
+  const isAgenda = pathname?.startsWith('/agenda');
+  const mainBottomPadding = isAgenda ? 'pb-20 md:pb-0' : 'pb-24 md:pb-16';
+
   return (
     <>
       <Header />
       <AppInitializer />
-      <main className="pt-16 pb-20 md:pb-0 min-h-screen">
+      <main className={cn("pt-16 min-h-screen", mainBottomPadding)}>
         {children}
       </main>
     </>

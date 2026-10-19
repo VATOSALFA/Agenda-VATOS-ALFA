@@ -620,16 +620,14 @@ export function OverdueNotificationsPopover({
         const targetCol = (res as any).isSandbox ? 'reservas_sandbox' : 'reservas';
         await updateDoc(doc(db, targetCol, res.id), {
           whatsappConfirmationSent: true,
-          estado: 'Confirmado',
         });
       }
-      onUpdateStatus(res.id, 'Confirmado');
       toast({
-        title: 'Confirmación Enviada',
-        description: `WhatsApp abierto para ${clientName}. La cita se marcó como confirmada.`,
+        title: 'Mensaje de WhatsApp abierto',
+        description: `WhatsApp abierto para ${clientName}. La confirmación de la cita debe registrarse de manera manual una vez que el cliente confirme.`,
       });
     } catch (err) {
-      console.error('Error al confirmar cita online:', err);
+      console.error('Error al registrar envío de confirmación online:', err);
     }
   };
 
@@ -1079,7 +1077,7 @@ export function OverdueNotificationsPopover({
                         variant="outline"
                         onClick={(e) => handleSendOnlineConfirmation(res, e)}
                         className="flex-1 h-8 text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/30 font-bold rounded-lg transition-colors gap-1.5"
-                        title="Enviar confirmación oficial por WhatsApp y marcar como confirmada"
+                        title="Poner mensaje de confirmación en WhatsApp"
                       >
                         <WhatsAppIcon className="w-3.5 h-3.5 text-blue-400" />
                         <span>Mandar Confirmación</span>

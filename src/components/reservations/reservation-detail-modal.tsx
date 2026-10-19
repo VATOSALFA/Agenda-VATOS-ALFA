@@ -167,8 +167,6 @@ export function ReservationDetailModal({
     return isShortNoticeAppointment(reservation);
   }, [reservation]);
 
-  const isReminderDoneOrNotNeeded = Boolean(reservation.whatsappReminderSent || isShortNotice);
-
   const allProfessionalNames = useMemo(() => {
     if (!reservation.items || !professionals) return reservation.professionalNames || 'N/A';
 
@@ -314,18 +312,18 @@ export function ReservationDetailModal({
       };
     }
 
-    // 2. Chatbot WhatsApp / Janet
+    // 2. Chatbot / Janet (Chat App)
     if (canal.includes('chatbot') || canal.includes('janet') || canal.includes('bot')) {
       return {
         type: 'chatbot',
-        label: 'Janet (WhatsApp)',
-        badgeTitle: 'Janet (WhatsApp)',
+        label: 'Janet (Chat App)',
+        badgeTitle: 'Janet (Chat App)',
         icon: Bot,
         accentColor: 'text-blue-600 dark:text-blue-400',
         badgeClass: 'border-blue-500/40 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
         cardBg: 'bg-blue-50/40 dark:bg-blue-950/15 border-blue-200/60 dark:border-blue-800/40',
-        creator: 'Janet (Asistente Virtual)',
-        description: 'Cita agendada de forma automática por la asistente virtual Janet a través de WhatsApp.',
+        creator: 'Janet (Agente Inteligente)',
+        description: 'Cita agendada de forma automática por la agente inteligente Janet a través del chat de la aplicación.',
       };
     }
 
@@ -659,32 +657,25 @@ export function ReservationDetailModal({
 
   const currentLocal = locales?.find(l => l.id === reservation.local_id);
   const totalAmount = reservation.precio ?? (reservation as any).total ?? 0;
-  const isDepositPaid =
-    reservation.pago_estado === 'deposit_paid' ||
-    reservation.pago_estado === 'anticipo_pagado' ||
-    (reservation.pago_estado !== 'pendiente_anticipo' &&
-      reservation.pago_estado !== 'pending_payment' &&
-      reservation.pago_estado !== 'Pendiente' &&
-      reservation.pago_estado !== 'pendiente' &&
-      (Number(reservation.anticipo_pagado) > 0 ||
-        Number(reservation.anticipoPagado) > 0 ||
-        Number(reservation.monto_pagado_real) > 0 ||
-        Number(reservation.monto_pagado) > 0));
-
   const expectedDepositAmount = Number((reservation as any).anticipo_esperado || reservation.monto_anticipo || 0);
   const rawDepositPaid = Number(
     reservation.anticipo_pagado ||
     reservation.anticipoPagado ||
     reservation.monto_pagado_real ||
     reservation.monto_pagado ||
-    reservation.monto_anticipo ||
+    (totalAmount > 0 && reservation.saldo_pendiente !== undefined && Number(reservation.saldo_pendiente) < totalAmount
+      ? Math.max(0, totalAmount - Number(reservation.saldo_pendiente))
+      : 0) ||
     0
   );
-  const depositAmount = isDepositPaid
-    ? (rawDepositPaid > 0
-        ? rawDepositPaid
-        : (expectedDepositAmount > 0 ? expectedDepositAmount : Math.round(totalAmount * 0.5)))
-    : 0;
+  const isDepositPaid = Boolean(
+    (rawDepositPaid > 0 || reservation.pago_estado === 'deposit_paid' || reservation.pago_estado === 'anticipo_pagado') &&
+    reservation.pago_estado !== 'pendiente_anticipo' &&
+    reservation.pago_estado !== 'pending_payment' &&
+    reservation.pago_estado !== 'Pendiente' &&
+    reservation.pago_estado !== 'pendiente'
+  );
+  const depositAmount = isDepositPaid ? rawDepositPaid : 0;
   const balancePending = reservation.pago_estado === 'Pagado'
     ? 0
     : Math.max(0, totalAmount - depositAmount);
@@ -1316,42 +1307,26 @@ export function ReservationDetailModal({
                         )}
                       </div>
                     </div>
-                    {isShortNotice ? (
-                      <Button
-                        size="sm"
-                        disabled
-                        variant="outline"
-                        className="h-7 px-2.5 rounded-lg text-xs font-semibold bg-muted text-muted-foreground border border-border/70 cursor-not-allowed opacity-80"
-                        title="No requerido: cita agendada con poca anticipación"
-                      >
-                        <CheckCircle2 className="w-3 h-3 text-blue-400" /> No requerido
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="alfa"
-                        onClick={() => {
-                          if (isReminderDoneOrNotNeeded) return;
-                          handleWhatsAppClick('reminder');
-                        }}
-                        disabled={isReminderDoneOrNotNeeded}
-                        className={cn(
-                          "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                          reservation.whatsappReminderSent && "opacity-90"
-                        )}
-                        title={
-                          reservation.whatsappReminderSent
-                            ? "Recordatorio ya enviado"
-                            : "Enviar recordatorio por WhatsApp"
-                        }
-                      >
-                        {reservation.whatsappReminderSent ? (
-                          <><CheckCircle2 className="w-3 h-3" /> Enviado</>
-                        ) : (
-                          <><Send className="w-3 h-3" /> Enviar</>
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      variant="alfa"
+                      onClick={() => handleWhatsAppClick('reminder')}
+                      className={cn(
+                        "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
+                        reservation.whatsappReminderSent && "opacity-90"
+                      )}
+                      title={
+                        reservation.whatsappReminderSent
+                          ? "Reenviar recordatorio por WhatsApp"
+                          : "Enviar recordatorio por WhatsApp"
+                      }
+                    >
+                      {reservation.whatsappReminderSent ? (
+                        <><CheckCircle2 className="w-3 h-3" /> Enviado</>
+                      ) : (
+                        <><Send className="w-3 h-3" /> Enviar</>
+                      )}
+                    </Button>
                   </div>
                 </div>
               </div>

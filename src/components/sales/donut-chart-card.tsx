@@ -11,12 +11,19 @@ interface DonutChartCardProps {
 }
 
 export const DonutChartCard = ({ title, data, total, dataLabels }: DonutChartCardProps) => {
-    const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
+    const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
-    const allLabels = dataLabels || ['Efectivo', 'Tarjeta', 'Transferencia'];
+    const allLabels = dataLabels || ['Efectivo', 'Terminal Point', 'Transferencia', 'Pagos en Línea'];
 
     const tableData = allLabels.map(label => {
-        const found = data.find(d => d.name.toLowerCase() === label.toLowerCase());
+        const found = data.find(d => {
+            const dName = d.name.toLowerCase().trim();
+            const lName = label.toLowerCase().trim();
+            if (dName === lName) return true;
+            if (lName === 'terminal point' && (dName === 'tarjeta' || dName === 'terminal')) return true;
+            if (lName.includes('linea') && (dName.includes('linea') || dName === 'mercadopago')) return true;
+            return false;
+        });
         return {
             name: label,
             value: found ? found.value : 0,

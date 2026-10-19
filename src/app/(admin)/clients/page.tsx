@@ -378,7 +378,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | 'gasto_total' | null;
+  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | 'ultima_visita' | 'gasto_total' | null;
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -429,6 +429,78 @@ export default function ClientsPage() {
   const [historicalReservations, setHistoricalReservations] = useState<Reservation[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
+
+  // Precargar reservas en segundo plano para enriquecer la fecha de última visita
+  useEffect(() => {
+    if (!db) return;
+    let isCancelled = false;
+    getDocs(collection(db, 'reservas'))
+      .then(snap => {
+        if (isCancelled) return;
+        const resList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
+        setHistoricalReservations(resList);
+      })
+      .catch(err => {
+        console.warn("No se pudieron precargar reservas para última visita:", err);
+      });
+    return () => { isCancelled = true; };
+  }, [db]);
+
+  const clientLastVisitMap = useMemo(() => {
+    const map = new Map<string, Date>();
+    const salesSource = hasLoadedHistory ? historicalSales : sales;
+    const reservationsSource = historicalReservations;
+
+    if (salesSource && salesSource.length > 0) {
+      salesSource.forEach(s => {
+        const clientId = s.cliente_id;
+        if (!clientId) return;
+
+        let saleDate: Date | null = null;
+        if (s.fecha_hora_venta instanceof Timestamp) {
+          saleDate = s.fecha_hora_venta.toDate();
+        } else if ((s.fecha_hora_venta as any)?.seconds) {
+          saleDate = new Date((s.fecha_hora_venta as any).seconds * 1000);
+        } else if (typeof s.fecha_hora_venta === 'string') {
+          saleDate = parseISO(s.fecha_hora_venta);
+        }
+
+        if (saleDate && !isNaN(saleDate.getTime())) {
+          const currentLast = map.get(clientId);
+          if (!currentLast || saleDate > currentLast) {
+            map.set(clientId, saleDate);
+          }
+        }
+      });
+    }
+
+    if (reservationsSource && reservationsSource.length > 0) {
+      reservationsSource.forEach(r => {
+        const clientId = r.cliente_id;
+        if (!clientId) return;
+        if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
+
+        let resDate: Date | null = null;
+        const rawDate = r.fecha as any;
+        if (typeof rawDate === 'string') {
+          resDate = parseISO(rawDate);
+        } else if (rawDate instanceof Timestamp) {
+          resDate = rawDate.toDate();
+        } else if (rawDate?.seconds) {
+          resDate = new Date(rawDate.seconds * 1000);
+        }
+
+        if (resDate && !isNaN(resDate.getTime())) {
+          const currentLast = map.get(clientId);
+          if (!currentLast || resDate > currentLast) {
+            map.set(clientId, resDate);
+          }
+        }
+      });
+    }
+
+    return map;
+  }, [sales, historicalSales, historicalReservations, hasLoadedHistory]);
 
   const clientSpentMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -585,48 +657,6 @@ export default function ClientsPage() {
       activeFilters.topSpent !== 'todos';
 
     if (hasAdvancedFilters) {
-
-      // --- OPTIMIZATION: Pre-calculate Last Visit Map ---
-      // Instead of iterating historicalSales for EVERY client (O(NxM)), 
-      // we iterate history ONCE (O(M)) and map outcomes.
-      const clientLastVisitMap = new Map<string, Date>();
-
-      if (activeFilters.inactiveTime !== 'todos' && hasLoadedHistory) {
-        historicalSales.forEach(s => {
-          const clientId = s.cliente_id;
-          if (!clientId) return;
-
-          let saleDate: Date | null = null;
-          if (s.fecha_hora_venta instanceof Timestamp) {
-            saleDate = s.fecha_hora_venta.toDate();
-          } else if (typeof s.fecha_hora_venta === 'string') {
-            saleDate = parseISO(s.fecha_hora_venta);
-          }
-
-          if (saleDate) {
-            const currentLast = clientLastVisitMap.get(clientId);
-            if (!currentLast || saleDate > currentLast) {
-              clientLastVisitMap.set(clientId, saleDate);
-            }
-          }
-        });
-
-        historicalReservations.forEach(r => {
-          const clientId = r.cliente_id;
-          if (!clientId) return;
-          if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
-
-          const resDate = typeof r.fecha === 'string' ? parseISO(r.fecha) : null;
-          if (resDate) {
-            const currentLast = clientLastVisitMap.get(clientId);
-            if (!currentLast || resDate > currentLast) {
-              clientLastVisitMap.set(clientId, resDate);
-            }
-          }
-        });
-      }
-      // ----------------------------------------------------
-
       // Filter by Inactive Time
       if (activeFilters.inactiveTime !== 'todos') {
         const monthsInactive = parseInt(activeFilters.inactiveTime, 10);
@@ -786,7 +816,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap]);
+  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap, clientLastVisitMap]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -794,6 +824,7 @@ export default function ClientsPage() {
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;
+    if (date instanceof Date) return date.getTime();
     if (date instanceof Timestamp) return date.toDate().getTime();
     if (date?.seconds) return date.seconds * 1000;
     if (typeof date === 'string') return parseISO(date).getTime();
@@ -824,6 +855,10 @@ export default function ClientsPage() {
           valA = getDateValue(a.creado_en);
           valB = getDateValue(b.creado_en);
           break;
+        case 'ultima_visita':
+          valA = clientLastVisitMap.get(a.id)?.getTime() || 0;
+          valB = clientLastVisitMap.get(b.id)?.getTime() || 0;
+          break;
         case 'gasto_total':
           valA = clientSpentMap.get(a.id) || 0;
           valB = clientSpentMap.get(b.id) || 0;
@@ -836,7 +871,7 @@ export default function ClientsPage() {
       if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredClients, sortField, sortDirection, clientSpentMap]);
+  }, [filteredClients, sortField, sortDirection, clientSpentMap, clientLastVisitMap]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -848,7 +883,7 @@ export default function ClientsPage() {
       }
     } else {
       setSortField(field);
-      setSortDirection(field === 'gasto_total' ? 'desc' : 'asc');
+      setSortDirection((field === 'gasto_total' || field === 'ultima_visita') ? 'desc' : 'asc');
     }
     setCurrentPage(1);
   };
@@ -924,7 +959,9 @@ export default function ClientsPage() {
   const formatDate = (date: any, formatString: string = 'PP') => {
     if (!date) return 'N/A';
     let dateObj: Date;
-    if (date.seconds) {
+    if (date instanceof Date) {
+      dateObj = date;
+    } else if (date.seconds) {
       dateObj = new Date(date.seconds * 1000);
     } else if (typeof date === 'string') {
       dateObj = parseISO(date);
@@ -984,6 +1021,7 @@ export default function ClientsPage() {
       const unattendedAppointments = clientReservations.filter(r => r.estado === 'No asiste').length;
       const cancelledAppointments = clientReservations.filter(r => r.estado === 'Cancelado').length;
       const totalSpent = clientSales.reduce((acc, sale) => acc + (sale.total || 0), 0);
+      const lastVisit = clientLastVisitMap.get(client.id);
 
       return {
         'Nombre': client.nombre || '',
@@ -992,6 +1030,7 @@ export default function ClientsPage() {
         'Teléfono': client.telefono || '',
         'Fecha de Nacimiento': client.fecha_nacimiento ? formatDate(client.fecha_nacimiento, 'dd/MM/yy') : 'N/A',
         'Cliente desde': client.creado_en ? formatDate(client.creado_en, 'dd/MM/yy') : 'N/A',
+        'Última visita': lastVisit ? formatDate(lastVisit, 'dd/MM/yy') : 'Sin visitas',
         'Número de cliente': client.numero_cliente || '',
         'Citas totales': client.citas_totales ?? totalAppointments,
         'Citas asistidas': client.citas_asistidas ?? attendedAppointments,
@@ -1316,33 +1355,41 @@ export default function ClientsPage() {
                       </div>
                     </div>
 
-                    {/* Fila inferior: Teléfono, Registro y Consumo */}
-                    <div className="flex items-center justify-between pt-2 border-t border-border/40 text-xs">
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        {canViewPhone && hasPhone ? (
-                          <span className="font-medium text-foreground">{client.telefono}</span>
-                        ) : (
-                          <span>{canViewPhone ? 'Sin teléfono' : '****-****'}</span>
-                        )}
-                        {hasPhone && enableMarketing && (
-                          <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-                            title="Enviar WhatsApp"
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
-                          </a>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-muted-foreground">
-                          {formatDate(client.creado_en)}
-                        </span>
+                    {/* Fila inferior: Teléfono, Registro, Última visita y Consumo */}
+                    <div className="flex flex-col gap-1.5 pt-2 border-t border-border/40 text-xs">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          {canViewPhone && hasPhone ? (
+                            <span className="font-medium text-foreground">{client.telefono}</span>
+                          ) : (
+                            <span>{canViewPhone ? 'Sin teléfono' : '****-****'}</span>
+                          )}
+                          {hasPhone && enableMarketing && (
+                            <a
+                              href={whatsappUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                              title="Enviar WhatsApp"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
                         <span className="font-bold text-slate-900 dark:text-white bg-muted/60 px-2 py-0.5 rounded text-xs">
                           {formattedSpent}
                         </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>Desde: {formatDate(client.creado_en, 'dd/MM/yy')}</span>
+                        {(() => {
+                          const lv = clientLastVisitMap.get(client.id);
+                          return (
+                            <span>
+                              Últ. visita: <span className={lv ? "text-foreground font-medium" : "italic text-muted-foreground/60"}>{lv ? formatDate(lv, 'dd/MM/yy') : 'Sin visitas'}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -1375,6 +1422,9 @@ export default function ClientsPage() {
                       <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('ultima_visita')}>
+                        <span className="flex items-center">Última visita <SortIcon field="ultima_visita" /></span>
+                      </TableHead>
                       <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-right" onClick={() => handleSort('gasto_total')}>
                         <span className="flex items-center justify-end">Consumo <SortIcon field="gasto_total" /></span>
                       </TableHead>
@@ -1390,6 +1440,7 @@ export default function ClientsPage() {
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
@@ -1419,6 +1470,16 @@ export default function ClientsPage() {
                           <TableCell className="py-1.5 px-3 text-xs truncate max-w-[160px]">{client.correo}</TableCell>
                           <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{canViewPhone ? client.telefono : '****-****'}</TableCell>
                           <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{formatDate(client.creado_en)}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">
+                            {(() => {
+                              const lv = clientLastVisitMap.get(client.id);
+                              return lv ? (
+                                <span className="text-foreground font-medium">{formatDate(lv)}</span>
+                              ) : (
+                                <span className="text-muted-foreground/60 italic text-[11px]">Sin visitas</span>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="py-1.5 px-3 text-xs text-right font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
                             {(() => {
                               const spent = clientSpentMap.get(client.id) || 0;

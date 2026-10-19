@@ -1358,18 +1358,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 getDoc(doc(db, 'reservas', initialData.reservationId)).then(snap => {
                     if (snap.exists()) {
                         const res = snap.data();
-                        const isResDepositPaid =
-                            res.pago_estado === 'deposit_paid' ||
-                            res.pago_estado === 'anticipo_pagado' ||
-                            (res.pago_estado !== 'pendiente_anticipo' &&
-                                res.pago_estado !== 'pending_payment' &&
-                                res.pago_estado !== 'Pendiente' &&
-                                res.pago_estado !== 'pendiente' &&
-                                (Number(res.anticipo_pagado) > 0 ||
-                                    Number(res.anticipoPagado) > 0 ||
-                                    Number(res.monto_pagado_real) > 0 ||
-                                    Number(res.monto_pagado) > 0));
-
                         const rawDbDeposit = Number(
                             res.anticipoPagado ||
                             res.anticipo_pagado ||
@@ -1379,12 +1367,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             (res.total && res.saldo_pendiente !== undefined && Number(res.total) > Number(res.saldo_pendiente)
                                 ? Math.max(0, Number(res.total) - Number(res.saldo_pendiente))
                                 : 0) ||
-                            res.anticipo_esperado ||
                             0
                         );
-                        const dbDeposit = isResDepositPaid
-                            ? (rawDbDeposit > 0 ? rawDbDeposit : Math.round(Number(res.total || 0) * 0.5))
-                            : 0;
+                        const isResDepositPaid = Boolean(
+                            rawDbDeposit > 0 &&
+                            res.pago_estado !== 'pendiente_anticipo' &&
+                            res.pago_estado !== 'pending_payment' &&
+                            res.pago_estado !== 'Pendiente' &&
+                            res.pago_estado !== 'pendiente'
+                        );
+                        const dbDeposit = isResDepositPaid ? rawDbDeposit : 0;
                         setAnticipoPagado(dbDeposit);
                     }
                 }).catch(console.error);
@@ -3263,7 +3255,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         >
                                                             {[
                                                                 { id: 'efectivo', label: 'Efectivo', desc: 'En caja / cambio', icon: Banknote },
-                                                                { id: 'tarjeta', label: 'Tarjeta', desc: 'Terminal Point', icon: CreditCard },
+                                                                { id: 'tarjeta', label: 'Terminal Point', desc: 'Cobro con terminal', icon: CreditCard },
                                                                 { id: 'transferencia', label: 'Transferencia', desc: 'SPEI / QR', icon: QrCode },
                                                                 { id: 'combinado', label: 'Combinado', desc: 'Mixto', icon: Layers },
                                                             ].map((item) => {
@@ -3591,7 +3583,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         name="pago_tarjeta"
                                                         render={({ field }) => (
                                                             <FormItem>
-                                                                <FormLabel>Tarjeta</FormLabel>
+                                                                <FormLabel>Terminal Point</FormLabel>
                                                                 <FormControl><Input type="number" placeholder="$" {...field} value={field.value || ''} onChange={e => field.onChange(e.target.valueAsNumber)} /></FormControl>
                                                             </FormItem>
                                                         )}
@@ -3628,7 +3620,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         </FormLabel>
                                                         <div className="grid grid-cols-3 gap-2">
                                                             {[
-                                                                { id: 'tarjeta', label: 'Tarjeta' },
+                                                                { id: 'tarjeta', label: 'Terminal Point' },
                                                                 { id: 'efectivo', label: 'Efectivo' },
                                                                 { id: 'transferencia', label: 'Transferencia' }
                                                             ].map((m) => (

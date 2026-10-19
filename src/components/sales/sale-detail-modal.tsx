@@ -176,13 +176,26 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
     };
 
     const paymentMethodLabel = (() => {
-        switch (sale.metodo_pago) {
+        const method = (sale.metodo_pago || (sale as any).metodo_pago_anticipo || '').toLowerCase().trim();
+        switch (method) {
             case 'efectivo': return 'Efectivo';
-            case 'tarjeta': return 'Tarjeta';
-            case 'transferencia': return 'Transferencia';
-            case 'mercadopago': return 'Pagos en Línea';
+            case 'tarjeta':
+            case 'terminal':
+            case 'terminal_point':
+                return 'Terminal Point';
+            case 'transferencia':
+            case 'spei':
+                return 'Transferencia';
+            case 'mercadopago':
+            case 'pagos en linea':
+            case 'pagos_en_linea':
+            case 'en_linea':
+                return 'Pagos en Línea';
             case 'combinado': return 'Pago Combinado';
-            default: return sale.metodo_pago || 'No especificado';
+            case 'alfacoins': return 'Alfa Coins';
+            default:
+                if (sale.pago_estado === 'deposit_paid') return 'Pagos en Línea';
+                return sale.metodo_pago || 'No especificado';
         }
     })();
 
@@ -350,7 +363,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                     )}
                                     {Boolean(sale.detalle_pago_combinado.tarjeta && sale.detalle_pago_combinado.tarjeta > 0) && (
                                         <div className="flex justify-between bg-muted/30 p-2 rounded-lg">
-                                            <span className="text-muted-foreground">Tarjeta:</span>
+                                            <span className="text-muted-foreground">Terminal Point:</span>
                                             <strong className="text-foreground font-semibold">${sale.detalle_pago_combinado.tarjeta.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                                         </div>
                                     )}

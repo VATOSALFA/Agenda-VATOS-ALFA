@@ -24,143 +24,62 @@ import {
   calcularAnticipoParaServicios,
   crearPreferenciaMercadoPagoChat,
 } from '@/lib/ai/agent-payments';
+import {
+  consultarPaseAlfaYPromocionesTool,
+  computeClientLoyaltySummary,
+} from '@/lib/ai/agent-loyalty-knowledge';
+import {
+  consultarServiciosTool,
+  consultarBarberosTool,
+  consultarProductosTool,
+  consultarUbicacionTool,
+  consultarPoliticasYTerminosTool,
+  resolveProducts,
+} from '@/lib/ai/agent-catalog-tools';
 
-export const consultarServiciosTool = ai.defineTool(
-  {
-    name: 'consultar_servicios',
-    description:
-      'Obtiene el catálogo de servicios activos de VATOS ALFA con sus IDs, nombres, duración base en minutos, duración específica por cada barbero/experto (ej. Beatriz 30 min, Lalo 60 min, Ivon 40 min), precio en pesos mexicanos y si requiere anticipo.',
-    inputSchema: z.object({}),
-    outputSchema: z.array(
-      z.object({
-        id: z.string(),
-        nombre: z.string(),
-        duracion: z.number(),
-        duracionPorBarbero: z.record(z.string(), z.number()).optional(),
-        duracionesDetalle: z.string().optional(),
-        barberosHabilitados: z.array(z.string()).optional(),
-        precio: z.number(),
-        requiereAnticipo: z.boolean(),
-        montoAnticipo: z.number(),
-        politicaAnticipo: z.string(),
-      })
-    ),
-  },
-  async () => {
+export {
+  consultarServiciosTool,
+  consultarBarberosTool,
+  consultarProductosTool,
+  consultarUbicacionTool,
+  consultarPoliticasYTerminosTool,
+  consultarPaseAlfaYPromocionesTool,
+  resolveProducts,
+};
+
+async function syncConversationClientIdentity(
+  db: FirebaseFirestore.Firestore,
+  identity: {
+    clientId?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+  }
+) {
+  const ctx = chatContextStorage.getStore();
+  if (!ctx) return;
+
+  if (identity.clientId) ctx.clientId = identity.clientId;
+  if (identity.name && identity.name !== 'Cliente') ctx.clientName = identity.name;
+  if (identity.phone) ctx.clientPhone = identity.phone;
+  if (identity.email) ctx.clientEmail = identity.email;
+
+  if (ctx.conversationId) {
     try {
-      const db = getDb();
-      const [servsSnap, profsSnap] = await Promise.all([
-        db.collection('servicios').where('active', '==', true).get(),
-        db.collection('profesionales').where('active', '==', true).get(),
-      ]);
+      const updatePayload: Record<string, any> = {
+        updated_at: new Date(),
+      };
+      if (identity.clientId) updatePayload.cliente_id = identity.clientId;
+      if (identity.name && identity.name !== 'Cliente') updatePayload.cliente_nombre = identity.name;
+      if (identity.phone) updatePayload.cliente_telefono = identity.phone;
+      if (identity.email) updatePayload.cliente_correo = identity.email;
 
-      const profMap: Record<string, string> = {};
-      profsSnap.docs.forEach((d) => {
-        const pData = d.data();
-        profMap[d.id] = pData.publicName || pData.name || 'Barbero';
-      });
-
-      let globalMin = 190;
-      let globalPct = 50;
-      let globalActive = true;
-      try {
-        const cfgDoc = await db.collection('configuracion').doc('servicios').get();
-        if (cfgDoc.exists) {
-          const cfg = cfgDoc.data()!;
-          if (typeof cfg.anticipo_monto_minimo_activo === 'boolean') globalActive = cfg.anticipo_monto_minimo_activo;
-          if (Number(cfg.anticipo_monto_minimo) > 0) globalMin = Number(cfg.anticipo_monto_minimo);
-          if (Number(cfg.anticipo_porcentaje_defecto) > 0) globalPct = Number(cfg.anticipo_porcentaje_defecto);
-        }
-      } catch (_) {}
-
-      return servsSnap.docs.map((doc) => {
-        const d = doc.data();
-        const price = Number(d.price || d.precio || 0);
-        const reqDirect = Boolean(d.requiere_anticipo || d.payment_type === 'online-deposit');
-        const reqThreshold = globalActive && price >= globalMin;
-        const req = reqDirect || reqThreshold;
-        let depositAmount = 0;
-        if (reqDirect) {
-          const amtType = d.payment_amount_type || d.tipo_anticipo || '%';
-          const amtVal = Number(d.payment_amount_value || d.monto_anticipo || 50);
-          depositAmount = amtType === '$' ? amtVal : price * (amtVal / 100);
-        } else if (reqThreshold) {
-          depositAmount = price * (globalPct / 100);
-        }
-
-        const customDurations: Record<string, number> = {};
-        const detailsArr: string[] = [];
-        if (d.durationPorProfesional && typeof d.durationPorProfesional === 'object') {
-          for (const [profId, dur] of Object.entries(d.durationPorProfesional)) {
-            const barberName = profMap[profId];
-            if (barberName && dur !== undefined && dur !== null && dur !== '') {
-              const durNum = Number(dur);
-              if (!isNaN(durNum) && durNum > 0) {
-                customDurations[barberName] = durNum;
-                detailsArr.push(`${barberName}: ${durNum} min`);
-              }
-            }
-          }
-        }
-
-        const barberosHabilitados: string[] = [];
-        if (Array.isArray(d.professionals) && d.professionals.length > 0) {
-          d.professionals.forEach((pId: string) => {
-            if (profMap[pId]) barberosHabilitados.push(profMap[pId]);
-          });
-        }
-
-        return {
-          id: doc.id,
-          nombre: d.name || d.nombre || 'Servicio',
-          duracion: Number(d.duration || d.duracion || 30),
-          duracionPorBarbero: Object.keys(customDurations).length > 0 ? customDurations : undefined,
-          duracionesDetalle: detailsArr.length > 0 ? detailsArr.join(' | ') : undefined,
-          barberosHabilitados: barberosHabilitados.length > 0 ? barberosHabilitados : undefined,
-          precio: price,
-          requiereAnticipo: req,
-          montoAnticipo: Math.round(depositAmount),
-          politicaAnticipo: req
-            ? `Requiere anticipo de $${Math.round(depositAmount)} MXN (${reqDirect ? 'configurado en el servicio' : `50% por superar $${globalMin} MXN`})`
-            : `Sin anticipo individual (aplica 50% de anticipo si se combina con otros servicios sumando $${globalMin}+ MXN)`,
-        };
-      });
-    } catch (e: any) {
-      console.error('Error in consultar_servicios:', e);
-      return [];
+      await db.collection('conversaciones').doc(ctx.conversationId).set(updatePayload, { merge: true });
+    } catch (_) {
+      // No bloquear flujo por actualización de metadatos de conversación
     }
   }
-);
-
-export const consultarBarberosTool = ai.defineTool(
-  {
-    name: 'consultar_barberos',
-    description: 'Obtiene la lista de barberos/profesionales activos en la barberia con sus IDs y nombres.',
-    inputSchema: z.object({}),
-    outputSchema: z.array(
-      z.object({
-        id: z.string(),
-        nombre: z.string(),
-      })
-    ),
-  },
-  async () => {
-    try {
-      const db = getDb();
-      const snap = await db.collection('profesionales').where('active', '==', true).get();
-      return snap.docs.map((doc) => {
-        const d = doc.data();
-        return {
-          id: doc.id,
-          nombre: d.publicName || d.name || 'Barbero',
-        };
-      });
-    } catch (e: any) {
-      console.error('Error in consultar_barberos:', e);
-      return [];
-    }
-  }
-);
+}
 
 export const consultarDisponibilidadTool = ai.defineTool(
   {
@@ -212,7 +131,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
       mensaje: z.string().optional(),
     }),
   },
-  async ({ fecha, profesionalId, barberoNombre, servicioNombre, serviciosNombres, duracionMinutos, diasABuscar, clienteTelefono, clienteNombre }) => {
+  async ({ fecha, profesionalId, barberoNombre, servicioNombre, serviciosNombres, duracionMinutos, diasABuscar, clienteTelefono }) => {
     try {
       const db = getDb();
 
@@ -228,9 +147,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
               resolvedNotes = snap.docs[0].data().notas || snap.docs[0].data().nota || '';
             }
           }
-        } catch (noteErr) {
-          // ignore
-        }
+        } catch (_) {}
       }
 
       // Cargar servicios activos
@@ -248,11 +165,13 @@ export const consultarDisponibilidadTool = ai.defineTool(
       const evaluatedServiceName = resolved.displayTitle || resolved.names.join(' + ');
 
       const profsSnap = await db.collection('profesionales').where('active', '==', true).get();
-      const barbers = profsSnap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name || '',
-        publicName: d.data().publicName || d.data().name || 'Barbero',
-      }));
+      const barbers = profsSnap.docs
+        .filter((d) => !d.data().deleted)
+        .map((d) => ({
+          id: d.id,
+          name: d.data().name || '',
+          publicName: d.data().publicName || d.data().name || 'Barbero',
+        }));
 
       let targetBarbers = barbers;
       if (profesionalId) {
@@ -286,23 +205,20 @@ export const consultarDisponibilidadTool = ai.defineTool(
 
         for (const b of targetBarbers) {
           try {
-            // Verificar si el cliente tiene duración personalizada en sus notas para este barbero
             let customClientDuration: number | null = null;
             if (resolvedNotes) {
               customClientDuration = parseClientCustomDuration(resolvedNotes, b.publicName || b.name);
             }
 
-            // Calcular la duración específica para ESTE barbero
             const baseDuration = selectedServices.reduce((total, service) => total +
               (customClientDuration && /corte/i.test(service.name || service.nombre || '') ? customClientDuration : getBarberServiceDuration([service], b.id, 30)), 0);
             const barberDuration = Math.max(baseDuration, duracionMinutos || 0);
 
             const isSimulation = Boolean(
               currentCtx?.simulation ||
-              currentCtx?.conversationId?.startsWith('sim-sandbox') ||
+              currentCtx?.conversationId?.startsWith('sim') ||
               clienteTelefono?.startsWith('sim') ||
-              currentCtx?.clientPhone?.startsWith('sim') ||
-              process.env.NODE_ENV !== 'production'
+              currentCtx?.clientPhone?.startsWith('sim')
             );
 
             const res = await getAvailableSlots({
@@ -340,12 +256,10 @@ export const consultarDisponibilidadTool = ai.defineTool(
         const srvTxt = evaluatedServiceName ? ` para ${evaluatedServiceName}` : '';
         resumenTexto = `No hay horarios disponibles${srvTxt} en las fechas consultadas (${datesToCheck.join(', ')}).`;
       } else {
-        // Encontrar las fechas que tienen al menos un espacio libre
         const diasConDisponibilidad = Array.from(new Set(results.map((r) => r.fecha)));
         const primerDiaFecha = diasConDisponibilidad[0];
         const resultadosPrimerDia = results.filter((r) => r.fecha === primerDiaFecha);
 
-        // Reunir y ordenar cronológicamente los slots del primer día
         const slotsPrimerDia: Array<{ hora: string; hora12: string; barberoNombre: string }> = [];
         for (const r of resultadosPrimerDia) {
           for (const h of r.horarios) {
@@ -358,7 +272,6 @@ export const consultarDisponibilidadTool = ai.defineTool(
         }
         slotsPrimerDia.sort((a, b) => a.hora.localeCompare(b.hora));
 
-        // Agrupar barberos por hora para opciones claras y limpias (ej. 10:00 AM con Lupita o Alfredo)
         const horasMap = new Map<string, string[]>();
         for (const s of slotsPrimerDia) {
           if (!horasMap.has(s.hora12)) {
@@ -369,23 +282,30 @@ export const consultarDisponibilidadTool = ai.defineTool(
           }
         }
 
-        const primerasHoras = Array.from(horasMap.entries()).slice(0, 3);
-        opcionesMasProximas = primerasHoras.map(([hora12, barberos]) => {
+        const todasLasHoras = Array.from(horasMap.entries());
+        opcionesMasProximas = todasLasHoras.map(([hora12, barberos]) => {
           return `${hora12} con ${barberos.join(' o ')}`;
         });
 
         const diaSemanaLabel = resultadosPrimerDia[0].diaSemana;
         diaMasProximo = `${diaSemanaLabel} (${primerDiaFecha})`;
 
-        resumenTexto = `HORARIO MÁS PRÓXIMO DISPONIBLE:\n` +
-          `- Día más cercano con citas: ${diaSemanaLabel} (${primerDiaFecha})\n` +
-          `- Opciones más próximas: ${opcionesMasProximas.join(', ')}\n\n` +
-          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Ofrece únicamente estas 2 o 3 opciones del ${diaSemanaLabel}. NUNCA envíes listas largas ni menciones los otros días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}). Responde de forma muy concisa, humana y conversacional (máximo 2 a 3 oraciones).\n\n` +
-          `Referencia adicional (solo por si el cliente pide otra fecha):\n` +
+        const desglosePrimerDia = resultadosPrimerDia
+          .map((r) => {
+            const all12h = r.horarios.map((h) => formatTime12h(h)).join(', ');
+            return `- ${r.barberoNombre}: ${all12h}`;
+          })
+          .join('\n');
+
+        resumenTexto = `HORARIOS DISPONIBLES EN TIEMPO REAL (IDÉNTICOS A LA PÁGINA WEB):\n` +
+          `- Día: ${diaSemanaLabel} (${primerDiaFecha})\n` +
+          `${desglosePrimerDia}\n\n` +
+          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Comparte TODOS los horarios disponibles del ${diaSemanaLabel} para el barbero solicitado (o las opciones del día si no especificó barbero), SIN OMITIR NINGÚN HORARIO (por ejemplo, incluye también los de las 7:00 PM, 7:30 PM, 8:30 PM si aparecen en la lista). Los horarios que menciones deben coincidir al 100% con los de la página web para no desperdiciar ningún espacio disponible de los barberos. No desgloses días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}) a menos que el cliente pida otra fecha.\n\n` +
+          `Referencia de días posteriores (solo por si el cliente pide otra fecha):\n` +
           results
             .map((r) => {
-              const sample12h = r.horarios.slice(0, 3).map((h) => formatTime12h(h)).join(', ');
-              return `${r.diaSemana} con ${r.barberoNombre}: ${sample12h}`;
+              const all12h = r.horarios.map((h) => formatTime12h(h)).join(', ');
+              return `${r.diaSemana} con ${r.barberoNombre}: ${all12h}`;
             })
             .join('\n');
       }
@@ -393,7 +313,10 @@ export const consultarDisponibilidadTool = ai.defineTool(
       return {
         diaMasProximo,
         opcionesMasProximas,
-        disponibilidadPorFecha: results,
+        disponibilidadPorFecha: results.map((r) => ({
+          ...r,
+          horarios12h: r.horarios.map((h) => formatTime12h(h)),
+        })),
         resumenTexto,
         serviciosConsultados: evaluatedServiceName,
         duracionConsultada: results.length > 0 ? results[0].duracionMinutos : undefined,
@@ -409,79 +332,11 @@ export const consultarDisponibilidadTool = ai.defineTool(
   }
 );
 
-export async function resolveProducts(
-  db: any,
-  productNames?: string[],
-  singleProductName?: string
-): Promise<Array<{ id: string; nombre: string; precio: number; cantidad: number }>> {
-  const namesToFind: string[] = [];
-  if (singleProductName && singleProductName.trim()) {
-    namesToFind.push(singleProductName.trim());
-  }
-  if (Array.isArray(productNames)) {
-    productNames.forEach((n) => {
-      if (n && n.trim()) namesToFind.push(n.trim());
-    });
-  }
-
-  if (namesToFind.length === 0) return [];
-
-  const snap = await db.collection('productos').where('active', '==', true).get();
-  const allProducts = snap.docs.map((d: any) => {
-    const data = d.data();
-    return {
-      id: d.id,
-      nombre: data.nombre || '',
-      precio: Number(data.public_price || data.precio_venta || data.precio || 0),
-      stock: Number(data.stock || 0),
-    };
-  });
-
-  const resolved: Array<{ id: string; nombre: string; precio: number; cantidad: number }> = [];
-
-  for (const query of namesToFind) {
-    const qClean = cleanSearchStr(query);
-    let match = allProducts.find((p: any) => {
-      const nClean = cleanSearchStr(p.nombre);
-      return nClean.includes(qClean) || qClean.includes(nClean);
-    });
-
-    if (!match) {
-      const words = qClean.split(/\s+/).filter((w: string) => w.length > 2 && !['una', 'uno', 'para', 'con', 'por', 'las', 'los', 'del'].includes(w));
-      if (words.length > 0) {
-        match = allProducts.find((p: any) => {
-          const nClean = cleanSearchStr(p.nombre);
-          return words.some((w: string) => nClean.includes(w));
-        });
-      }
-    }
-
-    if (!match) throw new Error(`No se encontró el producto ${query}. Confirma el nombre antes de continuar.`);
-    if (match) {
-      const requestedQuantity = (resolved.find(item => item.id === match.id)?.cantidad || 0) + 1;
-      if (match.stock < requestedQuantity) throw new Error(`No hay existencias suficientes de ${match.nombre}.`);
-      const existing = resolved.find((r) => r.id === match.id);
-      if (existing) {
-        existing.cantidad += 1;
-      } else {
-        resolved.push({
-          id: match.id,
-          nombre: match.nombre,
-          precio: match.precio,
-          cantidad: 1,
-        });
-      }
-    }
-  }
-
-  return resolved;
-}
-
 export const verificarORegistrarClienteTool = ai.defineTool(
   {
     name: 'verificar_o_registrar_cliente',
     description:
-      'Verifica si el cliente ya está registrado en la base de datos de VATOS ALFA mediante su celular o correo electrónico. Si el cliente NO está registrado pero ya proporcionó su nombre completo, celular (10 dígitos) y correo electrónico, lo registra formalmente en la base de datos de clientes con su número de cliente asignado para que pueda agendar.',
+      'Verifica si el cliente ya está registrado en la base de datos de VATOS ALFA mediante su celular o correo electrónico y vincula su identidad automáticamente a la conversación del chat. Si el cliente NO está registrado pero ya proporcionó su nombre completo, celular (10 dígitos) y correo electrónico, lo registra formalmente en la base de datos de clientes con su número de cliente asignado.',
     inputSchema: z.object({
       celular: z.string().describe('Número de celular o WhatsApp del cliente (10 dígitos en México, ej. 4421234567)'),
       correoElectronico: z.string().optional().describe('Correo electrónico del cliente (ej. cliente@gmail.com)'),
@@ -494,6 +349,7 @@ export const verificarORegistrarClienteTool = ai.defineTool(
       celular: z.string().optional(),
       correo: z.string().optional(),
       numeroCliente: z.union([z.number(), z.string()]).optional(),
+      paseAlfaResumen: z.string().optional(),
       faltanDatos: z.array(z.string()).optional(),
       mensaje: z.string(),
     }),
@@ -534,14 +390,32 @@ export const verificarORegistrarClienteTool = ai.defineTool(
         const data = existingDoc.data();
         const currentEmail = data.correo || data.email || '';
 
-        // Si le faltaba el correo y ahora lo proporcionó, actualizarlo
         if ((!currentEmail || !currentEmail.includes('@')) && cleanEmail && cleanEmail.includes('@')) {
           await clientsRef.doc(existingDoc.id).update({ correo: cleanEmail, updated_at: FieldValue.serverTimestamp() });
           data.correo = cleanEmail;
         }
 
-        const hasEmail = Boolean(data.correo || data.email) && String(data.correo || data.email).includes('@');
-        const hasPhone = Boolean(data.telefono) && String(data.telefono).replace(/\D/g, '').length >= 10;
+        const currentPhone = String(data.telefono || '').replace(/\D/g, '');
+        if (currentPhone.length < 10 && cleanPhone && cleanPhone.length >= 10) {
+          await clientsRef.doc(existingDoc.id).update({ telefono: cleanPhone, updated_at: FieldValue.serverTimestamp() });
+          data.telefono = cleanPhone;
+        }
+
+        const resolvedFullName = `${data.nombre || ''} ${data.apellido || ''}`.trim() || 'Cliente';
+        const resolvedPhone = data.telefono || cleanPhone;
+        const resolvedEmail = data.correo || data.email || cleanEmail;
+
+        await syncConversationClientIdentity(db, {
+          clientId: existingDoc.id,
+          name: resolvedFullName,
+          phone: resolvedPhone,
+          email: resolvedEmail,
+        });
+
+        const loyalty = computeClientLoyaltySummary(data);
+
+        const hasEmail = Boolean(resolvedEmail) && String(resolvedEmail).includes('@');
+        const hasPhone = Boolean(resolvedPhone) && String(resolvedPhone).replace(/\D/g, '').length >= 10;
 
         const missing: string[] = [];
         if (!hasPhone) missing.push('celular');
@@ -551,9 +425,10 @@ export const verificarORegistrarClienteTool = ai.defineTool(
           return {
             registrado: false,
             clienteId: existingDoc.id,
-            nombre: `${data.nombre || ''} ${data.apellido || ''}`.trim() || 'Cliente',
-            celular: data.telefono,
-            correo: data.correo || data.email,
+            nombre: resolvedFullName,
+            celular: resolvedPhone,
+            correo: resolvedEmail,
+            paseAlfaResumen: loyalty.resumenTexto,
             faltanDatos: missing,
             mensaje: `El cliente fue encontrado en la base de datos pero le falta: ${missing.join(', ')}. Es requisito indispensable solicitárselo antes de agendar.`,
           };
@@ -562,11 +437,12 @@ export const verificarORegistrarClienteTool = ai.defineTool(
         return {
           registrado: true,
           clienteId: existingDoc.id,
-          nombre: `${data.nombre || ''} ${data.apellido || ''}`.trim() || 'Cliente',
-          celular: data.telefono,
-          correo: data.correo || data.email,
+          nombre: resolvedFullName,
+          celular: resolvedPhone,
+          correo: resolvedEmail,
           numeroCliente: data.numero_cliente,
-          mensaje: `El cliente ya está registrado en la base de datos de VATOS ALFA y sus datos están completos. Puedes proceder a agendar su cita con crear_cita.`,
+          paseAlfaResumen: loyalty.resumenTexto,
+          mensaje: `El cliente ya está registrado en la base de datos de VATOS ALFA y su identidad quedó vinculada al chat. Puedes proceder a agendar su cita con crear_cita.`,
         };
       }
 
@@ -588,6 +464,7 @@ export const verificarORegistrarClienteTool = ai.defineTool(
       const nameParts = (nombreCompleto || '').trim().split(/\s+/);
       const firstName = nameParts[0] || 'Cliente';
       const lastName = nameParts.slice(1).join(' ') || '';
+      const fullNewName = `${firstName} ${lastName}`.trim();
 
       let nextClientNumber = 1;
       try {
@@ -610,14 +487,21 @@ export const verificarORegistrarClienteTool = ai.defineTool(
 
       const added = await clientsRef.add(newClientDoc);
 
+      await syncConversationClientIdentity(db, {
+        clientId: added.id,
+        name: fullNewName,
+        phone: cleanPhone,
+        email: cleanEmail,
+      });
+
       return {
         registrado: true,
         clienteId: added.id,
-        nombre: `${firstName} ${lastName}`.trim(),
+        nombre: fullNewName,
         celular: cleanPhone,
         correo: cleanEmail,
         numeroCliente: nextClientNumber,
-        mensaje: `¡Cliente registrado exitosamente en la base de datos de VATOS ALFA con el ID #${nextClientNumber}! Ahora procede a crear su cita con crear_cita.`,
+        mensaje: `¡Cliente registrado exitosamente en la base de datos de VATOS ALFA con el ID #${nextClientNumber} y vinculado a este chat! Ahora procede a crear su cita con crear_cita.`,
       };
     } catch (err: any) {
       console.error('Error in verificarORegistrarClienteTool:', err);
@@ -675,11 +559,13 @@ export const crearCitaTool = ai.defineTool(
       let finalBarberName = barberoNombre || 'tu barbero';
 
       const profsSnap = await db.collection('profesionales').where('active', '==', true).get();
-      const barbers = profsSnap.docs.map((d) => ({
-        id: d.id,
-        name: d.data().name || '',
-        publicName: d.data().publicName || d.data().name || 'Barbero',
-      }));
+      const barbers = profsSnap.docs
+        .filter((d) => !d.data().deleted)
+        .map((d) => ({
+          id: d.id,
+          name: d.data().name || '',
+          publicName: d.data().publicName || d.data().name || 'Barbero',
+        }));
 
       if (barberoNombre) {
         const found = barbers.find((b) => matchBarberName(barberoNombre, b));
@@ -691,12 +577,11 @@ export const crearCitaTool = ai.defineTool(
       }
 
       if (!finalProfId) throw new Error('Confirma el profesional con el cliente antes de crear la cita.');
-
-      if (!finalProfId || !barbers.some(b => b.id === finalProfId)) throw new Error('El profesional no está disponible.');
+      if (!barbers.some(b => b.id === finalProfId)) throw new Error('El profesional no está disponible.');
       finalBarberName = barbers.find(b => b.id === finalProfId)!.publicName;
 
       if (!servicioIds?.length && !serviciosNombres?.length && !servicioNombre) throw new Error('Confirma los servicios antes de crear la cita.');
-      // Resolver servicios con soporte para múltiples servicios
+
       const servsSnap = await db.collection('servicios').where('active', '==', true).get();
       const allServices = servsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
@@ -712,7 +597,6 @@ export const crearCitaTool = ai.defineTool(
       const selectedServices = resolved.services;
       if (!isBarberCapableOfServices(selectedServices, finalProfId)) throw new Error('El profesional no realiza todos los servicios seleccionados.');
 
-      // Resolver notas del cliente para duraciones personalizadas
       const currentCtx = chatContextStorage.getStore();
       let resolvedClientNotes = currentCtx?.clientNotes || '';
       if (!resolvedClientNotes && (telefonoCliente || currentCtx?.clientPhone)) {
@@ -724,9 +608,7 @@ export const crearCitaTool = ai.defineTool(
               resolvedClientNotes = snap.docs[0].data().notas || snap.docs[0].data().nota || '';
             }
           }
-        } catch (noteErr) {
-          // ignore
-        }
+        } catch (_) {}
       }
 
       let customClientDuration: number | null = null;
@@ -737,7 +619,6 @@ export const crearCitaTool = ai.defineTool(
         (customClientDuration && /corte/i.test(service.name || service.nombre || '') ? customClientDuration : getBarberServiceDuration([service], finalProfId!, 30)), 0);
       const finalDuration = Math.max(baseDuration, duracionMinutos || 0);
 
-      // El motor compartido aplica duration al primer corte, no al bloque completo.
       const overrideIndex = selectedServices.findIndex(service => selectedServices.length === 1 || /corte/i.test(service.name || service.nombre || ''));
       const normalTotal = getBarberServiceDuration(selectedServices, finalProfId!, 30);
       const bookingDuration = overrideIndex >= 0
@@ -745,11 +626,9 @@ export const crearCitaTool = ai.defineTool(
         : undefined;
       if (overrideIndex < 0 && finalDuration !== normalTotal) throw new Error('La duración especial de esta combinación requiere revisión de recepción.');
 
-      // Resolver productos físicos opcionales
       const resolvedProducts = await resolveProducts(db, productosNombres, productoNombre);
       const extraProductsAmount = resolvedProducts.reduce((sum, p) => sum + (p.precio * (p.cantidad || 1)), 0);
 
-      // Calcular anticipo con servicios + productos + hora de inicio
       const anticipoCalc = await calcularAnticipoParaServicios(selectedServices, extraProductsAmount, normalizedTime);
 
       const nameParts = (nombreCliente || 'Cliente').trim().split(/\s+/);
@@ -767,7 +646,6 @@ export const crearCitaTool = ai.defineTool(
       const resolvedEmail = (correoCliente || chatContext?.clientEmail || '').trim().toLowerCase();
       const cleanPhone = (telefonoCliente || chatContext?.clientPhone || '').replace(/\D/g, '').slice(-10);
 
-      // VALIDACIÓN ESTRICTA: El cliente DEBE contar con celular y correo electrónico registrado antes de agendar
       if (!resolvedEmail || !resolvedEmail.includes('@')) {
         return {
           exito: false,
@@ -778,19 +656,15 @@ export const crearCitaTool = ai.defineTool(
       if (!cleanPhone || cleanPhone.length < 10) {
         return {
           exito: false,
-          mensaje: 'No es posible crear la cita todavía: se requiere un número de celular válido de 10 dígitos para registrar la cita y enviar las confirmaciones de WhatsApp. Por favor solicítale su celular al cliente.',
+          mensaje: 'No es posible crear la cita todavía: se requiere un número de celular válido de 10 dígitos para registrar la cita y enviar las confirmaciones. Por favor solicítale su celular al cliente.',
         };
       }
 
       const isSimulation = Boolean(
         chatContext?.simulation ||
-        chatContext?.clientPhone?.startsWith('web') ||
         chatContext?.clientPhone?.startsWith('sim') ||
-        telefonoCliente?.startsWith('web') ||
         telefonoCliente?.startsWith('sim') ||
-        chatContext?.conversationId?.startsWith('web') ||
-        chatContext?.conversationId?.startsWith('sim') ||
-        process.env.NODE_ENV !== 'production'
+        chatContext?.conversationId?.startsWith('sim')
       );
 
       const res = await createPublicReservation({
@@ -832,9 +706,7 @@ export const crearCitaTool = ai.defineTool(
             const formatted = validSlots.map((s: string) => formatTime12h(s)).join(', ');
             alternativeSlotsText = ` Horarios disponibles reales donde sí cabe la duración completa (${finalServName} - ${barberDuration} min) con ${finalBarberName} para esa fecha: ${formatted}.`;
           }
-        } catch (e) {
-          // ignore
-        }
+        } catch (_) {}
 
         return {
           exito: false,
@@ -843,8 +715,15 @@ export const crearCitaTool = ai.defineTool(
       }
 
       const reservationId = (res as any).reservationId || (res as any).id;
+      const bookedClientId = (res as any).clientId || chatContext?.clientId;
 
-      // Marcar en la conversación que ya se completó el agendamiento y no insistir con venta cruzada hoy
+      await syncConversationClientIdentity(db, {
+        clientId: bookedClientId,
+        name: `${firstName} ${lastName}`.trim(),
+        phone: cleanPhone,
+        email: resolvedEmail,
+      });
+
       if (chatContext?.conversationId) {
         try {
           await db.collection('conversaciones').doc(chatContext.conversationId).set(
@@ -857,7 +736,6 @@ export const crearCitaTool = ai.defineTool(
         } catch (_) {}
       }
 
-      // Si requiere anticipo, generar preferencia de Mercado Pago y asociar enlace
       if (anticipoCalc.requiereAnticipo) {
         const fullTitle = resolvedProducts.length > 0
           ? `${finalServName} + ${resolvedProducts.map((p) => p.nombre).join(', ')} (${targetFecha} ${time12h})`
@@ -873,7 +751,6 @@ export const crearCitaTool = ai.defineTool(
 
         const linkPago = pref?.initPoint || '';
 
-        // Guardar link de pago en la reserva
         if (linkPago) {
           const targetCol = isSimulation ? 'reservas_sandbox' : 'reservas';
           await db.collection(targetCol).doc(reservationId).set(
@@ -1122,7 +999,6 @@ export const consultarCitasClienteTool = ai.defineTool(
       const db = getDb();
       const reservations = await getClientReservations(telefono);
 
-      // Mapear nombres de barberos
       const profsSnap = await db.collection('profesionales').get();
       const barberMap = new Map<string, string>();
       profsSnap.docs.forEach((d) => {
@@ -1225,14 +1101,14 @@ export const confirmarCitaClienteTool = ai.defineTool(
         const current = fresh.data();
         if (!current || !isUpcomingReservation(current) || hasPendingDeposit(current) || current.fecha !== targetData.fecha || current.hora_inicio !== targetData.hora_inicio || current.cliente_telefono !== targetData.cliente_telefono || current.cliente_id !== targetData.cliente_id) throw new Error('La cita cambió o tiene un anticipo pendiente. Consulta sus datos nuevamente.');
         transaction.update(reservation.ref, {
-        estado: current.estado || 'Reservado',
-        confirmada_por_cliente: true,
-        confirmada_en: now,
-        etiqueta_recordatorio: 'confirmada',
-        whatsappConfirmationSent: true,
-        updated_at: now,
-        notas: (current.notas ? current.notas + ' | ' : '') + 'Confirmada por cliente vía WhatsApp',
-      });
+          estado: current.estado || 'Reservado',
+          confirmada_por_cliente: true,
+          confirmada_en: now,
+          etiqueta_recordatorio: 'confirmada',
+          whatsappConfirmationSent: true,
+          updated_at: now,
+          notas: (current.notas ? current.notas + ' | ' : '') + 'Confirmada por cliente vía Asistente Virtual Janet',
+        });
       });
 
       let barberName = targetData.professionalNames || targetData.barbero_nombre || '';
@@ -1242,7 +1118,7 @@ export const confirmarCitaClienteTool = ai.defineTool(
           if (bDoc.exists) {
             barberName = bDoc.data()?.publicName || bDoc.data()?.name || '';
           }
-        } catch (e) {}
+        } catch (_) {}
       }
 
       const formattedTime = formatTime12h(targetData.hora_inicio);
@@ -1259,81 +1135,6 @@ export const confirmarCitaClienteTool = ai.defineTool(
     } catch (e: any) {
       console.error('Error in confirmar_cita_cliente:', e);
       return { exito: false, mensaje: e.message || 'Error al confirmar la cita.' };
-    }
-  }
-);
-
-export const consultarProductosTool = ai.defineTool(
-  {
-    name: 'consultar_productos',
-    description:
-      'Consulta el catálogo de productos físicos a la venta en VATOS ALFA Barber Shop (ceras, pomadas, aftershave, shampoo, aceites para barba, minoxidil, etc.) con sus precios, descripciones y existencias (stock).',
-    inputSchema: z.object({
-      termino: z
-        .string()
-        .optional()
-        .describe('Término de búsqueda o nombre del producto (ej: cera, pomada, minoxidil, aftershave, shampoo, barba). Déjalo vacío para ver los productos principales.'),
-    }),
-    outputSchema: z.object({
-      totalEncontrados: z.number(),
-      productos: z.array(
-        z.object({
-          id: z.string(),
-          nombre: z.string(),
-          precio: z.number(),
-          stock: z.number(),
-          disponible: z.boolean(),
-          descripcion: z.string(),
-        })
-      ),
-      resumenTexto: z.string(),
-    }),
-  },
-  async ({ termino }) => {
-    try {
-      const db = getDb();
-      const snap = await db.collection('productos').where('active', '==', true).get();
-      let allProducts = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          nombre: data.nombre || '',
-          precio: Number(data.public_price || data.precio_venta || data.precio || 0),
-          stock: Number(data.stock || 0),
-          disponible: Number(data.stock || 0) > 0,
-          descripcion: data.description || data.descripcion || '',
-        };
-      });
-
-      if (termino && termino.trim()) {
-        const qClean = cleanSearchStr(termino);
-        const filtered = allProducts.filter((p) => {
-          const nClean = cleanSearchStr(p.nombre);
-          const dClean = cleanSearchStr(p.descripcion);
-          return nClean.includes(qClean) || dClean.includes(qClean);
-        });
-        if (filtered.length > 0) {
-          allProducts = filtered;
-        }
-      }
-
-      const topProducts = allProducts.slice(0, 6);
-      const resumenTexto = topProducts
-        .map((p) => `• ${p.nombre}: $${p.precio} MXN (${p.disponible ? `disponible, quedan ${p.stock} piezas` : 'agotado temporalmente'}) - ${p.descripcion.slice(0, 90)}...`)
-        .join('\n');
-
-      return {
-        totalEncontrados: topProducts.length,
-        productos: topProducts,
-        resumenTexto: resumenTexto || 'No se encontraron productos en el catálogo con ese término.',
-      };
-    } catch (e: any) {
-      console.error('Error in consultar_productos:', e);
-      return {
-        totalEncontrados: 0,
-        productos: [],
-        resumenTexto: 'No se pudo consultar el catálogo de productos en este momento.',
-      };
     }
   }
 );
@@ -1372,7 +1173,7 @@ export const anotarListaEsperaTool = ai.defineTool(
         notas: notas || '',
         estado: 'pendiente',
         creado_en: new Date(),
-        origen: 'asistente_sofia',
+        origen: 'asistente_virtual_janet',
       });
 
       return {
@@ -1459,53 +1260,6 @@ export const reagendarCitaTool = ai.defineTool(
   }
 );
 
-export const consultarUbicacionTool = ai.defineTool(
-  {
-    name: 'consultar_ubicacion',
-    description: 'Obtiene la dirección física exacta, referencias para llegar, teléfono y horarios de apertura de la barbería VATOS ALFA.',
-    inputSchema: z.object({}),
-    outputSchema: z.object({
-      nombre: z.string(),
-      direccion: z.string(),
-      ciudad: z.string(),
-      referencias: z.string(),
-      telefono: z.string(),
-      horarios: z.string(),
-      mapsGoogle: z.string(),
-    }),
-  },
-  async () => {
-    try {
-      const db = getDb();
-      const snap = await db.collection('locales').limit(1).get();
-      if (!snap.empty) {
-        const data = snap.docs[0].data();
-        return {
-          nombre: data.name || 'VATOS ALFA Barber Shop',
-          direccion: data.address || 'Av. Cerro Sombrerete 1001, Col. Cipreses',
-          ciudad: 'Santiago de Querétaro, Qro., México',
-          referencias: 'Sobre Av. Cerro Sombrerete, Col. Cipreses. Contamos con cajones de estacionamiento al frente.',
-          telefono: data.phone || '4428727279',
-          horarios: 'Lunes a Sábado de 10:00 AM a 9:00 PM, Domingos de 10:00 AM a 8:00 PM',
-          mapsGoogle: 'https://maps.google.com/?q=Av+Cerro+Sombrerete+1001+Cipreses+Queretaro',
-        };
-      }
-    } catch (e) {
-      // fallback
-    }
-
-    return {
-      nombre: 'VATOS ALFA Barber Shop',
-      direccion: 'Av. Cerro Sombrerete 1001, Col. Cipreses',
-      ciudad: 'Santiago de Querétaro, Qro., México',
-      referencias: 'Sobre Av. Cerro Sombrerete (zona Cipreses). Contamos con estacionamiento al frente.',
-      telefono: '4428727279',
-      horarios: 'Lunes a Sábado de 10:00 AM a 9:00 PM, Domingos de 10:00 AM a 8:00 PM',
-      mapsGoogle: 'https://maps.google.com/?q=Av+Cerro+Sombrerete+1001+Cipreses+Queretaro',
-    };
-  }
-);
-
 export const solicitarRecepcionTool = ai.defineTool(
   {
     name: 'solicitar_recepcion',
@@ -1519,7 +1273,7 @@ export const solicitarRecepcionTool = ai.defineTool(
       mensaje: z.string(),
     }),
   },
-  async ({ conversationId, motivo }) => {
+  async ({ motivo }) => {
     try {
       const db = getDb();
       const context = chatContextStorage.getStore();
@@ -1546,94 +1300,6 @@ export const solicitarRecepcionTool = ai.defineTool(
   }
 );
 
-export const consultarPoliticasYTerminosTool = ai.defineTool(
-  {
-    name: 'consultar_terminos_y_privacidad',
-    description:
-      'Consulta los Términos y Condiciones oficiales de servicio, políticas de puntualidad, anticipos, cancelaciones y reembolsos, y el Aviso de Privacidad integral de VATOS ALFA Barber Shop. Devuelve los resúmenes y los enlaces web oficiales para compartir con el cliente.',
-    inputSchema: z.object({
-      tema: z
-        .enum(['terminos', 'privacidad', 'cancelaciones_y_anticipos', 'ambos'])
-        .optional()
-        .describe('Tema a consultar: "terminos" para reglas de citas y servicio, "privacidad" para manejo y protección de datos personales, "cancelaciones_y_anticipos" para reglas de anticipo/reembolso, o "ambos".'),
-    }),
-    outputSchema: z.object({
-      urlTerminos: z.string(),
-      urlPrivacidad: z.string(),
-      resumenTerminos: z.string(),
-      resumenPrivacidad: z.string(),
-      politicaCancelacionYAnticipos: z.string(),
-      textoDetallado: z.string().optional(),
-    }),
-  },
-  async ({ tema = 'ambos' }) => {
-    try {
-      const db = getDb();
-      let customTerms = '';
-      let customPrivacy = '';
-
-      try {
-        const settingsDoc = await db.collection('settings').doc('website').get();
-        if (settingsDoc.exists) {
-          const data = settingsDoc.data()!;
-          if (data.termsText) customTerms = data.termsText.trim();
-          if (data.privacyText) customPrivacy = data.privacyText.trim();
-        }
-      } catch (err) {
-        console.error('Error reading website settings for terms/privacy:', err);
-      }
-
-      const urlTerminos = 'https://vatosalfa.com/terminos';
-      const urlPrivacidad = 'https://vatosalfa.com/privacidad';
-
-      const resumenTerminos =
-        '1. Tolerancia máxima de 10 minutos para iniciar la cita. Tras 10 min sin presencia ni aviso previo, se marca como "No Show" y se libera el espacio.\n' +
-        '2. Anticipos de garantía: Aplican para citas iguales o mayores a $190 MXN (o servicios específicos). Se abonan en línea por Mercado Pago o transferencia y se descuentan del total en recepción.\n' +
-        '3. Cancelaciones y Reagendaciones: Si se notifica con al menos 2 horas de anticipación, el 100% del anticipo se guarda como saldo a favor válido por 30 días. Cancelaciones con menos de 2 horas o No-Show causan la pérdida del anticipo.\n' +
-        '4. Si la barbería debe cancelar por causas de fuerza mayor, el cliente recibe reagendación prioritaria o el reembolso del 100% de su anticipo.\n' +
-        '5. Derecho de admisión y respeto mutuo en el establecimiento.';
-
-      const politicaCancelacionYAnticipos =
-        '• Con aviso de 2 horas o más: Tu anticipo queda 100% respaldado como saldo a favor en tu cuenta para reagendar en los siguientes 30 días.\n' +
-        '• Con menos de 2 horas o inasistencia (No Show tras 10 min de tolerancia): Se pierde el anticipo por concepto de apartado y tiempo reservado del barbero.\n' +
-        '• Por causas imputables a la barbería: Reagendación prioritaria inmediata o devolución del 100% del anticipo pagado.';
-
-      const resumenPrivacidad =
-        '• Responsable: VATOS ALFA Barber Shop (Santiago de Querétaro, Qro.).\n' +
-        '• Datos recabados: Nombre, número de WhatsApp/teléfono y correo electrónico.\n' +
-        '• Finalidad: Exclusivamente para agendar citas, identificación del cliente y envío de recordatorios o confirmaciones por WhatsApp.\n' +
-        '• Confidencialidad: NO se venden ni comparten datos con terceros para publicidad. Solo se utilizan proveedores tecnológicos indispensables para operar (Google Cloud/Firebase).\n' +
-        '• Derechos ARCO: El cliente puede solicitar acceso, rectificación, cancelación u oposición de sus datos escribiendo a contacto@vatosalfa.com.';
-
-      let textoDetallado = '';
-      if (customTerms && (tema === 'terminos' || tema === 'ambos' || tema === 'cancelaciones_y_anticipos')) {
-        textoDetallado += `Términos registrados:\n${customTerms.substring(0, 1200)}...\n\n`;
-      }
-      if (customPrivacy && (tema === 'privacidad' || tema === 'ambos')) {
-        textoDetallado += `Privacidad registrada:\n${customPrivacy.substring(0, 800)}...`;
-      }
-
-      return {
-        urlTerminos,
-        urlPrivacidad,
-        resumenTerminos,
-        resumenPrivacidad,
-        politicaCancelacionYAnticipos,
-        textoDetallado: textoDetallado || undefined,
-      };
-    } catch (e: any) {
-      console.error('Error in consultar_terminos_y_privacidad:', e);
-      return {
-        urlTerminos: 'https://vatosalfa.com/terminos',
-        urlPrivacidad: 'https://vatosalfa.com/privacidad',
-        resumenTerminos: 'Tolerancia de 10 minutos, cancelaciones con 2 horas de anticipación conservan saldo por 30 días.',
-        resumenPrivacidad: 'Datos usados exclusivamente para citas y recordatorios, no se comparten con terceros.',
-        politicaCancelacionYAnticipos: 'Avisando con 2h se conserva el saldo a favor; menos de 2h o inasistencia se pierde el anticipo.',
-      };
-    }
-  }
-);
-
 export function getAgentTools({ userPickingSlot }: { userPickingSlot?: boolean } = {}) {
   return [
     verificarORegistrarClienteTool,
@@ -1651,5 +1317,6 @@ export function getAgentTools({ userPickingSlot }: { userPickingSlot?: boolean }
     confirmarCitaClienteTool,
     anotarListaEsperaTool,
     consultarPoliticasYTerminosTool,
+    consultarPaseAlfaYPromocionesTool,
   ];
 }

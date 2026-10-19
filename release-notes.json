@@ -2,8 +2,11 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Ajuste en el selector de horarios de la agenda.",
+  "summary": "Refactorización de módulos, mejoras en medios de pago, anticipos y horarios de Janet.",
   "notes": [
-    "El selector de horas al crear o editar citas ahora muestra únicamente el horario operativo de la sucursal y horarios especiales habilitados."
+    "Los botones de envío de confirmación y recordatorio por WhatsApp en el detalle de cita ahora permanecen siempre habilitados sin cambiar el estado de la cita automáticamente.",
+    "Se habilitó el desplazamiento vertical en el Reporte de Comisiones para visualización completa en tablets y todos los dispositivos.",
+    "Actualización de medios de pago: 'Terminal Point' para cobros y anticipos en terminal física, 'Pago en línea' para reservas desde web/app y 'Transferencia' para links de pago enviados desde sucursal.",
+    "Mayor claridad visual en el monto de anticipo al reservar en línea y sincronización completa de todos los horarios disponibles en Janet."
   ]
 }

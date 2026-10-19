@@ -80,21 +80,25 @@ export default function AppInitializer() {
 
   return (
     <>
-      <NewReservationForm
-        isOpen={isReservationModalOpen}
-        onOpenChange={setIsReservationModalOpen}
-        isDialogChild={false} // It's a standalone dialog
-        onFormSubmit={onDataRefresh}
-        initialData={reservationInitialData}
-        isEditMode={!!reservationInitialData?.id}
-      />
+      {isReservationModalOpen && (
+        <NewReservationForm
+          isOpen={isReservationModalOpen}
+          onOpenChange={setIsReservationModalOpen}
+          isDialogChild={false} // It's a standalone dialog
+          onFormSubmit={onDataRefresh}
+          initialData={reservationInitialData}
+          isEditMode={!!reservationInitialData?.id}
+        />
+      )}
 
-      <BlockScheduleForm
-        isOpen={isBlockScheduleModalOpen}
-        onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={onDataRefresh}
-        initialData={blockInitialData}
-      />
+      {isBlockScheduleModalOpen && (
+        <BlockScheduleForm
+          isOpen={isBlockScheduleModalOpen}
+          onOpenChange={setIsBlockScheduleModalOpen}
+          onFormSubmit={onDataRefresh}
+          initialData={blockInitialData}
+        />
+      )}
 
       <NewSaleSheet
         isOpen={isSaleSheetOpen}
@@ -104,10 +108,12 @@ export default function AppInitializer() {
         forceMaximize={saleTrigger}
       />
 
-      <QRScannerModal
-        isOpen={isQrScannerOpen}
-        onOpenChange={setIsQrScannerOpen}
-      />
+      {isQrScannerOpen && (
+        <QRScannerModal
+          isOpen={isQrScannerOpen}
+          onOpenChange={setIsQrScannerOpen}
+        />
+      )}
     </>
   );
 }

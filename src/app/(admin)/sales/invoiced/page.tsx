@@ -51,8 +51,39 @@ import { DonutChartCard } from "@/components/sales/donut-chart-card";
 import { useInvoicedSales } from "./use-invoiced-sales";
 import { logAuditAction } from '@/lib/audit-logger';
 
+function formatPaymentMethodName(saleOrMethod: any): string {
+    const rawMethod = (typeof saleOrMethod === 'string'
+        ? saleOrMethod
+        : (saleOrMethod?.metodo_pago || saleOrMethod?.metodo_pago_anticipo || '')
+    ).toLowerCase().trim();
 
+    if (rawMethod === 'tarjeta' || rawMethod === 'terminal' || rawMethod === 'terminal_point' || rawMethod === 'terminal point') {
+        return 'Terminal Point';
+    }
+    if (rawMethod === 'efectivo') {
+        return 'Efectivo';
+    }
+    if (rawMethod === 'transferencia' || rawMethod === 'spei') {
+        return 'Transferencia';
+    }
+    if (rawMethod === 'mercadopago' || rawMethod === 'mercado_pago' || rawMethod === 'pagos en linea' || rawMethod === 'pagos_en_linea' || rawMethod === 'en_linea' || rawMethod === 'online') {
+        return 'Pagos en Línea';
+    }
+    if (rawMethod === 'combinado') {
+        return 'Combinado';
+    }
+    if (rawMethod === 'alfacoins' || rawMethod === 'alfa_coins') {
+        return 'Alfa Coins';
+    }
 
+    // Fallback: If sale object was passed without rawMethod but marked as deposit_paid
+    if (typeof saleOrMethod === 'object' && saleOrMethod?.pago_estado === 'deposit_paid') {
+        return 'Pagos en Línea';
+    }
+
+    if (!rawMethod) return 'N/A';
+    return rawMethod.charAt(0).toUpperCase() + rawMethod.slice(1);
+}
 
 export default function InvoicedSalesPage() {
     const { user } = useAuth();
@@ -176,8 +207,8 @@ export default function InvoicedSalesPage() {
                         bValue = (b.professionalNames || '').toLowerCase();
                         break;
                     case 'metodo_pago':
-                        aValue = (a.metodo_pago || '').toLowerCase();
-                        bValue = (b.metodo_pago || '').toLowerCase();
+                        aValue = formatPaymentMethodName(a).toLowerCase();
+                        bValue = formatPaymentMethodName(b).toLowerCase();
                         break;
                     case 'total':
                         aValue = (a.monto_pagado_real !== undefined && a.monto_pagado_real < a.total) ? a.monto_pagado_real : a.total;
@@ -435,7 +466,22 @@ export default function InvoicedSalesPage() {
                 snapshot.forEach(doc => {
                     const data = doc.data();
                     const localMatch = activeFilters.local === 'todos' || data.local_id === activeFilters.local;
-                    const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || data.metodo_pago === activeFilters.paymentMethod;
+                    const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || (() => {
+                        const filter = activeFilters.paymentMethod;
+                        if (filter === 'tarjeta') {
+                            return data.metodo_pago === 'tarjeta' || data.metodo_pago === 'terminal' || data.metodo_pago === 'terminal_point';
+                        }
+                        if (filter === 'efectivo') {
+                            return data.metodo_pago === 'efectivo';
+                        }
+                        if (filter === 'transferencia') {
+                            return data.metodo_pago === 'transferencia';
+                        }
+                        if (filter === 'Pagos en linea' || filter === 'pagos_en_linea' || filter === 'Pagos en Línea') {
+                            return data.metodo_pago === 'mercadopago' || data.metodo_pago === 'Pagos en linea' || data.metodo_pago === 'pagos_en_linea' || data.metodo_pago === 'en_linea' || (!data.metodo_pago && data.pago_estado === 'deposit_paid');
+                        }
+                        return data.metodo_pago === filter;
+                    })();
 
                     if (localMatch && paymentMethodMatch) {
                         cancelledSales.push({ ...data, isCancelled: true });
@@ -468,7 +514,7 @@ export default function InvoicedSalesPage() {
             'Concepto': sale.isCancelled ? `[CANCELADA] ${getSaleConcept(sale)}` : getSaleConcept(sale),
             'Detalle': sale.items?.map((i: any) => i.nombre).join(', ') || 'N/A',
             'Profesional': sale.professionalNames || 'N/A',
-            'Método de Pago': sale.metodo_pago,
+            'Método de Pago': formatPaymentMethodName(sale),
             'Total': sale.isCancelled ? 0 : ((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total),
             'Descuento': '0.00%', // Placeholder
         }));
@@ -724,9 +770,9 @@ export default function InvoicedSalesPage() {
                                 <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                                     <SelectItem value="todos">Todos los métodos de pago</SelectItem>
                                     <SelectItem value="efectivo">Efectivo</SelectItem>
-                                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                                    <SelectItem value="tarjeta">Terminal Point</SelectItem>
                                     <SelectItem value="transferencia">Transferencia</SelectItem>
-                                    <SelectItem value="Pagos en linea">Pagos en linea</SelectItem>
+                                    <SelectItem value="Pagos en linea">Pagos en Línea</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -824,9 +870,9 @@ export default function InvoicedSalesPage() {
                                         <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                                             <SelectItem value="todos">Todos los métodos de pago</SelectItem>
                                             <SelectItem value="efectivo">Efectivo</SelectItem>
-                                            <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                                            <SelectItem value="tarjeta">Terminal Point</SelectItem>
                                             <SelectItem value="transferencia">Transferencia</SelectItem>
-                                            <SelectItem value="Pagos en linea">Pagos en linea</SelectItem>
+                                            <SelectItem value="Pagos en linea">Pagos en Línea</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -940,7 +986,7 @@ export default function InvoicedSalesPage() {
                                                         <span className="truncate text-muted-foreground text-[10px]">{label}</span>
                                                     </div>
                                                     <span className="font-semibold text-foreground text-[10px] shrink-0 ml-1">
-                                                        ${val.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                                        ${val.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </span>
                                                 </div>
                                             );
@@ -1114,10 +1160,7 @@ export default function InvoicedSalesPage() {
                                                     {getSaleConcept(sale)}
                                                 </span>
                                                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-400 capitalize">
-                                                    {sale.pago_estado === 'deposit_paid' ? 'Pago en Línea' : (
-                                                        sale.metodo_pago === 'combinado' ? 'Combinado' :
-                                                            sale.metodo_pago === 'mercadopago' ? 'Pago en Línea' : sale.metodo_pago
-                                                    )}
+                                                    {formatPaymentMethodName(sale)}
                                                 </span>
                                             </div>
 
@@ -1249,10 +1292,7 @@ export default function InvoicedSalesPage() {
                                                 <TableCell className="py-2.5 px-3 text-xs text-muted-foreground">{sale.items && Array.isArray(sale.items) ? sale.items.map(i => i.nombre).join(', ') : 'N/A'}</TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs">{sale.professionalNames}</TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs capitalize">
-                                                    {sale.pago_estado === 'deposit_paid' ? 'Pago en Línea' : (
-                                                        sale.metodo_pago === 'combinado' ? 'Combinado' :
-                                                            sale.metodo_pago === 'mercadopago' ? 'Pago en Línea' : sale.metodo_pago
-                                                    )}
+                                                    {formatPaymentMethodName(sale)}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs font-semibold">
                                                     ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1662,8 +1702,9 @@ export default function InvoicedSalesPage() {
                                     </SelectTrigger>
                                     <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
                                         <SelectItem value="efectivo">Efectivo</SelectItem>
-                                        <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                                        <SelectItem value="tarjeta">Terminal Point</SelectItem>
                                         <SelectItem value="transferencia">Transferencia</SelectItem>
+                                        <SelectItem value="mercadopago">Pagos en Línea</SelectItem>
                                         <SelectItem value="combinado">Combinado</SelectItem>
                                     </SelectContent>
                                 </Select>

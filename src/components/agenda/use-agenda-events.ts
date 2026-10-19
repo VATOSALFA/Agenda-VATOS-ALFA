@@ -53,14 +53,20 @@ export function useAgendaEvents(
                     correo: (res as any).cliente_email || ''
                 } as unknown as Client : undefined);
 
-                const isDepositPaid =
-                    res.pago_estado === 'deposit_paid' ||
-                    res.pago_estado === 'anticipo_pagado' ||
-                    (res.pago_estado !== 'pendiente_anticipo' &&
-                     res.pago_estado !== 'pending_payment' &&
-                     res.pago_estado !== 'Pendiente' &&
-                     res.pago_estado !== 'pendiente' &&
-                     Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_pagado || 0) > 0);
+                const rawEventDepositPaid = Number(
+                    res.anticipo_pagado ||
+                    (res as any).anticipoPagado ||
+                    (res as any).monto_pagado_real ||
+                    (res as any).monto_pagado ||
+                    0
+                );
+                const isDepositPaid = Boolean(
+                    (rawEventDepositPaid > 0 || res.pago_estado === 'deposit_paid' || res.pago_estado === 'anticipo_pagado') &&
+                    res.pago_estado !== 'pendiente_anticipo' &&
+                    res.pago_estado !== 'pending_payment' &&
+                    res.pago_estado !== 'Pendiente' &&
+                    res.pago_estado !== 'pendiente'
+                );
 
                 const timing = getPendingDepositTiming(res, nowMs, 10);
                 const isPendingDeposit = timing.isPendingDeposit && !timing.depositExpired;

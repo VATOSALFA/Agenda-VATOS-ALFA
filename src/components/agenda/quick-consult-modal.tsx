@@ -17,6 +17,7 @@ import { Zap, Clock, User, AlertCircle, Sparkles, ArrowLeft } from 'lucide-react
 import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Schedule } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
+import { getNormalizedDayOfWeek, getEffectiveBarberDaySchedule } from '@/lib/scheduling/schedule-engine';
 
 interface QuickConsultModalProps {
   isOpen: boolean;
@@ -68,10 +69,7 @@ export function QuickConsultModal({
     if (!selectedService || !date) return [];
 
     const formattedDate = format(date, 'yyyy-MM-dd');
-    const dayOfWeek = format(date, 'eeee', { locale: es })
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '');
+    const dayOfWeek = getNormalizedDayOfWeek(date);
 
     // Current time limit if checking for today (Mexico City time or system time)
     const now = new Date();
@@ -89,112 +87,13 @@ export function QuickConsultModal({
       return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
     };
 
-    const getDaySchedule = (barber: Profesional) => {
-      const dateStr = formattedDate;
-      const regSchedule = barber.schedule ? barber.schedule[dayOfWeek as keyof typeof barber.schedule] : null;
-      const localDay = localSchedule?.[dayOfWeek as keyof typeof localSchedule];
-      const isLocalOpen = localDay ? localDay.enabled !== false : true;
-
-      // Check for Special Journeys (there may be multiple on the same day)
-      const barberJourneys = (specialJourneys || []).filter(
-        (s: any) => s.profesionalId === barber.id && s.fecha === dateStr
-      );
-
-      if (barberJourneys.length > 0) {
-        const workingIntervals: { start: number; end: number }[] = [];
-
-        if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && isLocalOpen) {
-          let regStart = parseTime(regSchedule.start);
-          let regEnd = parseTime(regSchedule.end);
-          if (localDay && localDay.enabled && localDay.start && localDay.end) {
-            regStart = Math.max(regStart, parseTime(localDay.start));
-            regEnd = Math.min(regEnd, parseTime(localDay.end));
-          }
-          if (regStart < regEnd) {
-            let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
-            if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
-              regSchedule.breaks.forEach((brk: any) => {
-                if (!brk.start || !brk.end) return;
-                const bStart = parseTime(brk.start);
-                const bEnd = parseTime(brk.end);
-                if (bStart >= bEnd) return;
-                const nextSegs: { start: number; end: number }[] = [];
-                regSegments.forEach(seg => {
-                  if (bEnd <= seg.start || bStart >= seg.end) {
-                    nextSegs.push(seg);
-                  } else {
-                    if (bStart > seg.start) nextSegs.push({ start: seg.start, end: bStart });
-                    if (bEnd < seg.end) nextSegs.push({ start: bEnd, end: seg.end });
-                  }
-                });
-                regSegments = nextSegs;
-              });
-            }
-            workingIntervals.push(...regSegments);
-          }
-        }
-
-        barberJourneys.forEach((j: any) => {
-          if (j.hora_inicio && j.hora_fin) {
-            const s = parseTime(j.hora_inicio);
-            const e = parseTime(j.hora_fin);
-            if (s < e) workingIntervals.push({ start: s, end: e });
-          }
-        });
-
-        if (workingIntervals.length > 0) {
-          workingIntervals.sort((a, b) => a.start - b.start);
-          const merged: { start: number; end: number }[] = [];
-          workingIntervals.forEach(iv => {
-            if (merged.length === 0) {
-              merged.push({ ...iv });
-            } else {
-              const last = merged[merged.length - 1];
-              if (iv.start <= last.end) {
-                last.end = Math.max(last.end, iv.end);
-              } else {
-                merged.push({ ...iv });
-              }
-            }
-          });
-
-          const overallStart = formatMins(merged[0].start);
-          const overallEnd = formatMins(merged[merged.length - 1].end);
-          const breaks: { start: string; end: string }[] = [];
-          for (let i = 0; i < merged.length - 1; i++) {
-            if (merged[i].end < merged[i + 1].start) {
-              breaks.push({ start: formatMins(merged[i].end), end: formatMins(merged[i + 1].start) });
-            }
-          }
-
-          return {
-            enabled: true,
-            start: overallStart,
-            end: overallEnd,
-            breaks,
-          };
-        }
-      }
-
-      if (!isLocalOpen) {
-        return { enabled: false, start: localDay?.start || '10:00', end: localDay?.end || '20:00' };
-      }
-
-      if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && localDay?.enabled && localDay?.start && localDay?.end) {
-        const clampedStart = regSchedule.start > localDay.start ? regSchedule.start : localDay.start;
-        const clampedEnd = regSchedule.end < localDay.end ? regSchedule.end : localDay.end;
-        if (clampedStart >= clampedEnd) {
-          return { ...regSchedule, enabled: false };
-        }
-        return {
-          ...regSchedule,
-          start: clampedStart,
-          end: clampedEnd,
-        };
-      }
-
-      return regSchedule;
-    };
+    const getDaySchedule = (barber: Profesional) =>
+      getEffectiveBarberDaySchedule({
+        barber,
+        date,
+        localSchedule,
+        specialJourneys,
+      });
 
     const slots: {
       time: string;

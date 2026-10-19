@@ -70,6 +70,7 @@ import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
 import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
+import { getNormalizedDayOfWeek, getEffectiveBarberDaySchedule } from '@/lib/scheduling/schedule-engine';
 
 
 
@@ -459,7 +460,7 @@ export default function AgendaView() {
       return { timeSlots: [], startHour: 10, endHour: 21 };
     }
     const targetDate = date || new Date();
-    const dayOfWeek = format(targetDate, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const dayOfWeek = getNormalizedDayOfWeek(targetDate);
     const daySchedule = selectedLocal.schedule[dayOfWeek as keyof typeof selectedLocal.schedule] || selectedLocal.schedule.lunes;
 
     let sH = 10, sM = 0, eH = 21, eM = 0;
@@ -1438,130 +1439,12 @@ export default function AgendaView() {
 
   const getDaySchedule = (barber: Profesional): ScheduleDay | null => {
     if (!date) return null;
-
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const dayOfWeek = format(date, 'eeee', { locale: es })
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    const regSchedule = barber.schedule ? barber.schedule[dayOfWeek as keyof typeof barber.schedule] : null;
-
-    // Check for Special Journeys (there may be multiple on the same day)
-    const barberJourneys = (specialJourneys || []).filter(
-      (s: any) => s.profesionalId === barber.id && s.fecha === dateStr
-    );
-
-    if (barberJourneys.length > 0) {
-      const parseMins = (t: string) => {
-        const [h, m] = t.split(':').map(Number);
-        return h * 60 + m;
-      };
-      const fmtMins = (mins: number) => {
-        const h = Math.floor(mins / 60);
-        const m = mins % 60;
-        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-      };
-
-      const workingIntervals: { start: number; end: number }[] = [];
-
-      // 1. Include regular shift if enabled on this day (clamped to local hours if local is open)
-      const localDay = selectedLocal?.schedule?.[dayOfWeek as keyof typeof selectedLocal.schedule];
-      const isLocalOpen = localDay ? localDay.enabled !== false : true;
-
-      if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && isLocalOpen) {
-        let regStart = parseMins(regSchedule.start);
-        let regEnd = parseMins(regSchedule.end);
-        if (localDay && localDay.enabled && localDay.start && localDay.end) {
-          regStart = Math.max(regStart, parseMins(localDay.start));
-          regEnd = Math.min(regEnd, parseMins(localDay.end));
-        }
-        if (regStart < regEnd) {
-          let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
-          if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
-            regSchedule.breaks.forEach((brk: any) => {
-              if (!brk.start || !brk.end) return;
-              const bStart = parseMins(brk.start);
-              const bEnd = parseMins(brk.end);
-              if (bStart >= bEnd) return;
-              const nextSegs: { start: number; end: number }[] = [];
-              regSegments.forEach(seg => {
-                if (bEnd <= seg.start || bStart >= seg.end) {
-                  nextSegs.push(seg);
-                } else {
-                  if (bStart > seg.start) nextSegs.push({ start: seg.start, end: bStart });
-                  if (bEnd < seg.end) nextSegs.push({ start: bEnd, end: seg.end });
-                }
-              });
-              regSegments = nextSegs;
-            });
-          }
-          workingIntervals.push(...regSegments);
-        }
-      }
-
-      // 2. Include all Special Journeys (unclamped to local hours so before/after opening works)
-      barberJourneys.forEach((j: any) => {
-        if (j.hora_inicio && j.hora_fin) {
-          const s = parseMins(j.hora_inicio);
-          const e = parseMins(j.hora_fin);
-          if (s < e) workingIntervals.push({ start: s, end: e });
-        }
-      });
-
-      if (workingIntervals.length > 0) {
-        workingIntervals.sort((a, b) => a.start - b.start);
-        const merged: { start: number; end: number }[] = [];
-        workingIntervals.forEach(iv => {
-          if (merged.length === 0) {
-            merged.push({ ...iv });
-          } else {
-            const last = merged[merged.length - 1];
-            if (iv.start <= last.end) {
-              last.end = Math.max(last.end, iv.end);
-            } else {
-              merged.push({ ...iv });
-            }
-          }
-        });
-
-        const overallStart = fmtMins(merged[0].start);
-        const overallEnd = fmtMins(merged[merged.length - 1].end);
-        const breaks: { start: string; end: string }[] = [];
-        for (let i = 0; i < merged.length - 1; i++) {
-          if (merged[i].end < merged[i + 1].start) {
-            breaks.push({ start: fmtMins(merged[i].end), end: fmtMins(merged[i + 1].start) });
-          }
-        }
-
-        return {
-          enabled: true,
-          start: overallStart,
-          end: overallEnd,
-          breaks,
-        };
-      }
-    }
-
-    const localDay = selectedLocal?.schedule?.[dayOfWeek as keyof typeof selectedLocal.schedule];
-    const isLocalOpen = localDay ? localDay.enabled !== false : true;
-    if (!isLocalOpen) {
-      return { enabled: false, start: localDay?.start || '10:00', end: localDay?.end || '20:00' };
-    }
-    if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && localDay?.enabled && localDay?.start && localDay?.end) {
-      const clampedStart = regSchedule.start > localDay.start ? regSchedule.start : localDay.start;
-      const clampedEnd = regSchedule.end < localDay.end ? regSchedule.end : localDay.end;
-      if (clampedStart >= clampedEnd) {
-        return { ...regSchedule, enabled: false };
-      }
-      return {
-        ...regSchedule,
-        start: clampedStart,
-        end: clampedEnd,
-      };
-    }
-
-    return regSchedule;
+    return getEffectiveBarberDaySchedule({
+      barber,
+      date,
+      localSchedule: selectedLocal?.schedule as any,
+      specialJourneys,
+    });
   };
 
   const selectedDateFormatted = useMemo(() => {
@@ -1954,7 +1837,7 @@ export default function AgendaView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
-                          <span className="text-sm">Reserva agendada por Janet (WhatsApp)</span>
+                          <span className="text-sm">Reserva agendada por Janet (Chat App)</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Lock className="w-5 h-5 text-muted-foreground flex-shrink-0" />
@@ -2367,7 +2250,7 @@ export default function AgendaView() {
                                         )}
 
                                         {/* Payment Status Indicator (A/$) - Right */}
-                                        {(event.pago_estado === 'Pagado' || event.pago_estado === 'deposit_paid') && (
+                                        {(event.pago_estado === 'Pagado' || (event.pago_estado === 'deposit_paid' && Number(event.anticipo_pagado || (event as any).anticipoPagado || (event as any).monto_pagado_real || (event as any).monto_pagado || event.monto_anticipo || 0) > 0)) && (
                                           <div className={cn(
                                             "h-full px-2 flex items-center justify-center min-w-[20px] shrink-0",
                                             event.pago_estado === 'Pagado' ? 'bg-green-500' : 'bg-orange-500'
@@ -2424,18 +2307,18 @@ export default function AgendaView() {
                                   ) : (
                                     event.pago_estado && (
                                       <div className="flex items-center gap-2 text-sm">
-                                        {event.pago_estado === 'deposit_paid' ? (
+                                        {event.pago_estado === 'deposit_paid' && Number(event.anticipo_pagado || (event as any).anticipoPagado || (event as any).monto_pagado_real || (event as any).monto_pagado || event.monto_anticipo || 0) > 0 ? (
                                           <span className="font-bold text-orange-500">A</span>
                                         ) : (
-                                          <DollarSign className={cn("w-4 h-4", event.pago_estado === 'deposit_paid' ? 'text-orange-500' : 'text-green-600')} />
+                                          <DollarSign className={cn("w-4 h-4", event.pago_estado === 'Pagado' ? 'text-green-600' : 'text-slate-400')} />
                                         )}
                                         <span className={cn(
                                           event.pago_estado === 'Pagado' ? 'text-green-600' :
-                                            event.pago_estado === 'deposit_paid' ? 'text-orange-600 font-medium' :
-                                              'text-yellow-600'
+                                            (event.pago_estado === 'deposit_paid' && Number(event.anticipo_pagado || (event as any).anticipoPagado || (event as any).monto_pagado_real || (event as any).monto_pagado || event.monto_anticipo || 0) > 0) ? 'text-orange-600 font-medium' :
+                                              'text-slate-400'
                                         )}>
                                           {event.pago_estado === 'Pagado' ? 'Pago completo' :
-                                            event.pago_estado === 'deposit_paid' ? 'Anticipo pagado' :
+                                            (event.pago_estado === 'deposit_paid' && Number(event.anticipo_pagado || (event as any).anticipoPagado || (event as any).monto_pagado_real || (event as any).monto_pagado || event.monto_anticipo || 0) > 0) ? 'Anticipo pagado' :
                                               'Pago pendiente'}
                                         </span>
                                       </div>
@@ -2460,22 +2343,26 @@ export default function AgendaView() {
         </div>
       </div>
 
-      <NewReservationForm
-        isOpen={isReservationModalOpen}
-        onOpenChange={setIsReservationModalOpen}
-        isDialogChild={false}
-        onFormSubmit={onDataRefresh}
-        initialData={reservationInitialData}
-        isEditMode={!!reservationInitialData?.id}
-        isSandboxMode={isLocalhost && sandboxViewMode !== 'real_only'}
-      />
+      {isReservationModalOpen && (
+        <NewReservationForm
+          isOpen={isReservationModalOpen}
+          onOpenChange={setIsReservationModalOpen}
+          isDialogChild={false}
+          onFormSubmit={onDataRefresh}
+          initialData={reservationInitialData}
+          isEditMode={!!reservationInitialData?.id}
+          isSandboxMode={isLocalhost && sandboxViewMode !== 'real_only'}
+        />
+      )}
 
-      <BlockScheduleForm
-        isOpen={isBlockScheduleModalOpen}
-        onOpenChange={setIsBlockScheduleModalOpen}
-        onFormSubmit={onDataRefresh}
-        initialData={blockInitialData}
-      />
+      {isBlockScheduleModalOpen && (
+        <BlockScheduleForm
+          isOpen={isBlockScheduleModalOpen}
+          onOpenChange={setIsBlockScheduleModalOpen}
+          onFormSubmit={onDataRefresh}
+          initialData={blockInitialData}
+        />
+      )}
 
       {
         selectedReservation && (
@@ -2548,12 +2435,14 @@ export default function AgendaView() {
           </AlertDialog>
         )
       }
-      <EnableScheduleModal
-        isOpen={isEnableScheduleModalOpen}
-        onOpenChange={setIsEnableScheduleModalOpen}
-        onFormSubmit={onDataRefresh}
-        initialData={enableScheduleInitialData}
-      />
+      {isEnableScheduleModalOpen && (
+        <EnableScheduleModal
+          isOpen={isEnableScheduleModalOpen}
+          onOpenChange={setIsEnableScheduleModalOpen}
+          onFormSubmit={onDataRefresh}
+          initialData={enableScheduleInitialData}
+        />
+      )}
       {!isStaff && (
         <QuickConsultModal
           isOpen={isQuickConsultOpen}

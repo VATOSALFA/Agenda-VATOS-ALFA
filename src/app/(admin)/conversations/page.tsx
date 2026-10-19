@@ -115,10 +115,26 @@ import {
   SearchX,
   XCircle,
   Bell,
+  File as FileIcon,
+  Settings2,
+  Palette,
+  Type,
+  Link2,
 } from 'lucide-react';
 
 // Modals & Actions
 import { NewConversationModal } from '@/components/admin/conversations/new-conversation-modal';
+import { WhatsAppEmojiPicker } from '@/components/admin/conversations/whatsapp-emoji-picker';
+import { CameraCaptureModal } from '@/components/admin/conversations/camera-capture-modal';
+import {
+  ChatSettingsModal,
+  DEFAULT_CHAT_PREFERENCES,
+  playChatNotificationTone,
+  getFontSizeClass,
+  getSentBubbleClasses,
+  getClientBubbleClasses,
+  type ChatPreferences,
+} from '@/components/admin/conversations/chat-settings-modal';
 import { NewReservationForm } from '@/components/reservations/new-reservation-form';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { processAgentMessage } from '@/lib/actions/ai-agent';
@@ -138,6 +154,8 @@ import {
   sendTestChatReminder,
 } from '@/lib/actions/conversation-actions';
 import type { Conversation, ChatMessage, Client } from '@/lib/types';
+
+const CHAT_PREFS_STORAGE_KEY = 'vatos_alfa_chat_preferences_v1';
 
 const AVAILABLE_TAGS = [
   { id: 'VIP', label: '⭐ VIP', color: 'bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/30' },
@@ -929,8 +947,48 @@ export default function ConversationsDashboardPage() {
   const [sendRole, setSendRole] = useState<'cliente' | 'recepcion' | 'nota_interna'>('recepcion');
   const [pauseBotOnSend, setPauseBotOnSend] = useState<boolean>(false);
   const [isProcessingAI, setIsProcessingAI] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  // Chat Preferences & Customization State
+  const [chatPrefs, setChatPrefs] = useState<ChatPreferences>(DEFAULT_CHAT_PREFERENCES);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
+  const [cameraModalTarget, setCameraModalTarget] = useState<'main' | 'simulator'>('main');
+
+  // Load saved chat preferences from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(CHAT_PREFS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setChatPrefs((prev) => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch {}
+  }, []);
+
+  const handleUpdateChatPrefs = (newPrefs: ChatPreferences) => {
+    setChatPrefs(newPrefs);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CHAT_PREFS_STORAGE_KEY, JSON.stringify(newPrefs));
+      } catch {}
+    }
+  };
+
+  const soundEnabled = chatPrefs.soundEnabled;
+  const setSoundEnabled = (enabled: boolean) => {
+    handleUpdateChatPrefs({ ...chatPrefs, soundEnabled: enabled });
+  };
+
   const [attachedImageUrl, setAttachedImageUrl] = useState<string>('');
+  const [attachedFileInfo, setAttachedFileInfo] = useState<{
+    url: string;
+    name: string;
+    size: number;
+    mimeType: string;
+  } | null>(null);
   const [showImageInput, setShowImageInput] = useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = useState<boolean>(false);
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
@@ -941,11 +999,17 @@ export default function ConversationsDashboardPage() {
   const [deleteAuthError, setDeleteAuthError] = useState<string>('');
   const [isVerifyingDeleteCode, setIsVerifyingDeleteCode] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const generalFileInputRef = useRef<HTMLInputElement>(null);
+  const simFileInputRef = useRef<HTMLInputElement>(null);
   const chatTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Audio voice recording state & refs
+  // Audio voice recording state & refs (Main Chat + Simulator)
   const [isRecordingAudio, setIsRecordingAudio] = useState<boolean>(false);
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [liveVoiceTranscript, setLiveVoiceTranscript] = useState<string>('');
+  const liveTranscriptRef = useRef<string>('');
+  const speechRecognitionRef = useRef<any>(null);
+  const recordingTargetRef = useRef<'main' | 'simulator'>('main');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1371,12 +1435,12 @@ export default function ConversationsDashboardPage() {
       msgsQuery,
       (snapshot) => {
         // Sound notification on incoming client message if not initial load
-        if (!isInitialLoadRef.current && soundEnabled) {
+        if (!isInitialLoadRef.current && chatPrefs.soundEnabled) {
           const hasNewClientMsg = snapshot.docChanges().some(
             (change) => change.type === 'added' && change.doc.data().de === 'cliente'
           );
           if (hasNewClientMsg) {
-            playNotificationChime();
+            playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
           }
         }
 
@@ -1409,7 +1473,7 @@ export default function ConversationsDashboardPage() {
     );
 
     return () => unsubscribe();
-  }, [db, selectedConvId, soundEnabled]);
+  }, [db, selectedConvId, chatPrefs.soundEnabled, chatPrefs.notificationTone, chatPrefs.notificationVolume]);
 
   // Load client details when conversation changes
   const loadClientDetails = () => {
@@ -1523,83 +1587,135 @@ export default function ConversationsDashboardPage() {
     }
   };
 
-  // Handle processing image files from local disk, clipboard paste, or drag & drop
-  const handleProcessImageFile = async (file: File) => {
+  // Handle processing image or document files from local disk, clipboard paste, or drag & drop
+  const handleProcessImageFile = async (file: File, target: 'main' | 'simulator' = 'main') => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+
+    if (file.size > 15 * 1024 * 1024) {
       toast({
-        title: 'Formato no soportado',
-        description: 'Por favor selecciona un archivo de imagen válido (JPG, PNG, WEBP, etc.).',
+        title: 'Archivo muy grande',
+        description: 'El tamaño máximo permitido es de 15 MB.',
         variant: 'destructive',
       });
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      toast({
-        title: 'Imagen muy grande',
-        description: 'El tamaño máximo permitido para imágenes es de 10 MB.',
-        variant: 'destructive',
-      });
+    const isImage = file.type.startsWith('image/');
+    const isAudio = file.type.startsWith('audio/');
+
+    // If user selected an audio file from their device via Clip, send it as a voice note!
+    if (isAudio) {
+      setIsUploadingImage(true);
+      try {
+        let audioUrl = '';
+        if (storage) {
+          try {
+            const safeName = file.name ? file.name.replace(/[^a-zA-Z0-9._-]/g, '_') : 'audio.mp3';
+            const fileRef = storageRef(
+              storage,
+              `chat_audio/${selectedConvId || 'general'}/${Date.now()}_${safeName}`
+            );
+            const uploadRes = await uploadBytes(fileRef, file);
+            audioUrl = await getDownloadURL(uploadRes.ref);
+          } catch {}
+        }
+        if (!audioUrl) {
+          audioUrl = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          });
+        }
+        await handleSendUploadedVoiceOrAudio({
+          audioUrl,
+          mimeType: file.type || 'audio/mp3',
+          durationSec: 0,
+          target,
+        });
+      } catch (err: any) {
+        toast({
+          title: 'Error al adjuntar audio',
+          description: err.message || 'No se pudo procesar el archivo de audio.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsUploadingImage(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (generalFileInputRef.current) generalFileInputRef.current.value = '';
+        if (simFileInputRef.current) simFileInputRef.current.value = '';
+      }
       return;
     }
 
     setIsUploadingImage(true);
     try {
+      let downloadUrl = '';
+      const safeName = file.name ? file.name.replace(/[^a-zA-Z0-9._-]/g, '_') : isImage ? 'imagen.png' : 'documento.pdf';
+
       if (storage) {
-        const safeName = file.name ? file.name.replace(/[^a-zA-Z0-9._-]/g, '_') : 'imagen.png';
-        const fileRef = storageRef(
-          storage,
-          `chat_attachments/${selectedConvId || 'general'}/${Date.now()}_${safeName}`
-        );
-        const uploadRes = await uploadBytes(fileRef, file);
-        const downloadUrl = await getDownloadURL(uploadRes.ref);
+        try {
+          const folder = isImage ? 'chat_attachments' : 'chat_files';
+          const fileRef = storageRef(
+            storage,
+            `${folder}/${selectedConvId || 'general'}/${Date.now()}_${safeName}`
+          );
+          const uploadRes = await uploadBytes(fileRef, file);
+          downloadUrl = await getDownloadURL(uploadRes.ref);
+        } catch (storageErr) {
+          console.warn('Error subiendo archivo a Firebase Storage, usando DataURL de respaldo:', storageErr);
+        }
+      }
+
+      if (!downloadUrl) {
+        downloadUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      if (target === 'simulator') {
+        // Send immediately or attach to simulator
+        await handleSendSimulatorMedia({
+          url: downloadUrl,
+          isImage,
+          fileName: file.name || safeName,
+          fileSize: file.size,
+          fileMimeType: file.type || 'application/octet-stream',
+        });
+      } else if (isImage) {
         setAttachedImageUrl(downloadUrl);
+        setAttachedFileInfo(null);
         toast({
-          title: 'Imagen adjuntada',
-          description: 'La imagen se cargó correctamente y está lista para enviarse.',
+          title: '📷 Imagen lista para enviar',
+          description: `${file.name || 'Imagen'} adjuntada correctamente.`,
         });
       } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          if (result) {
-            setAttachedImageUrl(result);
-            toast({
-              title: 'Imagen adjuntada',
-              description: 'Imagen preparada para enviar.',
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch (err: any) {
-      console.warn('Error subiendo imagen a Firebase Storage, usando DataURL de respaldo:', err);
-      try {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          if (result) {
-            setAttachedImageUrl(result);
-            toast({
-              title: 'Imagen adjuntada',
-              description: 'Imagen preparada para enviar.',
-            });
-          }
-        };
-        reader.readAsDataURL(file);
-      } catch (fallbackErr: any) {
+        setAttachedFileInfo({
+          url: downloadUrl,
+          name: file.name || safeName,
+          size: file.size,
+          mimeType: file.type || 'application/octet-stream',
+        });
+        setAttachedImageUrl('');
         toast({
-          title: 'Error al procesar imagen',
-          description: err.message || 'No se pudo cargar la imagen seleccionada.',
-          variant: 'destructive',
+          title: '📎 Archivo adjuntado',
+          description: `${file.name} listo para enviarse.`,
         });
       }
+    } catch (err: any) {
+      toast({
+        title: 'Error al adjuntar archivo',
+        description: err.message || 'No se pudo cargar el archivo seleccionado.',
+        variant: 'destructive',
+      });
     } finally {
       setIsUploadingImage(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (generalFileInputRef.current) generalFileInputRef.current.value = '';
+      if (simFileInputRef.current) simFileInputRef.current.value = '';
     }
   };
 
@@ -1608,11 +1724,11 @@ export default function ConversationsDashboardPage() {
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      if (item.type.indexOf('image') !== -1) {
+      if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
           e.preventDefault();
-          handleProcessImageFile(file);
+          handleProcessImageFile(file, 'main');
           break;
         }
       }
@@ -1640,16 +1756,7 @@ export default function ConversationsDashboardPage() {
     setIsDraggingFile(false);
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
-      const file = files[0];
-      if (file.type.startsWith('image/')) {
-        handleProcessImageFile(file);
-      } else {
-        toast({
-          title: 'Archivo no soportado',
-          description: 'Por favor arrastra únicamente archivos de imagen.',
-          variant: 'destructive',
-        });
-      }
+      handleProcessImageFile(files[0], 'main');
     }
   };
 
@@ -1670,8 +1777,195 @@ export default function ConversationsDashboardPage() {
     }
   };
 
-  // Start voice recording with microphone
-  const startVoiceRecording = async () => {
+  // Helper to send a recorded or uploaded audio note (supports Reception Staff, Client Test Mode, and Simulator)
+  const handleSendUploadedVoiceOrAudio = async (params: {
+    audioUrl: string;
+    mimeType: string;
+    durationSec: number;
+    transcriptHint?: string;
+    target: 'main' | 'simulator';
+  }) => {
+    const { audioUrl, mimeType, durationSec, transcriptHint, target } = params;
+    const durationStr =
+      durationSec > 0
+        ? `${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, '0')}`
+        : 'Audio';
+    const msgText =
+      transcriptHint && transcriptHint.trim()
+        ? `🎤 Nota de voz (${durationStr}): "${transcriptHint.trim()}"`
+        : `🎤 Nota de voz (${durationStr})`;
+
+    if (target === 'simulator') {
+      const clientTempMsg: ChatMessage = {
+        id: 'temp-voice-' + Date.now(),
+        conversation_id: 'sim-sandbox',
+        de: 'cliente',
+        texto: msgText,
+        timestamp: new Date(),
+        tipo: 'audio',
+        mediaUrl: audioUrl,
+        metadata: {
+          duration: durationSec,
+          fileMimeType: mimeType,
+          transcripcion: transcriptHint?.trim() || undefined,
+        },
+      };
+      setSimMessages((prev) => [...prev, clientTempMsg]);
+      setIsSimProcessing(true);
+      try {
+        const res = await processAgentMessage({
+          conversationId: 'sim-sandbox-' + simPhone.replace(/\D/g, ''),
+          clientPhone: simPhone,
+          clientName: simName,
+          clientEmail: simEmail,
+          userMessage: transcriptHint?.trim() || msgText,
+          channel: 'simulador',
+          audioUrl,
+          audioMimeType: mimeType,
+          audioDuration: durationSec,
+          audioTranscriptHint: transcriptHint?.trim() || undefined,
+        });
+
+        if (res.audioTranscription) {
+          setSimMessages((prev) =>
+            prev.map((m) =>
+              m.id === clientTempMsg.id
+                ? {
+                    ...m,
+                    metadata: { ...(m.metadata || {}), transcripcion: res.audioTranscription },
+                  }
+                : m
+            )
+          );
+        }
+
+        if (res.success && res.botReply) {
+          const botTempMsg: ChatMessage = {
+            id: 'bot-' + Date.now(),
+            conversation_id: 'sim-sandbox',
+            de: 'bot',
+            texto: res.botReply,
+            timestamp: new Date(),
+          };
+          setSimMessages((prev) => [...prev, botTempMsg]);
+        }
+      } catch (err: any) {
+        toast({
+          title: 'Error procesando audio en simulador',
+          description: err.message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsSimProcessing(false);
+      }
+      return;
+    }
+
+    if (!selectedConvId) return;
+
+    // If sending as Client in the main chat -> Janet listens & responds!
+    if (sendRole === 'cliente') {
+      const tempId = `temp-client-voice-${Date.now()}`;
+      const optimisticMsg: ChatMessage = {
+        id: tempId,
+        conversation_id: selectedConvId,
+        de: 'cliente',
+        texto: msgText,
+        timestamp: new Date(),
+        tipo: 'audio',
+        mediaUrl: audioUrl,
+        estado: 'enviado',
+        metadata: {
+          duration: durationSec,
+          fileMimeType: mimeType,
+          transcripcion: transcriptHint?.trim() || undefined,
+        },
+      };
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setIsProcessingAI(true);
+      try {
+        const res = await processAgentMessage({
+          conversationId: selectedConvId,
+          clientPhone: activeConversation?.cliente_telefono || '5214421234567',
+          clientName: activeConversation?.cliente_nombre || 'Cliente de Prueba',
+          userMessage: transcriptHint?.trim() || msgText,
+          channel: (activeConversation?.canal as any) || 'simulador',
+          audioUrl,
+          audioMimeType: mimeType,
+          audioDuration: durationSec,
+          audioTranscriptHint: transcriptHint?.trim() || undefined,
+        });
+
+        if (!res.success) {
+          toast({
+            title: 'Error del Asistente Virtual',
+            description: res.error || 'No se pudo procesar la nota de voz.',
+            variant: 'destructive',
+          });
+        } else {
+          toast({
+            title: '🎤 Janet escuchó la nota de voz',
+            description: res.audioTranscription
+              ? `Transcripción: "${res.audioTranscription}"`
+              : `Duración: ${durationStr}`,
+          });
+        }
+      } catch (err: any) {
+        toast({
+          title: 'Error al enviar audio de cliente',
+          description: err.message,
+          variant: 'destructive',
+        });
+      } finally {
+        setIsProcessingAI(false);
+      }
+      return;
+    }
+
+    // Otherwise: Receptionist sends voice note to client
+    const tempId = `temp-voice-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversation_id: selectedConvId,
+      de: 'recepcion',
+      texto: msgText,
+      timestamp: new Date(),
+      tipo: 'audio',
+      mediaUrl: audioUrl,
+      estado: 'enviado',
+      metadata: {
+        staffName: user?.displayName || user?.email || 'Recepción',
+        duration: durationSec,
+        transcripcion: transcriptHint?.trim() || undefined,
+      },
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
+
+    const res = await sendStaffMessage({
+      conversationId: selectedConvId,
+      messageText: msgText,
+      staffName: user?.displayName || user?.email || 'Recepcionista',
+      pauseBot: pauseBotOnSend,
+      audioUrl,
+      audioDuration: durationSec,
+    });
+
+    if (!res.success) {
+      toast({
+        title: 'Error al enviar audio',
+        description: res.error || 'No se pudo registrar la nota de voz.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: '🎤 Nota de voz enviada',
+        description: `Duración: ${durationStr}`,
+      });
+    }
+  };
+
+  // Start voice recording with microphone + parallel Web Speech API recognition
+  const startVoiceRecording = async (target: 'main' | 'simulator' = 'main') => {
     if (isRecordingAudio) return;
     if (typeof window === 'undefined' || !navigator?.mediaDevices?.getUserMedia) {
       toast({
@@ -1681,6 +1975,10 @@ export default function ConversationsDashboardPage() {
       });
       return;
     }
+
+    recordingTargetRef.current = target;
+    setLiveVoiceTranscript('');
+    liveTranscriptRef.current = '';
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1710,6 +2008,32 @@ export default function ConversationsDashboardPage() {
         }
       };
 
+      // Start parallel Web Speech Recognition (es-MX) for instant live transcription hint
+      try {
+        const SpeechRecognition =
+          (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'es-MX';
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.onresult = (event: any) => {
+            let fullText = '';
+            for (let i = 0; i < event.results.length; i++) {
+              fullText += event.results[i][0].transcript + ' ';
+            }
+            const cleaned = fullText.trim();
+            if (cleaned) {
+              liveTranscriptRef.current = cleaned;
+              setLiveVoiceTranscript(cleaned);
+            }
+          };
+          recognition.onerror = () => {};
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+        }
+      } catch {}
+
       mediaRecorder.start(250);
       setIsRecordingAudio(true);
       setRecordingSeconds(0);
@@ -1733,6 +2057,12 @@ export default function ConversationsDashboardPage() {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try {
         mediaRecorderRef.current.stop();
@@ -1745,11 +2075,15 @@ export default function ConversationsDashboardPage() {
     audioChunksRef.current = [];
     setIsRecordingAudio(false);
     setRecordingSeconds(0);
+    setLiveVoiceTranscript('');
+    liveTranscriptRef.current = '';
   };
 
-  // Finish voice recording and send immediately to chat
+  // Finish voice recording and send immediately to chat or simulator
   const finishAndSendVoiceRecording = async () => {
-    if (!mediaRecorderRef.current || !isRecordingAudio || !selectedConvId) return;
+    if (!mediaRecorderRef.current || !isRecordingAudio) return;
+    const target = recordingTargetRef.current;
+    if (target === 'main' && !selectedConvId) return;
 
     if (recordingSeconds < 1) {
       toast({
@@ -1761,10 +2095,20 @@ export default function ConversationsDashboardPage() {
     }
 
     const durationSec = recordingSeconds;
+    const capturedHint = liveTranscriptRef.current.trim();
     setIsRecordingAudio(false);
+    setLiveVoiceTranscript('');
+    liveTranscriptRef.current = '';
+
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
+    }
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
     }
 
     const recorder = mediaRecorderRef.current;
@@ -1792,7 +2136,16 @@ export default function ConversationsDashboardPage() {
       try {
         let audioUrl = '';
 
-        if (storage) {
+        // Keep DataURL as primary if sending to Gemini AI so multimodal base64 extraction is instant & reliable,
+        // or upload to Storage for staff messages
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(audioBlob);
+        });
+
+        if (storage && target === 'main' && sendRole === 'recepcion') {
           try {
             const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
             const fileRef = storageRef(
@@ -1807,55 +2160,16 @@ export default function ConversationsDashboardPage() {
         }
 
         if (!audioUrl) {
-          audioUrl = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(audioBlob);
-          });
+          audioUrl = dataUrl;
         }
 
-        const durationStr = `${Math.floor(durationSec / 60)}:${String(durationSec % 60).padStart(2, '0')}`;
-        const msgText = `🎤 Nota de voz (${durationStr})`;
-        const tempId = `temp-voice-${Date.now()}`;
-
-        const optimisticMsg: ChatMessage = {
-          id: tempId,
-          conversation_id: selectedConvId,
-          de: 'recepcion',
-          texto: msgText,
-          timestamp: new Date(),
-          tipo: 'audio',
-          mediaUrl: audioUrl,
-          estado: 'enviado',
-          metadata: {
-            staffName: user?.displayName || user?.email || 'Recepción',
-            duration: durationSec,
-          },
-        };
-        setMessages((prev) => [...prev, optimisticMsg]);
-
-        const res = await sendStaffMessage({
-          conversationId: selectedConvId,
-          messageText: msgText,
-          staffName: user?.displayName || user?.email || 'Recepcionista',
-          pauseBot: pauseBotOnSend,
-          audioUrl: audioUrl,
-          audioDuration: durationSec,
+        await handleSendUploadedVoiceOrAudio({
+          audioUrl,
+          mimeType,
+          durationSec,
+          transcriptHint: capturedHint || undefined,
+          target,
         });
-
-        if (!res.success) {
-          toast({
-            title: 'Error al enviar audio',
-            description: res.error || 'No se pudo registrar la nota de voz.',
-            variant: 'destructive',
-          });
-        } else {
-          toast({
-            title: '🎤 Nota de voz enviada',
-            description: `Duración: ${durationStr}`,
-          });
-        }
       } catch (err: any) {
         console.error('Error enviando nota de voz:', err);
         toast({
@@ -1881,7 +2195,8 @@ export default function ConversationsDashboardPage() {
     if (e) e.preventDefault();
     const text = staffInput.trim();
     const media = attachedImageUrl.trim() || undefined;
-    if ((!text && !media) || !selectedConvId || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio) return;
+    const fileDoc = attachedFileInfo;
+    if ((!text && !media && !fileDoc) || !selectedConvId || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio) return;
 
     // Internal staff note
     if (sendRole === 'nota_interna') {
@@ -1941,7 +2256,9 @@ export default function ConversationsDashboardPage() {
 
     // Client test message
     if (sendRole === 'cliente') {
-      const messageContent = text || (media ? 'Envío una imagen adjunta' : '');
+      const messageContent =
+        text ||
+        (fileDoc ? `📎 Archivo adjunto: ${fileDoc.name}` : media ? '📷 Imagen adjunta' : '');
       const tempId = `temp-client-${Date.now()}`;
       const optimisticMsg: ChatMessage = {
         id: tempId,
@@ -1949,13 +2266,21 @@ export default function ConversationsDashboardPage() {
         de: 'cliente',
         texto: messageContent,
         timestamp: new Date(),
-        tipo: media ? 'imagen' : 'texto',
-        mediaUrl: media,
+        tipo: fileDoc ? 'archivo' : media ? 'imagen' : 'texto',
+        mediaUrl: fileDoc ? fileDoc.url : media,
         estado: 'enviado',
+        metadata: fileDoc
+          ? {
+              fileName: fileDoc.name,
+              fileSize: fileDoc.size,
+              fileMimeType: fileDoc.mimeType,
+            }
+          : undefined,
       };
       setMessages((prev) => [...prev, optimisticMsg]);
       setStaffInput('');
       setAttachedImageUrl('');
+      setAttachedFileInfo(null);
       setShowImageInput(false);
       if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
       setIsProcessingAI(true);
@@ -1967,6 +2292,10 @@ export default function ConversationsDashboardPage() {
           userMessage: messageContent,
           channel: (activeConversation?.canal as any) || 'simulador',
           imageUrl: media,
+          fileUrl: fileDoc?.url,
+          fileName: fileDoc?.name,
+          fileSize: fileDoc?.size,
+          fileMimeType: fileDoc?.mimeType,
         });
 
         if (!res.success) {
@@ -2001,9 +2330,12 @@ export default function ConversationsDashboardPage() {
         return;
       }
 
-      const messageContent = text || (media ? '📷 Imagen enviada' : '');
+      const messageContent =
+        text ||
+        (fileDoc ? `📎 Archivo enviado: ${fileDoc.name}` : media ? '📷 Imagen enviada' : '');
       setStaffInput('');
       setAttachedImageUrl('');
+      setAttachedFileInfo(null);
       setShowImageInput(false);
       if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
       setIsSendingStaff(true);
@@ -2014,11 +2346,18 @@ export default function ConversationsDashboardPage() {
         de: 'recepcion',
         texto: messageContent,
         timestamp: new Date(),
-        tipo: media ? 'imagen' : 'texto',
-        mediaUrl: media,
+        tipo: fileDoc ? 'archivo' : media ? 'imagen' : 'texto',
+        mediaUrl: fileDoc ? fileDoc.url : media,
         estado: 'enviado',
         metadata: {
           staffName: user?.displayName || user?.email || 'Recepción',
+          ...(fileDoc
+            ? {
+                fileName: fileDoc.name,
+                fileSize: fileDoc.size,
+                fileMimeType: fileDoc.mimeType,
+              }
+            : {}),
         },
       };
       setMessages((prev) => [...prev, optimisticMsg]);
@@ -2030,6 +2369,10 @@ export default function ConversationsDashboardPage() {
           staffName: user?.displayName || user?.email || 'Recepcionista',
           pauseBot: pauseBotOnSend,
           imageUrl: media,
+          fileUrl: fileDoc?.url,
+          fileName: fileDoc?.name,
+          fileSize: fileDoc?.size,
+          fileMimeType: fileDoc?.mimeType,
         });
 
         if (!res.success) {
@@ -2213,6 +2556,76 @@ export default function ConversationsDashboardPage() {
     } finally {
       setIsVerifyingDeleteCode(false);
       setIsDeletingConversation(false);
+    }
+  };
+
+  // Simulator Media / File Handler
+  const handleSendSimulatorMedia = async (params: {
+    url: string;
+    isImage: boolean;
+    fileName: string;
+    fileSize: number;
+    fileMimeType: string;
+  }) => {
+    const { url, isImage, fileName, fileSize, fileMimeType } = params;
+    const msgText = isImage
+      ? simInput.trim() || '📷 Envío una imagen adjunta'
+      : simInput.trim() || `📎 Archivo adjunto: ${fileName}`;
+
+    setSimInput('');
+    setIsSimProcessing(true);
+
+    const clientTempMsg: ChatMessage = {
+      id: 'temp-media-' + Date.now(),
+      conversation_id: 'sim-sandbox',
+      de: 'cliente',
+      texto: msgText,
+      timestamp: new Date(),
+      tipo: isImage ? 'imagen' : 'archivo',
+      mediaUrl: url,
+      metadata: !isImage
+        ? {
+            fileName,
+            fileSize,
+            fileMimeType,
+          }
+        : undefined,
+    };
+    setSimMessages((prev) => [...prev, clientTempMsg]);
+
+    try {
+      const res = await processAgentMessage({
+        conversationId: 'sim-sandbox-' + simPhone.replace(/\D/g, ''),
+        clientPhone: simPhone,
+        clientName: simName,
+        clientEmail: simEmail,
+        userMessage: msgText,
+        channel: 'simulador',
+        imageUrl: isImage ? url : undefined,
+        fileUrl: !isImage ? url : undefined,
+        fileName: !isImage ? fileName : undefined,
+        fileSize: !isImage ? fileSize : undefined,
+        fileMimeType: !isImage ? fileMimeType : undefined,
+      });
+
+      if (res.success && res.botReply) {
+        const botTempMsg: ChatMessage = {
+          id: 'bot-' + Date.now(),
+          conversation_id: 'sim-sandbox',
+          de: 'bot',
+          texto: res.botReply,
+          timestamp: new Date(),
+        };
+        setSimMessages((prev) => [...prev, botTempMsg]);
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Error en simulador',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSimProcessing(false);
     }
   };
 
@@ -2487,6 +2900,18 @@ export default function ConversationsDashboardPage() {
 
         {/* Global Actions */}
         <div className="flex items-center space-x-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-border/70 text-slate-300 hover:bg-blue-500/10 hover:text-white hover:border-blue-500/40 transition-colors shadow-xs"
+            title="Personalizar tono de notificación, color de tarjetas y tamaño de letra"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
+            <span className="hidden sm:inline">Personalizar Chat</span>
+          </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -3060,8 +3485,8 @@ export default function ConversationsDashboardPage() {
                   </div>
                 </div>
 
-                {/* Right controls: Probar Recordatorio, Sound Toggle, Tomar Control Switch & Info Panel Toggle */}
-                <div className="flex items-center gap-1.5 md:gap-2.5 shrink-0">
+                {/* Right controls: Probar Recordatorio, Personalizar Chat, Sound Toggle, Tomar Control Switch & Info Panel Toggle */}
+                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
                   {/* Quick Test Reminder Button */}
                   <Button
                     type="button"
@@ -3069,15 +3494,26 @@ export default function ConversationsDashboardPage() {
                     size="sm"
                     disabled={isSendingDirectReminder}
                     onClick={handleSendDirectReminderTest}
-                    className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-yellow-500/40 text-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-600 transition-colors shrink-0"
+                    className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/10 hover:text-[#C5A880] transition-colors shrink-0"
                     title="Enviar recordatorio interactivo con los 3 botones a este chat"
                   >
                     {isSendingDirectReminder ? (
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Bell className="h-3.5 w-3.5 text-yellow-500" />
+                      <Bell className="h-3.5 w-3.5 text-[#C5A880]" />
                     )}
-                    <span className="hidden sm:inline">Probar Recordatorio</span>
+                    <span className="hidden lg:inline">Probar Recordatorio</span>
+                  </Button>
+
+                  {/* Chat Settings / Customization Button */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsSettingsModalOpen(true)}
+                    className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
+                    title="Personalizar tono, color de burbuja y tamaño de letra"
+                  >
+                    <SlidersHorizontal className="w-4 h-4 text-blue-400" />
                   </Button>
 
                   {/* Sound Notifications Toggle */}
@@ -3085,11 +3521,15 @@ export default function ConversationsDashboardPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => {
-                      setSoundEnabled(!soundEnabled);
+                      const nextSound = !soundEnabled;
+                      setSoundEnabled(nextSound);
+                      if (nextSound) {
+                        playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
+                      }
                       toast({
-                        title: !soundEnabled ? '🔔 Sonido activado' : '🔕 Sonido silenciado',
-                        description: !soundEnabled
-                          ? 'Escucharás un timbre cuando lleguen mensajes del cliente.'
+                        title: nextSound ? '🔔 Sonido activado' : '🔕 Sonido silenciado',
+                        description: nextSound
+                          ? 'Escucharás el tono elegido cuando lleguen mensajes del cliente.'
                           : 'Sonido de notificaciones desactivado.',
                       });
                     }}
@@ -3208,6 +3648,7 @@ export default function ConversationsDashboardPage() {
                       const isStaff = msg.de === 'recepcion';
                       const isSystem = msg.tipo === 'sistema';
                       const isInternalNote = msg.tipo === 'nota_interna';
+                      const fontSizeCls = getFontSizeClass(chatPrefs.fontSize);
 
                       // Format timestamp
                       let timeStr = '';
@@ -3254,6 +3695,15 @@ export default function ConversationsDashboardPage() {
                       const prevMsg = index > 0 ? messages[index - 1] : null;
                       const isSameSender = prevMsg && prevMsg.de === msg.de && prevMsg.tipo !== 'nota_interna' && msg.tipo !== 'nota_interna';
 
+                      const isVoiceNote =
+                        msg.tipo === 'audio' ||
+                        msg.mediaUrl?.includes('chat_audio') ||
+                        msg.mediaUrl?.startsWith('data:audio');
+                      const isFileDoc =
+                        msg.tipo === 'archivo' ||
+                        msg.mediaUrl?.includes('chat_files') ||
+                        (Boolean(msg.metadata?.fileName) && !isVoiceNote);
+
                       return (
                         <div
                           key={msg.id}
@@ -3261,26 +3711,24 @@ export default function ConversationsDashboardPage() {
                             isClient ? 'items-start' : 'items-end'
                           } ${isSameSender ? 'mt-1' : 'mt-2.5'}`}
                         >
-                          {/* Modern WhatsApp-Style Clean Bubble */}
+                          {/* Modern WhatsApp-Style Clean Bubble with User Customization */}
                           <div
-                            className={`max-w-[85%] md:max-w-[72%] rounded-2xl px-3.5 py-2 text-sm shadow-xs leading-relaxed whitespace-pre-wrap transition-all relative ${
+                            className={`max-w-[85%] md:max-w-[72%] rounded-2xl px-3.5 py-2 shadow-xs whitespace-pre-wrap transition-all relative ${fontSizeCls} ${
                               isClient
-                                ? 'bg-card border border-border/70 text-foreground rounded-tl-sm'
-                                : isBot
-                                ? 'bg-[#18223c] text-white border border-blue-500/25 rounded-tr-sm'
-                                : 'bg-[#202A49] text-white border border-blue-500/40 rounded-tr-sm'
+                                ? `${getClientBubbleClasses(chatPrefs.clientBubbleStyle)} rounded-tl-sm`
+                                : `${getSentBubbleClasses(chatPrefs.bubbleColorTheme, isBot)} rounded-tr-sm`
                             }`}
                           >
-                            {/* Attached Media: Voice Audio Player or Image Preview */}
-                            {msg.tipo === 'audio' || msg.mediaUrl?.includes('chat_audio') || msg.mediaUrl?.startsWith('data:audio') ? (
-                              <div className="mb-2 p-2 rounded-xl bg-background/90 border border-border/60 shadow-xs flex flex-col gap-1.5 min-w-[220px]">
+                            {/* Attached Media: Voice Audio Player, Document File Card, or Image Preview */}
+                            {isVoiceNote ? (
+                              <div className="mb-2 p-2.5 rounded-xl bg-background/90 border border-border/60 shadow-xs flex flex-col gap-1.5 min-w-[230px]">
                                 <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
-                                  <span className="flex items-center gap-1 font-medium text-blue-400">
+                                  <span className="flex items-center gap-1.5 font-semibold text-blue-400">
                                     <Mic className="w-3.5 h-3.5 text-blue-400" />
                                     Nota de voz
                                   </span>
                                   {msg.metadata?.duration ? (
-                                    <span className="text-[10px] font-mono font-semibold">
+                                    <span className="text-[10px] font-sans font-semibold text-foreground/80">
                                       {Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')}
                                     </span>
                                   ) : null}
@@ -3291,6 +3739,39 @@ export default function ConversationsDashboardPage() {
                                   className="w-full h-8 rounded-lg focus:outline-none"
                                   preload="metadata"
                                 />
+                                {chatPrefs.showAudioTranscription && msg.metadata?.transcripcion && (
+                                  <div className="mt-1 pt-1.5 border-t border-border/50 px-1 text-[11px] text-foreground/85 italic leading-snug">
+                                    <span className="font-semibold not-italic text-blue-400 mr-1">Transcripción IA:</span>
+                                    &ldquo;{msg.metadata.transcripcion}&rdquo;
+                                  </div>
+                                )}
+                              </div>
+                            ) : isFileDoc && msg.mediaUrl ? (
+                              <div className="mb-2 p-2.5 rounded-xl bg-background/95 border border-border/60 shadow-xs flex items-center justify-between gap-3 min-w-[230px]">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <FileText className="w-5 h-5 text-blue-400 shrink-0" />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-foreground truncate">
+                                      {msg.metadata?.fileName || 'Documento adjunto'}
+                                    </p>
+                                    <p className="text-[10px] text-muted-foreground font-sans">
+                                      {msg.metadata?.fileSize
+                                        ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
+                                        : 'Archivo compartido'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <a
+                                  href={msg.mediaUrl}
+                                  download={msg.metadata?.fileName || 'archivo'}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-7 px-2.5 rounded-lg bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 text-[11px] font-semibold flex items-center gap-1 shrink-0 transition-colors"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>Abrir</span>
+                                </a>
                               </div>
                             ) : msg.mediaUrl ? (
                               <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-black/5">
@@ -3304,7 +3785,7 @@ export default function ConversationsDashboardPage() {
                             ) : null}
 
                             <div className="break-words">
-                              <FormattedChatText text={msg.texto} />
+                              <FormattedChatText text={msg.texto} className={fontSizeCls} />
 
                               {/* Interactive Action Buttons (Appointment Reminder / Confirmation) */}
                               {msg.metadata?.buttons && msg.metadata.buttons.length > 0 && (
@@ -3312,9 +3793,9 @@ export default function ConversationsDashboardPage() {
                                   {msg.metadata.selected_action ? (
                                     <div className="py-1 px-2.5 rounded-lg text-xs font-semibold select-none flex items-center gap-1.5">
                                       {msg.metadata.selected_action === 'confirm' && (
-                                        <span className="flex items-center gap-1.5 text-yellow-400">
-                                          <CheckCircle2 className="w-3.5 h-3.5 text-yellow-400" />
-                                          Cita confirmada en agenda (Etiqueta Amarilla)
+                                        <span className="flex items-center gap-1.5 text-[#C5A880]">
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-[#C5A880]" />
+                                          Cita confirmada en agenda
                                         </span>
                                       )}
                                       {msg.metadata.selected_action === 'reschedule' && (
@@ -3345,13 +3826,13 @@ export default function ConversationsDashboardPage() {
                                             onClick={() => handleExecuteAppointmentAction(msg, btn.action)}
                                             className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-sm ${
                                               isConfirm
-                                                ? 'bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold border-0 shadow-md active:scale-95'
+                                                ? 'bg-blue-600 hover:bg-blue-500 text-white font-bold border-0 shadow-md active:scale-95'
                                                 : isReschedule
                                                 ? 'bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-500/40 active:scale-95'
                                                 : 'bg-slate-800/80 hover:bg-slate-700/80 text-red-400 border border-red-500/30 active:scale-95'
                                             }`}
                                           >
-                                            {isConfirm && <Check className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />}
+                                            {isConfirm && <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />}
                                             {isReschedule && <Calendar className="w-3.5 h-3.5 text-blue-400" />}
                                             {isCancel && <XCircle className="w-3.5 h-3.5 text-red-400" />}
                                             <span>{btn.label}</span>
@@ -3440,7 +3921,7 @@ export default function ConversationsDashboardPage() {
                   <div className="absolute inset-0 bg-primary/15 backdrop-blur-xs z-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary pointer-events-none">
                     <UploadCloud className="w-8 h-8 text-primary animate-bounce" />
                     <span className="text-xs font-semibold text-primary">
-                      Suelta la imagen aquí para adjuntarla
+                      Suelta el archivo o imagen aquí para compartirlo
                     </span>
                   </div>
                 )}
@@ -3449,25 +3930,19 @@ export default function ConversationsDashboardPage() {
                   {/* Selector de rol de envío y herramientas rápidas */}
                   <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
                     <div className="inline-flex p-0.5 rounded-lg bg-muted/80 border border-border/40">
-                      {(activeConversation.canal === 'simulador' ||
-                        activeConversation.canal === 'web' ||
-                        activeConversation.id.startsWith('web') ||
-                        activeConversation.id.startsWith('sim') ||
-                        activeConversation.cliente_nombre?.toLowerCase().includes('web') ||
-                        activeConversation.cliente_nombre?.toLowerCase().includes('prueba')) && (
-                        <button
-                          type="button"
-                          onClick={() => setSendRole('cliente')}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all text-xs font-medium ${
-                            sendRole === 'cliente'
-                              ? 'bg-background text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          <User className="w-3 h-3 text-blue-500" />
-                          <span>Probar (Cliente)</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSendRole('cliente')}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all text-xs font-medium ${
+                          sendRole === 'cliente'
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="Simular mensaje o nota de voz enviada por el cliente para probar a Janet"
+                      >
+                        <User className="w-3 h-3 text-blue-500" />
+                        <span>Probar (Cliente)</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => setSendRole('recepcion')}
@@ -3478,7 +3953,7 @@ export default function ConversationsDashboardPage() {
                         }`}
                       >
                         <Scissors className="w-3 h-3 text-blue-400" />
-                        <span>Mensaje</span>
+                        <span>Recepción</span>
                       </button>
                       <button
                         type="button"
@@ -3539,7 +4014,33 @@ export default function ConversationsDashboardPage() {
                         className="hidden"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
-                            handleProcessImageFile(e.target.files[0]);
+                            handleProcessImageFile(e.target.files[0], 'main');
+                          }
+                        }}
+                      />
+
+                      {/* Hidden File Input for Any Device File (Documents, PDFs, Audio, Images) */}
+                      <input
+                        ref={generalFileInputRef}
+                        type="file"
+                        accept="*/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleProcessImageFile(e.target.files[0], 'main');
+                          }
+                        }}
+                      />
+
+                      {/* Hidden File Input for Simulator */}
+                      <input
+                        ref={simFileInputRef}
+                        type="file"
+                        accept="*/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleProcessImageFile(e.target.files[0], 'simulator');
                           }
                         }}
                       />
@@ -3559,9 +4060,9 @@ export default function ConversationsDashboardPage() {
                   </div>
 
                   {/* Manual URL input if toggled */}
-                  {showImageInput && !attachedImageUrl && (
+                  {showImageInput && !attachedImageUrl && !attachedFileInfo && (
                     <div className="p-2 rounded-lg bg-muted/40 border flex items-center gap-2 text-xs animate-in fade-in duration-150">
-                      <ImageIcon className="w-4 h-4 text-primary shrink-0" />
+                      <Link2 className="w-4 h-4 text-blue-400 shrink-0" />
                       <Input
                         placeholder="Pega la URL web de una imagen (ej: https://...)..."
                         value={attachedImageUrl}
@@ -3580,13 +4081,13 @@ export default function ConversationsDashboardPage() {
                     </div>
                   )}
 
-                  {/* Image Attachment Preview Card */}
-                  {(attachedImageUrl || isUploadingImage) && (
-                    <div className="p-2 rounded-xl bg-card border border-primary/20 shadow-xs flex items-center justify-between gap-3 text-xs animate-in fade-in duration-200">
+                  {/* Image or File Attachment Preview Card */}
+                  {(attachedImageUrl || attachedFileInfo || isUploadingImage) && (
+                    <div className="p-2 rounded-xl bg-card border border-blue-500/30 shadow-xs flex items-center justify-between gap-3 text-xs animate-in fade-in duration-200">
                       <div className="flex items-center gap-2.5 min-w-0">
                         {isUploadingImage ? (
-                          <div className="w-12 h-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                            <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+                          <div className="w-10 h-10 rounded-lg bg-muted/40 border border-border/60 flex items-center justify-center shrink-0">
+                            <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
                           </div>
                         ) : attachedImageUrl ? (
                           <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-border shrink-0 bg-black/10">
@@ -3596,15 +4097,23 @@ export default function ConversationsDashboardPage() {
                               className="w-full h-full object-cover"
                             />
                           </div>
+                        ) : attachedFileInfo ? (
+                          <FileText className="w-5 h-5 text-blue-400 shrink-0 ml-1" />
                         ) : null}
 
                         <div className="flex flex-col min-w-0">
                           <span className="font-semibold text-foreground text-xs truncate">
-                            {isUploadingImage ? 'Cargando imagen...' : 'Imagen adjunta para enviar'}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground truncate">
                             {isUploadingImage
-                              ? 'Procesando archivo...'
+                              ? 'Cargando archivo...'
+                              : attachedFileInfo
+                              ? attachedFileInfo.name
+                              : 'Imagen adjunta lista para enviar'}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground truncate font-sans">
+                            {isUploadingImage
+                              ? 'Procesando desde tu dispositivo...'
+                              : attachedFileInfo
+                              ? `${(attachedFileInfo.size / 1024).toFixed(1)} KB • Se compartirá en el chat`
                               : 'Se enviará junto con el mensaje o de forma independiente'}
                           </span>
                         </div>
@@ -3619,9 +4128,11 @@ export default function ConversationsDashboardPage() {
                             className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
                             onClick={() => {
                               setAttachedImageUrl('');
+                              setAttachedFileInfo(null);
                               if (fileInputRef.current) fileInputRef.current.value = '';
+                              if (generalFileInputRef.current) generalFileInputRef.current.value = '';
                             }}
-                            title="Quitar imagen"
+                            title="Quitar archivo adjunto"
                           >
                             <X className="w-4 h-4" />
                           </Button>
@@ -3631,43 +4142,51 @@ export default function ConversationsDashboardPage() {
                   )}
 
                   <form onSubmit={handleSendChatMessage} className="space-y-1.5">
-                    {isRecordingAudio ? (
-                      <div className="flex items-center justify-between gap-3 p-2.5 bg-rose-500/10 border border-rose-500/30 rounded-2xl animate-in fade-in duration-200">
-                        <div className="flex items-center gap-2.5 pl-2">
-                          <span className="relative flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
-                          </span>
-                          <span className="text-xs font-semibold text-rose-600 dark:text-rose-400">
-                            Grabando nota de voz...
-                          </span>
-                          <span className="text-xs font-mono font-bold bg-rose-500/20 text-rose-700 dark:text-rose-300 px-2 py-0.5 rounded-md">
-                            {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
-                          </span>
+                    {isRecordingAudio && recordingTargetRef.current === 'main' ? (
+                      <div className="flex flex-col gap-1.5 p-2.5 bg-red-500/10 border border-red-500/30 rounded-2xl animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 pl-2">
+                            <span className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                            </span>
+                            <span className="text-xs font-semibold text-red-400">
+                              Grabando nota de voz ({sendRole === 'cliente' ? 'Cliente → Janet' : 'Recepción'})...
+                            </span>
+                            <span className="text-xs font-sans font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded-md">
+                              {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={cancelVoiceRecording}
+                              className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive gap-1"
+                              title="Cancelar grabación"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Cancelar</span>
+                            </Button>
+
+                            <Button
+                              type="button"
+                              onClick={finishAndSendVoiceRecording}
+                              className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm gap-1.5"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Enviar Nota</span>
+                            </Button>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={cancelVoiceRecording}
-                            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-destructive gap-1"
-                            title="Cancelar grabación"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Cancelar</span>
-                          </Button>
-
-                          <Button
-                            type="button"
-                            onClick={finishAndSendVoiceRecording}
-                            className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm gap-1.5"
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            <span>Enviar Nota</span>
-                          </Button>
-                        </div>
+                        {liveVoiceTranscript && (
+                          <div className="px-2 pt-1 border-t border-red-500/20 text-[11px] text-slate-300 italic truncate">
+                            🎙️ Escuchando: &ldquo;{liveVoiceTranscript}&rdquo;
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className={`flex items-end gap-1.5 bg-background border rounded-2xl p-1.5 focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-sm ${
@@ -3682,7 +4201,7 @@ export default function ConversationsDashboardPage() {
                             sendRole === 'nota_interna'
                               ? 'Escribe una nota interna para el equipo...'
                               : sendRole === 'cliente'
-                              ? 'Escribe como cliente de prueba...'
+                              ? 'Escribe o graba audio como cliente para probar a Janet...'
                               : canReply
                               ? 'Escribe un mensaje...'
                               : 'No tienes permiso para responder.'
@@ -3696,100 +4215,127 @@ export default function ConversationsDashboardPage() {
                             }
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
+                            if (chatPrefs.enterToSend && e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
                               handleSendChatMessage();
                             }
                           }}
                           disabled={(sendRole === 'recepcion' && !canReply) || isSendingStaff || isProcessingAI || isUploadingImage}
                           rows={1}
-                          className="min-h-[38px] max-h-[180px] resize-none overflow-y-auto border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-2 text-sm bg-transparent shadow-none leading-relaxed transition-[height] duration-75"
+                          className={`min-h-[38px] max-h-[180px] resize-none overflow-y-auto border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-2 bg-transparent shadow-none leading-relaxed transition-[height] duration-75 ${getFontSizeClass(chatPrefs.fontSize)}`}
                         />
 
-                        {/* 4 Tool Icons: Clip, Cámara, Micrófono, Emojis */}
+                        {/* 4 Functional Tool Icons: Clip (Device Files), Cámara (Live Camera), Micrófono (Audio IA), Emojis (WhatsApp Picker) */}
                         <div className="flex items-center gap-0.5 mb-0.5 shrink-0">
-                          {/* 1. Clip - Adjuntar */}
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                            onClick={() => setShowImageInput(!showImageInput)}
-                            disabled={isRecordingAudio}
-                            title="Adjuntar enlace o archivo"
-                          >
-                            <Paperclip className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                          </Button>
+                          {/* 1. Clip - Compartir Archivos desde el Dispositivo */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                disabled={isRecordingAudio || isUploadingImage}
+                                title="Compartir archivo, documento o imagen desde el dispositivo"
+                              >
+                                <Paperclip className="w-4 h-4 text-slate-400" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-60 bg-[#151b2e] border-2 border-blue-500 text-white rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5 z-50 space-y-1"
+                            >
+                              <div className="px-2 py-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                Compartir desde dispositivo
+                              </div>
+                              <DropdownMenuItem
+                                onClick={() => generalFileInputRef.current?.click()}
+                                className="text-xs rounded-lg focus:bg-blue-500/20 cursor-pointer flex items-center gap-2 py-2"
+                              >
+                                <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-white">Documento o Archivo</span>
+                                  <span className="text-[10px] text-slate-400">PDF, Word, Excel, Audio o ZIP</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => fileInputRef.current?.click()}
+                                className="text-xs rounded-lg focus:bg-blue-500/20 cursor-pointer flex items-center gap-2 py-2"
+                              >
+                                <ImageIcon className="w-4 h-4 text-blue-400 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-white">Galería de Fotos</span>
+                                  <span className="text-[10px] text-slate-400">JPG, PNG, WEBP desde tu equipo</span>
+                                </div>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setShowImageInput(!showImageInput)}
+                                className="text-xs rounded-lg focus:bg-blue-500/20 cursor-pointer flex items-center gap-2 py-2"
+                              >
+                                <Link2 className="w-4 h-4 text-slate-400 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium text-slate-200">Pegar enlace web (URL)</span>
+                                  <span className="text-[10px] text-slate-400">Enlace externo de imagen</span>
+                                </div>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
-                          {/* 2. Cámara - Foto */}
+                          {/* 2. Cámara - Acceso Directo a Cámara del Dispositivo */}
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                            onClick={() => fileInputRef.current?.click()}
+                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            onClick={() => {
+                              setCameraModalTarget('main');
+                              setIsCameraModalOpen(true);
+                            }}
                             disabled={isUploadingImage || isRecordingAudio}
-                            title="Tomar o adjuntar foto"
+                            title="Abrir cámara del dispositivo para tomar foto"
                           >
                             {isUploadingImage ? (
-                              <RefreshCw className="w-4 h-4 animate-spin text-gray-500 dark:text-gray-400" />
+                              <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
                             ) : (
-                              <Camera className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                              <Camera className="w-4 h-4 text-slate-400" />
                             )}
                           </Button>
 
-                          {/* 3. Micrófono - Grabar Voz */}
+                          {/* 3. Micrófono - Grabar Nota de Voz (Janet la entiende) */}
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                            onClick={startVoiceRecording}
+                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            onClick={() => startVoiceRecording('main')}
                             disabled={(sendRole === 'recepcion' && !canReply) || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio}
-                            title="Grabar nota de voz"
+                            title={
+                              sendRole === 'cliente'
+                                ? 'Grabar audio como cliente (Janet lo escuchará y responderá)'
+                                : 'Grabar nota de voz'
+                            }
                           >
-                            <Mic className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            <Mic className="w-4 h-4 text-slate-400" />
                           </Button>
 
-                          {/* 4. Emoji - Emojis */}
+                          {/* 4. Emoji - Selector Moderno Estilo WhatsApp */}
                           <Popover>
                             <PopoverTrigger asChild>
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-zinc-800 rounded-xl transition-colors"
-                                title="Insertar emojis"
+                                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                title="Insertar emojis modernos estilo WhatsApp"
                               >
-                                <Smile className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                <Smile className="w-4 h-4 text-slate-400" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-72 p-2.5 rounded-xl z-50 mb-2 border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between pb-1 border-b text-xs">
-                                  <span className="font-semibold text-foreground">Emojis</span>
-                                  <span className="text-[10px] text-muted-foreground">Click para insertar</span>
-                                </div>
-                                {EMOJI_CATEGORIES.map((cat) => (
-                                  <div key={cat.name} className="space-y-1">
-                                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                                      {cat.name}
-                                    </span>
-                                    <div className="grid grid-cols-6 gap-1">
-                                      {cat.emojis.map((emoji, idx) => (
-                                        <button
-                                          key={idx}
-                                          type="button"
-                                          className="w-8 h-8 flex items-center justify-center text-lg rounded-lg hover:bg-muted active:scale-95 transition-all cursor-pointer"
-                                          onClick={() => handleInsertEmoji(emoji)}
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
+                            <PopoverContent
+                              align="end"
+                              className="w-80 p-3 rounded-2xl z-50 mb-2 bg-[#111827] border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+                            >
+                              <WhatsAppEmojiPicker onSelectEmoji={handleInsertEmoji} />
                             </PopoverContent>
                           </Popover>
                         </div>
@@ -3799,7 +4345,7 @@ export default function ConversationsDashboardPage() {
                           size="icon"
                           disabled={
                             (sendRole === 'recepcion' && !canReply) ||
-                            (!staffInput.trim() && !attachedImageUrl) ||
+                            (!staffInput.trim() && !attachedImageUrl && !attachedFileInfo) ||
                             isSendingStaff ||
                             isProcessingAI ||
                             isUploadingImage
@@ -3819,23 +4365,27 @@ export default function ConversationsDashboardPage() {
                       </div>
                     )}
 
-                    {(isRecordingAudio || isProcessingAI || isUploadingImage || sendRole === 'nota_interna' || pauseBotOnSend) && (
+                    {(isRecordingAudio || isProcessingAI || isUploadingImage || sendRole === 'nota_interna' || sendRole === 'cliente' || pauseBotOnSend) && (
                       <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pt-0.5 animate-in fade-in-50">
                         <span>
                           {isRecordingAudio ? (
-                            <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1">
+                            <span className="text-red-400 font-medium flex items-center gap-1">
                               <Mic className="w-3 h-3 animate-pulse" />
-                              Grabando nota de voz... Pulsa 'Enviar Nota' o 'Cancelar'.
+                              Grabando nota de voz... Pulsa &apos;Enviar Nota&apos; o &apos;Cancelar&apos;.
                             </span>
                           ) : isProcessingAI ? (
                             <span className="text-blue-400 font-medium flex items-center gap-1">
                               <Sparkles className="w-3 h-3 animate-spin" />
-                              {assistantName} está consultando la agenda...
+                              {assistantName} está escuchando y consultando la agenda...
                             </span>
                           ) : isUploadingImage ? (
                             <span className="text-blue-400 font-medium flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
-                              Subiendo archivo de imagen...
+                              Procesando archivo del dispositivo...
+                            </span>
+                          ) : sendRole === 'cliente' ? (
+                            <span className="text-blue-400 font-medium flex items-center gap-1">
+                              <Bot className="w-3 h-3 text-blue-400" /> Modo Cliente activo: envía texto, foto, archivo o nota de voz y {assistantName} te responderá.
                             </span>
                           ) : sendRole === 'nota_interna' ? (
                             <span className="text-blue-400 font-medium flex items-center gap-1">
@@ -4040,6 +4590,16 @@ export default function ConversationsDashboardPage() {
               <div className="space-y-3">
                 {simMessages.map((msg) => {
                   const isClient = msg.de === 'cliente';
+                  const fontSizeCls = getFontSizeClass(chatPrefs.fontSize);
+                  const isVoiceNote =
+                    msg.tipo === 'audio' ||
+                    msg.mediaUrl?.includes('chat_audio') ||
+                    msg.mediaUrl?.startsWith('data:audio');
+                  const isFileDoc =
+                    msg.tipo === 'archivo' ||
+                    msg.mediaUrl?.includes('chat_files') ||
+                    (Boolean(msg.metadata?.fileName) && !isVoiceNote);
+
                   return (
                     <div
                       key={msg.id}
@@ -4048,16 +4608,79 @@ export default function ConversationsDashboardPage() {
                       }`}
                     >
                       <span className="text-[10px] text-muted-foreground mb-0.5 px-1 font-medium">
-                        {isClient ? simName : '💈 Recepción VATOS ALFA'}
+                        {isClient ? simName : `💈 ${assistantName} • VATOS ALFA`}
                       </span>
                       <div
-                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap shadow-sm ${
+                        className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 whitespace-pre-wrap shadow-sm ${fontSizeCls} ${
                           isClient
-                            ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                            : 'bg-card border text-card-foreground rounded-tl-sm'
+                            ? `${getSentBubbleClasses(chatPrefs.bubbleColorTheme, false)} rounded-tr-sm`
+                            : `${getClientBubbleClasses(chatPrefs.clientBubbleStyle)} rounded-tl-sm`
                         }`}
                       >
-                        <FormattedChatText text={msg.texto} className="text-xs" />
+                        {isVoiceNote && msg.mediaUrl ? (
+                          <div className="mb-2 p-2 rounded-xl bg-background/90 border border-border/60 shadow-xs flex flex-col gap-1.5 min-w-[220px]">
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
+                              <span className="flex items-center gap-1 font-semibold text-blue-400">
+                                <Mic className="w-3.5 h-3.5 text-blue-400" />
+                                Nota de voz
+                              </span>
+                              {msg.metadata?.duration ? (
+                                <span className="text-[10px] font-sans font-semibold text-foreground/80">
+                                  {Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')}
+                                </span>
+                              ) : null}
+                            </div>
+                            <audio
+                              controls
+                              src={msg.mediaUrl}
+                              className="w-full h-8 rounded-lg focus:outline-none"
+                              preload="metadata"
+                            />
+                            {chatPrefs.showAudioTranscription && msg.metadata?.transcripcion && (
+                              <div className="mt-1 pt-1.5 border-t border-border/50 px-1 text-[11px] text-foreground/85 italic leading-snug">
+                                <span className="font-semibold not-italic text-blue-400 mr-1">Transcripción IA:</span>
+                                &ldquo;{msg.metadata.transcripcion}&rdquo;
+                              </div>
+                            )}
+                          </div>
+                        ) : isFileDoc && msg.mediaUrl ? (
+                          <div className="mb-2 p-2 rounded-xl bg-background/95 border border-border/60 shadow-xs flex items-center justify-between gap-2.5 min-w-[210px]">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-xs font-semibold text-foreground truncate">
+                                  {msg.metadata?.fileName || 'Archivo adjunto'}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground font-sans">
+                                  {msg.metadata?.fileSize
+                                    ? `${(msg.metadata.fileSize / 1024).toFixed(1)} KB`
+                                    : 'Documento'}
+                                </p>
+                              </div>
+                            </div>
+                            <a
+                              href={msg.mediaUrl}
+                              download={msg.metadata?.fileName || 'archivo'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-6 px-2 rounded-md bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/30 text-blue-400 text-[10px] font-semibold flex items-center gap-1 shrink-0"
+                            >
+                              <Download className="w-3 h-3 text-blue-400" />
+                              Abrir
+                            </a>
+                          </div>
+                        ) : msg.mediaUrl ? (
+                          <div className="mb-2 rounded-lg overflow-hidden border border-border/50 bg-black/5">
+                            <img
+                              src={msg.mediaUrl}
+                              alt="Adjunto"
+                              className="max-h-48 w-auto object-cover rounded cursor-pointer"
+                              onClick={() => window.open(msg.mediaUrl, '_blank')}
+                            />
+                          </div>
+                        ) : null}
+
+                        <FormattedChatText text={msg.texto} className={fontSizeCls} />
 
                         {/* Interactive Buttons in Simulator */}
                         {msg.metadata?.buttons && msg.metadata.buttons.length > 0 && (
@@ -4065,9 +4688,9 @@ export default function ConversationsDashboardPage() {
                             {msg.metadata.selected_action ? (
                               <div className="py-1 px-2 rounded-lg text-[11px] font-semibold select-none flex items-center gap-1.5">
                                 {msg.metadata.selected_action === 'confirm' && (
-                                  <span className="flex items-center gap-1.5 text-yellow-400">
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-yellow-400" />
-                                    Cita confirmada en agenda (Etiqueta Amarilla)
+                                  <span className="flex items-center gap-1.5 text-[#C5A880]">
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-[#C5A880]" />
+                                    Cita confirmada en agenda
                                   </span>
                                 )}
                                 {msg.metadata.selected_action === 'reschedule' && (
@@ -4098,13 +4721,13 @@ export default function ConversationsDashboardPage() {
                                       onClick={() => handleExecuteSimulatorAction(msg, btn.action)}
                                       className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-semibold transition-all shadow-sm ${
                                         isConfirm
-                                          ? 'bg-yellow-400 hover:bg-yellow-300 text-slate-950 font-bold border-0 shadow-md active:scale-95'
+                                          ? 'bg-blue-600 hover:bg-blue-500 text-white font-bold border-0 shadow-md active:scale-95'
                                           : isReschedule
                                           ? 'bg-slate-800 hover:bg-slate-700 text-blue-300 border border-blue-500/40 active:scale-95'
                                           : 'bg-slate-800/80 hover:bg-slate-700/80 text-red-400 border border-red-500/30 active:scale-95'
                                       }`}
                                     >
-                                      {isConfirm && <Check className="w-3 h-3 text-slate-950 stroke-[2.5]" />}
+                                      {isConfirm && <Check className="w-3 h-3 text-white stroke-[2.5]" />}
                                       {isReschedule && <Calendar className="w-3 h-3 text-blue-400" />}
                                       {isCancel && <XCircle className="w-3 h-3 text-red-400" />}
                                       <span>{btn.label}</span>
@@ -4146,7 +4769,7 @@ export default function ConversationsDashboardPage() {
                 {isSimProcessing && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground italic px-2">
                     <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
-                    Revisando agenda y formulando respuesta...
+                    {assistantName} está escuchando y consultando la agenda...
                   </div>
                 )}
                 <div ref={simMessagesEndRef} />
@@ -4154,32 +4777,141 @@ export default function ConversationsDashboardPage() {
             )}
           </div>
 
-          {/* Simulator Input */}
+          {/* Simulator Input with All 4 Functional Tools (Clip, Camera, Mic, Emojis) */}
           <div className="p-3 border-t bg-card/60">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendSimulatorMessage();
-              }}
-              className="flex items-center gap-2"
-            >
-              <Input
-                placeholder="Escribe como cliente (ej. ¿Hay cita a las 4pm?)..."
-                value={simInput}
-                onChange={(e) => setSimInput(e.target.value)}
-                disabled={isSimProcessing}
-                className="text-xs h-9"
-              />
-              <Button
-                type="submit"
-                disabled={!simInput.trim() || isSimProcessing}
-                size="sm"
-                className="h-9 px-3 gap-1 bg-primary text-primary-foreground"
+            {isRecordingAudio && recordingTargetRef.current === 'simulator' ? (
+              <div className="flex flex-col gap-1.5 p-2.5 bg-red-500/10 border border-red-500/30 rounded-2xl animate-in fade-in duration-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 pl-1">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                    </span>
+                    <span className="text-xs font-semibold text-red-400">
+                      Grabando audio para {assistantName}...
+                    </span>
+                    <span className="text-xs font-sans font-bold bg-red-500/20 text-red-300 px-2 py-0.5 rounded-md">
+                      {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={cancelVoiceRecording}
+                      className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={finishAndSendVoiceRecording}
+                      className="h-7 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1"
+                    >
+                      <Send className="w-3 h-3" />
+                      Enviar Audio
+                    </Button>
+                  </div>
+                </div>
+                {liveVoiceTranscript && (
+                  <div className="px-2 pt-1 border-t border-red-500/20 text-[11px] text-slate-300 italic truncate">
+                    🎙️ Escuchando: &ldquo;{liveVoiceTranscript}&rdquo;
+                  </div>
+                )}
+              </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendSimulatorMessage();
+                }}
+                className="flex items-center gap-1.5"
               >
-                <Send className="w-3.5 h-3.5" />
-                Enviar
-              </Button>
-            </form>
+                <Input
+                  placeholder="Escribe o graba audio como cliente (ej. ¿Hay cita a las 4pm?)..."
+                  value={simInput}
+                  onChange={(e) => setSimInput(e.target.value)}
+                  disabled={isSimProcessing || isUploadingImage}
+                  className="text-xs h-9 flex-1"
+                />
+
+                {/* 4 Tools inside Simulator */}
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => simFileInputRef.current?.click()}
+                    disabled={isSimProcessing || isUploadingImage}
+                    className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
+                    title="Compartir archivo o imagen desde el dispositivo"
+                  >
+                    <Paperclip className="w-4 h-4 text-slate-400" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setCameraModalTarget('simulator');
+                      setIsCameraModalOpen(true);
+                    }}
+                    disabled={isSimProcessing || isUploadingImage}
+                    className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
+                    title="Abrir cámara del dispositivo"
+                  >
+                    <Camera className="w-4 h-4 text-slate-400" />
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => startVoiceRecording('simulator')}
+                    disabled={isSimProcessing || isUploadingImage}
+                    className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
+                    title="Grabar nota de voz para Janet"
+                  >
+                    <Mic className="w-4 h-4 text-slate-400" />
+                  </Button>
+
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
+                        title="Insertar emojis"
+                      >
+                        <Smile className="w-4 h-4 text-slate-400" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-80 p-3 rounded-2xl z-50 mb-2 bg-[#111827] border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+                    >
+                      <WhatsAppEmojiPicker
+                        onSelectEmoji={(emoji) => setSimInput((prev) => prev + emoji)}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={!simInput.trim() || isSimProcessing}
+                  size="sm"
+                  className="h-9 px-3 gap-1 bg-primary text-primary-foreground"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Enviar
+                </Button>
+              </form>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -4501,6 +5233,39 @@ export default function ConversationsDashboardPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ============================================================ */}
+      {/* MODAL: CÁMARA EN VIVO DEL DISPOSITIVO (WEB / MÓVIL) */}
+      {/* ============================================================ */}
+      <CameraCaptureModal
+        open={isCameraModalOpen}
+        onOpenChange={setIsCameraModalOpen}
+        onCaptureFile={(file) => handleProcessImageFile(file, cameraModalTarget)}
+        onOpenDeviceGallery={() => {
+          if (cameraModalTarget === 'simulator') {
+            simFileInputRef.current?.click();
+          } else {
+            fileInputRef.current?.click();
+          }
+        }}
+      />
+
+      {/* ============================================================ */}
+      {/* MODAL: PERSONALIZACIÓN Y CONFIGURACIÓN DE MENSAJES */}
+      {/* ============================================================ */}
+      <ChatSettingsModal
+        open={isSettingsModalOpen}
+        onOpenChange={setIsSettingsModalOpen}
+        preferences={chatPrefs}
+        onSavePreferences={(newPrefs) => {
+          handleUpdateChatPrefs(newPrefs);
+          toast({
+            title: '✨ Preferencias de mensajes guardadas',
+            description: 'Se aplicaron tus ajustes de color, tamaño de letra y tono de notificación.',
+          });
+        }}
+        assistantName={assistantName}
+      />
     </div>
   );
 }

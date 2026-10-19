@@ -1,6 +1,7 @@
 'use server';
 
 import { getDb } from '@/lib/firebase-server';
+import { computeClientLoyaltySummary } from '@/lib/ai/agent-loyalty-knowledge';
 
 function sanitizeFirestoreData(data: any): any {
   if (data === null || data === undefined) return data;
@@ -29,6 +30,10 @@ export async function sendStaffMessage({
   imageUrl,
   audioUrl,
   audioDuration,
+  fileUrl,
+  fileName,
+  fileSize,
+  fileMimeType,
   staffName,
   pauseBot = false,
 }: {
@@ -37,6 +42,10 @@ export async function sendStaffMessage({
   imageUrl?: string;
   audioUrl?: string;
   audioDuration?: number;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileMimeType?: string;
   staffName?: string;
   pauseBot?: boolean;
 }) {
@@ -48,7 +57,7 @@ export async function sendStaffMessage({
     const now = new Date();
 
     const msgRef = convRef.collection('mensajes').doc();
-    const tipo = audioUrl ? 'audio' : imageUrl ? 'imagen' : 'texto';
+    const tipo = audioUrl ? 'audio' : imageUrl ? 'imagen' : fileUrl ? 'archivo' : 'texto';
     await msgRef.set({
       id: msgRef.id,
       conversation_id: conversationId,
@@ -56,11 +65,14 @@ export async function sendStaffMessage({
       texto: messageText,
       timestamp: now,
       tipo,
-      mediaUrl: audioUrl || imageUrl || null,
+      mediaUrl: audioUrl || imageUrl || fileUrl || null,
       estado: 'enviado',
       metadata: {
         staffName: staffName || 'Recepción',
         ...(audioDuration ? { duration: audioDuration } : {}),
+        ...(fileName ? { fileName } : {}),
+        ...(fileSize ? { fileSize } : {}),
+        ...(fileMimeType ? { fileMimeType } : {}),
       },
     });
 
@@ -174,20 +186,20 @@ export async function getClientDetailsForChat({
 
     // 2. Si no se encontró por ID o no venía, buscar por teléfono
     if (!clientDoc && cleanPhone) {
-      const directSnap = await db.collection('clientes').where('telefono', '==', phone).limit(1).get();
-      if (!directSnap.empty) {
-        clientDoc = directSnap.docs[0];
-      } else {
-        const cleanSnap = await db.collection('clientes').where('telefono', '==', cleanPhone).limit(1).get();
-        if (!cleanSnap.empty) {
-          clientDoc = cleanSnap.docs[0];
-        } else {
-          const clientsSnap = await db.collection('clientes').get();
-          clientDoc = clientsSnap.docs.find((d) => {
-            const p = (d.data().telefono || '').replace(/\D/g, '');
-            return p.includes(cleanPhone);
-          });
+      const variants = Array.from(new Set([phone, cleanPhone, `52${cleanPhone}`, `521${cleanPhone}`].filter(Boolean)));
+      for (const variant of variants) {
+        const snap = await db.collection('clientes').where('telefono', '==', variant).limit(1).get();
+        if (!snap.empty) {
+          clientDoc = snap.docs[0];
+          break;
         }
+      }
+      if (!clientDoc) {
+        const clientsSnap = await db.collection('clientes').get();
+        clientDoc = clientsSnap.docs.find((d) => {
+          const p = (d.data().telefono || '').replace(/\D/g, '');
+          return p.includes(cleanPhone);
+        });
       }
     }
 
@@ -208,35 +220,41 @@ export async function getClientDetailsForChat({
     const resolvedClientId = clientDoc?.id || clientId;
     const clientData = clientDoc ? { id: clientDoc.id, ...clientDoc.data() } : null;
 
-    // 3. Cargar profesionales para nombres legibles
-    const profsSnap = await db.collection('profesionales').get();
+    // 3. Cargar profesionales y configuración de Pase Alfa
+    const [profsSnap, paseAlfaDoc, appMovilDoc] = await Promise.all([
+      db.collection('profesionales').get(),
+      db.collection('configuracion').doc('pase_alfa').get(),
+      db.collection('configuracion').doc('app_movil').get(),
+    ]);
     const profMap: Record<string, string> = {};
     profsSnap.docs.forEach((p) => {
       const pd = p.data();
       profMap[p.id] = pd.publicName || pd.name || 'Barbero';
     });
 
-    // 4. Buscar todas las reservas del cliente
+    // 4. Buscar todas las reservas del cliente (por cliente_id y por cliente_telefono indexado)
     let clientReservas: Array<any> = [];
+    const seenResIds = new Set<string>();
 
     if (resolvedClientId) {
       const byClientSnap = await db.collection('reservas').where('cliente_id', '==', resolvedClientId).get();
-      clientReservas = byClientSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      byClientSnap.docs.forEach((d) => {
+        seenResIds.add(d.id);
+        clientReservas.push({ id: d.id, ...d.data() });
+      });
     }
 
-    // Si también hay reservas registradas por teléfono sin cliente_id
     if (cleanPhone) {
-      const allResSnap = await db.collection('reservas').get();
-      const additional = allResSnap.docs
-        .filter((d) => {
-          const r = d.data();
-          if (resolvedClientId && r.cliente_id === resolvedClientId) return false;
-          const rp = (r.customer?.telefono || r.customerPhone || r.telefono || '').replace(/\D/g, '');
-          return rp && rp.includes(cleanPhone);
-        })
-        .map((d) => ({ id: d.id, ...d.data() }));
-
-      clientReservas = [...clientReservas, ...additional];
+      const phoneVariants = Array.from(new Set([cleanPhone, `52${cleanPhone}`, `521${cleanPhone}`]));
+      for (const pv of phoneVariants) {
+        const byPhoneSnap = await db.collection('reservas').where('cliente_telefono', '==', pv).get();
+        byPhoneSnap.docs.forEach((d) => {
+          if (!seenResIds.has(d.id)) {
+            seenResIds.add(d.id);
+            clientReservas.push({ id: d.id, ...d.data() });
+          }
+        });
+      }
     }
 
     // 5. Calcular métricas dinámicas exactas coincidentes con la Ficha de Cliente
@@ -348,9 +366,18 @@ export async function getClientDetailsForChat({
         }
       : null;
 
+    const loyalty = enrichedClient
+      ? computeClientLoyaltySummary(
+          enrichedClient,
+          paseAlfaDoc.exists ? paseAlfaDoc.data() : null,
+          appMovilDoc.exists ? appMovilDoc.data() : null
+        )
+      : null;
+
     return {
       success: true,
       client: sanitizeFirestoreData(enrichedClient),
+      loyalty,
       recentAppointments: sanitizeFirestoreData(enrichedRecent),
       totalSpent,
       totalCompras,

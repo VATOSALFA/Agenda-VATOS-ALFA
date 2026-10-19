@@ -92,7 +92,22 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
     const filteredSales = useMemo(() => {
         const filtered = salesDataFromHook.filter(sale => {
             const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
-            const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || sale.metodo_pago === activeFilters.paymentMethod;
+            const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || (() => {
+                const filter = activeFilters.paymentMethod;
+                if (filter === 'tarjeta') {
+                    return sale.metodo_pago === 'tarjeta' || sale.metodo_pago === 'terminal' || sale.metodo_pago === 'terminal_point' || (sale.metodo_pago === 'combinado' && (sale.detalle_pago_combinado?.tarjeta || 0) > 0);
+                }
+                if (filter === 'efectivo') {
+                    return sale.metodo_pago === 'efectivo' || (sale.metodo_pago === 'combinado' && (sale.detalle_pago_combinado?.efectivo || 0) > 0);
+                }
+                if (filter === 'transferencia') {
+                    return sale.metodo_pago === 'transferencia' || (sale.metodo_pago === 'combinado' && (sale.detalle_pago_combinado?.transferencia || 0) > 0);
+                }
+                if (filter === 'Pagos en linea' || filter === 'pagos_en_linea' || filter === 'Pagos en Línea') {
+                    return sale.metodo_pago === 'mercadopago' || sale.metodo_pago === 'Pagos en linea' || sale.metodo_pago === 'pagos_en_linea' || sale.metodo_pago === 'en_linea' || (sale.metodo_pago === 'combinado' && (sale.detalle_pago_combinado?.pagos_en_linea || 0) > 0) || (!sale.metodo_pago && sale.pago_estado === 'deposit_paid');
+                }
+                return sale.metodo_pago === filter;
+            })();
 
             // Professional Filter Logic
             let professionalMatch = true;
@@ -141,7 +156,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         if (!populatedSales) {
             return {
                 totalSales: { data: [], total: 0, dataLabels: ['Servicios', 'Productos'] },
-                paymentMethods: { data: [], total: 0, dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia'] }
+                paymentMethods: { data: [], total: 0, dataLabels: ['Efectivo', 'Terminal Point', 'Transferencia', 'Pagos en Línea'] }
             };
         }
 
@@ -192,34 +207,47 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
                         else if (pMetodo === 'transferencia') adjTr = Math.max(0, adjTr - propinaVal);
                         else if (pMetodo === 'mercadopago' || pMetodo === 'en_linea') adjO = Math.max(0, adjO - propinaVal);
 
-                        acc['efectivo'] = (acc['efectivo'] || 0) + adjE;
-                        acc['tarjeta'] = (acc['tarjeta'] || 0) + adjT;
-                        acc['transferencia'] = (acc['transferencia'] || 0) + adjTr;
-                        if (adjO > 0) acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + adjO;
+                        acc['Efectivo'] = (acc['Efectivo'] || 0) + adjE;
+                        acc['Terminal Point'] = (acc['Terminal Point'] || 0) + adjT;
+                        acc['Transferencia'] = (acc['Transferencia'] || 0) + adjTr;
+                        if (adjO > 0) acc['Pagos en Línea'] = (acc['Pagos en Línea'] || 0) + adjO;
                     } else {
                         const factor = actualRevenue / combinedSum;
-                        acc['efectivo'] = (acc['efectivo'] || 0) + (combinedEfectivo * factor);
-                        acc['tarjeta'] = (acc['tarjeta'] || 0) + (combinedTarjeta * factor);
-                        acc['transferencia'] = (acc['transferencia'] || 0) + (combinedTransferencia * factor);
+                        acc['Efectivo'] = (acc['Efectivo'] || 0) + (combinedEfectivo * factor);
+                        acc['Terminal Point'] = (acc['Terminal Point'] || 0) + (combinedTarjeta * factor);
+                        acc['Transferencia'] = (acc['Transferencia'] || 0) + (combinedTransferencia * factor);
                         if (combinedOnline > 0) {
-                            acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + (combinedOnline * factor);
+                            acc['Pagos en Línea'] = (acc['Pagos en Línea'] || 0) + (combinedOnline * factor);
                         }
                     }
                 } else {
-                    acc['efectivo'] = (acc['efectivo'] || 0) + combinedEfectivo;
-                    acc['tarjeta'] = (acc['tarjeta'] || 0) + combinedTarjeta;
-                    acc['transferencia'] = (acc['transferencia'] || 0) + combinedTransferencia;
+                    acc['Efectivo'] = (acc['Efectivo'] || 0) + combinedEfectivo;
+                    acc['Terminal Point'] = (acc['Terminal Point'] || 0) + combinedTarjeta;
+                    acc['Transferencia'] = (acc['Transferencia'] || 0) + combinedTransferencia;
                     if (combinedOnline > 0) {
-                        acc['Pagos en Linea'] = (acc['Pagos en Linea'] || 0) + combinedOnline;
+                        acc['Pagos en Línea'] = (acc['Pagos en Línea'] || 0) + combinedOnline;
                     }
                 }
             } else {
-                let method = sale.metodo_pago || 'otro';
+                let method = sale.metodo_pago;
                 let amount = actualRevenue;
 
-                if (method === 'mercadopago') method = 'Pagos en Linea';
+                // Map payment methods into standard buckets
+                let bucket = 'Efectivo';
+                const lower = (method || '').toLowerCase().trim();
+                if (lower === 'tarjeta' || lower === 'terminal' || lower === 'terminal_point' || lower === 'terminal point') {
+                    bucket = 'Terminal Point';
+                } else if (lower === 'transferencia' || lower === 'spei') {
+                    bucket = 'Transferencia';
+                } else if (lower === 'mercadopago' || lower === 'mercado_pago' || lower === 'pagos en linea' || lower === 'pagos_en_linea' || lower === 'en_linea' || lower === 'online' || (!method && sale.pago_estado === 'deposit_paid')) {
+                    bucket = 'Pagos en Línea';
+                } else if (lower === 'efectivo') {
+                    bucket = 'Efectivo';
+                } else {
+                    bucket = lower ? (lower.charAt(0).toUpperCase() + lower.slice(1)) : 'Otro';
+                }
 
-                acc[method] = (acc[method] || 0) + amount;
+                acc[bucket] = (acc[bucket] || 0) + amount;
             }
             return acc;
         }, {} as Record<string, number>);
@@ -242,7 +270,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
             paymentMethods: {
                 data: Object.entries(salesByPaymentMethod).map(([name, value]) => ({ name, value })),
                 total: totalSales, // Ensure totals match
-                dataLabels: ['Efectivo', 'Tarjeta', 'Transferencia', 'Pagos en Linea']
+                dataLabels: ['Efectivo', 'Terminal Point', 'Transferencia', 'Pagos en Línea']
             },
         };
     }, [populatedSales]);

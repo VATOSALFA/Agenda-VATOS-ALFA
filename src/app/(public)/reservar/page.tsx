@@ -2367,21 +2367,43 @@ export default function BookingPage() {
                                         </button>
                                     </div>
 
-                                    <div className="border-t border-border/60 pt-2 space-y-1">
-                                        <div className="flex justify-between text-base sm:text-lg font-bold text-foreground">
-                                            <span>Total</span>
-                                            <span className="font-sans font-black">{formatPrice(totalPrice)}</span>
-                                        </div>
-                                        {upfrontTotal > 0 && (
+                                    <div className="border-t border-border/60 pt-3 space-y-2.5">
+                                        {upfrontTotal > 0 ? (
                                             <>
-                                                <div className="flex justify-between text-xs sm:text-sm font-bold text-blue-500">
-                                                    <span>Pagar ahora en línea (Anticipo)</span>
-                                                    <span className="font-sans">{formatPrice(upfrontTotal)}</span>
+                                                {/* Desglose de totales de la cita */}
+                                                <div className="space-y-1 text-xs sm:text-sm">
+                                                    <div className="flex justify-between text-muted-foreground">
+                                                        <span>Total de la cita:</span>
+                                                        <span className="font-sans font-semibold text-foreground">{formatPrice(totalPrice)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-muted-foreground text-[11px] sm:text-xs">
+                                                        <span>Resta por liquidar en barbería:</span>
+                                                        <span className="font-sans font-medium text-foreground">{formatPrice(totalPrice - upfrontTotal)}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex justify-between text-[11px] sm:text-xs text-muted-foreground">
-                                                    <span>Pendiente en local</span>
-                                                    <span className="font-sans font-medium">{formatPrice(totalPrice - upfrontTotal)}</span>
+
+                                                {/* BLOQUE DESTACADO: MONTO A PAGAR HOY (ANTICIPO) */}
+                                                <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-[0_4px_20px_rgba(59,130,246,0.12)] flex items-center justify-between gap-3">
+                                                    <div className="space-y-1 min-w-0">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
+                                                                Pagar hoy
+                                                            </span>
+                                                            <span className="font-bold text-xs sm:text-sm text-blue-950 dark:text-blue-200">
+                                                                Anticipo en línea ({Math.round((upfrontTotal / totalPrice) * 100)}%)
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-muted-foreground leading-tight">
+                                                            Solo pagas este anticipo para asegurar tu cita. El restante se liquida el día de tu cita.
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <span className="block text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 font-sans tracking-tight">
+                                                            {formatPrice(upfrontTotal)}
+                                                        </span>
+                                                    </div>
                                                 </div>
+
                                                 {historyRequiresDeposit && (
                                                     <div className="bg-red-500/10 border border-red-500/30 text-red-900 dark:text-red-300 text-xs p-3 rounded-xl flex items-start gap-2 mt-2">
                                                         <ShieldCheck className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
@@ -2403,7 +2425,7 @@ export default function BookingPage() {
                                                                 Escudo de Reserva: Cita activa para la misma fecha
                                                             </p>
                                                             <p className="text-[11px] text-muted-foreground leading-relaxed">
-                                                                {sameDayDepositMessage || `Detectamos que ya cuentas con una cita programada para esta fecha ($${sameDayActiveTotal.toFixed(2)} MXN). Al sumar esta reserva y alcanzar $${sameDayAccumulatedTotal.toFixed(2)} MXN en el día, se requiere un anticipo del ${sameDayDepositPercent}% de garantía.`}
+                                                                {sameDayDepositMessage || `Detectamos que ya cuentas con una cita programada para esta fecha (${formatPrice(sameDayActiveTotal)}). Al sumar esta reserva y alcanzar ${formatPrice(sameDayAccumulatedTotal)} en el día, se requiere un anticipo del ${sameDayDepositPercent}% de garantía.`}
                                                             </p>
                                                         </div>
                                                     </div>
@@ -2419,10 +2441,15 @@ export default function BookingPage() {
                                                 {!historyRequiresDeposit && !sameDayRequiresDeposit && !isOpeningHourDepositApplied && isThresholdDepositApplied && (
                                                     <div className="bg-blue-500/10 border border-blue-500/30 text-foreground text-xs p-2.5 rounded-xl flex items-start gap-2 mt-1.5">
                                                         <Info className="h-4 w-4 shrink-0 text-blue-400 mt-0.5" />
-                                                        <span className="text-muted-foreground text-[11px] leading-relaxed">Por el monto de los servicios (${totalPrice.toFixed(2)}), se requiere un anticipo del {serviciosConfig?.anticipo_porcentaje_defecto || 50}% para confirmar tu espacio.</span>
+                                                        <span className="text-muted-foreground text-[11px] leading-relaxed">Por el monto de los servicios ({formatPrice(totalPrice)}), se requiere un anticipo del {serviciosConfig?.anticipo_porcentaje_defecto || 50}% para confirmar tu espacio.</span>
                                                     </div>
                                                 )}
                                             </>
+                                        ) : (
+                                            <div className="flex justify-between text-base sm:text-lg font-bold text-foreground">
+                                                <span>Total a pagar en sucursal</span>
+                                                <span className="font-sans font-black">{formatPrice(totalPrice)}</span>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
@@ -2441,7 +2468,7 @@ export default function BookingPage() {
                                                     <Loader2 className="h-5 w-5 animate-spin" />
                                                     <span>Procesando...</span>
                                                 </div>
-                                            ) : (upfrontTotal > 0 ? "Proceder al Pago" : "Confirmar Reserva")}
+                                            ) : (upfrontTotal > 0 ? `Proceder al Pago (${formatPrice(upfrontTotal)})` : "Confirmar Reserva")}
                                         </Button>
                                     </div>
                                 </div>

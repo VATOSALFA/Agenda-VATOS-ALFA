@@ -60,6 +60,17 @@ import {
 } from "@/components/ui/command"
 import { ServiceInput } from './service-input';
 import { SendConfirmationModal } from './send-confirmation-modal';
+import {
+  computeTimeSelectorOptions,
+  getNormalizedDayOfWeek,
+  getLocalDaySchedule,
+  isTimeRangeCoveredBySpecialSchedule,
+} from '@/lib/scheduling/schedule-engine';
+import { ClientSummaryAndDepositCard } from './form-parts/client-summary-and-deposit-card';
+import { ConfirmBarberLockModal } from './form-parts/confirm-barber-lock-modal';
+import { DepositWarningModal } from './form-parts/deposit-warning-modal';
+
+let cachedPopularCounts: Record<string, number> | null = null;
 
 interface ReminderSettings {
   notifications: Record<string, { enabled: boolean }>;
@@ -285,7 +296,11 @@ export function NewReservationForm({
   const { data: reminderSettingsData, loading: reminderSettingsLoading } = useFirestoreQuery<ReminderSettings>('configuracion', undefined, where('__name__', '==', 'recordatorios'));
   const { data: agendaSettingsData, loading: agendaSettingsLoading } = useFirestoreQuery<AgendaSettings>('configuracion', undefined, where('__name__', '==', 'agenda'));
   const { data: bookingRulesData } = useFirestoreQuery<ReglasReservasConfig>('configuracion', undefined, where('__name__', '==', 'reglas_reservas'));
-  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>('jornadas_especiales');
+  const { data: specialJourneys, loading: specialJourneysLoading } = useFirestoreQuery<any>(
+    'jornadas_especiales',
+    `special-form-${selectedDateStr}-${selectedLocalId}`,
+    where('fecha', '==', selectedDateStr)
+  );
 
   const reminderSettings = reminderSettingsData?.[0];
   const agendaSettings = agendaSettingsData?.[0];
@@ -445,11 +460,15 @@ export function NewReservationForm({
     return depositAmountCalculated;
   }, [manualDepositAmount, depositAmountCalculated]);
 
-  // Popular / Most sold services calculation
-  const [popularCounts, setPopularCounts] = useState<Record<string, number>>({});
+  // Popular / Most sold services calculation (cached in memory across modal mounts)
+  const [popularCounts, setPopularCounts] = useState<Record<string, number>>(cachedPopularCounts || {});
 
   useEffect(() => {
-    if (!db) return;
+    if (!db || (!isOpen && !isDialogChild)) return;
+    if (cachedPopularCounts) {
+      setPopularCounts(cachedPopularCounts);
+      return;
+    }
     let isSubscribed = true;
 
     const fetchPopularServices = async () => {
@@ -503,6 +522,7 @@ export function NewReservationForm({
           });
         }
 
+        cachedPopularCounts = counts;
         if (isSubscribed) {
           setPopularCounts(counts);
         }
@@ -516,7 +536,7 @@ export function NewReservationForm({
     return () => {
       isSubscribed = false;
     };
-  }, [db]);
+  }, [db, isOpen, isDialogChild]);
 
   const popularServices = useMemo(() => {
     if (!services || services.length === 0) return [];
@@ -619,94 +639,18 @@ export function NewReservationForm({
 
   const timeOptions = useMemo(() => {
     const targetDate = safeParseDate(watchedDate) || new Date();
-    const formattedDate = format(targetDate, 'yyyy-MM-dd');
-    const dayOfWeek = format(targetDate, 'eeee', { locale: es })
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-
-    const localDaySchedule =
-      currentLocal?.schedule?.[dayOfWeek as keyof typeof currentLocal.schedule] ||
-      currentLocal?.schedule?.lunes;
-
-    let baseSH = 10, baseSM = 0;
-    let baseEH = dayOfWeek === 'domingo' ? 20 : 21, baseEM = 0;
-    const baseEnabled = localDaySchedule ? Boolean(localDaySchedule.enabled) : true;
-
-    if (localDaySchedule?.enabled && localDaySchedule?.start && localDaySchedule?.end) {
-      const [parsedSH, parsedSM] = localDaySchedule.start.split(':').map(Number);
-      const [parsedEH, parsedEM] = localDaySchedule.end.split(':').map(Number);
-      if (!isNaN(parsedSH) && !isNaN(parsedSM)) {
-        baseSH = parsedSH;
-        baseSM = parsedSM;
-      }
-      if (!isNaN(parsedEH) && !isNaN(parsedEM)) {
-        baseEH = parsedEH;
-        baseEM = parsedEM;
-      }
-    }
-
-    const computeBoundsForProfs = (profIds: string[]) => {
-      let sH = baseSH, sM = baseSM;
-      let eH = baseEH, eM = baseEM;
-      let anyEnabled = baseEnabled;
-
-      const expandBounds = (startStr?: string, endStr?: string) => {
-        if (!startStr || !endStr) return;
-        const [stH, stM] = startStr.split(':').map(Number);
-        const [enH, enM] = endStr.split(':').map(Number);
-        if (isNaN(stH) || isNaN(stM) || isNaN(enH) || isNaN(enM)) return;
-
-        if (!anyEnabled) {
-          sH = stH; sM = stM;
-          eH = enH; eM = enM;
-          anyEnabled = true;
-        } else {
-          if (stH < sH || (stH === sH && stM < sM)) {
-            sH = stH; sM = stM;
-          }
-          if (enH > eH || (enH === eH && enM > eM)) {
-            eH = enH; eM = enM;
-          }
-        }
-      };
-
-      // 1. Expandir si existen Jornadas Especiales ('jornadas_especiales') para la fecha, sucursal y profesional(es)
-      (specialJourneys || []).forEach((sj: any) => {
-        const matchesLocal = !sj.local_id || !currentLocal?.id || sj.local_id === currentLocal.id;
-        const matchesProf = profIds.length === 0 || (sj.barbero_id && profIds.includes(sj.barbero_id));
-        if (sj.fecha === formattedDate && matchesLocal && matchesProf) {
-          expandBounds(sj.hora_inicio, sj.hora_fin);
-        }
-      });
-
-      // 2. Expandir si existen Horarios Especiales habilitados desde Agenda ('bloqueos_horario' con type === 'available')
-      (allTimeBlocks || []).forEach((tb: any) => {
-        const matchesLocal = !tb.local_id || !currentLocal?.id || tb.local_id === currentLocal.id;
-        const matchesProf = profIds.length === 0 || (tb.barbero_id && profIds.includes(tb.barbero_id));
-        if (tb.fecha === formattedDate && tb.type === 'available' && matchesLocal && matchesProf) {
-          expandBounds(tb.hora_inicio, tb.hora_fin);
-        }
-      });
-
-      const maxStartHour = eM > 0 ? eH : Math.max(sH, eH - 1);
-      const startHours = Array.from({ length: Math.max(1, maxStartHour - sH + 1) }, (_, i) => sH + i);
-      const endHours = Array.from({ length: Math.max(1, eH - sH + 1) }, (_, i) => sH + i);
-      return { startHours, endHours };
-    };
-
     const selectedProfIds = Array.from(
       new Set((watchedItems || []).map((i: any) => i?.barbero_id).filter(Boolean))
     ) as string[];
 
-    const { startHours, endHours } = computeBoundsForProfs(selectedProfIds);
-    const getStartHoursForProf = (profId?: string) => {
-      return computeBoundsForProfs(profId ? [profId] : selectedProfIds).startHours;
-    };
-
-    const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
-
-    return { hours: startHours, startHours, endHours, getStartHoursForProf, minutes };
+    return computeTimeSelectorOptions({
+      date: targetDate,
+      localId: currentLocal?.id,
+      localSchedule: currentLocal?.schedule as any,
+      specialJourneys: specialJourneys || [],
+      timeBlocks: allTimeBlocks || [],
+      selectedProfIds,
+    });
   }, [watchedDate, currentLocal, specialJourneys, allTimeBlocks, watchedItems]);
 
   const validateItemsAvailability = useCallback((values: ReservationFormData) => {
@@ -782,12 +726,12 @@ export function NewReservationForm({
         item_hora_fin = item_hora_fin || item_hora_inicio;
       }
 
-      const dayOfWeek = format(fecha, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const dayOfWeek = getNormalizedDayOfWeek(fecha);
       const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
-      const localDaySchedule = currentLocal?.schedule?.[dayOfWeek as keyof typeof currentLocal.schedule];
-      const isLocalOpen = localDaySchedule ? localDaySchedule.enabled !== false : true;
-      const localStart = localDaySchedule?.start || '10:00';
-      const localEnd = localDaySchedule?.end || (dayOfWeek === 'domingo' ? '20:00' : '21:00');
+      const localDay = getLocalDaySchedule(currentLocal?.schedule as any, dayOfWeek);
+      const isLocalOpen = localDay.enabled;
+      const localStart = localDay.start;
+      const localEnd = localDay.end;
 
       // Get all available blocks for this professional on this date
       const availableBlocks = allTimeBlocks.filter(b => 
@@ -796,22 +740,13 @@ export function NewReservationForm({
         (b as any).type === 'available'
       );
       const profSpecialJourneys = specialJourneys.filter((sj: any) => 
-        sj.profesionalId === item.barbero_id && 
+        (sj.profesionalId === item.barbero_id || sj.barbero_id === item.barbero_id) && 
         sj.fecha === formattedDate
       );
 
       // Helper function to check if a specific time range is fully covered by an available block or special journey
-      const isRangeCovered = (start: string, end: string) => {
-        if (start > end) return false;
-        if (start === end) {
-          const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin > start);
-          const coveredBySpecial = profSpecialJourneys.some((sj: any) => sj.hora_inicio <= start && sj.hora_fin > start);
-          return coveredByBlock || coveredBySpecial;
-        }
-        const coveredByBlock = availableBlocks.some(b => b.hora_inicio <= start && b.hora_fin >= end);
-        const coveredBySpecial = profSpecialJourneys.some((sj: any) => sj.hora_inicio <= start && sj.hora_fin >= end);
-        return coveredByBlock || coveredBySpecial;
-      };
+      const isRangeCovered = (start: string, end: string) =>
+        isTimeRangeCoveredBySpecialSchedule(start, end, availableBlocks, profSpecialJourneys);
 
       // Check for 'block' blocks (overrides schedule)
       const hasBlock = allTimeBlocks.some(b =>
@@ -1063,8 +998,6 @@ export function NewReservationForm({
       const isAlreadyPaidOrDeposit = Boolean(
         isEditMode && (
           initialData.pago_estado === 'Pagado' ||
-          initialData.pago_estado === 'anticipo_pagado' ||
-          initialData.pago_estado === 'deposit_paid' ||
           existingPaidAmt > 0
         )
       );
@@ -1367,13 +1300,14 @@ export function NewReservationForm({
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
       const isInitialAlreadyPaid = isEditMode && initialData?.pago_estado === 'Pagado';
-      const effectiveDepositPaid = data._depositPaidOverride !== undefined
+      const rawEffectiveDepositPaid = data._depositPaidOverride !== undefined
         ? data._depositPaidOverride
         : (depositPaid || isInitialAlreadyPaid);
       const totalPrecioNum = Number(data.precio) || 0;
       const targetDepositAmount = isAnyAnticipoActive
         ? effectiveDepositAmount
         : (Number((data as any).monto_anticipo || (initialData as any)?.anticipo_pagado || (initialData as any)?.monto_pagado_real || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
+      const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
 
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
       const preservedStatuses = ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
@@ -2057,337 +1991,50 @@ export function NewReservationForm({
               </div>
 
               {selectedClient ? (
-                <div className="space-y-2">
-                  {/* Tarjeta de Cliente Minimizada por Defecto Vatos Alfa */}
-                  <div className="p-2.5 px-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <Avatar className="h-8 w-8 border border-border shrink-0">
-                          <AvatarFallback className="bg-[#1a233a] text-white font-bold text-[11px]">
-                            {selectedClient.nombre?.[0]}{selectedClient.apellido?.[0]}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex items-center gap-2 flex-wrap min-w-0">
-                          <p className="font-bold text-xs sm:text-sm text-foreground truncate">
-                            {selectedClient.nombre} {selectedClient.apellido}
-                          </p>
-                          <span className="text-xs text-muted-foreground font-sans shrink-0">
-                            • {selectedClient.telefono}
-                          </span>
-                          {isNewClient ? (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold shrink-0">
-                              Nuevo
-                            </Badge>
-                          ) : isAnticipoRequired ? (
-                            <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold shrink-0">
-                              🚨 Anticipo Requerido
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold shrink-0">
-                              ✓ Frecuente
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-0.5 shrink-0">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground rounded-lg gap-1"
-                          onClick={() => setIsClientStatsExpanded(prev => !prev)}
-                          title={isClientStatsExpanded ? "Ocultar historial de citas" : "Ver historial de citas"}
-                        >
-                          <span className="hidden sm:inline">Historial ({clientStats.totalCitas})</span>
-                          {isClientStatsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
-                          onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
-                          title="Editar datos del cliente"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive rounded-lg"
-                          onClick={() => {
-                            form.setValue('cliente_id', '');
-                            setDepositPaid(false);
-                            setManualDepositEnabled(false);
-                            setManualDepositAmount('');
-                          }}
-                          title="Cambiar cliente"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Mini-Métricas de Asistencia y Fidelidad Desplegables */}
-                    {isClientStatsExpanded && (
-                      <div className="mt-2.5 pt-2.5 border-t border-border/60 space-y-2 animate-in fade-in duration-150">
-                        <div className="grid grid-cols-4 gap-2 text-center">
-                          <div className="bg-muted/30 rounded-lg p-1.5">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase">Citas</p>
-                            <p className="text-xs font-bold text-foreground font-sans">{clientStats.totalCitas}</p>
-                          </div>
-                          <div className="bg-blue-500/5 rounded-lg p-1.5 border border-blue-500/15">
-                            <p className="text-[10px] text-blue-400/80 font-medium uppercase">Asistidas</p>
-                            <p className="text-xs font-bold text-blue-400 font-sans">{clientStats.asistidasCount}</p>
-                          </div>
-                          <div className={cn(
-                            "rounded-lg p-1.5 border transition-colors",
-                            unattendedCount >= maxInasistenciasPermitidas
-                              ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400"
-                              : unattendedCount > 0
-                              ? "bg-slate-500/10 border-slate-500/20 text-slate-700 dark:text-slate-300"
-                              : "bg-muted/30 border-transparent text-muted-foreground"
-                          )}>
-                            <p className="text-[10px] font-medium uppercase">Inasistencias</p>
-                            <p className={cn("text-xs font-black font-sans", unattendedCount >= maxInasistenciasPermitidas && "animate-pulse")}>
-                              {unattendedCount}
-                            </p>
-                          </div>
-                          <div className="bg-muted/30 rounded-lg p-1.5">
-                            <p className="text-[10px] text-muted-foreground font-medium uppercase">Canceladas</p>
-                            <p className="text-xs font-bold text-muted-foreground font-sans">{clientStats.canceladasCount}</p>
-                          </div>
-                        </div>
-
-                        {selectedClient.correo && (
-                          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-                            <span className="font-semibold text-foreground shrink-0">Correo:</span>
-                            <span className="truncate">{selectedClient.correo}</span>
-                          </div>
-                        )}
-
-                        {selectedClient.notas && (
-                          <div className="text-[11px] text-muted-foreground flex items-start gap-1.5">
-                            <span className="font-semibold text-foreground shrink-0">Nota del perfil:</span>
-                            <span className="italic truncate">{selectedClient.notas}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* REGLA DE RESERVA / ANTICIPO MINIMIZADA POR DEFECTO CON OPCIÓN DE EXPANDIR */}
-                  {isAnyAnticipoActive ? (
-                    <div className={cn(
-                      "rounded-xl border-2 shadow-xs overflow-hidden transition-all",
-                      isAnticipoRequiredDueToHistory
-                        ? "border-red-500/50 bg-gradient-to-r from-red-500/10 via-red-500/5 to-red-500/10"
-                        : "border-blue-500/50 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-blue-500/10"
-                    )}>
-                      {/* Cabecera compacta siempre visible */}
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setIsDepositRuleExpanded(prev => !prev)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setIsDepositRuleExpanded(prev => !prev);
-                          }
-                        }}
-                        className="p-2.5 px-3 flex items-center justify-between gap-2 cursor-pointer select-none hover:bg-white/5 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {isAnticipoRequiredDueToHistory ? (
-                            <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                          ) : (
-                            <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
-                          )}
-                          <span className={cn(
-                            "font-black text-[11px] sm:text-xs uppercase tracking-wide truncate",
-                            isAnticipoRequiredDueToHistory ? "text-red-800 dark:text-red-200" : "text-blue-800 dark:text-blue-200"
-                          )}>
-                            {isAnticipoRequiredDueToHistory
-                              ? "🛡️ Escudo Antifraude: Anticipo Obligatorio"
-                              : isAnticipoRequiredDueToOpeningHour
-                              ? `⏰ Regla de Reserva: Horario de Apertura (${openingHourTarget} AM)`
-                              : isAnticipoRequiredDueToAmount
-                              ? `💳 Regla de Reserva: Anticipo por Monto (+$${formatMoney(montoMinimoThreshold)})`
-                              : "💳 Anticipo Manual Personalizado"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Badge className={cn(
-                            "text-white font-bold text-[10px] px-2 py-0 shadow-xs font-sans",
-                            isAnticipoRequiredDueToHistory ? "bg-red-600" : "bg-blue-600"
-                          )}>
-                            {isAnticipoRequiredDueToHistory
-                              ? `${penalizacionPorcentaje}% Anticipo`
-                              : isAnticipoRequiredDueToOpeningHour
-                              ? `${openingHourPorcentaje}% Anticipo`
-                              : isAnticipoRequiredDueToAmount
-                              ? `${anticipoPorcentajeDefecto}% Anticipo`
-                              : "Manual"}
-                          </Badge>
-                          <span className="text-xs font-bold text-foreground font-sans hidden sm:inline">
-                            (${formatMoney(effectiveDepositAmount)})
-                          </span>
-                          {isDepositRuleExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Contenido expandible de la regla de reserva */}
-                      {isDepositRuleExpanded && (
-                        <div className={cn(
-                          "px-3 pb-3 pt-2 border-t space-y-2.5 animate-in fade-in duration-150",
-                          isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
-                        )}>
-                          <div className="space-y-1">
-                            <p className={cn(
-                              "text-xs leading-snug",
-                              isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200"
-                            )}>
-                              {isAnticipoRequiredDueToHistory ? (
-                                <>Este cliente acumula <strong>{unattendedCount} inasistencias previas</strong> (límite permitido: {maxInasistenciasPermitidas}). Por regla oficial de Vatos Alfa, <strong>debe pagar anticipo para apartar su cita</strong>.</>
-                              ) : isAnticipoRequiredDueToOpeningHour ? (
-                                <>Todas las citas agendadas en la ventana de apertura de las <strong>{openingHourTarget} AM</strong> requieren obligatoriamente un anticipo del <strong>{openingHourPorcentaje}%</strong> para asegurar el primer turno del día.</>
-                              ) : isAnticipoRequiredDueToAmount ? (
-                                <>El total de la cita es de <strong>${formatMoney(currentTotal)} MXN</strong> (alcanza o supera el mínimo de ${formatMoney(montoMinimoThreshold)} MXN). Por regla oficial de Vatos Alfa, <strong>requiere anticipo para apartar lugar</strong>.</>
-                              ) : (
-                                <>Has activado el <strong>anticipo manual</strong> para esta cita. Puedes ajustar libremente la cantidad a solicitar o cobrar.</>
-                              )}
-                            </p>
-                            <div className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground pt-1 flex-wrap font-sans">
-                              <div className="flex items-center gap-2">
-                                <span>Total Cita: <strong>${formatMoney(currentTotal)} MXN</strong></span>
-                                <span>•</span>
-                                <span className={isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-400" : "text-blue-600 dark:text-blue-400"}>
-                                  Anticipo: <strong>${formatMoney(effectiveDepositAmount)} MXN</strong>
-                                </span>
-                              </div>
-                              {manualDepositEnabled && !isAnticipoRequired && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setManualDepositEnabled(false);
-                                    setManualDepositAmount('');
-                                  }}
-                                  className="text-[10px] text-red-500 hover:underline font-semibold"
-                                >
-                                  (Quitar anticipo manual)
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Campo de Monto Manual de Anticipo y Botón de Enviar Link */}
-                          <div className={cn(
-                            "pt-2 border-t flex flex-wrap items-center justify-between gap-2",
-                            isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20"
-                          )}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-semibold text-foreground">Monto Anticipo:</span>
-                              <div className="relative w-28">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">$</span>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max={currentTotal}
-                                  step="1"
-                                  value={manualDepositAmount !== '' ? manualDepositAmount : (effectiveDepositAmount || '')}
-                                  onChange={(e) => setManualDepositAmount(e.target.value)}
-                                  placeholder={String(depositAmountCalculated || 50)}
-                                  className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border font-sans"
-                                />
-                              </div>
-                              <span className="text-xs font-bold text-foreground font-sans">MXN</span>
-                              {manualDepositAmount !== '' && isAnticipoRequired && (
-                                <button
-                                  type="button"
-                                  onClick={() => setManualDepositAmount('')}
-                                  className="text-[11px] text-blue-500 hover:underline font-medium font-sans"
-                                >
-                                  (Auto: ${formatMoney(depositAmountCalculated)})
-                                </button>
-                              )}
-                            </div>
-
-                            {!depositPaid && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={handleSaveAndSendLink}
-                                disabled={isSubmitting}
-                                className="h-8 px-3 text-xs font-bold border-blue-500/40 text-blue-500 hover:text-white hover:bg-blue-600 gap-1.5 rounded-xl shadow-xs"
-                              >
-                                <CreditCard className="w-3.5 h-3.5" />
-                                <span>Enviar Link (SPEI / MP)</span>
-                              </Button>
-                            )}
-                          </div>
-
-                          {/* Control de cobro en recepción */}
-                          <div className={cn("pt-2 border-t flex flex-wrap items-center justify-between gap-2", isAnticipoRequiredDueToHistory ? "border-red-500/20" : "border-blue-500/20")}>
-                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                              <input
-                                type="checkbox"
-                                checked={depositPaid}
-                                onChange={(e) => setDepositPaid(e.target.checked)}
-                                className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                              />
-                              <span className="text-xs font-bold text-foreground">
-                                {depositPaid ? '✓ Anticipo marcado como PAGADO en recepción' : 'Marcar Anticipo como PAGADO en recepción'}
-                              </span>
-                            </label>
-
-                            {depositPaid && (
-                              <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
-                                <span className="text-[11px] text-muted-foreground font-medium">Método:</span>
-                                <Select value={depositMethod} onValueChange={setDepositMethod}>
-                                  <SelectTrigger className="h-7 text-xs w-32 bg-background border-border">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                                    <SelectItem value="tarjeta">Tarjeta (Terminal)</SelectItem>
-                                    <SelectItem value="transferencia">Transferencia</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setManualDepositEnabled(true);
-                          setIsDepositRuleExpanded(true);
-                          if (manualDepositAmount === '') {
-                            setManualDepositAmount(String(Math.round(currentTotal * 0.5) || 50));
-                          }
-                        }}
-                        className="h-7 px-2 text-xs text-blue-500 hover:text-blue-400 font-semibold gap-1.5"
-                      >
-                        <CreditCard className="w-3.5 h-3.5" />
-                        <span>+ Solicitar / Cobrar Anticipo Manual</span>
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <ClientSummaryAndDepositCard
+                  selectedClient={selectedClient}
+                  isNewClient={isNewClient}
+                  isAnticipoRequired={isAnticipoRequired}
+                  isAnyAnticipoActive={isAnyAnticipoActive}
+                  isAnticipoRequiredDueToHistory={isAnticipoRequiredDueToHistory}
+                  isAnticipoRequiredDueToOpeningHour={isAnticipoRequiredDueToOpeningHour}
+                  isAnticipoRequiredDueToAmount={isAnticipoRequiredDueToAmount}
+                  openingHourTarget={openingHourTarget}
+                  openingHourPorcentaje={openingHourPorcentaje}
+                  montoMinimoThreshold={montoMinimoThreshold}
+                  penalizacionPorcentaje={penalizacionPorcentaje}
+                  anticipoPorcentajeDefecto={anticipoPorcentajeDefecto}
+                  maxInasistenciasPermitidas={maxInasistenciasPermitidas}
+                  unattendedCount={unattendedCount}
+                  currentTotal={currentTotal}
+                  depositAmountCalculated={depositAmountCalculated}
+                  effectiveDepositAmount={effectiveDepositAmount}
+                  clientStats={clientStats}
+                  isClientStatsExpanded={isClientStatsExpanded}
+                  setIsClientStatsExpanded={setIsClientStatsExpanded}
+                  isDepositRuleExpanded={isDepositRuleExpanded}
+                  setIsDepositRuleExpanded={setIsDepositRuleExpanded}
+                  manualDepositEnabled={manualDepositEnabled}
+                  setManualDepositEnabled={setManualDepositEnabled}
+                  manualDepositAmount={manualDepositAmount}
+                  setManualDepositAmount={setManualDepositAmount}
+                  depositPaid={depositPaid}
+                  setDepositPaid={setDepositPaid}
+                  depositMethod={depositMethod}
+                  setDepositMethod={setDepositMethod}
+                  isSubmitting={isSubmitting}
+                  onEditClient={() => {
+                    setIsEditingClient(true);
+                    setIsClientModalOpen(true);
+                  }}
+                  onClearClient={() => {
+                    form.setValue('cliente_id', '');
+                    setDepositPaid(false);
+                    setManualDepositEnabled(false);
+                    setManualDepositAmount('');
+                  }}
+                  onSaveAndSendLink={handleSaveAndSendLink}
+                />
               ) : (
                 <FormField control={form.control} name="cliente_id" render={({ field }) => (
                   <FormItem>
@@ -2783,245 +2430,75 @@ export function NewReservationForm({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showConfirmLockModal} onOpenChange={(open) => {
-        setShowConfirmLockModal(open);
-        if (!open) {
+      <ConfirmBarberLockModal
+        open={showConfirmLockModal}
+        onOpenChange={setShowConfirmLockModal}
+        pendingConfirmProfs={pendingConfirmProfs}
+        currentConfirmIdx={currentConfirmIdx}
+        professionals={professionals}
+        onReset={() => {
           setCurrentConfirmIdx(-1);
           setPendingConfirmProfs([]);
-        }
-      }}>
-        <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col">
-          {/* CABECERA OFICIAL VATOS ALFA */}
-          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
-            <div className="header-light-beam" aria-hidden="true" />
+        }}
+        onConfirmAnswer={async (locked: boolean) => {
+          const currentProfId = pendingConfirmProfs[currentConfirmIdx];
+          const newLocks = { ...confirmedLocks, [currentProfId]: locked };
+          setConfirmedLocks(newLocks);
 
-            <div className="relative z-10 flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
-                <Scissors className="h-5 w-5 text-slate-300 shrink-0" />
-                <div>
-                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
-                    Confirmación de Barbero
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-300 mt-0.5">
-                    Preferencia exclusiva de profesional
-                  </DialogDescription>
-                </div>
-              </div>
+          const nextIdx = currentConfirmIdx + 1;
+          if (nextIdx < pendingConfirmProfs.length) {
+            setCurrentConfirmIdx(nextIdx);
+          } else {
+            setShowConfirmLockModal(false);
+            setCurrentConfirmIdx(-1);
+            setPendingConfirmProfs([]);
+            if (pendingSubmitData) {
+              const updatedItems = pendingSubmitData.items.map((item: any) => ({
+                ...item,
+                professional_lock: newLocks[item.barbero_id] ?? false,
+              }));
+              await executeSave({ ...pendingSubmitData, items: updatedItems });
+            }
+          }
+        }}
+      />
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowConfirmLockModal(false);
-                  setCurrentConfirmIdx(-1);
-                  setPendingConfirmProfs([]);
-                }}
-                className="p-1 text-slate-300 hover:text-white transition-colors"
-                aria-label="Cerrar modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-5 space-y-4">
-            <p className="text-sm font-semibold text-foreground">
-              {(() => {
-                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
-                const professionalName = professionals.find(p => p.id === currentProfId)?.name;
-                return professionalName
-                  ? `¿El cliente pidió exclusivamente con ${professionalName}?`
-                  : '¿El cliente pidió exclusivamente con el barbero?';
-              })()}
-            </p>
-          </div>
-          <DialogFooter className="px-5 pb-5 pt-0 flex justify-end gap-3 sm:space-x-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={async () => {
-                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
-                const newLocks = { ...confirmedLocks, [currentProfId]: false };
-                setConfirmedLocks(newLocks);
-
-                const nextIdx = currentConfirmIdx + 1;
-                if (nextIdx < pendingConfirmProfs.length) {
-                  setCurrentConfirmIdx(nextIdx);
-                } else {
-                  setShowConfirmLockModal(false);
-                  setCurrentConfirmIdx(-1);
-                  setPendingConfirmProfs([]);
-                  if (pendingSubmitData) {
-                    const updatedItems = pendingSubmitData.items.map((item: any) => ({
-                      ...item,
-                      professional_lock: newLocks[item.barbero_id] ?? false
-                    }));
-                    await executeSave({ ...pendingSubmitData, items: updatedItems });
-                  }
-                }
-              }}
-            >
-              No
-            </Button>
-            <Button
-              type="button"
-              className="btn-vatos-alfa rounded-xl font-bold text-xs"
-              onClick={async () => {
-                const currentProfId = pendingConfirmProfs[currentConfirmIdx];
-                const newLocks = { ...confirmedLocks, [currentProfId]: true };
-                setConfirmedLocks(newLocks);
-
-                const nextIdx = currentConfirmIdx + 1;
-                if (nextIdx < pendingConfirmProfs.length) {
-                  setCurrentConfirmIdx(nextIdx);
-                } else {
-                  setShowConfirmLockModal(false);
-                  setCurrentConfirmIdx(-1);
-                  setPendingConfirmProfs([]);
-                  if (pendingSubmitData) {
-                    const updatedItems = pendingSubmitData.items.map((item: any) => ({
-                      ...item,
-                      professional_lock: newLocks[item.barbero_id] ?? false
-                    }));
-                    await executeSave({ ...pendingSubmitData, items: updatedItems });
-                  }
-                }
-              }}
-            >
-              Sí
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL PREVENTIVO DE ANTICIPO POR INASISTENCIAS */}
-      <Dialog open={showDepositWarningModal} onOpenChange={setShowDepositWarningModal}>
-        <DialogContent hideCloseButton={true} className="sm:max-w-md p-0 rounded-2xl overflow-hidden shadow-2xl border border-border">
-          <div className={cn(
-            "p-4 sm:p-5 text-white border-b flex items-center justify-between relative overflow-hidden",
-            isAnticipoRequiredDueToHistory
-              ? "bg-gradient-to-r from-red-950 via-slate-900 to-red-950 border-red-900/50"
-              : "bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-[#2d3a60]/60"
-          )}>
-            {/* Haz de luz animado en diagonal */}
-            <div className="header-light-beam" aria-hidden="true" />
-
-            <div className="relative z-10 flex items-center justify-between w-full">
-            <div className="flex items-center gap-2.5">
-              {isAnticipoRequiredDueToHistory ? (
-                <ShieldAlert className="h-5 w-5 text-red-400 shrink-0" />
-              ) : (
-                <CreditCard className="h-5 w-5 text-slate-300 shrink-0" />
-              )}
-              <div>
-                <DialogTitle className="text-base font-bold text-white tracking-tight">
-                  {isAnticipoRequiredDueToHistory
-                    ? 'Escudo Antifraude • Anticipo Requerido'
-                    : isAnticipoRequiredDueToOpeningHour
-                    ? `Horario de Apertura (${openingHourTarget} AM) • Anticipo Requerido`
-                    : 'Regla de Reserva • Anticipo Requerido'}
-                </DialogTitle>
-                <DialogDescription className="text-xs text-slate-300">
-                  {isAnticipoRequiredDueToHistory
-                    ? 'Regla de reserva para clientes con historial de inasistencias'
-                    : isAnticipoRequiredDueToOpeningHour
-                    ? `Toda cita a las ${openingHourTarget} AM requiere anticipo obligatorio`
-                    : `Cita a partir de $${montoMinimoThreshold} MXN requiere anticipo de garantía`}
-                </DialogDescription>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowDepositWarningModal(false)}
-              className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/10"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            </div>
-          </div>
-
-          <div className="p-5 space-y-4 text-xs">
-            <div className={cn(
-              "p-3.5 border rounded-xl space-y-1.5",
-              isAnticipoRequiredDueToHistory ? "bg-red-500/10 border-red-500/30" : "bg-blue-500/10 border-blue-500/30"
-            )}>
-              <p className={cn("font-bold text-sm", isAnticipoRequiredDueToHistory ? "text-red-700 dark:text-red-300" : "text-blue-800 dark:text-blue-200")}>
-                {isAnticipoRequiredDueToHistory
-                  ? `Este cliente tiene ${unattendedCount} inasistencias registradas.`
-                  : isAnticipoRequiredDueToOpeningHour
-                  ? `Cita programada en el horario de apertura (${openingHourTarget} AM).`
-                  : `Cita con total de $${currentTotal} MXN (alcanza o supera los $${montoMinimoThreshold} MXN).`}
-              </p>
-              <p className="text-muted-foreground leading-relaxed">
-                {isAnticipoRequiredDueToHistory
-                  ? `Para proteger el tiempo del barbero y los costos operativos, la política de Vatos Alfa exige un anticipo del ${penalizacionPorcentaje}% ($${depositAmountCalculated} MXN).`
-                  : isAnticipoRequiredDueToOpeningHour
-                  ? `Por regla oficial de Vatos Alfa, todas las citas agendadas a las ${openingHourTarget} AM (primer turno del día) requieren un anticipo del ${openingHourPorcentaje}% ($${depositAmountCalculated} MXN) para confirmar el espacio.`
-                  : `Según las reglas de reserva de Vatos Alfa, citas de $${montoMinimoThreshold} MXN o más exigen un anticipo del ${anticipoPorcentajeDefecto}% ($${depositAmountCalculated} MXN) para confirmar el lugar.`}
-              </p>
-            </div>
-
-            <p className="text-muted-foreground font-medium">
-              ¿Cómo deseas proceder con esta reserva en el sistema?
-            </p>
-
-            <div className="space-y-2 pt-1">
-              <Button
-                type="button"
-                className="w-full btn-vatos-alfa font-bold h-10 rounded-xl justify-center text-xs shadow-sm"
-                onClick={async () => {
-                  setDepositPaid(true);
-                  setShowDepositWarningModal(false);
-                  if (pendingSaveData) {
-                    await proceedWithSubmission(pendingSaveData, true);
-                  }
-                }}
-              >
-                ✓ Ya cobré el anticipo (${effectiveDepositAmount} MXN)
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-10 rounded-xl justify-center text-xs font-bold border-border/80 hover:bg-muted text-foreground shadow-xs flex items-center gap-2"
-                onClick={async () => {
-                  setDepositPaid(false);
-                  setShowDepositWarningModal(false);
-                  if (pendingSaveData) {
-                    await proceedWithSubmission({ ...pendingSaveData, _openSendLinkModal: true }, false);
-                  }
-                }}
-              >
-                <CreditCard className="w-3.5 h-3.5 text-blue-400" />
-                <span>Enviar Enlace Mercado Pago (SPEI / Tarjeta)</span>
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-9 rounded-xl justify-center text-xs font-medium text-muted-foreground border-border hover:bg-muted"
-                onClick={async () => {
-                  setDepositPaid(false);
-                  setShowDepositWarningModal(false);
-                  if (pendingSaveData) {
-                    await proceedWithSubmission(pendingSaveData, false);
-                  }
-                }}
-              >
-                Dejar como Pendiente de Anticipo (Cobrar después)
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="w-full h-9 rounded-xl justify-center text-xs text-muted-foreground"
-                onClick={() => setShowDepositWarningModal(false)}
-              >
-                Volver a revisar datos de la cita
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DepositWarningModal
+        open={showDepositWarningModal}
+        onOpenChange={setShowDepositWarningModal}
+        isAnticipoRequiredDueToHistory={isAnticipoRequiredDueToHistory}
+        isAnticipoRequiredDueToOpeningHour={isAnticipoRequiredDueToOpeningHour}
+        openingHourTarget={openingHourTarget}
+        openingHourPorcentaje={openingHourPorcentaje}
+        montoMinimoThreshold={montoMinimoThreshold}
+        unattendedCount={unattendedCount}
+        currentTotal={currentTotal}
+        penalizacionPorcentaje={penalizacionPorcentaje}
+        anticipoPorcentajeDefecto={anticipoPorcentajeDefecto}
+        depositAmountCalculated={depositAmountCalculated}
+        effectiveDepositAmount={effectiveDepositAmount}
+        onConfirmPaidNow={async () => {
+          setDepositPaid(true);
+          setShowDepositWarningModal(false);
+          if (pendingSaveData) {
+            await proceedWithSubmission(pendingSaveData, true);
+          }
+        }}
+        onSendPaymentLink={async () => {
+          setDepositPaid(false);
+          setShowDepositWarningModal(false);
+          if (pendingSaveData) {
+            await proceedWithSubmission({ ...pendingSaveData, _openSendLinkModal: true }, false);
+          }
+        }}
+        onLeavePending={async () => {
+          setDepositPaid(false);
+          setShowDepositWarningModal(false);
+          if (pendingSaveData) {
+            await proceedWithSubmission(pendingSaveData, false);
+          }
+        }}
+      />
     </>
   );
 

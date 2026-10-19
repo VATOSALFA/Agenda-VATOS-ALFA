@@ -2,9 +2,9 @@ import { chatContextStorage } from './agent-context';
 import { getDb } from '@/lib/firebase-server';
 import { format } from 'date-fns';
 import { getAvailableSlots } from '@/lib/actions/booking';
-import { matchBarberName, formatTime12h, getBarberServiceDuration } from '@/lib/ai/agent-utils';
+import { matchBarberName, formatTime12h, getBarberServiceDuration, getMexicoDateInfo } from '@/lib/ai/agent-utils';
 import { cancelarCitaTool, confirmarCitaClienteTool, consultarCitasClienteTool } from './agent-tools';
-import { getMexicoDateInfo } from './agent-utils';
+import { consultarPaseAlfaYPromocionesTool } from './agent-loyalty-knowledge';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
 
 // ==========================================
@@ -76,38 +76,44 @@ export async function executeFallbackLogic({
 
   try {
     const servsSnap = await db.collection('servicios').where('active', '==', true).get();
-    activeServices = servsSnap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        name: data.name || data.nombre || 'Corte de Cabello',
-        price: Number(data.price || data.precio || 0),
-        duration: Number(data.duration || data.duracion || 30),
-        durationPorProfesional: data.durationPorProfesional,
-        professionals: data.professionals,
-      };
-    });
+    activeServices = servsSnap.docs
+      .filter((d) => !d.data().deleted)
+      .map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name || data.nombre || 'Corte de Cabello',
+          price: Number(data.price || data.precio || 0),
+          duration: Number(data.duration || data.duracion || 30),
+          durationPorProfesional: data.durationPorProfesional,
+          professionals: data.professionals,
+        };
+      });
 
     const profsSnap = await db.collection('profesionales').where('active', '==', true).get();
-    activeBarbers = profsSnap.docs.map((d) => {
-      const data = d.data();
-      return {
-        id: d.id,
-        name: data.name || '',
-        publicName: data.publicName || data.name || 'Barbero',
-      };
-    });
+    activeBarbers = profsSnap.docs
+      .filter((d) => !d.data().deleted)
+      .map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          name: data.name || '',
+          publicName: data.publicName || data.name || 'Barbero',
+        };
+      });
   } catch (e) {
     console.error('Error fetching services/barbers in fallback:', e);
   }
 
   // 3. Detectores de intención y entidades
+  const isAskingSensitiveInfo = /(cu[aá]nto ganan|sueldo|salario|comisi[oó]n|comisiones|finanzas|ventas del d[ií]a|ingresos de la barber|tel[eé]fono personal|celular de|n[uú]mero de .*(bety|beatriz|lalo|eduardo|ivon|lupita|alfredo)|direcci[oó]n personal|d[oó]nde vive|corte de caja)/i.test(text);
+  const isAskingLoyaltyOrPromos = /(pase alfa|alfa\s*coins?|monedas?|sellos?|lealtad|puntos|corte gratis|promoci[oó]n|promociones|cumplea[ñn]os|cu[aá]nto vale un alfa)/i.test(text);
   const isHaircut = /(corte|cabello|pelo|fade|degradado|desvanecido)/i.test(text);
   const isBeard = /(barba|bigote|afeitad|rasurad|toalla caliente)/i.test(text);
   const isAskingMultiServices = /(varios servicios|dos servicios|m[aá]s de un servicio|al mismo tiempo|juntos|combo|junto|corte.*y.*barba|corte.*\+.*barba|servicios al mismo tiempo)/i.test(text);
   const isAskingTermsOrPrivacy = /(t[eé]rminos|condiciones|pol[ií]ticas? de privacidad|aviso de privacidad|privacidad|datos personales|c[oó]mo usan mis datos|pol[ií]tica de cancelaci[oó]n|reembolso|reembolsos)/i.test(text);
   const isAskingHours = /(horario|horas|hora|disponible|disponibilidad|espacio|lugar|tienes|tienen|a que hora|a qué hora|puedo ir)/i.test(text);
-  const isAskingPrices = /(precio|costo|cuanto cuesta|cuánto cuesta|cuanto cobran|cuánto cobran|tarifa|promoci)/i.test(text);
+  const isAskingPrices = /(precio|costo|cuanto cuesta|cuánto cuesta|cuanto cobran|cuánto cobran|tarifa)/i.test(text);
   const isAskingBarbers = /(quien atiende|quién atiende|quienes atienden|quiénes atienden|quien corta|quién corta|barberos|el equipo)/i.test(text);
   const isAskingMyCitas = /(mis citas|cuando es mi cita|cuándo es mi cita|a que hora es mi cita|mi reserva|revisar cita)/i.test(text);
   const isCancelling = /(cancelar|cancela|ya no voy a poder|ya no puedo ir|anular)/i.test(text);
@@ -160,22 +166,51 @@ export async function executeFallbackLogic({
   // RESPUESTAS HUMANAS CONTEXTUALES
   // ==========================================
 
+  // CASO SEGURIDAD: Solicitud de información financiera interna o datos privados del personal
+  if (isAskingSensitiveInfo) {
+    return 'Por políticas de privacidad y seguridad de VATOS ALFA, no compartimos información financiera interna de la barbería ni datos personales o números privados de los integrantes de nuestro equipo. Si deseas agendar una cita con alguno de nuestros profesionales o tienes alguna duda sobre nuestros servicios, con mucho gusto te apoyo por este chat.';
+  }
+
+  // CASO PASE ALFA, ALFA COINS Y PROMOCIONES
+  if (isAskingLoyaltyOrPromos) {
+    try {
+      const loyaltyRes = await consultarPaseAlfaYPromocionesTool({ telefonoCliente: clientPhone });
+      const promosText = loyaltyRes.promocionesYPrivilegiosActivos.length > 0
+        ? `\n\nPromociones y privilegios vigentes:\n${loyaltyRes.promocionesYPrivilegiosActivos.map((p) => `• ${p.titulo} (${p.descuentoORecompensa}): ${p.descripcion}. Términos: ${p.terminosYCondiciones}`).join('\n')}`
+        : '';
+      const clientText =
+        loyaltyRes.estadoClienteActual?.identificado && loyaltyRes.estadoClienteActual.nivelActual
+          ? `\n\nTu estado actual (${loyaltyRes.estadoClienteActual.nombre || 'Cliente'}): Nivel ${loyaltyRes.estadoClienteActual.nivelActual}, ${loyaltyRes.estadoClienteActual.sellosAcumulados ?? 0} sellos acumulados (te faltan ${loyaltyRes.estadoClienteActual.sellosParaCorteGratis ?? 10} para tu corte gratis) y saldo de ${loyaltyRes.estadoClienteActual.saldoAlfaCoins ?? 0} ALFA COINS ($${(loyaltyRes.estadoClienteActual.equivalenteEnPesosMxn ?? 0).toFixed(2)} MXN).`
+          : '';
+      return `¡Con mucho gusto te explico cómo funciona nuestro Pase Alfa Club y los ALFA COINS!\n\n• Sellos Pase Alfa: ${loyaltyRes.paseAlfaClub.descripcion} (${loyaltyRes.paseAlfaClub.terminosSellos})\n• ALFA COINS: ${loyaltyRes.alfaCoinsExplicacion.comoSeGanan} ${loyaltyRes.alfaCoinsExplicacion.cuantoValeUnAlfaCoin}\n• Cómo canjearlos: ${loyaltyRes.alfaCoinsExplicacion.comoSeCanjean}\n• Cumpleaños: ${loyaltyRes.beneficioCumpleanos.descripcion} (${loyaltyRes.beneficioCumpleanos.terminos})${promosText}${clientText}`;
+    } catch (_) {
+      return 'En el Pase Alfa Club acumulas 1 sello por cada visita pagada y al juntar 9 sellos tu corte #10 es 100% gratis. Además, con tu App vinculada ganas 1 ALFA COIN por cada $1.00 MXN pagado: cada moneda vale $0.03 MXN en nivel Alfa Member (3%), $0.05 MXN en nivel Alfa Gold (5%) y $0.07 MXN en nivel Alfa Black VIP (7%), canjeables como descuento directo en recepción.';
+    }
+  }
+
   // CASO 0: Pregunta por ubicación / dirección / cómo llegar
   if (isAskingLocation) {
-    return '¡Con gusto! Estamos ubicados en *Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro, Qro.* (sobre Av. Cerro Sombrerete). Abrimos de lunes a sábado de 10:00 AM a 9:00 PM y domingos de 10:00 AM a 8:00 PM. Contamos con estacionamiento al frente. ¿Te gustaría agendar una cita para visitarnos? 💈';
+    return '¡Con gusto! Estamos ubicados en Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro, Qro. (sobre Av. Cerro Sombrerete). Abrimos de lunes a sábado de 10:00 AM a 9:00 PM y domingos de 10:00 AM a 8:00 PM. Contamos con estacionamiento al frente. ¿Te gustaría agendar una cita para visitarnos? 💈';
   }
 
   // CASO 0.5: Pregunta sobre agendar varios servicios al mismo tiempo (ej: corte + barba express)
   if (isAskingMultiServices && (/pued|sabe|como|ejemplo|\?|se puede|es posible/i.test(text) || !requestedTime)) {
-    return '¡Sí, totalmente! Puedo agendarte varios servicios en la misma cita (por ejemplo: corte de cabello + barba express, o corte con ceja o facial). Al agendarlos juntos, reservamos el bloque continuo de tiempo necesario con tu barbero (por ejemplo, 65 minutos para corte y barba express) por un total de $240 MXN. Como la suma supera $190 MXN, el sistema genera automáticamente un enlace de Mercado Pago para apartar tu espacio con el 50% de anticipo ($120 MXN) y el resto se liquida en recepción. ¿Te gustaría que te revise disponibilidad para corte y barba?';
+    const corteSrv = activeServices.find((s) => /corte/i.test(s.name)) || activeServices[0];
+    const barbaSrv = activeServices.find((s) => /barba/i.test(s.name)) || activeServices[1];
+    if (corteSrv && barbaSrv) {
+      const sumPrice = corteSrv.price + barbaSrv.price;
+      const depositExample = Math.round(sumPrice * 0.5);
+      return `¡Sí, totalmente! Puedo agendarte varios servicios en la misma cita (por ejemplo: ${corteSrv.name} + ${barbaSrv.name}, o corte con ceja o facial). Al agendarlos juntos, reservamos el bloque continuo de tiempo necesario con tu barbero por un total de $${sumPrice.toFixed(2)} MXN. Cuando el total alcanza o supera el monto mínimo de garantía, el sistema genera un enlace seguro de Mercado Pago para apartar tu espacio con el 50% de anticipo ($${depositExample.toFixed(2)} MXN) y el resto se liquida en recepción. ¿Te gustaría que te revise disponibilidad?`;
+    }
+    return '¡Sí, totalmente! Puedo agendarte varios servicios en la misma cita reservando el bloque continuo de tiempo con tu barbero. ¿Qué combinación de servicios te gustaría realizarte para revisarte disponibilidad?';
   }
 
   // CASO 0.8: Preguntas sobre Términos y Condiciones o Aviso de Privacidad
   if (isAskingTermsOrPrivacy) {
     if (text.includes('privacidad') || text.includes('datos') || text.includes('correo') || text.includes('informaci')) {
-      return '¡Sí, con mucho gusto! En VATOS ALFA cuidamos con estricta confidencialidad tus datos personales. Tu nombre y WhatsApp se utilizan únicamente para la gestión de tus citas y recordatorios, y jamás se comparten ni venden a terceros. Puedes consultar el Aviso de Privacidad completo en: *https://vatosalfa.com/privacidad*. ¿Hay algo en lo que te pueda apoyar hoy?';
+      return '¡Sí, con mucho gusto! En VATOS ALFA cuidamos con estricta confidencialidad tus datos personales. Tu nombre, teléfono y correo se utilizan únicamente para la gestión de tus citas y recordatorios, y jamás se comparten ni venden a terceros. Puedes consultar el Aviso de Privacidad completo en: https://vatosalfa.com/privacidad. ¿Hay algo en lo que te pueda apoyar hoy?';
     }
-    return '¡Sí, por supuesto! Tengo acceso completo a los Términos y Condiciones de VATOS ALFA. En resumen: contamos con tolerancia estricta de 10 minutos; las cancelaciones o cambios con al menos 2 horas de anticipación conservan el 100% de tu anticipo como saldo a favor por 30 días (con menos de 2 horas o inasistencia se pierde por el tiempo apartado del barbero). Puedes consultar los términos completos en *https://vatosalfa.com/terminos* y nuestro aviso de privacidad en *https://vatosalfa.com/privacidad*. ¿Tienes alguna duda en específico?';
+    return '¡Sí, por supuesto! Tengo acceso completo a los Términos y Condiciones de VATOS ALFA. En resumen: contamos con tolerancia estricta de 10 minutos; las cancelaciones o cambios con al menos 2 horas de anticipación conservan el 100% de tu anticipo como saldo a favor por 30 días (con menos de 2 horas o inasistencia se pierde por el tiempo apartado del barbero). Puedes consultar los términos completos en https://vatosalfa.com/terminos y nuestro aviso de privacidad en https://vatosalfa.com/privacidad. ¿Tienes alguna duda en específico?';
   }
 
   // CASO 0.9: Envío de comprobante de pago o confirmación de transferencia
@@ -187,7 +222,7 @@ export async function executeFallbackLogic({
   // CASO 0.95: Agendar a nombre de otra persona
   const isBookingForOther = /(a nombre de|para mi amigo|para mi hermano|para mi primo|para mi hijo|para mi papa|para mi papá|para mi novio|para mi esposo|para otra persona)/i.test(text);
   if (isBookingForOther && !/\d{10}/.test(text)) {
-    return '¡Con mucho gusto! Para poder registrarlo correctamente en el sistema y no confundirlo con otros clientes con el mismo nombre, ¿me apoyas con su nombre completo con apellidos y su número de WhatsApp? Así la cita queda vinculada a su propia cuenta y le llegarán sus confirmaciones a su teléfono.';
+    return '¡Con mucho gusto! Para poder registrarlo correctamente en el sistema y no confundirlo con otros clientes con el mismo nombre, ¿me apoyas con su nombre completo con apellidos, su número de celular de 10 dígitos y su correo electrónico? Así la cita queda vinculada a su propia cuenta.';
   }
 
   // CASO 1: Confirmar asistencia a cita (Recordatorio de cita)
@@ -213,7 +248,7 @@ export async function executeFallbackLogic({
   }
 
   // CASO 2: Cancelar cita
-  if (isCancelling && !/[?¿]/.test(text) && !/(no|como|cómo|puedo|politica|política)/.test(text)) {
+  if (isCancelling && !/[?¿]/.test(text) && !/ (no|como|cómo|puedo|politica|política) /.test(text)) {
     const result = await cancelarCitaTool({ telefono: clientPhone });
     return result.mensaje;
   }
@@ -280,17 +315,21 @@ export async function executeFallbackLogic({
     }
 
     if (slotsFound.length > 0) {
-      const sample = slotsFound.slice(0, 4).map((s) => formatTime12h(s)).join(', ');
-      return `¡Con gusto, ${clientName || 'amigo'}! Con ${barberSampleName} el horario más próximo disponible para ${foundDateLabel} es en horarios como *${sample}*. ¿Cuál de estos te acomoda para apartártelo de una vez?`;
+      const sample = slotsFound.map((s) => formatTime12h(s)).join(', ');
+      return `¡Con gusto, ${clientName || 'amigo'}! Con ${barberSampleName} para ${foundDateLabel} tenemos disponibles los horarios: ${sample}. ¿Cuál de estos te acomoda para apartártelo de una vez?`;
     }
 
     return `¡Hola! Con gusto te atendemos con tu ${serviceName}. Para esos días la agenda de ${barberSampleName || 'los barberos'} está completa. ¿Te gustaría que te revise para la próxima semana?`;
   }
 
-  // CASO 6: Pregunta por precios o catálogo
+  // CASO 6: Pregunta por precios o catálogo (100% dinámico desde Firestore)
   if (isAskingPrices) {
     if (activeServices.length > 0) {
-      return `Con gusto. El corte de cabello tradicional está en $220 y el arreglo de barba en $180 (o tenemos el combo de corte y barba en $350). Ambos incluyen toalla caliente y perfilado. ¿Te gustaría que te busque un espacio para hoy o mañana?`;
+      const catalogSummary = activeServices
+        .slice(0, 6)
+        .map((s) => `${s.name}: $${s.price.toFixed(2)} MXN`)
+        .join(', ');
+      return `Con mucho gusto te comparto nuestros precios vigentes en VATOS ALFA: ${catalogSummary}. ¿Qué servicio te gustaría realizarte para buscarte un espacio hoy o mañana?`;
     }
   }
 

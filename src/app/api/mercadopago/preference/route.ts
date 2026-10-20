@@ -11,9 +11,28 @@ export async function POST(req: NextRequest) {
         // This ID will be the key to create the document in the Webhook
         const db = getDb();
         let reservationId = body.reservationId;
+        const bookingList = Array.isArray(body.bookingData)
+            ? body.bookingData
+            : (body.bookingData ? [body.bookingData] : []);
+
         if (!reservationId) {
             const newRef = db.collection('reservas').doc();
             reservationId = newRef.id;
+        }
+
+        // Ensure primary booking in bookingData uses the exact same reservationId as external_reference
+        if (bookingList.length > 0) {
+            bookingList[0].id = reservationId;
+            try {
+                await db.collection('mp_checkout_drafts').doc(reservationId).set({
+                    reservationId,
+                    bookingData: bookingList,
+                    payer,
+                    createdAt: new Date(),
+                });
+            } catch (draftErr) {
+                console.warn('[MP] Could not save mp_checkout_drafts:', draftErr);
+            }
         }
 
         // Initialize Mercado Pago (prioritize dynamic Firestore config, fallback to env)
@@ -64,11 +83,11 @@ export async function POST(req: NextRequest) {
         console.log(`[MP] Base URL: ${baseUrl}`);
         console.log(`[MP] Return URL for Redirects: ${returnUrl}`);
 
-        // Construct Back URLs
+        // Construct Back URLs (pointing to existing Next.js routes)
         const backUrls = {
-            success: `${returnUrl}/reserva/exitosa`,
+            success: `${returnUrl}/reserva/confirmada`,
             failure: `${returnUrl}/reserva/fallida`,
-            pending: `${returnUrl}/`
+            pending: `${returnUrl}/reserva/pendiente`
         };
 
         const bodyData = {
@@ -101,7 +120,7 @@ export async function POST(req: NextRequest) {
             auto_return: 'approved',
             metadata: {
                 reservation_id: reservationId,
-                booking_json: body.bookingData ? JSON.stringify(body.bookingData) : undefined
+                booking_json: bookingList.length > 0 ? JSON.stringify(bookingList) : undefined
             },
             notification_url: "https://vatosalfa.com/api/mercado-pago-webhook"
         };
@@ -110,6 +129,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             id: result.id,
+            reservationId,
             init_point: result.init_point,
             sandbox_init_point: result.sandbox_init_point // Explicitly return sandbox point
         });

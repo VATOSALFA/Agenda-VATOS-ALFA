@@ -148,6 +148,41 @@ export default function BookingPage() {
         birthday: ''
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [pendingPaymentReservationId, setPendingPaymentReservationId] = useState<string | null>(null);
+    const [pendingPaymentInitPoint, setPendingPaymentInitPoint] = useState<string | null>(null);
+    const [verifyingPaymentManual, setVerifyingPaymentManual] = useState(false);
+
+    useEffect(() => {
+        if (!pendingPaymentReservationId) return;
+        let active = true;
+        const checkPaymentStatus = async () => {
+            try {
+                const res = await fetch(`/api/mercado-pago-webhook?reservationId=${encodeURIComponent(pendingPaymentReservationId)}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (active && data?.verified) {
+                    setPendingPaymentReservationId(null);
+                    setIsSubmitting(false);
+                    setVerifyingPaymentManual(false);
+                    setStep(5);
+                }
+            } catch (_) {}
+        };
+        const intervalId = setInterval(checkPaymentStatus, 3000);
+        const onFocusOrVisible = () => {
+            if (document.visibilityState === 'visible') {
+                checkPaymentStatus();
+            }
+        };
+        window.addEventListener('focus', onFocusOrVisible);
+        document.addEventListener('visibilitychange', onFocusOrVisible);
+        return () => {
+            active = false;
+            clearInterval(intervalId);
+            window.removeEventListener('focus', onFocusOrVisible);
+            document.removeEventListener('visibilitychange', onFocusOrVisible);
+        };
+    }, [pendingPaymentReservationId]);
     const [historyRequiresDeposit, setHistoryRequiresDeposit] = useState(false);
     const [historyPenaltyPercent, setHistoryPenaltyPercent] = useState(50);
     const [historyPenaltyCount, setHistoryPenaltyCount] = useState(0);
@@ -944,6 +979,11 @@ export default function BookingPage() {
                     // The redirection issue is solved by the API handles pointing to valid https domain.
 
                     if (data.init_point) {
+                        const resIdToTrack = data.reservationId || bookingsPayload[0]?.id || null;
+                        if (resIdToTrack) {
+                            setPendingPaymentReservationId(resIdToTrack);
+                        }
+                        setPendingPaymentInitPoint(data.init_point);
                         window.location.href = data.init_point;
                         return; // Successfully redirected
                     } else {
@@ -2466,10 +2506,61 @@ export default function BookingPage() {
                                             {isSubmitting ? (
                                                 <div className="flex items-center gap-2 justify-center">
                                                     <Loader2 className="h-5 w-5 animate-spin" />
-                                                    <span>Procesando...</span>
+                                                    <span>{pendingPaymentReservationId ? "Esperando confirmación de Mercado Pago..." : "Procesando..."}</span>
                                                 </div>
                                             ) : (upfrontTotal > 0 ? `Proceder al Pago (${formatPrice(upfrontTotal)})` : "Confirmar Reserva")}
                                         </Button>
+                                        {pendingPaymentReservationId && (
+                                            <div className="mt-3 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10 text-center space-y-2">
+                                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                                    Si completaste tu pago en la App de Mercado Pago, tu cita se confirmará automáticamente en unos segundos.
+                                                </p>
+                                                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        disabled={verifyingPaymentManual}
+                                                        className="w-full sm:w-auto text-xs font-semibold border-blue-500/50 text-blue-600 dark:text-blue-400 cursor-pointer"
+                                                        onClick={async () => {
+                                                            setVerifyingPaymentManual(true);
+                                                            try {
+                                                                const res = await fetch(`/api/mercado-pago-webhook?reservationId=${encodeURIComponent(pendingPaymentReservationId)}`);
+                                                                const data = await res.json();
+                                                                if (data?.verified) {
+                                                                    setPendingPaymentReservationId(null);
+                                                                    setIsSubmitting(false);
+                                                                    setStep(5);
+                                                                } else {
+                                                                    toast({
+                                                                        title: 'Verificando pago',
+                                                                        description: 'Aún no recibimos la confirmación de Mercado Pago. Intenta de nuevo en unos segundos.',
+                                                                    });
+                                                                }
+                                                            } catch (_) {
+                                                            } finally {
+                                                                setVerifyingPaymentManual(false);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {verifyingPaymentManual ? 'Verificando...' : 'Ya realicé mi pago, verificar ahora'}
+                                                    </Button>
+                                                    {pendingPaymentInitPoint && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="w-full sm:w-auto text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                                                            onClick={() => {
+                                                                window.location.href = pendingPaymentInitPoint;
+                                                            }}
+                                                        >
+                                                            Reabrir Mercado Pago
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </motion.div>

@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { CheckCircle, Calendar, Clock, MapPin, ArrowRight, RotateCcw } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, MapPin, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { doc, getDoc } from 'firebase/firestore';
@@ -15,8 +15,8 @@ import { es } from 'date-fns/locale';
 export default function ReservaConfirmadaPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const reservationId = searchParams.get('external_reference');
-    const paymentId = searchParams.get('payment_id');
+    const reservationId = searchParams.get('external_reference') || searchParams.get('reservationId');
+    const paymentId = searchParams.get('payment_id') || searchParams.get('collection_id');
 
     const [reservation, setReservation] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -28,6 +28,9 @@ export default function ReservaConfirmadaPage() {
                 return;
             }
             try {
+                // Ensure payment is verified and reservation document is created even if MP webhook had a slight delay
+                await fetch(`/api/mercado-pago-webhook?reservationId=${encodeURIComponent(reservationId)}`).catch(() => null);
+
                 const docRef = doc(db, 'reservas', reservationId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
@@ -37,7 +40,7 @@ export default function ReservaConfirmadaPage() {
                     // Trigger isolated conversion tracking for confirmed online reservation
                     trackGoogleAdsReservation({
                         reservationId: docSnap.id,
-                        value: Number(resData.totalAmount || resData.precio_total || resData.precio || 0),
+                        value: Number(resData.totalAmount || resData.precio_total || resData.precio || resData.total || 0),
                         currency: 'MXN',
                     });
                 }
@@ -58,6 +61,9 @@ export default function ReservaConfirmadaPage() {
             </div>
         );
     }
+
+    const displayDateStr = reservation?.fecha || reservation?.date || '';
+    const displayTimeStr = reservation?.hora_inicio || reservation?.time || '';
 
     return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
@@ -85,17 +91,21 @@ export default function ReservaConfirmadaPage() {
                     {reservation ? (
                         <div className="space-y-4">
                             <div className="bg-slate-950/60 p-4 rounded-xl space-y-3 border border-slate-800">
-                                <div className="flex items-center gap-3 text-slate-200">
-                                    <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
-                                    <span className="font-semibold text-sm capitalize">
-                                        {format(parseDate(reservation.fecha), 'EEEE d, MMMM yyyy', { locale: es })}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-3 text-slate-200">
-                                    <Clock className="w-4 h-4 text-blue-400 shrink-0" />
-                                    <span className="font-semibold text-sm">{reservation.hora_inicio} hrs</span>
-                                </div>
-                                {reservation.local_id && (
+                                {displayDateStr && (
+                                    <div className="flex items-center gap-3 text-slate-200">
+                                        <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+                                        <span className="font-semibold text-sm capitalize">
+                                            {format(parseDate(displayDateStr), 'EEEE d, MMMM yyyy', { locale: es })}
+                                        </span>
+                                    </div>
+                                )}
+                                {displayTimeStr && (
+                                    <div className="flex items-center gap-3 text-slate-200">
+                                        <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                                        <span className="font-semibold text-sm">{displayTimeStr} hrs</span>
+                                    </div>
+                                )}
+                                {(reservation.local_id || reservation.locationId) && (
                                     <div className="flex items-center gap-3 text-slate-200">
                                         <MapPin className="w-4 h-4 text-blue-400 shrink-0" />
                                         <span className="text-xs text-slate-400">Sucursal Confirmada</span>
@@ -110,7 +120,7 @@ export default function ReservaConfirmadaPage() {
                         </div>
                     ) : (
                         <div className="text-center text-sm text-slate-300 bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                            <p>No se encontraron los detalles de la reserva, pero tu pago fue procesado correctamente.</p>
+                            <p>Tu pago fue procesado correctamente y tu cita ha quedado registrada.</p>
                             {reservationId && <p className="mt-2 font-mono text-xs text-blue-400">ID: {reservationId.slice(0, 8)}</p>}
                         </div>
                     )}

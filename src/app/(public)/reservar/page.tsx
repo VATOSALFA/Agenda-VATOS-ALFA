@@ -26,6 +26,13 @@ import { where } from 'firebase/firestore';
 import Image from 'next/image';
 import { getServiceLocalImage } from '@/lib/service-images';
 import { LegalModals } from './LegalModals';
+import {
+    COUNTRY_PHONE_CODES,
+    getCountryPhoneConfig,
+    buildStoredPhone,
+    handlePhoneInputChange,
+    isValidPhoneNumber,
+} from '@/lib/phone-utils';
 
 
 // Helper Interfaces
@@ -147,6 +154,8 @@ export default function BookingPage() {
         notes: '',
         birthday: ''
     });
+    const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
+    const [phoneLocalDigits, setPhoneLocalDigits] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [pendingPaymentReservationId, setPendingPaymentReservationId] = useState<string | null>(null);
     const [pendingPaymentInitPoint, setPendingPaymentInitPoint] = useState<string | null>(null);
@@ -235,7 +244,9 @@ export default function BookingPage() {
         let active = true;
         const phone = clientDetails.phone?.trim();
         const email = clientDetails.email?.trim();
-        const identifier = (phone && phone.length === 10) ? phone : (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '');
+        const identifier = (phone && isValidPhoneNumber(phone, phoneCountryCode, phoneLocalDigits))
+            ? phone
+            : (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '');
 
         if (identifier) {
             checkClientBookingEligibility(identifier, selectedBookingDateStr, currentCartTotal).then((res) => {
@@ -1101,7 +1112,7 @@ export default function BookingPage() {
     const isStep3Valid = useMemo(() => {
         if (!clientDetails.name?.trim() || !clientDetails.lastName?.trim()) return false;
         if (getFieldConfig('phone').use && getFieldConfig('phone').required) {
-            if (clientDetails.phone.length !== 10 || /^(\d)\1{9}$/.test(clientDetails.phone)) return false;
+            if (!isValidPhoneNumber(clientDetails.phone, phoneCountryCode, phoneLocalDigits)) return false;
         }
         if (getFieldConfig('email').use && getFieldConfig('email').required) {
             if (!clientDetails.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientDetails.email)) return false;
@@ -1110,7 +1121,7 @@ export default function BookingPage() {
         if (getFieldConfig('notes').use && getFieldConfig('notes').required && !clientDetails.notes?.trim()) return false;
         if (getFieldConfig('dob').use && getFieldConfig('dob').required && !clientDetails.birthday) return false;
         return true;
-    }, [clientDetails, getFieldConfig]);
+    }, [clientDetails, phoneCountryCode, phoneLocalDigits, getFieldConfig]);
 
     const formatPrice = (price: any) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(price) || 0);
 
@@ -2106,24 +2117,57 @@ export default function BookingPage() {
                                                 <Label htmlFor="phone" className="w-16 sm:w-20 text-xs font-semibold text-foreground/80 shrink-0">
                                                     Celular {getFieldConfig('phone').required && <span className="text-red-500">*</span>}
                                                 </Label>
-                                                <div className="flex-1">
-                                                    <Input
-                                                        id="phone"
-                                                        type="tel"
-                                                        placeholder="5512345678"
-                                                        value={clientDetails.phone}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                                                            setClientDetails({ ...clientDetails, phone: val });
-                                                        }}
-                                                        className={cn(
-                                                            "w-full rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background",
-                                                            (clientDetails.phone.length > 0 && clientDetails.phone.length < 10) || (clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone))
-                                                                ? "border-red-500 bg-red-50 dark:bg-red-950/20"
-                                                                : ""
-                                                        )}
-                                                    />
-                                                    {clientDetails.phone.length === 10 && /^(\d)\1{9}$/.test(clientDetails.phone) && (
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Select
+                                                            value={phoneCountryCode}
+                                                            onValueChange={(newCode) => {
+                                                                const cfg = getCountryPhoneConfig(newCode);
+                                                                const trimmedLocal = phoneLocalDigits.slice(0, cfg.maxDigits);
+                                                                setPhoneCountryCode(newCode);
+                                                                setPhoneLocalDigits(trimmedLocal);
+                                                                setClientDetails({
+                                                                    ...clientDetails,
+                                                                    phone: buildStoredPhone(newCode, trimmedLocal),
+                                                                });
+                                                            }}
+                                                        >
+                                                            <SelectTrigger
+                                                                aria-label="Código de país"
+                                                                className="w-[88px] sm:w-[96px] h-9 px-2 rounded-xl border-border/80 text-xs font-medium bg-background shrink-0"
+                                                            >
+                                                                <SelectValue>
+                                                                    {getCountryPhoneConfig(phoneCountryCode).label}
+                                                                </SelectValue>
+                                                            </SelectTrigger>
+                                                            <SelectContent className="max-h-[240px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                                                                {COUNTRY_PHONE_CODES.map((c) => (
+                                                                    <SelectItem key={c.code} value={c.code} className="text-xs">
+                                                                        {c.flag} {c.code === 'OTHER' ? '+Otro' : c.code} — {c.country}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <Input
+                                                            id="phone"
+                                                            type="tel"
+                                                            placeholder={getCountryPhoneConfig(phoneCountryCode).placeholder}
+                                                            value={phoneLocalDigits}
+                                                            onChange={(e) => {
+                                                                const parsed = handlePhoneInputChange(e.target.value, phoneCountryCode);
+                                                                setPhoneCountryCode(parsed.countryCode);
+                                                                setPhoneLocalDigits(parsed.localDigits);
+                                                                setClientDetails({ ...clientDetails, phone: parsed.storedPhone });
+                                                            }}
+                                                            className={cn(
+                                                                "w-full rounded-xl border-border/80 focus-visible:ring-blue-500 h-9 text-xs sm:text-sm bg-background",
+                                                                phoneLocalDigits.length > 0 && !isValidPhoneNumber(clientDetails.phone, phoneCountryCode, phoneLocalDigits)
+                                                                    ? "border-red-500 bg-red-50 dark:bg-red-950/20"
+                                                                    : ""
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    {phoneLocalDigits.length > 0 && /^(\d)\1{6,}$/.test(phoneLocalDigits) && (
                                                         <p className="text-[10px] text-red-500 mt-0.5">Número inválido.</p>
                                                     )}
                                                 </div>

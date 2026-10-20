@@ -637,8 +637,9 @@ export function ReservationDetailModal({
 
   const handleWhatsAppClick = async (type: 'confirmation' | 'reminder') => {
     if (!reservation.customer?.telefono || !db) return;
-    const phone = reservation.customer.telefono.replace(/\D/g, '');
-    const formattedPhone = phone.length === 10 ? '52' + phone : phone;
+    const rawTel = String(reservation.customer.telefono).trim();
+    const phone = rawTel.replace(/\D/g, '');
+    const formattedPhone = !rawTel.startsWith('+') && phone.length === 10 ? '52' + phone : phone;
     
     const message = type === 'confirmation' ? generateWhatsAppMessage() : generateWhatsAppReminderMessage();
     

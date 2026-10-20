@@ -426,12 +426,16 @@ export function OverdueNotificationsPopover({
 
   const getClientPhone = (res: Reservation): string => {
     const client = resolveClient(res);
-    const phoneRaw =
+    const phoneRaw = String(
       client?.telefono ||
       (res as any).cliente_telefono ||
       (res as any).telefono ||
-      '';
-    return phoneRaw.replace(/\D/g, '');
+      ''
+    ).trim();
+    const digits = phoneRaw.replace(/\D/g, '');
+    if (!digits) return '';
+    if (phoneRaw.startsWith('+')) return digits;
+    return digits.length === 10 ? '52' + digits : digits;
   };
 
   const handleCardClick = (res: Reservation) => {

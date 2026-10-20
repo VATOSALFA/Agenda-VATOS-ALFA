@@ -36,6 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatPhoneForWhatsApp } from '@/lib/phone-utils';
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" fill="currentColor" className={className}>
@@ -276,8 +277,7 @@ export function SendConfirmationModal({
 
   const handleSendWhatsApp = async () => {
     if (!clientPhone || !db) return;
-    const phone = clientPhone.replace(/\D/g, '');
-    const formattedPhone = phone.length === 10 ? '52' + phone : phone;
+    const formattedPhone = formatPhoneForWhatsApp(clientPhone);
     const message = generateMessage();
 
     window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');

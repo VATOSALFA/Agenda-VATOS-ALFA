@@ -63,6 +63,18 @@ import { NewClientForm } from '../clients/new-client-form';
 import { ClientInput } from '../reservations/client-input';
 import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import {
+    findMatchingReferrerClient,
+    validateInvitedClientEligibility,
+    REFERRAL_DISCOUNT_PERCENT,
+    REFERRAL_HOST_REWARD_COINS,
+    REFERRAL_MIN_PURCHASE_MXN,
+    validateJuntosSchedule,
+    getCurrentHaircutPrice,
+    calculateJuntosMinPurchase,
+    calculateJuntosRewardCoins,
+    JUNTOS_REWARD_COINS_PER_PERSON,
+} from '@/lib/benefit-security';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
@@ -188,7 +200,16 @@ ClientCombobox.displayName = 'ClientCombobox';
 
 import { Switch } from '@/components/ui/switch';
 
-const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity, updateItemProfessional, assignAllProfessional, updateItemDiscount, removeFromCart, serviceSellers, productSellers, client, hasAppDownloaded, redeemPoints, setRedeemPoints, pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins, propina, appliedBenefit, alfaCoinUnitValue, clientLevelInfo }: any) => (
+const ResumenCarrito = ({
+    cart, subtotal, totalDiscount, total, anticipoPagado, onOpenAddItem, updateQuantity,
+    updateItemProfessional, assignAllProfessional, updateItemDiscount, removeFromCart,
+    serviceSellers, productSellers, client, hasAppDownloaded, redeemPoints, setRedeemPoints,
+    pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins,
+    propina, appliedBenefit, onApplyReferralCode, onRemoveBenefit, alfaCoinUnitValue, clientLevelInfo,
+    juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140,
+}: any) => {
+    const [referralInput, setReferralInput] = useState('');
+    return (
     <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-auto md:h-full md:min-h-0 shrink-0 md:shrink overflow-hidden">
         {/* Cabecera del Ticket */}
         <div className="p-3 sm:p-3.5 border-b border-border/60 flex justify-between items-center shrink-0 bg-muted/20">
@@ -362,31 +383,228 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
             </div>
         </ScrollArea>
 
-        {/* Beneficio QR Aplicado en Caja */}
+        {/* Acciones directas si aún no hay beneficio activo */}
+        {!appliedBenefit && (
+            <div className="px-3 py-1.5 shrink-0 flex items-center gap-2">
+                {onApplyReferralCode && (
+                    <div className="flex-1 flex items-center gap-1.5 bg-muted/20 border border-border/60 rounded-xl p-1.5">
+                        <Users className="h-3.5 w-3.5 text-[#C5A880] ml-1.5 shrink-0" />
+                        <Input
+                            value={referralInput}
+                            onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if (referralInput.trim()) {
+                                        onApplyReferralCode(referralInput.trim());
+                                        setReferralInput('');
+                                    }
+                                }
+                            }}
+                            placeholder="Código Invita Amigo (ALFA-NOMBRE-XXXX)"
+                            className="h-7 text-[11px] border-0 bg-transparent focus-visible:ring-0 px-1.5 font-mono uppercase"
+                        />
+                        <Button
+                            type="button"
+                            size="sm"
+                            disabled={!referralInput.trim()}
+                            onClick={() => {
+                                if (referralInput.trim()) {
+                                    onApplyReferralCode(referralInput.trim());
+                                    setReferralInput('');
+                                }
+                            }}
+                            className="h-7 px-2.5 text-[10px] font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black rounded-lg shrink-0"
+                        >
+                            -20%
+                        </Button>
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* Beneficio QR / Código Aplicado en Caja */}
         {appliedBenefit && (
-            <div className="p-2.5 border-t border-border/40 bg-[#C5A880]/10 border border-[#C5A880]/30 rounded-xl mx-3 my-1.5 flex items-center justify-between text-xs shrink-0">
-                <div className="flex items-center gap-2">
-                    <Gift className="h-4 w-4 text-[#C5A880] shrink-0" />
-                    <div>
-                        <p className="font-bold text-[#C5A880] text-xs">
-                            {appliedBenefit.benefitTitle || 'Beneficio Alfa Aplicado'}
-                        </p>
-                        {appliedBenefit.folio && (
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                                Folio: {appliedBenefit.folio}
+            <div className={cn(
+                "p-2.5 rounded-xl mx-3 my-1.5 flex flex-col gap-2 text-xs shrink-0 border",
+                appliedBenefit.isReferralBlocked
+                    ? "bg-red-500/10 border-red-500/40 text-red-200"
+                    : "bg-[#C5A880]/10 border-[#C5A880]/30"
+            )}>
+                <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2 min-w-0">
+                        {appliedBenefit.isReferralBenefit || appliedBenefit.isJuntosBenefit ? (
+                            <Users className={cn("h-4 w-4 shrink-0 mt-0.5", appliedBenefit.isReferralBlocked ? "text-red-400" : "text-[#C5A880]")} />
+                        ) : (
+                            <Gift className="h-4 w-4 text-[#C5A880] shrink-0 mt-0.5" />
+                        )}
+                        <div className="min-w-0">
+                            <p className={cn("font-bold text-xs", appliedBenefit.isReferralBlocked ? "text-red-400" : "text-[#C5A880]")}>
+                                {appliedBenefit.isReferralBenefit
+                                    ? (appliedBenefit.isReferralBlocked ? '⛔ Invitación Bloqueada' : `Invita a un Amigo (${REFERRAL_DISCOUNT_PERCENT}% Desc.)`)
+                                    : appliedBenefit.isJuntosBenefit
+                                    ? 'JUNTOS ES MEJOR (+400 Coins c/u)'
+                                    : (appliedBenefit.benefitTitle || 'Beneficio Alfa Aplicado')}
                             </p>
+                            {appliedBenefit.isReferralBlocked ? (
+                                <p className="text-[10px] text-red-300 leading-snug mt-0.5">
+                                    {appliedBenefit.referralBlockReason}
+                                </p>
+                            ) : appliedBenefit.isReferralBenefit && appliedBenefit.referrerName ? (
+                                <div className="space-y-0.5 mt-0.5">
+                                    <p className="text-[10px] text-muted-foreground font-sans">
+                                        Anfitrión: <span className="text-foreground font-semibold">{appliedBenefit.referrerName}</span> {appliedBenefit.referralCode ? `(${appliedBenefit.referralCode})` : ''}
+                                    </p>
+                                    <p className="text-[10px] text-blue-400 font-medium font-sans">
+                                        {total >= REFERRAL_MIN_PURCHASE_MXN
+                                            ? `✓ Compra >= $${formatMoney(REFERRAL_MIN_PURCHASE_MXN)}: Anfitrión recibirá +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`
+                                            : `⚠️ Requiere total >= $${formatMoney(REFERRAL_MIN_PURCHASE_MXN)} MXN para acreditar +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`}
+                                    </p>
+                                </div>
+                            ) : appliedBenefit.isJuntosBenefit ? (
+                                <div className="space-y-0.5 mt-0.5">
+                                    <p className="text-[10px] text-muted-foreground font-sans">
+                                        {appliedBenefit.juntosMode === 'companions_single_ticket'
+                                            ? `✓ Grupo con App (1 Ticket · ${1 + (appliedBenefit.companions?.length || 0)} participantes)`
+                                            : appliedBenefit.juntosMode === 'companions_separate_tickets'
+                                            ? '✓ Grupo con App (Ticket Individual Verificado)'
+                                            : '✓ Acompañantes menores sin app (Lun-Mié 10:00 a 14:00 hrs)'}
+                                    </p>
+                                </div>
+                            ) : appliedBenefit.folio ? (
+                                <p className="text-[10px] text-muted-foreground font-mono">
+                                    Folio: {appliedBenefit.folio}
+                                </p>
+                            ) : null}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        <Badge className={cn(
+                            "text-[10px] shrink-0 font-sans",
+                            appliedBenefit.isReferralBlocked
+                                ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                : "bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40"
+                        )}>
+                            {appliedBenefit.isReferralBlocked ? 'No Elegible' : appliedBenefit.isReferralBenefit ? '-20% Amigo' : appliedBenefit.isJuntosBenefit ? '+Coins' : 'Canjeado en QR'}
+                        </Badge>
+                        {onRemoveBenefit && (
+                            <button
+                                type="button"
+                                onClick={onRemoveBenefit}
+                                className="p-1 rounded-md text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                title="Quitar beneficio"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </button>
                         )}
                     </div>
                 </div>
-                <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-[10px] shrink-0 font-sans">
-                    Canjeado en QR
-                </Badge>
+
+                {/* Sub-panel exclusivo para Juntos es Mejor: Modalidad Escaneada y Requisito de Consumo Dinámico */}
+                {appliedBenefit.isJuntosBenefit && (() => {
+                    const effHaircutPrice = currentHaircutPrice || 140;
+                    const mode = appliedBenefit.juntosMode || 'minors';
+                    const companionsList = Array.isArray(appliedBenefit.companions) ? appliedBenefit.companions : [];
+                    const servicesCountInCart = cart.reduce((acc: number, it: any) => acc + (it.tipo === 'servicio' ? Number(it.cantidad || 1) : 0), 0);
+
+                    const countMinors = mode === 'minors' ? Math.max(1, Number(juntosMinorsCount || 1)) : 0;
+                    const participantsInTicket =
+                        mode === 'minors'
+                            ? 1 + countMinors
+                            : mode === 'companions_single_ticket'
+                            ? 1 + Math.max(1, companionsList.length)
+                            : 1; // companions_separate_tickets -> each pays their own ticket
+
+                    const requiredTotal = Math.round(effHaircutPrice * participantsInTicket * 100) / 100;
+                    const totalReward = JUNTOS_REWARD_COINS_PER_PERSON * participantsInTicket;
+                    const effectiveMoneyPaid = total + Number(anticipoPagado || 0);
+                    const isAmountEligible = effectiveMoneyPaid >= requiredTotal;
+                    const isServicesEligible = servicesCountInCart >= participantsInTicket;
+                    const isEligible = isAmountEligible && isServicesEligible;
+
+                    return (
+                        <div className="pt-2 border-t border-[#C5A880]/20 space-y-2">
+                            {mode === 'minors' && (
+                                <div className="flex items-center justify-between gap-2 bg-black/20 p-2 rounded-lg border border-[#C5A880]/15">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[11px] font-semibold text-foreground leading-tight font-sans">
+                                            Hijos menores sin app:
+                                        </p>
+                                        <p className="text-[10px] text-muted-foreground leading-tight font-sans">
+                                            +400 Alfa Coins c/u (sin límite de hijos)
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 shrink-0 bg-muted/40 p-1 rounded-lg border border-border/60">
+                                        <button
+                                            type="button"
+                                            disabled={countMinors <= 1}
+                                            onClick={() => setJuntosMinorsCount && setJuntosMinorsCount(Math.max(1, countMinors - 1))}
+                                            className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                                            title="Restar hijo menor"
+                                        >
+                                            <Minus className="h-3 w-3" />
+                                        </button>
+                                        <span className="text-xs font-bold font-sans px-1.5 min-w-[20px] text-center text-foreground">
+                                            {countMinors}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setJuntosMinorsCount && setJuntosMinorsCount(countMinors + 1)}
+                                            className="h-5 w-5 rounded flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                                            title="Sumar hijo menor"
+                                        >
+                                            <Plus className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {mode === 'companions_single_ticket' && companionsList.length > 0 && (
+                                <div className="bg-black/20 p-2 rounded-lg border border-[#C5A880]/15 space-y-1">
+                                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider font-sans">
+                                        Acompañantes verificados (+400 Coins a cada cuenta):
+                                    </p>
+                                    {companionsList.map((comp: any) => (
+                                        <div key={comp.id} className="flex items-center justify-between text-[11px] font-sans">
+                                            <span className="text-foreground font-medium truncate">{comp.name}</span>
+                                            <span className="text-[#C5A880] font-semibold shrink-0">+400 Coins</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Consumo Mínimo Dinámico y Estado de Elegibilidad */}
+                            <div className="space-y-1">
+                                <div className="flex justify-between items-center text-[11px] font-sans">
+                                    <span className="text-muted-foreground">Consumo mínimo en ticket:</span>
+                                    <span className="font-semibold text-foreground font-sans">
+                                        ${formatMoney(requiredTotal)} MXN ({participantsInTicket} serv. · ${formatMoney(effHaircutPrice)} c/u)
+                                    </span>
+                                </div>
+                                <p className={cn(
+                                    "text-[10px] font-medium font-sans leading-tight",
+                                    isEligible ? "text-blue-400" : "text-red-400"
+                                )}>
+                                    {!isServicesEligible
+                                        ? `⚠️ Agrega al menos ${participantsInTicket} servicio(s) al carrito (actual: ${servicesCountInCart}) para acreditar las +${totalReward} Alfa Coins.`
+                                        : !isAmountEligible
+                                        ? `⚠️ Falta $${formatMoney(Math.max(0, requiredTotal - effectiveMoneyPaid))} MXN en dinero real (sin AlfaCoins) para alcanzar $${formatMoney(requiredTotal)} MXN.`
+                                        : mode === 'companions_single_ticket'
+                                        ? `✓ Requisitos cubiertos: se abonarán +400 Alfa Coins al titular y +400 a cada acompañante al cobrar.`
+                                        : mode === 'companions_separate_tickets'
+                                        ? `✓ Requisitos cubiertos: se abonarán +400 Alfa Coins a este participante al cobrar su ticket.`
+                                        : `✓ Requisitos cubiertos: se abonarán +${totalReward} Alfa Coins al titular (${participantsInTicket} participantes) al cobrar.`}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
         )}
 
         {/* Puntos y AlfaCoins de Lealtad Alfa Club (Solo usuarios con App descargada) */}
         {client && hasAppDownloaded && (() => {
-            const clientCoins = Number(clientAlfaCoins ?? client.alfaCoins ?? client.alfa_coins ?? client.puntos ?? client.puntosLealtad ?? 0);
+            const clientCoins = Number(clientAlfaCoins ?? client.alfaCoins ?? client.alfa_coins ?? client.puntosLealtad ?? client.puntos_lealtad ?? client.puntos ?? 0);
             const unitVal = Number(alfaCoinUnitValue || 0.03);
             const cashEquivalent = Math.round(clientCoins * unitVal * 100) / 100;
             const usableMax = maxUsableAlfaCoins !== undefined ? maxUsableAlfaCoins : Math.min(clientCoins, Math.max(0, Math.ceil((subtotal - totalDiscount - anticipoPagado) / unitVal)));
@@ -521,7 +739,8 @@ const ResumenCarrito = ({ cart, subtotal, totalDiscount, total, anticipoPagado, 
             </div>
         )}
     </div>
-);
+    );
+};
 
 const AddItemDialog = ({ open, onOpenChange, services, categories, products, servicesLoading, productsLoading, addToCart }: any) => {
     const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
@@ -804,6 +1023,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [redeemPoints, setRedeemPoints] = useState(false); // State for redemption
     const [alfaCoinsToUse, setAlfaCoinsToUse] = useState<number | null>(null);
     const [appliedBenefit, setAppliedBenefit] = useState<any | null>(null);
+    const [juntosMinorsCount, setJuntosMinorsCount] = useState<number>(0);
+    const currentHaircutPrice = useMemo(() => getCurrentHaircutPrice(services), [services]);
     const [nivelesConfig, setNivelesConfig] = useState<any>(null);
 
     useEffect(() => {
@@ -917,7 +1138,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const clientAlfaCoins = useMemo(() => {
         if (!selectedClient || !hasAppDownloaded) return 0;
-        return Number(selectedClient.alfaCoins ?? (selectedClient as any).alfa_coins ?? selectedClient.puntos ?? selectedClient.puntosLealtad ?? 0);
+        return Number(selectedClient.alfaCoins ?? (selectedClient as any).alfa_coins ?? selectedClient.puntosLealtad ?? (selectedClient as any).puntos_lealtad ?? selectedClient.puntos ?? 0);
     }, [selectedClient, hasAppDownloaded]);
 
     const clientCashAvailable = useMemo(() => {
@@ -1014,6 +1235,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             const itemPrice = tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price;
             const itemName = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
             const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
+            const applyReferralDiscount =
+                tipo === 'servicio' &&
+                Boolean(appliedBenefit?.isReferralBenefit) &&
+                !Boolean(appliedBenefit?.isReferralBlocked);
 
             return [...prev, {
                 uniqueId: crypto.randomUUID(),
@@ -1022,10 +1247,204 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 precio: itemPrice || 0,
                 cantidad: 1,
                 tipo,
-                presentation_id
+                presentation_id,
+                ...(applyReferralDiscount ? {
+                    discountValue: String(REFERRAL_DISCOUNT_PERCENT),
+                    discountType: 'percentage' as const,
+                } : {})
             }];
         });
     };
+
+    // Aplicar o retirar automáticamente el 20% de descuento de referido sobre los servicios del carrito
+    useEffect(() => {
+        if (!appliedBenefit?.isReferralBenefit) return;
+
+        if (appliedBenefit.isReferralBlocked) {
+            setCart(prev =>
+                prev.map(it =>
+                    it.tipo === 'servicio' &&
+                    it.discountType === 'percentage' &&
+                    Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT
+                        ? { ...it, discountValue: '0', discountType: 'fixed' }
+                        : it
+                )
+            );
+        } else {
+            setCart(prev =>
+                prev.map(it =>
+                    it.tipo === 'servicio' && (!it.discountValue || Number(it.discountValue) === 0)
+                        ? { ...it, discountValue: String(REFERRAL_DISCOUNT_PERCENT), discountType: 'percentage' }
+                        : it
+                )
+            );
+        }
+    }, [appliedBenefit?.isReferralBenefit, appliedBenefit?.isReferralBlocked, cart.length]);
+
+    // Validación Zero-Trust cuando se selecciona al cliente en Caja con un código de referido activo
+    useEffect(() => {
+        if (!appliedBenefit?.isReferralBenefit || !selectedClient || !db) return;
+
+        let cancelled = false;
+        const verifyClientEligibility = async () => {
+            let previousSalesCount = 0;
+            try {
+                const qSales = query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id));
+                const snapSales = await getDocs(qSales);
+                previousSalesCount = snapSales.docs.filter(d => {
+                    const st = (d.data().pago_estado || '').toLowerCase();
+                    return st !== 'cancelado' && st !== 'pendiente';
+                }).length;
+            } catch (e) {
+                console.warn('Error verificando historial de ventas para referido:', e);
+            }
+
+            if (cancelled) return;
+
+            const eligibility = validateInvitedClientEligibility(
+                selectedClient,
+                {
+                    id: appliedBenefit.referrerId,
+                    nombre: appliedBenefit.referrerName,
+                    telefono: appliedBenefit.referrerPhone,
+                },
+                previousSalesCount
+            );
+
+            if (!eligibility.isEligible) {
+                if (!appliedBenefit.isReferralBlocked || appliedBenefit.referralBlockReason !== eligibility.rejectionReason) {
+                    setAppliedBenefit((prev: any) =>
+                        prev
+                            ? {
+                                  ...prev,
+                                  isReferralBlocked: true,
+                                  referralBlockReason: eligibility.rejectionReason,
+                              }
+                            : null
+                    );
+                    toast({
+                        variant: 'destructive',
+                        title: '⛔ Cliente No Elegible para "Invita a un Amigo"',
+                        description: eligibility.rejectionReason,
+                    });
+                }
+            } else if (appliedBenefit.isReferralBlocked) {
+                setAppliedBenefit((prev: any) =>
+                    prev
+                        ? {
+                              ...prev,
+                              isReferralBlocked: false,
+                              referralBlockReason: undefined,
+                          }
+                        : null
+                );
+            }
+        };
+
+        verifyClientEligibility();
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedClient, appliedBenefit?.isReferralBenefit, appliedBenefit?.referrerId, db, toast]);
+
+    const handleApplyManualReferralCode = useCallback(
+        (rawCode: string) => {
+            const { hostClient, parsed, error } = findMatchingReferrerClient(clients || [], rawCode);
+            if (!hostClient || error) {
+                toast({
+                    variant: 'destructive',
+                    title: '⛔ Código de Invitación Inválido',
+                    description: error || 'No se encontró ningún cliente titular con ese código.',
+                });
+                return;
+            }
+
+            if (selectedClient) {
+                const eligibility = validateInvitedClientEligibility(selectedClient, hostClient, 0);
+                if (!eligibility.isEligible) {
+                    toast({
+                        variant: 'destructive',
+                        title: '⛔ Promoción No Aplicable',
+                        description: eligibility.rejectionReason,
+                    });
+                    return;
+                }
+            }
+
+            const hostFullName = `${hostClient.nombre} ${hostClient.apellido || ''}`.trim();
+            const folio = `VA-REF-${parsed.suffix}-${Date.now().toString().slice(-4)}`;
+
+            setAppliedBenefit({
+                folio,
+                benefitTitle: 'Invita a un Amigo',
+                benefitId: 'invita_amigo',
+                isReferralBenefit: true,
+                referralCode: parsed.fullCode,
+                referrerId: hostClient.id,
+                referrerName: hostFullName,
+                referrerPhone: hostClient.telefono || '',
+                discount: REFERRAL_DISCOUNT_PERCENT,
+                rewardCoins: REFERRAL_HOST_REWARD_COINS,
+                minPurchase: REFERRAL_MIN_PURCHASE_MXN,
+                isReferralBlocked: false,
+            });
+
+            toast({
+                title: '🎉 ¡Código de Invitación Validado!',
+                description: `Anfitrión: ${hostFullName}. Se aplicó ${REFERRAL_DISCOUNT_PERCENT}% de descuento en los servicios del nuevo cliente.`,
+            });
+        },
+        [clients, selectedClient, toast]
+    );
+
+    // Auto-detectar si el cliente seleccionado tiene un registro grupal pre-verificado de "Juntos es Mejor" (Tickets Separados) hoy
+    useEffect(() => {
+        if (!isOpen || !db || !selectedClient?.id || appliedBenefit) return;
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const grpFolio = `VA-JUNTOS-GRP-${todayStr}-${selectedClient.id}`;
+
+        getDoc(doc(db, 'canjes_beneficios', grpFolio))
+            .then(snap => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.estado === 'pendiente_cobro_grupo' && !data.utilizado_en_venta) {
+                        setAppliedBenefit({
+                            folio: grpFolio,
+                            benefitTitle: 'JUNTOS ES MEJOR',
+                            benefitId: 'juntos_es_mejor',
+                            isJuntosBenefit: true,
+                            juntosMode: 'companions_separate_tickets',
+                            rewardCoinsPerPerson: JUNTOS_REWARD_COINS_PER_PERSON,
+                            isScheduleValid: true,
+                            minorsCount: 0,
+                        });
+                        setJuntosMinorsCount(0);
+                        toast({
+                            title: '🤝 Grupo "Juntos es Mejor" Detectado',
+                            description: `${selectedClient.nombre} forma parte de un grupo verificado hoy. Al cobrar su servicio recibirá +${JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins.`,
+                        });
+                    }
+                }
+            })
+            .catch(() => {});
+    }, [isOpen, db, selectedClient?.id, appliedBenefit, toast]);
+
+    const handleRemoveAppliedBenefit = useCallback(() => {
+        if (appliedBenefit?.isReferralBenefit) {
+            setCart(prev =>
+                prev.map(it =>
+                    it.tipo === 'servicio' &&
+                    it.discountType === 'percentage' &&
+                    Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT
+                        ? { ...it, discountValue: '0', discountType: 'fixed' }
+                        : it
+                )
+            );
+        }
+        setAppliedBenefit(null);
+        setJuntosMinorsCount(0);
+    }, [appliedBenefit]);
 
     const removeFromCart = (uniqueId: string) => {
         setCart(prev => prev.filter(item => item.uniqueId !== uniqueId));
@@ -1257,8 +1676,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             });
             return;
         }
-        const cleanPhone = selectedClient.telefono.replace(/\D/g, '');
-        const fullPhone = cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone;
+        const rawTel = String(selectedClient.telefono).trim();
+        const cleanPhone = rawTel.replace(/\D/g, '');
+        const fullPhone = !rawTel.startsWith('+') && cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone;
         const amountStr = `$${transferAmountToCharge.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
         const msg = `¡Hola ${selectedClient.nombre}! 💈 En Vatos Alfa puedes realizar tu pago de *${amountStr}* por transferencia SPEI o tarjeta de forma rápida y segura aquí:\n\n${transferPaymentLink}\n\nℹ️ _Instrucciones SPEI:_ Al abrir el enlace y elegir "Transferencia", se generará tu CLABE SPEI única con acreditación automática e inmediata sin necesidad de enviar comprobante.\n\n¡Muchas gracias por tu visita!`;
         window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -1302,10 +1722,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
             setAppliedBenefit((initialData as any)?.benefitRedeemed || null);
 
-            form.setValue('cliente_id', initialData.client.id);
-            if (initialData?.client) {
+            if (initialData?.client?.id) {
                 setSelectedClientId(initialData.client.id);
                 form.setValue('cliente_id', initialData.client.id);
+            } else {
+                setSelectedClientId('');
+                form.setValue('cliente_id', '');
             }
             if (initialData.local_id) {
                 form.setValue('local_id', initialData.local_id);
@@ -1381,7 +1803,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }).catch(console.error);
             }
-            setStep(2);
+            if ((initialData as any)?.benefitRedeemed) {
+                setAppliedBenefit((initialData as any).benefitRedeemed);
+                setJuntosMinorsCount(Number((initialData as any).benefitRedeemed?.minorsCount || 0));
+            }
+            const hasPreloadedItems = Array.isArray(initialData.items) && initialData.items.length > 0;
+            setStep(initialData?.client?.id && hasPreloadedItems ? 2 : 1);
         }
     }, [initialData, form, isOpen, db]);
 
@@ -1395,11 +1822,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
             if (pointsEarned > 0 || pointsSpent > 0) {
                 try {
+                    const delta = pointsEarned - pointsSpent;
                     const clientRef = doc(db, 'clientes', selectedClient.id);
                     await updateDoc(clientRef, {
-                        puntos: increment(pointsEarned - pointsSpent),
-                        alfaCoins: increment(pointsEarned - pointsSpent),
-                        alfa_coins: increment(pointsEarned - pointsSpent),
+                        puntos: increment(delta),
+                        alfaCoins: increment(delta),
+                        alfa_coins: increment(delta),
+                        puntosLealtad: increment(delta),
+                        puntos_lealtad: increment(delta),
                     });
                 } catch (e) {
                     console.error("Error updating points in Firestore:", e);
@@ -1407,13 +1837,193 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             }
         }
 
-        if (appliedBenefit?.folio && db) {
+        if (appliedBenefit?.isJuntosBenefit && selectedClient && db) {
             try {
+                const effPrice = currentHaircutPrice || 140;
+                const mode = appliedBenefit.juntosMode || 'minors';
+                const companionsList = Array.isArray(appliedBenefit.companions) ? appliedBenefit.companions : [];
+                const servicesCountInCart = cart.reduce((acc, it) => acc + (it.tipo === 'servicio' ? Number(it.cantidad || 1) : 0), 0);
+
+                const countMinors = mode === 'minors' ? Math.max(1, Number(juntosMinorsCount || 1)) : 0;
+                const participantsInTicket =
+                    mode === 'minors'
+                        ? 1 + countMinors
+                        : mode === 'companions_single_ticket'
+                        ? 1 + Math.max(1, companionsList.length)
+                        : 1; // companions_separate_tickets
+
+                const reqMin = Math.round(effPrice * participantsInTicket * 100) / 100;
+                const effectiveMoneyPaid = total + Number(anticipoPagado || 0);
+                const isAmountMet = effectiveMoneyPaid >= reqMin;
+                const isServicesMet = servicesCountInCart >= participantsInTicket;
+                const isMet = isAmountMet && isServicesMet;
+
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+                let totalBonusCoinsCredited = 0;
+
+                if (isMet) {
+                    if (mode === 'companions_single_ticket' && companionsList.length > 0) {
+                        // Acreditar +400 al titular y +400 a cada acompañante verificado en su propia cuenta
+                        const titularCoins = JUNTOS_REWARD_COINS_PER_PERSON;
+                        await updateDoc(doc(db, 'clientes', selectedClient.id), {
+                            puntos: increment(titularCoins),
+                            alfaCoins: increment(titularCoins),
+                            alfa_coins: increment(titularCoins),
+                            puntosLealtad: increment(titularCoins),
+                            puntos_lealtad: increment(titularCoins),
+                            ultimo_canje_juntos_fecha: todayStr,
+                        });
+                        totalBonusCoinsCredited += titularCoins;
+
+                        for (const comp of companionsList) {
+                            if (comp?.id && comp.id !== selectedClient.id) {
+                                await updateDoc(doc(db, 'clientes', comp.id), {
+                                    puntos: increment(JUNTOS_REWARD_COINS_PER_PERSON),
+                                    alfaCoins: increment(JUNTOS_REWARD_COINS_PER_PERSON),
+                                    alfa_coins: increment(JUNTOS_REWARD_COINS_PER_PERSON),
+                                    puntosLealtad: increment(JUNTOS_REWARD_COINS_PER_PERSON),
+                                    puntos_lealtad: increment(JUNTOS_REWARD_COINS_PER_PERSON),
+                                    ultimo_canje_juntos_fecha: todayStr,
+                                });
+                                totalBonusCoinsCredited += JUNTOS_REWARD_COINS_PER_PERSON;
+                                if (comp.folio) {
+                                    await setDoc(doc(db, 'canjes_beneficios', comp.folio), {
+                                        folio: comp.folio,
+                                        estado: 'canjeado',
+                                        utilizado_en_venta: true,
+                                        fecha_aplicacion: Timestamp.now(),
+                                        fecha_canje_dia: todayStr,
+                                        clienteId: comp.id,
+                                        clienteNombre: comp.name || '',
+                                        isJuntosBenefit: true,
+                                        juntosMode: 'companions_single_ticket',
+                                        rewardCoins: JUNTOS_REWARD_COINS_PER_PERSON,
+                                        recompensaAcreditada: true,
+                                    }, { merge: true });
+                                }
+                            }
+                        }
+
+                        toast({
+                            title: '🪙 ¡Alfa Coins Acreditados al Grupo!',
+                            description: `Se abonaron +${JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins a ${selectedClient.nombre} y +${JUNTOS_REWARD_COINS_PER_PERSON} a cada uno de sus ${companionsList.length} acompañante(s).`,
+                        });
+                    } else if (mode === 'companions_separate_tickets') {
+                        // Ticket separado de integrante de grupo verificado: +400 a esta cuenta
+                        const individualCoins = JUNTOS_REWARD_COINS_PER_PERSON;
+                        await updateDoc(doc(db, 'clientes', selectedClient.id), {
+                            puntos: increment(individualCoins),
+                            alfaCoins: increment(individualCoins),
+                            alfa_coins: increment(individualCoins),
+                            puntosLealtad: increment(individualCoins),
+                            puntos_lealtad: increment(individualCoins),
+                            ultimo_canje_juntos_fecha: todayStr,
+                        });
+                        totalBonusCoinsCredited = individualCoins;
+
+                        toast({
+                            title: '🪙 ¡Alfa Coins por Juntos es Mejor!',
+                            description: `Se abonaron +${individualCoins} Alfa Coins a la cuenta de ${selectedClient.nombre}.`,
+                        });
+                    } else {
+                        // Modalidad Hijos Menores sin App: 400 * (1 + N) todo a la cuenta del papá/mamá
+                        const bonusCoins = calculateJuntosRewardCoins(countMinors);
+                        await updateDoc(doc(db, 'clientes', selectedClient.id), {
+                            puntos: increment(bonusCoins),
+                            alfaCoins: increment(bonusCoins),
+                            alfa_coins: increment(bonusCoins),
+                            puntosLealtad: increment(bonusCoins),
+                            puntos_lealtad: increment(bonusCoins),
+                            ultimo_canje_juntos_fecha: todayStr,
+                        });
+                        totalBonusCoinsCredited = bonusCoins;
+
+                        toast({
+                            title: '🪙 ¡Alfa Coins por Juntos es Mejor!',
+                            description: `Se abonaron +${bonusCoins} Alfa Coins a la cuenta de ${selectedClient.nombre} (Titular + ${countMinors} menor(es)).`,
+                        });
+                    }
+                }
+
+                const folio = appliedBenefit.folio || `VA-JUNTOS-${Date.now().toString().slice(-6)}`;
+                await setDoc(doc(db, 'canjes_beneficios', folio), {
+                    folio,
+                    estado: 'canjeado',
+                    utilizado_en_venta: true,
+                    fecha_aplicacion: Timestamp.now(),
+                    fecha_canje_dia: todayStr,
+                    clienteId: clientId || selectedClient.id,
+                    clienteNombre: `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim(),
+                    totalVenta: total,
+                    isJuntosBenefit: true,
+                    juntosMode: mode,
+                    minorsCount: countMinors,
+                    companionsCount: companionsList.length,
+                    haircutPriceApplied: effPrice,
+                    requiredMinPurchase: reqMin,
+                    rewardCoins: totalBonusCoinsCredited,
+                    recompensaAcreditada: isMet,
+                }, { merge: true });
+            } catch (e) {
+                console.error("Error updating canjes_beneficios for Juntos es Mejor:", e);
+            }
+        }
+
+        if (appliedBenefit?.folio && db && !appliedBenefit?.isReferralBlocked && !appliedBenefit?.isJuntosBenefit) {
+            try {
+                const isEligibleReferralReward =
+                    Boolean(appliedBenefit.isReferralBenefit) &&
+                    Boolean(appliedBenefit.referrerId) &&
+                    appliedBenefit.referrerId !== clientId &&
+                    total >= REFERRAL_MIN_PURCHASE_MXN;
+
                 await setDoc(doc(db, 'canjes_beneficios', appliedBenefit.folio), {
                     estado: 'canjeado',
                     utilizado_en_venta: true,
                     fecha_aplicacion: Timestamp.now(),
+                    clienteId: clientId || selectedClient?.id || null,
+                    clienteNombre: selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim() : null,
+                    totalVenta: total,
+                    ...(appliedBenefit.isReferralBenefit ? {
+                        isReferralBenefit: true,
+                        referralCode: appliedBenefit.referralCode || null,
+                        referrerId: appliedBenefit.referrerId || null,
+                        referrerName: appliedBenefit.referrerName || null,
+                        discountPercentApplied: REFERRAL_DISCOUNT_PERCENT,
+                        rewardCoins: isEligibleReferralReward ? REFERRAL_HOST_REWARD_COINS : 0,
+                        recompensaAcreditada: isEligibleReferralReward,
+                    } : {})
                 }, { merge: true });
+
+                // Marcar al cliente nuevo como referido para impedir que vuelva a usar otro código en el futuro
+                if (appliedBenefit.isReferralBenefit && clientId) {
+                    await updateDoc(doc(db, 'clientes', clientId), {
+                        beneficio_referido_usado: true,
+                        referido_por_id: appliedBenefit.referrerId || null,
+                        referido_por_nombre: appliedBenefit.referrerName || null,
+                        codigo_referido_usado: appliedBenefit.referralCode || appliedBenefit.folio || null,
+                        fecha_canje_referido: Timestamp.now(),
+                    });
+                }
+
+                // Si es un beneficio de referido válido y la venta cumple el mínimo ($160 MXN), acreditar 500 Alfa Coins al anfitrión
+                if (isEligibleReferralReward) {
+                    const referrerRef = doc(db, 'clientes', appliedBenefit.referrerId);
+                    await updateDoc(referrerRef, {
+                        puntos: increment(REFERRAL_HOST_REWARD_COINS),
+                        alfaCoins: increment(REFERRAL_HOST_REWARD_COINS),
+                        alfa_coins: increment(REFERRAL_HOST_REWARD_COINS),
+                        puntosLealtad: increment(REFERRAL_HOST_REWARD_COINS),
+                        puntos_lealtad: increment(REFERRAL_HOST_REWARD_COINS),
+                        amigos_referidos: increment(1),
+                    });
+                    toast({
+                        title: '🪙 ¡500 Alfa Coins Acreditados al Anfitrión!',
+                        description: `Se abonaron automáticamente ${REFERRAL_HOST_REWARD_COINS} Alfa Coins a la cuenta de ${appliedBenefit.referrerName}.`,
+                    });
+                }
             } catch (e) {
                 console.error("Error updating canjes_beneficios in sale finalization:", e);
             }
@@ -1649,7 +2259,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         tipo: 'fixed',
                         monto: totalDiscount
                     },
-                    total,
+                    descuento_alfacoins: pointsDiscount || 0,
+                    alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
+                    total: subtotal - totalDiscount,
                     fecha_hora_venta: Timestamp.now(),
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
@@ -2958,8 +3570,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         maxUsableAlfaCoins={maxUsableAlfaCoins}
                                         propina={watchedPropina}
                                         appliedBenefit={appliedBenefit}
+                                        onApplyReferralCode={handleApplyManualReferralCode}
+                                        onRemoveBenefit={handleRemoveAppliedBenefit}
                                         alfaCoinUnitValue={alfaCoinUnitValue}
                                         clientLevelInfo={clientLevelInfo}
+                                        juntosMinorsCount={juntosMinorsCount}
+                                        setJuntosMinorsCount={setJuntosMinorsCount}
+                                        currentHaircutPrice={currentHaircutPrice}
                                     />
                                 </div>
 
@@ -3814,8 +4431,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         maxUsableAlfaCoins={maxUsableAlfaCoins}
                                         propina={watchedPropina}
                                         appliedBenefit={appliedBenefit}
+                                        onApplyReferralCode={handleApplyManualReferralCode}
+                                        onRemoveBenefit={handleRemoveAppliedBenefit}
                                         alfaCoinUnitValue={alfaCoinUnitValue}
                                         clientLevelInfo={clientLevelInfo}
+                                        juntosMinorsCount={juntosMinorsCount}
+                                        setJuntosMinorsCount={setJuntosMinorsCount}
+                                        currentHaircutPrice={currentHaircutPrice}
                                     />
                                 </div>
                                 <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">
@@ -3877,7 +4499,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     >
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />}
                                         {total === 0 && pointsDiscount > 0
-                                            ? `Finalizar (${pointsDiscount} ALFA COINS)`
+                                            ? `Finalizar (${effectiveAlfaCoinsToUse} ALFA COINS)`
                                             : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
                                                 ? `Usa Cobrar en Terminal arriba`
                                                 : `Cobrar $${formatMoney(totalConPropina)} MXN`}

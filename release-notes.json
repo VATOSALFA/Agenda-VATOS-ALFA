@@ -2,11 +2,11 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Refactorización de módulos, mejoras en medios de pago, anticipos y horarios de Janet.",
+  "summary": "Soporte de teléfonos internacionales, promoción Juntos es Mejor, pagos con AlfaCoins y mejoras del sistema.",
   "notes": [
-    "Los botones de envío de confirmación y recordatorio por WhatsApp en el detalle de cita ahora permanecen siempre habilitados sin cambiar el estado de la cita automáticamente.",
-    "Se habilitó el desplazamiento vertical en el Reporte de Comisiones para visualización completa en tablets y todos los dispositivos.",
-    "Actualización de medios de pago: 'Terminal Point' para cobros y anticipos en terminal física, 'Pago en línea' para reservas desde web/app y 'Transferencia' para links de pago enviados desde sucursal.",
-    "Mayor claridad visual en el monto de anticipo al reservar en línea y sincronización completa de todos los horarios disponibles en Janet."
+    "Soporte completo para números internacionales (Costa Rica, EE.UU., Colombia, España, etc.) en reserva web y agenda, con detección automática y enlaces de WhatsApp adaptativos.",
+    "Promoción 'Juntos es Mejor' 100% activa con validación QR en recepción (menores de edad o usuarios de app) y detección dinámica del precio de corte vigente.",
+    "Soporte integral para cobro con AlfaCoins (total o parcial) en punto de venta, reportes de comisiones y balance de clientes.",
+    "Página pública oficial de eliminación de cuenta conforme a políticas de privacidad y tiendas de aplicaciones."
   ]
 }

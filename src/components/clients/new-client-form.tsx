@@ -33,6 +33,14 @@ import { Skeleton } from '../ui/skeleton';
 import { errorEmitter } from '@/lib/error-emitter';
 import { FirestorePermissionError } from '@/lib/errors';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  COUNTRY_PHONE_CODES,
+  getCountryPhoneConfig,
+  buildStoredPhone,
+  parseStoredPhone,
+  handlePhoneInputChange,
+  isValidPhoneNumber,
+} from '@/lib/phone-utils';
 
 interface ClientSettings {
   autoClientNumber?: boolean;
@@ -49,11 +57,11 @@ const createClientSchema = (settings?: ClientSettings) => {
     apellido: z.string().min(2, 'El apellido debe tener al menos 2 caracteres.'),
     telefono: fieldSettings.phone?.required
       ? z.string()
-        .transform(val => val.replace(/\D/g, ''))
-        .refine(val => val.length === 10, { message: 'El teléfono debe tener exactamente 10 dígitos.' })
+        .transform(val => val.trim())
+        .refine(val => isValidPhoneNumber(val), { message: 'Ingresa un número de teléfono válido (10 dígitos en México o con código de país).' })
       : z.string().optional()
-        .transform(val => val ? val.replace(/\D/g, '') : '')
-        .refine(val => !val || val.length === 10, { message: 'El teléfono debe tener exactamente 10 dígitos.' }),
+        .transform(val => val ? val.trim() : '')
+        .refine(val => !val || isValidPhoneNumber(val), { message: 'Ingresa un número de teléfono válido (10 dígitos en México o con código de país).' }),
     correo: fieldSettings.email?.required
       ? z.string().email('El correo electrónico no es válido.')
       : z.string().email('El correo electrónico no es válido.').optional().or(z.literal('')),
@@ -110,6 +118,8 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
+  const [phoneLocalDigits, setPhoneLocalDigits] = useState<string>('');
 
   const clientSchema = useMemo(() => createClientSchema(agendaSettings || undefined), [agendaSettings]);
 
@@ -160,17 +170,16 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
   const checkDuplicates = useCallback(async () => {
     if (isEditMode || !db) return;
 
-    const phone = debouncedPhone?.replace(/\D/g, '');
+    const phone = debouncedPhone?.trim() || '';
     const email = debouncedEmail?.toLowerCase();
 
-    // Reset errors if fields are empty or too short
+    // Reset errors if fields are empty or invalid
     setPhoneError(null);
-    if (!phone || phone.length < 10) setPhoneError(null);
-
     setEmailError(null);
-    if (!email || email.length < 5) setEmailError(null);
 
-    const phoneQuery = clientSettings?.validatePhone && phone && phone.length >= 10
+    const isPhoneComplete = phone ? isValidPhoneNumber(phone) : false;
+
+    const phoneQuery = clientSettings?.validatePhone && isPhoneComplete
       ? query(collection(db, 'clientes'), where('telefono', '==', phone))
       : null;
 
@@ -248,11 +257,17 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
           birthDate = new Date((client.fecha_nacimiento as any).seconds * 1000);
         }
       }
+      const parsedPhone = parseStoredPhone(client.telefono);
+      setPhoneCountryCode(parsedPhone.countryCode);
+      setPhoneLocalDigits(parsedPhone.localDigits);
       form.reset({
         ...client,
+        telefono: buildStoredPhone(parsedPhone.countryCode, parsedPhone.localDigits),
         fecha_nacimiento: birthDate
       });
     } else {
+      setPhoneCountryCode('+52');
+      setPhoneLocalDigits('');
       form.reset({
         nombre: initialName,
         apellido: '',
@@ -274,8 +289,8 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
 
     if (!isEditMode) {
       let hasError = false;
-      if (clientSettings?.validatePhone && data.telefono && data.telefono.length >= 10) {
-        const cleanPhone = data.telefono.replace(/\D/g, '');
+      if (clientSettings?.validatePhone && data.telefono && isValidPhoneNumber(data.telefono)) {
+        const cleanPhone = data.telefono.trim();
         const q = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
         if (!(await getDocs(q)).empty) {
           setPhoneError('Este número ya está registrado.');
@@ -459,18 +474,50 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
                   <FormLabel className="flex items-center text-xs font-medium text-foreground">
                     <Phone className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Teléfono {fieldSettings.phone.required && <span className="text-red-500 ml-1">*</span>}{!fieldSettings.phone.required && <OptionalLabel />}
                   </FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Ej: 1234567890 (10 dígitos)"
-                      {...field}
-                      maxLength={10}
-                      className="h-9 text-xs"
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '');
-                        field.onChange(val);
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={phoneCountryCode}
+                      onValueChange={(newCode) => {
+                        const cfg = getCountryPhoneConfig(newCode);
+                        const trimmedLocal = phoneLocalDigits.slice(0, cfg.maxDigits);
+                        setPhoneCountryCode(newCode);
+                        setPhoneLocalDigits(trimmedLocal);
+                        field.onChange(buildStoredPhone(newCode, trimmedLocal));
                       }}
-                    />
-                  </FormControl>
+                    >
+                      <SelectTrigger
+                        aria-label="Código de país"
+                        className="w-[88px] h-9 px-2 text-xs font-medium shrink-0"
+                      >
+                        <SelectValue>
+                          {getCountryPhoneConfig(phoneCountryCode).label}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="max-h-[220px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                        {COUNTRY_PHONE_CODES.map((c) => (
+                          <SelectItem key={c.code} value={c.code} className="text-xs">
+                            {c.flag} {c.code === 'OTHER' ? '+Otro' : c.code} — {c.country}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormControl>
+                      <Input
+                        placeholder={getCountryPhoneConfig(phoneCountryCode).placeholder}
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
+                        value={phoneLocalDigits}
+                        className="h-9 text-xs flex-1"
+                        onChange={(e) => {
+                          const parsed = handlePhoneInputChange(e.target.value, phoneCountryCode);
+                          setPhoneCountryCode(parsed.countryCode);
+                          setPhoneLocalDigits(parsed.localDigits);
+                          field.onChange(parsed.storedPhone);
+                        }}
+                      />
+                    </FormControl>
+                  </div>
                   {(isCheckingDuplicates || phoneError || form.formState.errors.telefono) && (
                     <div className="mt-1">
                       {isCheckingDuplicates ? (

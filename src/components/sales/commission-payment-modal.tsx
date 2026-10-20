@@ -257,7 +257,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 // Safety check: specific for online/partial payments that might have been marked 'Pagado' incorrectly
                 // If it has a tracked 'monto_pagado_real' that is less than the total, it's not fully paid.
                 // We allow a small epsilon for floating point issues.
-                const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0);
+                const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
                 if (sale.monto_pagado_real !== undefined && (sale.total - totalCovered) > 1) {
                     return;
                 }

@@ -491,7 +491,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
               {liveClient.telefono && canViewPhone && (
                 <a
-                  href={`https://wa.me/${liveClient.telefono.replace(/\D/g, '')}`}
+                  href={`https://wa.me/${!String(liveClient.telefono).trim().startsWith('+') && liveClient.telefono.replace(/\D/g, '').length === 10 ? '52' + liveClient.telefono.replace(/\D/g, '') : liveClient.telefono.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="h-8 w-8 rounded-lg text-slate-400 hover:text-[#25D366] hover:bg-white/10 flex items-center justify-center transition-colors"
@@ -681,7 +681,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
             <div className="pt-2 space-y-2">
               {liveClient.telefono && canViewPhone && (
                 <a
-                  href={`https://wa.me/${liveClient.telefono.replace(/\D/g, '')}`}
+                  href={`https://wa.me/${!String(liveClient.telefono).trim().startsWith('+') && liveClient.telefono.replace(/\D/g, '').length === 10 ? '52' + liveClient.telefono.replace(/\D/g, '') : liveClient.telefono.replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block w-full"

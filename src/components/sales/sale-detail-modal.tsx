@@ -428,6 +428,17 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                     </TableRow>
                                 ) : null}
 
+                                {Number((sale as any).descuento_alfacoins || 0) > 0 ? (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={2} className="text-right text-xs text-[#C5A880] font-semibold">
+                                            Canje ALFA COINS {Number((sale as any).alfacoins_canjeados || 0) > 0 ? `(${Number((sale as any).alfacoins_canjeados)} monedas)` : ''}
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs font-bold text-[#C5A880]">
+                                            -${Number((sale as any).descuento_alfacoins || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : null}
+
                                 {Boolean(sale.propina && sale.propina > 0) ? (
                                     <TableRow className="hover:bg-transparent text-blue-400 bg-blue-500/5">
                                         <TableCell colSpan={2} className="text-right text-xs font-medium">
@@ -447,7 +458,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                 </TableRow>
 
                                 {/* Desglose si es anticipo parcial */}
-                                {Boolean(sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) ? (
+                                {Boolean(sale.pago_estado === 'deposit_paid' || (sale.pago_estado !== 'Pagado' && sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total && !sale.anticipoPagado)) ? (
                                     <>
                                         <TableRow className="text-slate-600 dark:text-slate-400 font-medium text-xs hover:bg-transparent">
                                             <TableCell colSpan={2} className="text-right">Anticipo Pagado</TableCell>

@@ -7,6 +7,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { randomUUID } from 'crypto';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
 import { evaluateDepositRequirement, DEFAULT_BOOKING_RULES, ReglasReservasConfig, isExpiredPendingDepositReservation } from '@/lib/booking-rules';
+import { normalizePhoneForLookup, isValidPhoneNumber } from '@/lib/phone-utils';
 
 interface GetAvailabilityParams {
     date: string; // YYYY-MM-DD
@@ -492,10 +493,16 @@ export async function createPublicReservation(data: any) {
         }
 
         if (!existingDoc && validatePhone && data.client.phone) {
-            // 3. Check by Phone
-            const q = clientsRef.where('telefono', '==', data.client.phone).limit(1);
-            const snap = await q.get();
-            if (!snap.empty) existingDoc = snap.docs[0];
+            // 3. Check by Phone (supports Mexican 10-digit and International numbers)
+            const phoneLookup = normalizePhoneForLookup(data.client.phone);
+            for (const variant of phoneLookup.variants) {
+                const q = clientsRef.where('telefono', '==', variant).limit(1);
+                const snap = await q.get();
+                if (!snap.empty) {
+                    existingDoc = snap.docs[0];
+                    break;
+                }
+            }
         }
         
         if (!existingDoc && data.client.name && data.client.lastName) {
@@ -527,7 +534,7 @@ export async function createPublicReservation(data: any) {
                 const isInvalidPhone = !currentPhone || currentPhone.toLowerCase() === 'no registrado' || currentPhone.trim() === '';
                 const providedPhone = data.client.phone;
                 
-                if (validatePhone && providedPhone && isInvalidPhone && providedPhone.length >= 10) {
+                if (validatePhone && providedPhone && isInvalidPhone && isValidPhoneNumber(providedPhone)) {
                     updates.telefono = providedPhone;
                 }
                 
@@ -932,9 +939,9 @@ export async function createPublicReservation(data: any) {
         let clientHistory = null;
         const targetClientId = clientId || existingDoc?.id;
         const rawPhone = data.client?.phone || (existingDoc?.data()?.telefono);
-        const cleanPhoneDigits = (rawPhone || '').replace(/\D/g, '').slice(-10);
+        const phoneLookup = normalizePhoneForLookup(rawPhone);
 
-        if (existingDoc || targetClientId || cleanPhoneDigits.length === 10) {
+        if (existingDoc || targetClientId || phoneLookup.isValid) {
             const cData = existingDoc ? (existingDoc.data() || {}) : {};
             const canceladas = Number(cData.citas_canceladas) || 0;
             let noAsistidas = Number(cData.citas_no_asistidas) || 0;
@@ -948,9 +955,9 @@ export async function createPublicReservation(data: any) {
                         .get();
                     realReservationsNoShows = Math.max(realReservationsNoShows, snapId.size);
                 }
-                if (cleanPhoneDigits && cleanPhoneDigits.length === 10) {
+                if (phoneLookup.primary && phoneLookup.isValid) {
                     const snapPhone = await db.collection('reservas')
-                        .where('cliente_telefono', '==', cleanPhoneDigits)
+                        .where('cliente_telefono', '==', phoneLookup.primary)
                         .where('estado', '==', 'No asiste')
                         .get();
                     realReservationsNoShows = Math.max(realReservationsNoShows, snapPhone.size);
@@ -979,17 +986,19 @@ export async function createPublicReservation(data: any) {
         let sameDayActiveCount = 0;
         let sameDayActiveTotal = 0;
         try {
-            const cleanPhoneDigits = (data.client?.phone || '').replace(/\D/g, '');
-            const phone10 = cleanPhoneDigits.length >= 10 ? cleanPhoneDigits.slice(-10) : '';
+            const clientPhoneLookup = normalizePhoneForLookup(data.client?.phone);
 
             allReservationsToCheck.forEach(doc => {
                 const r = doc.data();
                 if (r.estado === 'Cancelado' || r.estado === 'Cancelada' || r.estado === 'No asiste') return;
 
                 const matchesId = clientId && r.cliente_id === clientId;
-                const resPhone = (r.cliente_telefono || '').replace(/\D/g, '');
-                const resPhone10 = resPhone.length >= 10 ? resPhone.slice(-10) : '';
-                const matchesPhone = phone10 && resPhone10 && phone10 === resPhone10;
+                const resPhoneLookup = normalizePhoneForLookup(r.cliente_telefono);
+                const matchesPhone = Boolean(
+                    clientPhoneLookup.primary &&
+                    resPhoneLookup.primary &&
+                    clientPhoneLookup.primary === resPhoneLookup.primary
+                );
 
                 if (matchesId || matchesPhone) {
                     sameDayActiveCount += 1;
@@ -1253,16 +1262,14 @@ export async function checkClientBookingEligibility(
         const config = await getPublicServiciosConfig();
 
         const clean = identifier.trim();
-        const cleanDigits = clean.replace(/\D/g, '');
-        const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : '';
+        const phoneLookup = !clean.includes('@') ? normalizePhoneForLookup(clean) : { primary: '', variants: [], isValid: false };
 
         const clientsRef = db.collection('clientes');
         let clientDoc: any = null;
 
-        // 1. Búsqueda por teléfono (buscando variantes comunes de formato)
-        if (last10) {
-            const phoneVariants = [last10, `+52${last10}`, `+52 ${last10}`, `52${last10}`, clean];
-            for (const variant of phoneVariants) {
+        // 1. Búsqueda por teléfono (buscando variantes comunes de formato nacional e internacional)
+        if (phoneLookup.variants.length > 0) {
+            for (const variant of phoneLookup.variants) {
                 const phoneSnap = await clientsRef.where('telefono', '==', variant).limit(1).get();
                 if (!phoneSnap.empty) {
                     clientDoc = phoneSnap.docs[0];
@@ -1297,9 +1304,9 @@ export async function checkClientBookingEligibility(
                         .get();
                     reservasNoShows = Math.max(reservasNoShows, snapById.size);
                 }
-                if (last10) {
+                if (phoneLookup.primary) {
                     const snapByPhone = await db.collection('reservas')
-                        .where('cliente_telefono', '==', last10)
+                        .where('cliente_telefono', '==', phoneLookup.primary)
                         .where('estado', '==', 'No asiste')
                         .get();
                     reservasNoShows = Math.max(reservasNoShows, snapByPhone.size);
@@ -1339,9 +1346,12 @@ export async function checkClientBookingEligibility(
                     if (r.estado === 'Cancelado' || r.estado === 'Cancelada' || r.estado === 'No asiste') return false;
 
                     const matchesId = clientDoc && r.cliente_id === clientDoc.id;
-                    const resPhone = (r.cliente_telefono || '').replace(/\D/g, '');
-                    const resLast10 = resPhone.length >= 10 ? resPhone.slice(-10) : '';
-                    const matchesPhone = last10 && resLast10 && last10 === resLast10;
+                    const resPhoneLookup = normalizePhoneForLookup(r.cliente_telefono);
+                    const matchesPhone = Boolean(
+                        phoneLookup.primary &&
+                        resPhoneLookup.primary &&
+                        phoneLookup.primary === resPhoneLookup.primary
+                    );
 
                     return matchesId || matchesPhone;
                 });

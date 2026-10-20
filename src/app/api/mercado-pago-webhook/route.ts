@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
+import { normalizePhoneForLookup } from '@/lib/phone-utils';
 
 async function getCandidateTokens(db: any): Promise<string[]> {
     const tokens = new Set<string>();
@@ -39,7 +40,9 @@ async function resolveOrCreateBookingClient(db: any, rawClient: any): Promise<{
     const name = String(rawClient?.name || rawClient?.nombre || '').trim();
     const lastName = String(rawClient?.lastName || rawClient?.apellido || '').trim();
     const fullName = [name, lastName].filter(Boolean).join(' ').trim() || 'Cliente Web';
-    const cleanPhone = String(rawClient?.phone || rawClient?.telefono || '').replace(/\D/g, '').slice(-10);
+    const rawPhoneStr = String(rawClient?.phone || rawClient?.telefono || '').trim();
+    const phoneLookup = normalizePhoneForLookup(rawPhoneStr);
+    const cleanPhone = phoneLookup.primary || rawPhoneStr.replace(/\D/g, '').slice(-10);
     const email = String(rawClient?.email || rawClient?.correo || '').trim();
 
     if (rawClient?.id && typeof rawClient.id === 'string' && rawClient.id !== 'unknown' && rawClient.id !== 'guest') {
@@ -65,9 +68,14 @@ async function resolveOrCreateBookingClient(db: any, rawClient: any): Promise<{
             }
         }
 
-        if (!existingDoc && cleanPhone.length === 10) {
-            const snap = await clientsRef.where('telefono', '==', cleanPhone).limit(1).get();
-            if (!snap.empty) existingDoc = snap.docs[0];
+        if (!existingDoc && phoneLookup.variants.length > 0) {
+            for (const variant of phoneLookup.variants) {
+                const snap = await clientsRef.where('telefono', '==', variant).limit(1).get();
+                if (!snap.empty) {
+                    existingDoc = snap.docs[0];
+                    break;
+                }
+            }
         }
 
         if (existingDoc) {
@@ -607,11 +615,14 @@ async function processApprovedPayment(
         if (resDoc.exists) {
             const resData = resDoc.data()!;
             if ((resData.canal_reserva === 'chatbot' || resData.origen === 'chatbot') && resData.cliente_telefono) {
-                const cleanPhone = resData.cliente_telefono.replace(/\D/g, '').slice(-10);
+                const cleanPhone = resData.cliente_telefono.replace(/\D/g, '');
+                const searchKey = cleanPhone.length >= 10 && !String(resData.cliente_telefono).startsWith('+')
+                    ? cleanPhone.slice(-10)
+                    : cleanPhone;
                 const convsSnap = await db.collection('conversaciones').get();
                 const targetConv = convsSnap.docs.find((d: any) => {
                     const p = (d.data().cliente_telefono || d.data().telefono || '').replace(/\D/g, '');
-                    return p.includes(cleanPhone) || d.id.includes(cleanPhone);
+                    return (searchKey && (p.includes(searchKey) || d.id.includes(searchKey)));
                 });
 
                 if (targetConv) {

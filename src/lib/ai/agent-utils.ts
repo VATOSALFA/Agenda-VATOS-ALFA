@@ -58,9 +58,11 @@ export function isValidBookingDate(value: string): boolean {
 }
 
 export function normalizeClientPhone(value: string): string {
-  const digits = String(value || '').replace(/\D/g, '');
-  if (/^\d{10}$/.test(digits)) return digits;
+  const trimmed = String(value || '').trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!trimmed.startsWith('+') && /^\d{10}$/.test(digits)) return digits;
   if (/^52\d{10}$/.test(digits) || /^521\d{10}$/.test(digits)) return digits.slice(-10);
+  if (digits.length >= 8 && digits.length <= 15) return digits;
   return '';
 }
 

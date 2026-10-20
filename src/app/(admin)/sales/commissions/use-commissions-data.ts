@@ -205,7 +205,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
                 return;
             }
-            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0);
+            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
             if (sale.pago_estado !== 'Pagado' && (sale.total - totalCovered) > 1) {
                 return;
             }

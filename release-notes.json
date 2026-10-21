@@ -2,11 +2,12 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Soporte de teléfonos internacionales, promoción Juntos es Mejor, pagos con AlfaCoins y mejoras del sistema.",
+  "summary": "Cuadratura contable de cobros en Terminal Point, soporte para teléfonos internacionales y mejoras de punto de venta.",
   "notes": [
-    "Soporte completo para números internacionales (Costa Rica, EE.UU., Colombia, España, etc.) en reserva web y agenda, con detección automática y enlaces de WhatsApp adaptativos.",
-    "Promoción 'Juntos es Mejor' 100% activa con validación QR en recepción (menores de edad o usuarios de app) y detección dinámica del precio de corte vigente.",
-    "Soporte integral para cobro con AlfaCoins (total o parcial) en punto de venta, reportes de comisiones y balance de clientes.",
-    "Página pública oficial de eliminación de cuenta conforme a políticas de privacidad y tiendas de aplicaciones."
+    "Cuadratura contable exacta en cobros con Terminal Point: exclusión automática de intentos de cobro pendientes o cancelados en ventas facturadas, flujo de caja, comisiones y propinas.",
+    "Auto-limpieza y reversión inteligente al reintentar cobros en terminal Point para evitar duplicidades.",
+    "Soporte completo para números telefónicos internacionales (Costa Rica, EE.UU., etc.) y números locales de 10 dígitos con enlaces directos de WhatsApp para confirmaciones y recordatorios.",
+    "Validación de promoción 'Juntos es Mejor' y soporte de cobro con AlfaCoins en punto de venta.",
+    "Página pública oficial de eliminación de cuenta conforme a directrices de tiendas de aplicaciones."
   ]
 }

@@ -91,6 +91,10 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
     // 3. Filter in Memory (Local & Payment Method) + Sort
     const filteredSales = useMemo(() => {
         const filtered = salesDataFromHook.filter(sale => {
+            // Excluir intentos inconclusos de terminal en estado Pendiente
+            if (sale.pago_estado === 'Pendiente' || (sale.pago_estado as string) === 'pendiente') {
+                return false;
+            }
             const localMatch = activeFilters.local === 'todos' || sale.local_id === activeFilters.local;
             const paymentMethodMatch = activeFilters.paymentMethod === 'todos' || (() => {
                 const filter = activeFilters.paymentMethod;

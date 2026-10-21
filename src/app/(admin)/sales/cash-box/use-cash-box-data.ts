@@ -192,7 +192,10 @@ export function useCashBoxData(activeFilters: CashBoxFilters, queryKey: number) 
 
     const salesWithClientData = useMemo(() => {
         if (salesLoading) return [];
-        const sortedSales = [...sales].sort((a, b) => {
+        const validSales = sales.filter(
+            sale => sale.pago_estado !== 'Pendiente' && (sale.pago_estado as string) !== 'pendiente'
+        );
+        const sortedSales = [...validSales].sort((a, b) => {
             const tA = a.fecha_hora_venta instanceof Timestamp ? a.fecha_hora_venta.toMillis() : 0;
             const tB = b.fecha_hora_venta instanceof Timestamp ? b.fecha_hora_venta.toMillis() : 0;
             return tB - tA;

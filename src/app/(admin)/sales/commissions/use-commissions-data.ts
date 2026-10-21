@@ -78,6 +78,10 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
 
             const salesMap = new Map<string, Sale>();
             sales.forEach(s => {
+                // Excluir intentos inconclusos de terminal en estado Pendiente
+                if (s.pago_estado === 'Pendiente' || (s.pago_estado as string) === 'pendiente') {
+                    return;
+                }
                 // If this sale was absorbed into another sale (e.g. advance liquidated at POS), ignore it to avoid duplicate commissions
                 if ((s as any).absorbed_in_sale_id) {
                     return;
@@ -149,7 +153,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                             const linkedSnap = await getDocs(qLinked);
                             linkedSnap.forEach(sDoc => {
                                 const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                                if ((saleData as any).absorbed_in_sale_id) {
+                                if ((saleData as any).absorbed_in_sale_id || saleData.pago_estado === 'Pendiente' || (saleData.pago_estado as string) === 'pendiente') {
                                     return;
                                 }
                                 const hasFinalSale = Array.from(salesMap.values()).some(

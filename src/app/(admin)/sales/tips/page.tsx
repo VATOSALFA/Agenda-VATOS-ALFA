@@ -120,6 +120,8 @@ export default function TipsPage() {
         if (!rawSales) return [];
 
         return rawSales
+            // Excluir intentos inconclusos de terminal en estado Pendiente
+            .filter(sale => sale.pago_estado !== 'Pendiente' && sale.pago_estado !== 'pendiente')
             // Solo ventas con propina mayor a 0
             .filter(sale => (sale.propina && Number(sale.propina) > 0))
             // Filtrar por Local ACTIVO

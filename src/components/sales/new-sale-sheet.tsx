@@ -2148,6 +2148,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setIsSendingToTerminal(true);
         setIsWaitingForPayment(true);
 
+        // 0. Limpiar cualquier intento previo en estado Pendiente (de esta sesión o de la misma cita)
+        if (saleIdRef.current) {
+            const prevPendingId = saleIdRef.current;
+            saleIdRef.current = null;
+            await revertPendingSale(prevPendingId);
+        }
+        if (reservationId) {
+            try {
+                const staleQuery = query(
+                    collection(db, 'ventas'),
+                    where('reservationId', '==', reservationId),
+                    where('pago_estado', '==', 'Pendiente')
+                );
+                const staleSnap = await getDocs(staleQuery);
+                for (const staleDoc of staleSnap.docs) {
+                    if (!staleDoc.id.startsWith('deposit_')) {
+                        await revertPendingSale(staleDoc.id);
+                    }
+                }
+            } catch (staleErr) {
+                console.error("Error cleaning up stale pending terminal sales:", staleErr);
+            }
+        }
+
         // 1. Crear referencia con ID nuevo para ventas
         const saleDocRef = doc(collection(db, 'ventas'));
         const tempSaleId = saleDocRef.id;

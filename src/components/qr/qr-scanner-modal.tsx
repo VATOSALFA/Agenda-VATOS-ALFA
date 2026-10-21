@@ -705,12 +705,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           if (isBirthday) {
             detectedBenefit.isBirthdayBenefit = true;
 
-            // 1. Validar que el cliente exista en la base de datos oficial
-            if (!foundClient) {
+            // 1. Exigir QR oficial firmado desde la App y cliente existente en la base de datos oficial
+            if (!detectedBenefit.signature || !detectedBenefit.clientId) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ QR OFICIAL REQUERIDO: Para validar el Regalo de Cumpleaños, debes escanear el código QR oficial firmado desde la aplicación móvil del cliente.';
+            } else if (!foundClient) {
               detectedBenefit.isBlocked = true;
               detectedBenefit.blockReason =
                 '⛔ CÓDIGO INVÁLIDO: Este código QR no está vinculado a ningún cliente registrado en el sistema oficial. Posible código generado externamente o alterado.';
-            } else {
+            } else if (!detectedBenefit.isBlocked) {
               // 2. Validar mes de cumpleaños oficial directamente en Firestore
               const bdayResult = validateClientBirthdayForBenefit(foundClient);
               if (!bdayResult.isEligible) {
@@ -753,6 +757,35 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                     detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños Confirmado! (${bdayResult.birthDateFormatted})`;
                   }
                 }
+              }
+            }
+          }
+
+          const isFreeCut =
+            detectedBenefit.benefitId === 'decimo_corte' ||
+            detectedBenefit.benefitId === 'corte_gratis' ||
+            detectedBenefit.folio?.includes('CORTE') ||
+            (detectedBenefit.benefitTitle || '').toLowerCase().includes('10') ||
+            (detectedBenefit.benefitTitle || '').toLowerCase().includes('corte gratis');
+
+          if (isFreeCut) {
+            detectedBenefit.benefitId = 'decimo_corte';
+            const requiredPaidStamps = Math.max(1, targetStamps - 1);
+
+            if (!detectedBenefit.signature || !detectedBenefit.clientId) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ QR OFICIAL REQUERIDO: Para canjear el 10.° Corte Gratis, debes escanear el código QR oficial firmado desde la aplicación del cliente.';
+            } else if (!foundClient) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ CLIENTE NO ENCONTRADO: Este código QR no pertenece a ningún cliente registrado en el sistema oficial.';
+            } else if (!detectedBenefit.isBlocked) {
+              const currentStamps = Number(foundClient.cortes_acumulados || 0);
+              const hasFreeCutFlag = Boolean((foundClient as any).corte_gratis_disponible);
+              if (currentStamps < requiredPaidStamps && !hasFreeCutFlag) {
+                detectedBenefit.isBlocked = true;
+                detectedBenefit.blockReason = `⛔ SELLOS INSUFICIENTES: ${foundClient.nombre} lleva ${currentStamps} de ${requiredPaidStamps} sellos requeridos en su Pase Alfa. Aún no desbloquea su corte de cortesía.`;
               }
             }
           }

@@ -323,7 +323,17 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
 
     if (isEditMode && client) {
       const clientRef = doc(db, 'clientes', client.id);
-      updateDoc(clientRef, dataToSave).then(() => {
+      updateDoc(clientRef, dataToSave).then(async () => {
+        if (data.telefono && data.telefono !== client.telefono) {
+          try {
+            const resSnap = await getDocs(query(collection(db, 'reservas'), where('cliente_id', '==', client.id)));
+            await Promise.all(
+              resSnap.docs.map((rDoc) => updateDoc(rDoc.ref, { cliente_telefono: data.telefono }))
+            );
+          } catch (syncErr) {
+            console.warn('Error sincronizando teléfono en reservas del cliente:', syncErr);
+          }
+        }
         toast({ title: '¡Cliente Actualizado!', description: `${data.nombre} ${data.apellido} ha sido actualizado.` });
         onFormSubmit(client.id);
         form.reset();

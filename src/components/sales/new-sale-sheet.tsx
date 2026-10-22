@@ -919,6 +919,10 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
 export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete, forceMaximize }: NewSaleSheetProps) {
     const { toast } = useToast();
     const { user, db } = useAuth();
+    const canViewPhone = useMemo(() => {
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+        return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+    }, [user]);
     const { enableLoyaltyPoints, loyaltyCashbackPercentage } = useFeatures(); // Import hook
     const [step, setStep] = useState(1);
     const [mobileTab, setMobileTab] = useState<'catalogo' | 'carrito'>('catalogo');
@@ -3355,7 +3359,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             </Avatar>
                                                             <div>
                                                                 <p className="font-bold text-xs sm:text-sm text-foreground">{selectedClient.nombre} {selectedClient.apellido}</p>
-                                                                <p className="text-[11px] text-muted-foreground">{selectedClient.telefono}</p>
+                                                                <p className="text-[11px] text-muted-foreground">{canViewPhone ? (selectedClient.telefono || 'Sin teléfono') : '••••-••••'}</p>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1">
@@ -3664,7 +3668,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 <div className="flex items-center gap-2.5 text-xs text-muted-foreground mt-0.5 flex-wrap">
                                                                     <span className="flex items-center gap-1 shrink-0">
                                                                         <Phone className="h-3 w-3 text-slate-400" />
-                                                                        {selectedClient.telefono || 'Sin teléfono'}
+                                                                        {canViewPhone ? (selectedClient.telefono || 'Sin teléfono') : '••••-••••'}
                                                                     </span>
                                                                     {selectedClient.correo && (
                                                                         <span className="flex items-center gap-1 truncate hidden sm:flex">
@@ -4346,7 +4350,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 <div className="pt-2 border-t border-border/40">
                                                                     <p className="font-semibold text-foreground mb-1.5">2. O enviar al celular del cliente</p>
                                                                     <div className="flex flex-wrap items-center gap-2">
-                                                                        {selectedClient?.telefono && (
+                                                                        {selectedClient?.telefono && canViewPhone && (
                                                                             <Button
                                                                                 type="button"
                                                                                 size="sm"

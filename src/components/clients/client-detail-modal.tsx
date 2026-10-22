@@ -174,7 +174,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   }, [liveClient.fecha_nacimiento]);
 
   const { user } = useAuth();
-  const canViewPhone = useMemo(() => user?.permissions?.includes('ver_numero_telefono'), [user]);
+  const canViewPhone = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('ver_numero_telefono')), [user]);
 
   const [resSortConfig, setResSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
   const [salesSortConfig, setSalesSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });

@@ -2,7 +2,7 @@
 'use client';
 
 import * as React from 'react';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -235,6 +235,7 @@ export function NewReservationForm({
   const [pendingSaveData, setPendingSaveData] = useState<any>(null);
   const [isClientStatsExpanded, setIsClientStatsExpanded] = useState<boolean>(false);
   const [isDepositRuleExpanded, setIsDepositRuleExpanded] = useState<boolean>(false);
+  const lastInitializedIdRef = useRef<string | null>(null);
   const { user, db } = useAuth();
   const { selectedLocalId } = useLocal();
 
@@ -887,7 +888,24 @@ export function NewReservationForm({
   }, [filteredProfessionals, allReservations, allTimeBlocks, specialJourneys, isEditMode, initialData, agendaSettings, currentLocal, servicesMap, db]);
 
   useEffect(() => {
+    if (!isOpen) {
+      lastInitializedIdRef.current = null;
+      setIsCalendarOpen(false);
+      setDepositPaid(false);
+      setManualDepositAmount('');
+      setManualDepositEnabled(false);
+      setIsDepositRuleExpanded(false);
+      setShowDepositWarningModal(false);
+      setPendingSaveData(null);
+      return;
+    }
+
     if (initialData && form) {
+      const reservationKey = initialData.id || 'initial-reservation';
+      if (lastInitializedIdRef.current === reservationKey && form.formState.isDirty) {
+        return;
+      }
+      lastInitializedIdRef.current = reservationKey;
       const fecha = safeParseDate(initialData.fecha) || new Date();
 
       const [startHour = '', startMinute = ''] = initialData.hora_inicio?.split(':') || [];
@@ -1021,6 +1039,10 @@ export function NewReservationForm({
       setShowDepositWarningModal(false);
       setPendingSaveData(null);
     } else if (isOpen) {
+      if (lastInitializedIdRef.current === 'new-reservation' && form.formState.isDirty) {
+        return;
+      }
+      lastInitializedIdRef.current = 'new-reservation';
       form.reset({
         fecha: new Date(),
         notas: '',
@@ -1771,7 +1793,7 @@ export function NewReservationForm({
                   render={({ field }) => (
                     <FormItem className="flex flex-col space-y-1">
                       <FormLabel className="text-xs">Fecha</FormLabel>
-                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={false}>
+                      <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen} modal={true}>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
@@ -1791,26 +1813,9 @@ export function NewReservationForm({
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        {isCalendarOpen && (
-                          <div
-                            className="fixed inset-0 z-[240] bg-transparent"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setIsCalendarOpen(false);
-                            }}
-                            onPointerDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setIsCalendarOpen(false);
-                            }}
-                          />
-                        )}
                         <PopoverContent
-                          className="z-[250] w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover relative"
+                          className="pointer-events-auto z-[250] w-auto p-0 border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] overflow-hidden bg-popover"
                           align="start"
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
                         >
                           <Calendar
                             locale={es}
@@ -1822,8 +1827,7 @@ export function NewReservationForm({
                                 setIsCalendarOpen(false);
                               }
                             }}
-                            disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                            required
+                            disabled={isEditMode ? undefined : (date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                             initialFocus
                           />
                           {/* Botones de selección rápida Vatos Alfa */}
@@ -1832,10 +1836,8 @@ export function NewReservationForm({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
+                              className="h-7 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg flex-1 cursor-pointer"
+                              onClick={() => {
                                 field.onChange(new Date());
                                 setIsCalendarOpen(false);
                               }}
@@ -1846,10 +1848,8 @@ export function NewReservationForm({
                               type="button"
                               variant="ghost"
                               size="sm"
-                              className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
+                              className="h-7 text-xs font-semibold text-slate-400 hover:text-foreground hover:bg-muted/50 rounded-lg flex-1 cursor-pointer"
+                              onClick={() => {
                                 const tomorrow = new Date();
                                 tomorrow.setDate(tomorrow.getDate() + 1);
                                 field.onChange(tomorrow);

@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Check, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import {
     Command,
     CommandEmpty,
@@ -29,6 +30,11 @@ interface ClientInputProps {
 }
 
 export const ClientInput = ({ value, onChange, clients, loading, onSearchChange }: ClientInputProps) => {
+    const { user } = useAuth();
+    const canViewPhone = useMemo(() => {
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+        return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+    }, [user]);
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState("");
 
@@ -150,7 +156,7 @@ export const ClientInput = ({ value, onChange, clients, loading, onSearchChange 
                                             <div className="min-w-0 flex-1">
                                                 <p className="font-semibold text-xs text-foreground truncate">{client.fullName}</p>
                                                 {client.telefono && (
-                                                    <p className="text-[10px] font-mono text-muted-foreground truncate">{client.telefono}</p>
+                                                    <p className="text-[10px] font-mono text-muted-foreground truncate">{canViewPhone ? client.telefono : '••••-••••'}</p>
                                                 )}
                                             </div>
                                         </div>

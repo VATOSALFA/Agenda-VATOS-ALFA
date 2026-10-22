@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronDown, ChevronUp, CreditCard, Edit, ShieldAlert, X } from 'lucide-react';
 import { cn, formatMoney } from '@/lib/utils';
 import type { Client } from '@/lib/types';
+import { useAuth } from '@/contexts/firebase-auth-context';
 
 interface ClientSummaryAndDepositCardProps {
   selectedClient: Client;
@@ -88,6 +89,12 @@ export function ClientSummaryAndDepositCard({
   onClearClient,
   onSaveAndSendLink,
 }: ClientSummaryAndDepositCardProps) {
+  const { user } = useAuth();
+  const canViewPhone = React.useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+  }, [user]);
+
   return (
     <div className="space-y-2">
       {/* Tarjeta de Cliente Minimizada por Defecto Vatos Alfa */}
@@ -105,7 +112,7 @@ export function ClientSummaryAndDepositCard({
                 {selectedClient.nombre} {selectedClient.apellido}
               </p>
               <span className="text-xs text-muted-foreground font-sans shrink-0">
-                • {selectedClient.telefono}
+                • {canViewPhone ? selectedClient.telefono : '••••-••••'}
               </span>
               {isNewClient ? (
                 <Badge

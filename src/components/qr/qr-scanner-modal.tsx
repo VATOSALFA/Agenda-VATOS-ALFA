@@ -40,6 +40,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/firebase-auth-context';
 import { db } from '@/lib/firebase-client';
 import {
   doc,
@@ -111,6 +112,11 @@ function playBeep(success = true) {
 
 export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }: QRScannerModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const canViewPhone = React.useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+  }, [user]);
 
   const [activeTab, setActiveTab] = useState<'camera' | 'manual'>('camera');
   const [manualInput, setManualInput] = useState('');
@@ -1827,7 +1833,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                         </div>
 
                         <div className="flex items-center gap-2 text-xs text-gray-300 mt-1">
-                          <span>{scannedClient.telefono || 'Sin teléfono'}</span>
+                          <span>{canViewPhone ? (scannedClient.telefono || 'Sin teléfono') : '••••-••••'}</span>
                           {scannedClient.correo && (
                             <>
                               <span>&bull;</span>

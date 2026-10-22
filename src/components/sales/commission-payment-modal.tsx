@@ -462,7 +462,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
     return (
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
-            <DialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 sm:max-w-4xl max-h-[90vh] flex flex-col" hideCloseButton={true}>
+            <DialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 w-[95vw] sm:w-full sm:max-w-4xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col" hideCloseButton={true}>
                 <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-slate-800 text-white shrink-0">
                     <div className="header-light-beam" />
                     <div className="relative z-10 flex items-center justify-between">
@@ -486,7 +486,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         </button>
                     </div>
                 </div>
-                <div className="p-3 sm:p-6 flex-1 overflow-y-auto min-h-0">
+                <div className="p-3 sm:p-6 flex-1 overflow-y-auto min-h-0 scrollbar-thin overscroll-contain touch-pan-y">
                     <Alert className="mb-3 hidden sm:flex">
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Pagos</AlertTitle>
@@ -497,7 +497,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                     {/* VISTA ESCRITORIO: TABLA */}
                     <div className="hidden sm:block max-h-[50vh] sm:max-h-96 w-full">
-                        <div className="overflow-x-auto w-full border rounded-xl">
+                        <div className="overflow-x-auto w-full border rounded-xl scrollbar-thin overscroll-contain touch-pan-y">
                             <Table className="min-w-[600px] sm:min-w-full">
                                 <TableHeader>
                                     <TableRow>

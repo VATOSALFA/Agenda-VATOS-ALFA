@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { User, X } from 'lucide-react';
 import type { AggregatedSellerSale } from '@/lib/types';
 
@@ -25,7 +24,7 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent 
         hideCloseButton={true}
-        className="max-w-4xl p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-background flex flex-col"
+        className="w-[95vw] sm:w-full max-w-4xl max-h-[88dvh] sm:max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-background"
       >
         {/* Cabecera Oficial VATOS ALFA */}
         <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
@@ -53,48 +52,52 @@ export function SellerSaleDetailModal({ isOpen, onOpenChange, summary }: SellerS
           </div>
         </div>
 
-        {/* Contenido / Tabla Compacta */}
-        <div className="p-4 sm:p-6">
-          <div className="rounded-xl border border-border/60 overflow-hidden">
-            <ScrollArea className="max-h-[50vh]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
-                    <TableHead className="py-1 px-3 text-xs font-semibold">Fecha</TableHead>
-                    <TableHead className="py-1 px-3 text-xs font-semibold">Cliente</TableHead>
-                    <TableHead className="py-1 px-3 text-xs font-semibold">Producto vendido</TableHead>
-                    <TableHead className="py-1 px-3 text-xs font-semibold text-right">Unidades</TableHead>
-                    <TableHead className="py-1 px-3 text-xs font-semibold text-right">Recaudación</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {summary.details.map((detail, index: number) => (
-                    <TableRow key={detail.saleId + index} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
-                      <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{detail.date}</TableCell>
-                      <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground">{detail.clientName}</TableCell>
-                      <TableCell className="py-1.5 px-3 text-xs text-foreground/90">{detail.productName}</TableCell>
-                      <TableCell className="py-1.5 px-3 text-xs text-right font-mono">{detail.unitsSold}</TableCell>
-                      <TableCell className="py-1.5 px-3 text-xs text-right font-bold text-foreground">
-                        ${detail.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-                <TableFooter>
-                  <TableRow className="h-8 bg-muted/40 font-bold border-t border-border/60">
-                    <TableCell colSpan={3} className="py-1 px-3 text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Total</TableCell>
-                    <TableCell className="py-1 px-3 text-right font-bold text-xs font-mono">{summary.unitsSold}</TableCell>
-                    <TableCell className="py-1 px-3 text-right font-extrabold text-sm text-foreground">
-                      ${summary.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        {/* Contenido / Tabla con Scroll Suave y Robusto en Móvil, Tablet y PC */}
+        <div className="p-3 sm:p-5 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto scrollbar-thin overscroll-contain touch-pan-y rounded-xl border border-border/60 bg-card/40">
+            <Table className="w-full min-w-[540px] sm:min-w-full">
+              <TableHeader className="sticky top-0 bg-[#10172b] dark:bg-[#10172b] z-10 border-b border-border/60 shadow-xs">
+                <TableRow className="h-8 bg-transparent hover:bg-transparent border-b border-border/60">
+                  <TableHead className="py-1 px-3 text-xs font-semibold text-white">Fecha</TableHead>
+                  <TableHead className="py-1 px-3 text-xs font-semibold text-white">Cliente</TableHead>
+                  <TableHead className="py-1 px-3 text-xs font-semibold text-white">Producto vendido</TableHead>
+                  <TableHead className="py-1 px-3 text-xs font-semibold text-white text-right">Unidades</TableHead>
+                  <TableHead className="py-1 px-3 text-xs font-semibold text-white text-right">Recaudación</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {summary.details.map((detail, index: number) => (
+                  <TableRow key={detail.saleId + index} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                    <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap text-muted-foreground font-sans">{detail.date}</TableCell>
+                    <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground">{detail.clientName}</TableCell>
+                    <TableCell className="py-1.5 px-3 text-xs text-foreground/90">{detail.productName}</TableCell>
+                    <TableCell className="py-1.5 px-3 text-xs text-right font-sans font-medium text-foreground">{detail.unitsSold}</TableCell>
+                    <TableCell className="py-1.5 px-3 text-xs text-right font-bold text-foreground font-sans">
+                      ${detail.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </TableCell>
                   </TableRow>
-                </TableFooter>
-              </Table>
-            </ScrollArea>
+                ))}
+              </TableBody>
+              <TableFooter className="sticky bottom-0 bg-[#10172b] dark:bg-[#10172b] z-10 border-t border-border/60 font-bold shadow-xs">
+                <TableRow className="h-9 hover:bg-transparent">
+                  <TableCell colSpan={3} className="py-1.5 px-3 text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Total</TableCell>
+                  <TableCell className="py-1.5 px-3 text-right font-bold text-xs font-sans text-white">{summary.unitsSold}</TableCell>
+                  <TableCell className="py-1.5 px-3 text-right font-bold text-sm text-white font-sans">
+                    ${summary.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
           </div>
 
-          <div className="flex justify-end pt-4">
-            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl border-border/60 text-xs">
+          <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3 shrink-0 gap-2">
+            <div className="text-xs text-muted-foreground font-sans flex items-center gap-1.5 flex-wrap">
+              <span>Total:</span>
+              <strong className="text-foreground">{summary.unitsSold} {summary.unitsSold === 1 ? 'unidad' : 'unidades'}</strong>
+              <span>•</span>
+              <strong className="text-foreground font-bold text-sm font-sans">${summary.revenue.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => onOpenChange(false)} className="rounded-xl border-border/60 text-xs shrink-0">
               Cerrar
             </Button>
           </div>

@@ -696,7 +696,7 @@ export default function CommissionsPage() {
 
             {/* Modal Institucional de Autorización para Descarga */}
             <Dialog open={isDownloadModalOpen} onOpenChange={setIsDownloadModalOpen}>
-                <DialogContent hideCloseButton={true} className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background max-w-md">
+                <DialogContent hideCloseButton={true} className="p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background max-w-md">
                     {/* Header Institucional Vatos Alfa */}
                     <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 text-white border-b border-blue-900/40">
                         <div className="header-light-beam" />

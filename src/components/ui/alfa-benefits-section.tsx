@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Image from 'next/image';
-import { motion, useScroll, useTransform } from 'framer-motion';
-import { Sparkles, ArrowRight, Award, Tag, X, ChevronDown, Smartphone } from 'lucide-react';
+import { motion, useScroll, useTransform, MotionValue } from 'framer-motion';
+import { Sparkles, ArrowRight, Award, Tag, X, ChevronDown, Smartphone, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlfaGoldSmokeBurst } from '@/components/ui/alfa-gold-smoke-burst';
@@ -37,8 +37,89 @@ interface StickyBenefitCardProps {
   benefit: BenefitItem;
   index: number;
   totalCards: number;
-  progress: any;
+  progress: MotionValue<number>;
+  isActive: boolean;
   onSelect: (b: BenefitItem) => void;
+}
+
+/**
+ * Genera rangos continuos y suaves para Framer Motion,
+ * recreando la baraja física 3D idéntica a StickyPromoStack de la app móvil.
+ */
+function getCardTransforms(index: number, totalCards: number) {
+  if (totalCards <= 1) {
+    return {
+      inputRange: [0, 1],
+      yOutput: [0, 0],
+      scaleOutput: [1, 1],
+      opacityOutput: [1, 1],
+      brightnessOutput: [1, 1],
+    };
+  }
+
+  const steps = totalCards - 1;
+  const stepSize = 1 / steps;
+  const points: number[] = [0];
+
+  for (let s = 0; s < steps; s++) {
+    const sStart = Number((s * stepSize + 0.05 * stepSize).toFixed(4));
+    const sEnd = Number(((s + 1) * stepSize - 0.05 * stepSize).toFixed(4));
+    if (!points.includes(sStart)) points.push(sStart);
+    if (!points.includes(sEnd)) points.push(sEnd);
+  }
+  if (!points.includes(1.0)) points.push(1.0);
+  points.sort((a, b) => a - b);
+
+  const yOutput: number[] = [];
+  const scaleOutput: number[] = [];
+  const opacityOutput: number[] = [];
+  const brightnessOutput: number[] = [];
+
+  for (const p of points) {
+    if (index === 0) {
+      const cardsAbove = Math.min(steps, Math.max(0, p / stepSize));
+      const yVal = -Math.round(cardsAbove * 14);
+      const scaleVal = Number(Math.max(0.85, 1.0 - cardsAbove * 0.05).toFixed(3));
+      const brightVal = Number(Math.max(0.68, 1.0 - cardsAbove * 0.12).toFixed(3));
+      yOutput.push(yVal);
+      scaleOutput.push(scaleVal);
+      opacityOutput.push(1.0);
+      brightnessOutput.push(brightVal);
+    } else {
+      const entryStart = (index - 1) * stepSize + 0.05 * stepSize;
+      const entryEnd = index * stepSize - 0.05 * stepSize;
+
+      if (p <= entryStart) {
+        yOutput.push(75);
+        scaleOutput.push(0.95);
+        opacityOutput.push(0.2);
+        brightnessOutput.push(0.88);
+      } else if (p < entryEnd) {
+        const t = (p - entryStart) / (entryEnd - entryStart);
+        yOutput.push(Math.round(75 * (1 - t)));
+        scaleOutput.push(Number((0.95 + 0.05 * t).toFixed(3)));
+        opacityOutput.push(Number((0.2 + 0.8 * t).toFixed(3)));
+        brightnessOutput.push(Number((0.88 + 0.12 * t).toFixed(3)));
+      } else {
+        const cardsAbove = Math.min(
+          totalCards - 1 - index,
+          Math.max(0, (p - (index * stepSize - 0.05 * stepSize)) / stepSize)
+        );
+        yOutput.push(-Math.round(cardsAbove * 14));
+        scaleOutput.push(Number(Math.max(0.85, 1.0 - cardsAbove * 0.05).toFixed(3)));
+        opacityOutput.push(1.0);
+        brightnessOutput.push(Number(Math.max(0.68, 1.0 - cardsAbove * 0.12).toFixed(3)));
+      }
+    }
+  }
+
+  return {
+    inputRange: points,
+    yOutput,
+    scaleOutput,
+    opacityOutput,
+    brightnessOutput,
+  };
 }
 
 function StickyBenefitCard({
@@ -46,26 +127,19 @@ function StickyBenefitCard({
   index,
   totalCards,
   progress,
+  isActive,
   onSelect,
 }: StickyBenefitCardProps) {
-  // Construir rangos de escala progresiva idéntica a StickyPromoStack de la app móvil
-  const steps = Math.max(1, totalCards - 1);
-  const inputRange: number[] = [0];
-  const outputRange: number[] = [1.0];
+  const { inputRange, yOutput, scaleOutput, opacityOutput, brightnessOutput } = useMemo(
+    () => getCardTransforms(index, totalCards),
+    [index, totalCards]
+  );
 
-  for (let s = 1; s <= steps; s++) {
-    const p = Math.min(1, s / steps);
-    inputRange.push(p);
-    if (s <= index) {
-      outputRange.push(1.0);
-    } else {
-      const shrinkSteps = s - index;
-      const targetScale = Math.max(0.88, 1.0 - shrinkSteps * 0.04);
-      outputRange.push(Number(targetScale.toFixed(3)));
-    }
-  }
-
-  const scale = useTransform(progress, inputRange, outputRange);
+  const y = useTransform(progress, inputRange, yOutput);
+  const scale = useTransform(progress, inputRange, scaleOutput);
+  const opacity = useTransform(progress, inputRange, opacityOutput);
+  const brightness = useTransform(progress, inputRange, brightnessOutput);
+  const filter = useTransform(brightness, (b) => `brightness(${b})`);
 
   // Limpieza de etiqueta de descuento
   const rawDiscount = benefit.discount || '';
@@ -76,73 +150,82 @@ function StickyBenefitCard({
     : null;
 
   return (
-    <div
-      className="sticky w-full"
+    <motion.div
       style={{
-        top: `calc(var(--stack-top, 220px) + ${index * 16}px)`,
-        zIndex: index + 1,
-        marginBottom: index === totalCards - 1 ? 0 : '36px',
+        y,
+        scale,
+        opacity,
+        filter,
+        zIndex: (index + 1) * 10,
+        transformOrigin: 'top center',
       }}
+      onClick={() => onSelect(benefit)}
+      className={cn(
+        "group absolute inset-x-2 sm:inset-x-0 h-[195px] sm:h-[220px] rounded-2xl sm:rounded-3xl p-[1.5px] overflow-hidden bg-slate-900 border transition-all duration-300 cursor-pointer select-none",
+        isActive
+          ? "border-blue-500/80 shadow-[0_16px_40px_rgba(37,99,235,0.35)]"
+          : "border-white/20 hover:border-blue-500/60 shadow-[0_12px_32px_rgba(0,0,0,0.5)]"
+      )}
     >
-      <motion.div
-        style={{
-          scale,
-          transformOrigin: 'top center',
-        }}
-        onClick={() => onSelect(benefit)}
-        className="group relative w-full h-[195px] sm:h-[220px] rounded-2xl sm:rounded-3xl p-[1.5px] overflow-hidden bg-slate-900 border border-white/20 hover:border-blue-500/80 shadow-[0_12px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_16px_40px_rgba(37,99,235,0.3)] transition-all duration-300 cursor-pointer select-none"
-      >
-        {/* Haz de luz láser rotatorio perimetral (NeonGlowCard / ShinyButton) */}
-        <span
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none animate-conic-laser opacity-40 group-hover:opacity-100 transition-opacity duration-300 z-0"
+      {/* Haz de luz láser rotatorio perimetral (NeonGlowCard / ShinyButton) */}
+      <span
+        className={cn(
+          "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none animate-conic-laser transition-opacity duration-300 z-0",
+          isActive ? "opacity-85" : "opacity-30 group-hover:opacity-100"
+        )}
+        aria-hidden="true"
+      />
+
+      {/* Cuerpo interior de la tarjeta */}
+      <div className="relative z-10 w-full h-full rounded-[14.5px] sm:rounded-[22.5px] bg-[#0F172A] overflow-hidden">
+        {/* Imagen de Fondo 100% Original */}
+        {benefit.imagenUrl ? (
+          <Image
+            src={benefit.imagenUrl}
+            alt={benefit.titulo}
+            fill
+            quality={90}
+            className="object-cover group-hover:scale-105 transition-transform duration-500"
+            sizes="(max-width: 640px) 100vw, 600px"
+            unoptimized={true}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-[#0F172A] flex items-center justify-center">
+            <Sparkles className="w-8 h-8 text-blue-500" />
+          </div>
+        )}
+
+        {/* Degradado inferior para legibilidad del título idéntico a la app móvil */}
+        <div
+          className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent z-10 pointer-events-none"
           aria-hidden="true"
         />
 
-        {/* Cuerpo interior de la tarjeta */}
-        <div className="relative z-10 w-full h-full rounded-[14.5px] sm:rounded-[22.5px] bg-[#0F172A] overflow-hidden">
-          {/* Imagen de Fondo 100% Original sin filtros oscuros */}
-          {benefit.imagenUrl ? (
-            <Image
-              src={benefit.imagenUrl}
-              alt={benefit.titulo}
-              fill
-              quality={90}
-              className="object-cover group-hover:scale-105 transition-transform duration-500"
-              sizes="(max-width: 640px) 100vw, 600px"
-              unoptimized={true}
-            />
-          ) : (
-            <div className="absolute inset-0 bg-[#0F172A] flex items-center justify-center">
-              <Sparkles className="w-8 h-8 text-blue-500" />
-            </div>
-          )}
-
-          {/* Contenido de la Tarjeta (100% imagen original sin filtros ni degradados oscuros) */}
-          <div className="relative z-20 w-full h-full p-4 sm:p-5 flex flex-col justify-between">
-            {/* Top Row: Descuento o Distintivo en la esquina superior derecha */}
-            <div className="flex items-center justify-between">
-              <div className="flex-1" />
-              {discountLabel ? (
-                <div className="bg-[#2563EB] text-white text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider shadow-md">
-                  {discountLabel}
-                </div>
-              ) : null}
-            </div>
-
-            {/* Bottom Row: Título limpio en negrita y botón circular con flecha */}
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="flex-1 text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] line-clamp-2 leading-snug">
-                {benefit.titulo}
-              </h3>
-
-              <div className="w-8 h-8 rounded-full bg-[#2563EB] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(37,99,235,0.45)] group-hover:scale-110 group-hover:bg-blue-500 transition-transform duration-200 shrink-0">
-                <ArrowRight className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+        {/* Contenido de la Tarjeta */}
+        <div className="relative z-20 w-full h-full p-4 sm:p-5 flex flex-col justify-between">
+          {/* Top Row: Descuento o Distintivo en la esquina superior derecha */}
+          <div className="flex items-center justify-between">
+            <div className="flex-1" />
+            {discountLabel ? (
+              <div className="bg-[#2563EB] text-white text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider shadow-md">
+                {discountLabel}
               </div>
+            ) : null}
+          </div>
+
+          {/* Bottom Row: Título limpio en negrita y botón circular con flecha */}
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex-1 text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] line-clamp-2 leading-snug">
+              {benefit.titulo}
+            </h3>
+
+            <div className="w-8 h-8 rounded-full bg-[#2563EB] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(37,99,235,0.45)] group-hover:scale-110 group-hover:bg-blue-500 transition-transform duration-200 shrink-0">
+              <ArrowRight className="w-3.5 h-3.5 text-white stroke-[2.5]" />
             </div>
           </div>
         </div>
-      </motion.div>
-    </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -155,10 +238,12 @@ export function AlfaBenefitsSection({
 }: AlfaBenefitsSectionProps) {
   const [selectedBenefit, setSelectedBenefit] = useState<BenefitItem | null>(null);
   const [showTerms, setShowTerms] = useState(false);
-  const stackContainerRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const sectionTrackRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Default Club Benefits
-  const defaultClubBenefits: BenefitItem[] = [
+  const defaultClubBenefits: BenefitItem[] = useMemo(() => [
     {
       id: 'pase-alfa-10',
       tag: 'PROGRAMA DE LEALTAD',
@@ -198,93 +283,243 @@ export function AlfaBenefitsSection({
       imagenUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=800&q=80',
       ctaText: 'Conocer Dinámica del Club',
     },
-  ];
+  ], [paseAlfaData]);
 
   // Dynamic VIP privileges configured in Pase Alfa (Privilegios VIP)
-  const rawPrivilegios = Array.isArray(paseAlfaData?.beneficios_detallados)
-    ? paseAlfaData.beneficios_detallados
-    : (Array.isArray(paseAlfaData?.privilegios) ? paseAlfaData.privilegios : []);
+  const dynamicPrivilegios: BenefitItem[] = useMemo(() => {
+    const rawPrivilegios = Array.isArray(paseAlfaData?.beneficios_detallados)
+      ? paseAlfaData.beneficios_detallados
+      : (Array.isArray(paseAlfaData?.privilegios) ? paseAlfaData.privilegios : []);
 
-  const dynamicPrivilegios: BenefitItem[] = rawPrivilegios
-    .filter((p: any) => p && p.activo !== false)
-    .map((p: any) => ({
-      id: p.id || `vip_${p.titulo || Math.random()}`,
-      tag: 'PRIVILEGIO VIP',
-      discount: 'CLUB ALFA',
-      badgeType: 'gold' as const,
-      titulo: p.titulo || 'Beneficio Exclusivo',
-      descripcion: p.descripcion || 'Privilegio exclusivo para miembros del Club Pase Alfa.',
-      recompensa: p.recompensa,
-      vigencia: p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa Club',
-      terminos: p.terminos || 'Exclusivo para clientes registrados en la app móvil.',
-      imagenUrl: p.imagenUrl || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
-      ctaText: 'Aprovechar Beneficio',
-    }));
+    return rawPrivilegios
+      .filter((p: any) => p && p.activo !== false)
+      .map((p: any) => ({
+        id: p.id || `vip_${p.titulo || Math.random()}`,
+        tag: 'PRIVILEGIO VIP',
+        discount: 'CLUB ALFA',
+        badgeType: 'gold' as const,
+        titulo: p.titulo || 'Beneficio Exclusivo',
+        descripcion: p.descripcion || 'Privilegio exclusivo para miembros del Club Pase Alfa.',
+        recompensa: p.recompensa,
+        vigencia: p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa Club',
+        terminos: p.terminos || 'Exclusivo para clientes registrados en la app móvil.',
+        imagenUrl: p.imagenUrl || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
+        ctaText: 'Aprovechar Beneficio',
+      }));
+  }, [paseAlfaData]);
 
   // Convert Firebase promotions to BenefitItems if available
-  const promoBenefits: BenefitItem[] = promotions.map((p) => ({
-    id: p.id,
-    tag: p.discount ? `OFERTA EXCLUSIVA` : 'PROMOCIÓN ACTIVA',
-    discount: p.discount ? `-${p.discount}% OFF` : (p.code ? `CÓDIGO: ${p.code}` : undefined),
-    badgeType: 'promo' as const,
-    titulo: p.name || p.titulo || 'Beneficio Exclusivo',
-    descripcion: p.description || p.descripcion || 'Aprovecha este beneficio exclusivo en tu próxima cita en VATOS ALFA.',
-    vigencia: p.endDate ? `Válido hasta el ${p.endDate}` : 'Por tiempo limitado',
-    terminos: p.termsAndConditions || p.terminos || 'Válido en sucursales participantes de VATOS ALFA.',
-    codigo: p.code || p.codigo,
-    imagenUrl: p.imageUrl || p.imagenUrl || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=800&q=80',
-    ctaText: 'Aprovechar Beneficio',
-  }));
+  const promoBenefits: BenefitItem[] = useMemo(() => {
+    return promotions.map((p) => ({
+      id: p.id,
+      tag: p.discount ? `OFERTA EXCLUSIVA` : 'PROMOCIÓN ACTIVA',
+      discount: p.discount ? `-${p.discount}% OFF` : (p.code ? `CÓDIGO: ${p.code}` : undefined),
+      badgeType: 'promo' as const,
+      titulo: p.name || p.titulo || 'Beneficio Exclusivo',
+      descripcion: p.description || p.descripcion || 'Aprovecha este beneficio exclusivo en tu próxima cita en VATOS ALFA.',
+      vigencia: p.endDate ? `Válido hasta el ${p.endDate}` : 'Por tiempo limitado',
+      terminos: p.termsAndConditions || p.terminos || 'Válido en sucursales participantes de VATOS ALFA.',
+      codigo: p.code || p.codigo,
+      imagenUrl: p.imageUrl || p.imagenUrl || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=800&q=80',
+      ctaText: 'Aprovechar Beneficio',
+    }));
+  }, [promotions]);
 
-  const clubList = dynamicPrivilegios.length > 0
-    ? (paseAlfaData?.activo === false ? dynamicPrivilegios : [defaultClubBenefits[0], ...dynamicPrivilegios])
-    : (paseAlfaData?.activo === false ? defaultClubBenefits.slice(1) : defaultClubBenefits);
+  const allBenefits = useMemo(() => {
+    const clubList = dynamicPrivilegios.length > 0
+      ? (paseAlfaData?.activo === false ? dynamicPrivilegios : [defaultClubBenefits[0], ...dynamicPrivilegios])
+      : (paseAlfaData?.activo === false ? defaultClubBenefits.slice(1) : defaultClubBenefits);
 
-  const allBenefits = [...clubList, ...promoBenefits];
+    return [...clubList, ...promoBenefits];
+  }, [dynamicPrivilegios, paseAlfaData?.activo, defaultClubBenefits, promoBenefits]);
 
-  // Seguimiento del scroll de la baraja para animar el reescalado 3D progresivo
+  // Seguimiento del scroll de la pista para animar la baraja 3D idéntica a la app móvil
   const { scrollYProgress } = useScroll({
-    target: stackContainerRef,
-    offset: ['start 200px', 'end 450px'],
+    target: sectionTrackRef,
+    offset: ['start start', 'end end'],
   });
 
-  return (
-    <div id="beneficios" className={cn("w-full py-12 md:py-16 bg-white scroll-mt-20", className)}>
-      <div className="container px-4 md:px-6 max-w-4xl mx-auto">
-        {/* Sticky Stacking Deck of Cards (Estilo StickyPromoStack de la App Móvil) */}
-        <div
-          ref={stackContainerRef}
-          className="relative w-full max-w-xl mx-auto [--stack-top:195px] sm:[--stack-top:225px]"
-          style={{
-            paddingBottom: `${Math.max(0, (allBenefits.length - 1) * 36 + 60)}px`,
-          }}
-        >
-          {/* Section Header: Sticky bajo el navbar para mantenerse visible mientras se apilan las tarjetas */}
-          <div className="sticky top-[64px] z-30 bg-white/95 backdrop-blur-md pt-2 pb-3 mb-6 sm:mb-8 text-center">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-xs font-bold uppercase tracking-wider mb-2">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Beneficios Exclusivos</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 text-[#202A49]">
-              Beneficios del Club Alfa
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
-              Toca cualquier beneficio para más detalles y dinámicas exclusivas
-            </p>
-            {onDownloadApp && (
-              <div className="mt-2.5 flex justify-center">
-                <button
-                  type="button"
-                  onClick={onDownloadApp}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C5A880] hover:text-[#e4cfb7] transition-colors py-1 px-3 rounded-full border border-[#C5A880]/30 hover:border-[#C5A880]/60 bg-[#C5A880]/10 hover:bg-[#C5A880]/20 cursor-pointer shadow-2xs"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-[#C5A880]" />
-                  <span>Descargar App Oficial (Club Alfa)</span>
-                </button>
-              </div>
-            )}
-          </div>
+  // Sincronizar el índice de tarjeta activo con el scroll en tiempo real
+  useEffect(() => {
+    const steps = Math.max(1, allBenefits.length - 1);
+    const stepSize = 1 / steps;
 
+    const unsubscribe = scrollYProgress.on('change', (latest) => {
+      let idx = 0;
+      for (let s = 0; s < steps; s++) {
+        if (latest >= (s + 0.45) * stepSize) {
+          idx = s + 1;
+        }
+      }
+      setActiveIndex(Math.min(allBenefits.length - 1, idx));
+    });
+
+    return () => unsubscribe();
+  }, [scrollYProgress, allBenefits.length]);
+
+  // Salto suave e interactivo a una tarjeta específica mediante clic o flechas
+  const handleJumpToCard = (targetIdx: number) => {
+    if (!sectionTrackRef.current) return;
+    const rect = sectionTrackRef.current.getBoundingClientRect();
+    const currentScrollY = window.scrollY;
+    const trackTop = currentScrollY + rect.top;
+    const steps = Math.max(1, allBenefits.length - 1);
+    const stepSize = 1 / steps;
+    const targetProgress = targetIdx === 0 ? 0.02 : (targetIdx === steps ? 0.98 : targetIdx * stepSize);
+    const scrollableDistance = sectionTrackRef.current.offsetHeight - window.innerHeight;
+    const targetY = trackTop + targetProgress * scrollableDistance;
+
+    if (typeof window !== 'undefined' && (window as any).__lenis) {
+      (window as any).__lenis.scrollTo(targetY, { duration: 0.8 });
+    } else {
+      window.scrollTo({ top: targetY, behavior: 'smooth' });
+    }
+  };
+
+  // Manejo de gestos táctiles para deslizar entre tarjetas en celular
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const deltaY = e.changedTouches[0].clientY - touchStartRef.current.y;
+    touchStartRef.current = null;
+
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
+      if (deltaX < 0 && activeIndex < allBenefits.length - 1) {
+        handleJumpToCard(activeIndex + 1);
+      } else if (deltaX > 0 && activeIndex > 0) {
+        handleJumpToCard(activeIndex - 1);
+      }
+    }
+  };
+
+  // Altura proporcional de pista de scroll para permitir despliegue y apilado fluido
+  const trackHeightStyle = useMemo(() => {
+    if (allBenefits.length <= 1) return 'auto';
+    return `${Math.max(130, 100 + (allBenefits.length - 1) * 38)}vh`;
+  }, [allBenefits.length]);
+
+  return (
+    <div
+      id="beneficios"
+      ref={sectionTrackRef}
+      className={cn("relative w-full bg-white scroll-mt-20", className)}
+      style={{ minHeight: trackHeightStyle }}
+    >
+      {/* Escenario Fijado (Sticky Stage) que permanece en pantalla mientras se apilan las tarjetas */}
+      <div className="sticky top-[64px] sm:top-[76px] z-20 w-full flex flex-col items-center justify-start py-4 px-4 overflow-visible">
+        {/* Encabezado Institucional Vatos Alfa */}
+        <div className="w-full max-w-xl mx-auto text-center mb-2 sm:mb-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-xs font-bold uppercase tracking-wider mb-2">
+            <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+            <span>Beneficios Exclusivos</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-1 sm:mb-2 text-[#202A49]">
+            Beneficios del Club Alfa
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+            Desliza para ver la baraja o toca cualquier tarjeta para ver su dinámica exclusiva
+          </p>
+
+          {onDownloadApp && (
+            <div className="mt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={onDownloadApp}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C5A880] hover:text-[#e4cfb7] transition-colors py-1 px-3 rounded-full border border-[#C5A880]/30 hover:border-[#C5A880]/60 bg-[#C5A880]/10 hover:bg-[#C5A880]/20 cursor-pointer shadow-2xs"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-[#C5A880]" />
+                <span>Descargar App Oficial (Club Alfa)</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Barra de Navegación Rápida / Indicador de Tarjetas */}
+        {allBenefits.length > 1 && (
+          <div className="flex items-center justify-center gap-1.5 sm:gap-2 my-1.5 sm:my-2 z-30">
+            {/* Flecha Anterior */}
+            <button
+              type="button"
+              onClick={() => handleJumpToCard(Math.max(0, activeIndex - 1))}
+              disabled={activeIndex === 0}
+              className={cn(
+                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                activeIndex === 0
+                  ? "text-slate-300 cursor-not-allowed"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              )}
+              aria-label="Beneficio anterior"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {/* Pastillas Interactivas de Beneficio */}
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              {allBenefits.map((b, idx) => {
+                const isCurrent = activeIndex === idx;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => handleJumpToCard(idx)}
+                    className={cn(
+                      "cursor-pointer transition-all duration-300 flex items-center gap-1.5",
+                      isCurrent
+                        ? "bg-[#202A49] text-white shadow-sm px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200 px-2 sm:px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "w-1.5 h-1.5 rounded-full transition-colors",
+                        isCurrent ? "bg-blue-400 animate-pulse" : "bg-slate-400"
+                      )}
+                    />
+                    <span className="truncate max-w-[85px] sm:max-w-[130px]">
+                      {idx === 0
+                        ? "10ª Visita"
+                        : idx === 1
+                        ? "Cumpleaños"
+                        : idx === 2
+                        ? "Alfa Coins"
+                        : b.titulo.split(' ')[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Flecha Siguiente */}
+            <button
+              type="button"
+              onClick={() => handleJumpToCard(Math.min(allBenefits.length - 1, activeIndex + 1))}
+              disabled={activeIndex === allBenefits.length - 1}
+              className={cn(
+                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                activeIndex === allBenefits.length - 1
+                  ? "text-slate-300 cursor-not-allowed"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
+              )}
+              aria-label="Beneficio siguiente"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Baraja 3D de Tarjetas Apilables (Sticky Stacking Deck con Deslizamiento y Gestos) */}
+        <div
+          className="relative w-full max-w-xl mx-auto h-[230px] sm:h-[260px] mt-2 select-none touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
           {allBenefits.map((benefit, index) => (
             <StickyBenefitCard
               key={benefit.id}
@@ -292,6 +527,7 @@ export function AlfaBenefitsSection({
               index={index}
               totalCards={allBenefits.length}
               progress={scrollYProgress}
+              isActive={activeIndex === index}
               onSelect={(b) => {
                 setShowTerms(false);
                 setSelectedBenefit(b);

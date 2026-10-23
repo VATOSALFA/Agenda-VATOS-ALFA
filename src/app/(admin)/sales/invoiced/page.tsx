@@ -48,7 +48,7 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { db } from "@/lib/firebase-client";
 import { DonutChartCard } from "@/components/sales/donut-chart-card";
-import { useInvoicedSales } from "./use-invoiced-sales";
+import { useInvoicedSales, getSaleActualRevenue } from "./use-invoiced-sales";
 import { logAuditAction } from '@/lib/audit-logger';
 
 function formatPaymentMethodName(saleOrMethod: any): string {
@@ -211,8 +211,8 @@ export default function InvoicedSalesPage() {
                         bValue = formatPaymentMethodName(b).toLowerCase();
                         break;
                     case 'total':
-                        aValue = (a.monto_pagado_real !== undefined && a.monto_pagado_real < a.total) ? a.monto_pagado_real : a.total;
-                        bValue = (b.monto_pagado_real !== undefined && b.monto_pagado_real < b.total) ? b.monto_pagado_real : b.total;
+                        aValue = getSaleActualRevenue(a);
+                        bValue = getSaleActualRevenue(b);
                         break;
                     case 'detalle':
                         aValue = (a.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
@@ -1144,7 +1144,7 @@ export default function InvoicedSalesPage() {
                                             </div>
                                             <div className="text-right shrink-0">
                                                 <div className="font-bold text-sm text-foreground">
-                                                    ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ${getSaleActualRevenue(sale).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </div>
                                                 {sale.descuento?.valor ? (
                                                     <div className="text-[10px] text-blue-400 font-medium">
@@ -1209,7 +1209,8 @@ export default function InvoicedSalesPage() {
                                     <span className="text-muted-foreground">Total ventas:</span>
                                     <span className="font-bold text-sm text-foreground">
                                         ${populatedSales.reduce((acc, sale) => {
-                                            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                                            const actualRevenue = getSaleActualRevenue(sale);
+                                            const _unused = false
                                                 ? sale.monto_pagado_real
                                                 : (sale.total || 0);
                                             return acc + actualRevenue;
@@ -1295,7 +1296,7 @@ export default function InvoicedSalesPage() {
                                                     {formatPaymentMethodName(sale)}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs font-semibold">
-                                                    ${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    ${getSaleActualRevenue(sale).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs">
                                                     {sale.descuento?.valor ? (
@@ -1353,7 +1354,8 @@ export default function InvoicedSalesPage() {
                                             <TableCell colSpan={6} className="text-right py-2.5 px-3">Total</TableCell>
                                             <TableCell className="py-2.5 px-3">
                                                 ${populatedSales.reduce((acc, sale) => {
-                                                    const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
+                                                    const actualRevenue = getSaleActualRevenue(sale);
+                                            const _unused = false
                                                         ? sale.monto_pagado_real
                                                         : (sale.total || 0);
                                                     return acc + actualRevenue;

@@ -996,6 +996,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const [amountPaid, setAmountPaid] = useState<number>(0);
     const saleIdRef = useRef<string | null>(null);
+    const attemptedTerminalIdsRef = useRef<Set<string>>(new Set());
 
     const unsubscribeRef = useRef<() => void | undefined>(undefined);
 
@@ -1835,6 +1836,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setIsSendingToTerminal(false);
             setIsWaitingForPayment(false);
             saleIdRef.current = null;
+            attemptedTerminalIdsRef.current.clear();
             setTransferPaymentLink('');
             setIsGeneratingTransferLink(false);
             setTransferLinkCopied(false);
@@ -2377,6 +2379,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         const saleDocRef = doc(collection(db, 'ventas'));
         const tempSaleId = saleDocRef.id;
         saleIdRef.current = tempSaleId;
+        attemptedTerminalIdsRef.current.add(tempSaleId);
 
         try {
             // 2. Preparamos los datos de la venta para guardarla como "Pendiente"
@@ -2523,8 +2526,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     })() : {
                         propina_metodo: paymentMethod
                     }),
-                    propina: formData.propina || 0, // Registrar propina
-                    monto_pagado_real: totalConPropina,
+                    propina: formData.propina || 0, // Registrar propina (independiente de la venta)
+                    monto_pagado_real: total, // Estrictamente el monto de la venta SIN propina
                     saldo_pendiente: 0,
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
@@ -2589,37 +2592,68 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (result.data.success) {
                 toast({ title: 'Cobro enviado', description: 'Por favor, completa el pago en la terminal.' });
 
-                // 4. Escuchar cambios en ese documento
+                // 4. Escuchar cambios en todos los intentos de esta sesión (por si el cliente paga el primer envío tras un reintento)
                 if (unsubscribeRef.current) unsubscribeRef.current();
 
-                const unsubscribe = onSnapshot(saleDocRef, async (docSnapshot) => {
-                    if (docSnapshot.exists()) {
+                let hasFinalizedTerminal = false;
+                const activeUnsubs: (() => void)[] = [];
+                const stopAllListeners = () => {
+                    activeUnsubs.forEach(u => {
+                        try { u(); } catch (_) {}
+                    });
+                    activeUnsubs.length = 0;
+                };
+
+                const watchedIds = Array.from(attemptedTerminalIdsRef.current);
+                watchedIds.forEach((watchedId) => {
+                    const watchedDocRef = doc(db, 'ventas', watchedId);
+                    const unsub = onSnapshot(watchedDocRef, async (docSnapshot) => {
+                        if (hasFinalizedTerminal || !docSnapshot.exists()) return;
                         const data = docSnapshot.data();
-                        if (data && data.pago_estado === 'Pagado') {
+                        if (data && (data.pago_estado === 'Pagado' || data.mercado_pago_status === 'approved')) {
+                            hasFinalizedTerminal = true;
+                            const approvedSaleId = docSnapshot.id;
+                            const pendingCurrentId = saleIdRef.current;
                             saleIdRef.current = null;
                             setIsSendingToTerminal(false);
                             setIsWaitingForPayment(false);
 
-                            unsubscribe();
+                            stopAllListeners();
                             unsubscribeRef.current = undefined;
 
-                            // Ensure propina_detalles is populated if client added tip directly on the Point terminal
-                            if (Number(data.propina) > 0 && (!Array.isArray(data.propina_detalles) || data.propina_detalles.length === 0)) {
+                            // Si el intento aprobado por la terminal fue uno previo y había otro pendiente activo, revertir el pendiente sobrante
+                            if (pendingCurrentId && pendingCurrentId !== approvedSaleId) {
                                 try {
-                                    const allBarberos = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
-                                    const uniqueBarberos = allBarberos.filter(id => professionals?.some(p => p.id === id));
-                                    const targetBarberos = uniqueBarberos.length > 0 ? uniqueBarberos : allBarberos;
-                                    if (targetBarberos.length > 0) {
-                                        const propinaSplit = parseFloat((Number(data.propina) / targetBarberos.length).toFixed(2));
-                                        await updateDoc(saleDocRef, {
-                                            propina_detalles: targetBarberos.map(bId => ({
-                                                barbero_id: bId,
-                                                monto: propinaSplit
-                                            }))
-                                        });
-                                    }
+                                    await revertPendingSale(pendingCurrentId);
+                                } catch (_) {}
+                            }
+
+                            // Garantizar que monto_pagado_real nunca incluya la propina y que pago_estado quede en Pagado
+                            const safeUpdates: Record<string, any> = {};
+                            if (data.pago_estado !== 'Pagado') {
+                                safeUpdates.pago_estado = 'Pagado';
+                                safeUpdates.saldo_pendiente = 0;
+                            }
+                            if (data.monto_pagado_real !== undefined && Number(data.propina) > 0 && data.monto_pagado_real > total) {
+                                safeUpdates.monto_pagado_real = total;
+                            }
+                            if (Number(data.propina) > 0 && (!Array.isArray(data.propina_detalles) || data.propina_detalles.length === 0)) {
+                                const allBarberos = Array.from(new Set(cart.map(i => i.barbero_id).filter(Boolean)));
+                                const uniqueBarberos = allBarberos.filter(id => professionals?.some(p => p.id === id));
+                                const targetBarberos = uniqueBarberos.length > 0 ? uniqueBarberos : allBarberos;
+                                if (targetBarberos.length > 0) {
+                                    const propinaSplit = parseFloat((Number(data.propina) / targetBarberos.length).toFixed(2));
+                                    safeUpdates.propina_detalles = targetBarberos.map(bId => ({
+                                        barbero_id: bId,
+                                        monto: propinaSplit
+                                    }));
+                                }
+                            }
+                            if (Object.keys(safeUpdates).length > 0) {
+                                try {
+                                    await updateDoc(watchedDocRef, safeUpdates);
                                 } catch (propErr) {
-                                    console.error("Error updating propina_detalles on terminal snapshot:", propErr);
+                                    console.error("Error updating terminal sale fields on snapshot:", propErr);
                                 }
                             }
 
@@ -2642,6 +2676,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     await updateDoc(resRef, { 
                                         pago_estado: 'Pagado',
                                         estado: 'Asiste',
+                                        saldo_pendiente: 0,
                                         items: reservationItems,
                                         precio: subtotal - totalDiscount,
                                         servicio: reservationItems.map((i: any) => i.nombre).join(', ')
@@ -2653,10 +2688,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                             await finalizeSaleProcess(data.cliente_id, data.local_id);
                         }
-                    }
+                    });
+                    activeUnsubs.push(unsub);
                 });
 
-                unsubscribeRef.current = unsubscribe;
+                unsubscribeRef.current = stopAllListeners;
 
             } else {
                 throw new Error(result.data.message || 'Error al enviar cobro a la terminal.');
@@ -2764,6 +2800,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setIsClientModalOpen(false);
         setIsAddItemDialogOpen(false);
         saleIdRef.current = null;
+        attemptedTerminalIdsRef.current.clear();
     }, [form, user, selectedLocalId, locales]);
 
     useEffect(() => {
@@ -3172,11 +3209,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     pago_estado: 'Pagado',
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || (depositSaleData ? Number(depositSaleData.monto_pagado_real || depositSaleData.monto_anticipo || depositSaleData.anticipoPagado || 0) : 0),
+                    // monto_pagado_real SIEMPRE representa el ingreso de venta SIN propina
                     monto_pagado_real: isDepositLiquidation
                         ? amountBeingPaid
                         : Math.min(
-                            grandTotal + propinaToSave,
-                            (((isUpdate && existingSaleData?.pago_estado !== 'Pendiente') ? Number(existingSaleData?.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid + propinaToSave)
+                            grandTotal,
+                            (((isUpdate && existingSaleData?.pago_estado !== 'Pendiente') ? Number(existingSaleData?.monto_pagado_real || 0) : (anticipoPagado || 0)) + amountBeingPaid)
                         ),
                     saldo_pendiente: 0,
                     status: 'completed',
@@ -3222,7 +3260,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 } else {
                     saleDataToSave.propina_metodo = data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo');
                     if (isDepositLiquidation) {
-                        const paidNow = amountBeingPaid + propinaToSave;
+                        const paidNow = amountBeingPaid;
                         saleDataToSave.detalle_pago_combinado = {
                             efectivo: data.metodo_pago === 'efectivo' ? paidNow : 0,
                             tarjeta: data.metodo_pago === 'tarjeta' ? paidNow : 0,
@@ -3273,21 +3311,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         }
                     }
 
-                    // 2. Extract current payments (amountBeingPaid is the balance being paid NOW)
+                    // 2. Extract current payments (amountBeingPaid is the balance being paid NOW, excluding tip)
                     let currEfectivo = 0;
                     let currTarjeta = 0;
                     let currTransferencia = 0;
 
                     if (data.metodo_pago === 'combinado') {
-                        currEfectivo = data.pago_efectivo || 0;
-                        currTarjeta = data.pago_tarjeta || 0;
-                        currTransferencia = data.pago_transferencia || 0;
+                        currEfectivo = saleDataToSave.detalle_pago_combinado?.efectivo ?? (data.pago_efectivo || 0);
+                        currTarjeta = saleDataToSave.detalle_pago_combinado?.tarjeta ?? (data.pago_tarjeta || 0);
+                        currTransferencia = saleDataToSave.detalle_pago_combinado?.transferencia ?? (data.pago_transferencia || 0);
                     } else if (data.metodo_pago === 'efectivo') {
-                        currEfectivo = amountBeingPaid + propinaToSave;
+                        currEfectivo = amountBeingPaid;
                     } else if (data.metodo_pago === 'tarjeta') {
-                        currTarjeta = amountBeingPaid + propinaToSave;
+                        currTarjeta = amountBeingPaid;
                     } else if (data.metodo_pago === 'transferencia') {
-                        currTransferencia = amountBeingPaid + propinaToSave;
+                        currTransferencia = amountBeingPaid;
                     }
 
                     // 3. Combine
@@ -3297,9 +3335,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     let totalOnline = prevOnline;
 
                     // CANDADO DE SEGURIDAD ANTISOBRECOBRO:
-                    // Si la suma de métodos excede el total + propina (debido a borradores pendientes no liquidados),
+                    // Si la suma de métodos excede el total de la venta (debido a borradores pendientes no liquidados),
                     // se respeta prioritariamente la decisión actual del cajero.
-                    const maxAllowed = (saleDataToSave.total || 0) + propinaToSave;
+                    const maxAllowed = saleDataToSave.total || 0;
                     const combinedSumRaw = totalEfectivo + totalTarjeta + totalTransferencia + totalOnline;
                     if (combinedSumRaw > maxAllowed + 0.01) {
                         if (isPendingDraft || (currEfectivo + currTarjeta + currTransferencia >= maxAllowed - 0.01)) {
@@ -4264,16 +4302,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         try {
                                                                             setIsSubmitting(true);
                                                                             saleIdRef.current = null;
-                                                                            const saleRef = doc(db, 'ventas', confirmedSaleId);
-                                                                            await updateDoc(saleRef, {
-                                                                                pago_estado: 'Pagado',
-                                                                                metodo_pago: paymentMethod, // Respect initial choice
-                                                                                monto_pagado_real: totalConPropina,
-                                                                                saldo_pendiente: 0,
-                                                                                propina: form.getValues('propina') || 0,
-                                                                                fecha_pago: new Date(),
-                                                                                notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
-                                                                            });
+
+                                                                            // Verificar si algún intento previo de terminal ya fue aprobado por el webhook
+                                                                            // para evitar duplicar ventas cuando hubo reintentos
+                                                                            let webhookApprovedSaleId: string | null = null;
+                                                                            const candidateIds = Array.from(attemptedTerminalIdsRef.current);
+                                                                            for (const candId of candidateIds) {
+                                                                                const candSnap = await getDoc(doc(db, 'ventas', candId));
+                                                                                if (candSnap.exists()) {
+                                                                                    const candData = candSnap.data();
+                                                                                    if (candData.pago_estado === 'Pagado' || candData.mercado_pago_status === 'approved') {
+                                                                                        webhookApprovedSaleId = candId;
+                                                                                        break;
+                                                                                    }
+                                                                                }
+                                                                            }
+
+                                                                            if (webhookApprovedSaleId && webhookApprovedSaleId !== confirmedSaleId) {
+                                                                                // Un intento previo ya fue cobrado por el webhook; cancelar este borrador duplicado
+                                                                                await revertPendingSale(confirmedSaleId);
+                                                                            } else if (!webhookApprovedSaleId) {
+                                                                                const saleRef = doc(db, 'ventas', confirmedSaleId);
+                                                                                // monto_pagado_real SIEMPRE guarda el monto de la venta SIN propina
+                                                                                await updateDoc(saleRef, {
+                                                                                    pago_estado: 'Pagado',
+                                                                                    metodo_pago: paymentMethod, // Respect initial choice
+                                                                                    monto_pagado_real: total,
+                                                                                    saldo_pendiente: 0,
+                                                                                    propina: form.getValues('propina') || 0,
+                                                                                    fecha_pago: new Date(),
+                                                                                    notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
+                                                                                });
+                                                                            }
+                                                                            attemptedTerminalIdsRef.current.clear();
 
                                                                             // Also update Reservation status if linked
                                                                             if (reservationId && db) {

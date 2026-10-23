@@ -521,15 +521,41 @@ exports.mercadoPagoWebhook = onRequest(
         if (!ventaDoc.exists || ventaDoc.data().pago_estado === 'Pagado') return;
 
         const ventaData = ventaDoc.data();
+        const isDepositSale = Boolean(
+          ventaData.tipo_venta === 'anticipo' ||
+          String(external_reference).startsWith('deposit_')
+        );
         const montoOriginal = Number(ventaData.total || 0);
         const montoPagado = Number(transaction_amount || 0);
-        const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : 0;
+        const anticipoPrevio = isDepositSale
+          ? 0
+          : Number(ventaData.anticipoPagado || ventaData.anticipo_pagado || ventaData.monto_anticipo || 0);
+        const descuentoCoins = Number(ventaData.descuento_alfacoins || 0);
+        const isCombined = ventaData.metodo_pago === 'combinado';
+        const montoBaseEsperado = isDepositSale
+          ? Number(ventaData.anticipo_esperado || montoOriginal || 0)
+          : isCombined
+            ? Number(ventaData.detalle_pago_combinado?.tarjeta || ventaData.pago_tarjeta || 0)
+            : Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins);
+
+        const propinaTerminal = (!isDepositSale && montoPagado > montoBaseEsperado)
+          ? parseFloat((montoPagado - montoBaseEsperado).toFixed(2))
+          : 0;
+        const propinaPrevia = Number(ventaData.propina) || 0;
+        const propina = propinaTerminal > 0 ? propinaTerminal : propinaPrevia;
+
+        const montoVentaSinPropina = isDepositSale
+          ? montoPagado
+          : isCombined
+            ? Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins)
+            : Math.max(0, Math.min(montoBaseEsperado, parseFloat((montoPagado - propina).toFixed(2))));
 
         t.update(ventaRef, {
           pago_estado: 'Pagado',
           mercado_pago_status: status,
           mercado_pago_id: String(paymentInfo.id),
-          monto_pagado_real: montoPagado,
+          monto_pagado_real: montoVentaSinPropina,
+          monto_cobrado_terminal: montoPagado,
           propina: propina,
           fecha_pago: new Date()
         });

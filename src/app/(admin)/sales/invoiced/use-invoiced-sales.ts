@@ -14,6 +14,39 @@ export interface InvoicedSalesFilters {
     professional?: string;
 }
 
+/**
+ * Calcula el ingreso real de una venta facturada SIN incluir jamás la propina.
+ * Protege contra registros históricos donde una liquidación de anticipo con propina
+ * haya sumado la propina dentro de `monto_pagado_real`.
+ */
+export function getSaleActualRevenue(sale: Sale): number {
+    const saleTotal = Number(sale.total) || 0;
+    const propina = Number(sale.propina) || 0;
+    const anticipo = Number((sale as any).anticipoPagado ?? (sale as any).anticipo_pagado ?? 0);
+    const alfaDiscount = Number((sale as any).descuento_alfacoins || 0);
+
+    if (sale.pago_estado === 'deposit_paid') {
+        const rawPaid = Number(sale.monto_pagado_real) || 0;
+        if (propina > 0 && rawPaid > propina && Math.abs(rawPaid - ((saleTotal - anticipo - alfaDiscount) + propina)) < 0.05) {
+            return Math.max(0, rawPaid - propina);
+        }
+        return rawPaid;
+    }
+
+    if (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal) {
+        const rawPaid = Number(sale.monto_pagado_real) || 0;
+        if (anticipo > 0 && propina > 0) {
+            const expectedRemainder = Math.max(0, saleTotal - anticipo - alfaDiscount);
+            if (rawPaid > expectedRemainder + 0.01 && Math.abs(rawPaid - (expectedRemainder + propina)) < 0.05) {
+                return expectedRemainder;
+            }
+        }
+        return rawPaid;
+    }
+
+    return saleTotal;
+}
+
 export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: number) {
 
     // 1. Build Query Constraints
@@ -165,12 +198,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         }
 
         const salesByType = populatedSales.reduce((acc, sale) => {
-            let saleTotal = sale.total || 0;
-
-            // Use real paid amount if available (for deposits/partial)
-            if (sale.pago_estado === 'deposit_paid' || (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < saleTotal)) {
-                saleTotal = sale.monto_pagado_real || 0;
-            }
+            const saleTotal = getSaleActualRevenue(sale);
 
             const computedSaleSubtotal = sale.subtotal || sale.items?.reduce((sum, it: any) => sum + (it.subtotal ?? (((it.precio || 0) * (it.cantidad || 1)))), 0) || saleTotal || 1;
 
@@ -187,9 +215,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         }, {} as Record<string, number>);
 
         const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
-            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
+            const actualRevenue = getSaleActualRevenue(sale);
 
             if (sale.metodo_pago === 'combinado') {
                 const combinedEfectivo = sale.detalle_pago_combinado?.efectivo || 0;
@@ -257,12 +283,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
         }, {} as Record<string, number>);
 
         const totalSales = populatedSales.reduce((acc, sale) => {
-            // Use real paid amount if available (for deposits/partial), otherwise total
-            // This handles cases where status might be 'deposit_paid' OR if we just want to track actual inflow
-            const actualRevenue = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                ? sale.monto_pagado_real
-                : (sale.total || 0);
-            return acc + actualRevenue;
+            return acc + getSaleActualRevenue(sale);
         }, 0);
 
         return {

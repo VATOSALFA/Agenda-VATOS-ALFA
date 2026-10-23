@@ -452,17 +452,51 @@ exports.mercadoPagoWebhook = onRequest(
           const ventaData = (ventaDoc.exists ? ventaDoc.data() : ventaCanceladaDoc.data()) || {};
           if (ventaData.pago_estado === 'Pagado') return;
 
-          // PRE-READ Linked Reservation (Must be done before ANY write)
+          // PRE-READ Linked Reservation & sibling sales for the same reservation (Must be done before ANY write)
           let reservaRef = null;
           let reservaDoc = null;
+          let siblingSalesSnap = null;
           if (ventaData.reservationId) {
             reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
-            reservaDoc = await t.get(reservaRef);
+            const siblingsQuery = admin.firestore().collection('ventas').where('reservationId', '==', ventaData.reservationId);
+            [reservaDoc, siblingSalesSnap] = await Promise.all([
+              t.get(reservaRef),
+              t.get(siblingsQuery)
+            ]);
           }
 
+          const isDepositSale = Boolean(
+            ventaData.tipo_venta === 'anticipo' ||
+            String(external_reference).startsWith('deposit_')
+          );
           const montoOriginal = Number(ventaData.total || 0);
           const montoPagado = Number(transaction_amount || 0);
-          const propina = montoPagado > montoOriginal ? parseFloat((montoPagado - montoOriginal).toFixed(2)) : (Number(ventaData.propina) || 0);
+          const anticipoPrevio = isDepositSale
+            ? 0
+            : Number(ventaData.anticipoPagado || ventaData.anticipo_pagado || ventaData.monto_anticipo || 0);
+          const descuentoCoins = Number(ventaData.descuento_alfacoins || 0);
+          const isCombined = ventaData.metodo_pago === 'combinado';
+
+          // Monto base esperado de la venta en la terminal (descontando anticipos previos y AlfaCoins, sin propina)
+          const montoBaseEsperado = isDepositSale
+            ? Number(ventaData.anticipo_esperado || montoOriginal || 0)
+            : isCombined
+              ? Number(ventaData.detalle_pago_combinado?.tarjeta || ventaData.pago_tarjeta || 0)
+              : Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins);
+
+          // La propina es cualquier excedente cobrado en la terminal sobre el monto base esperado
+          const propinaTerminal = (!isDepositSale && montoPagado > montoBaseEsperado)
+            ? parseFloat((montoPagado - montoBaseEsperado).toFixed(2))
+            : 0;
+          const propinaPrevia = Number(ventaData.propina) || 0;
+          const propina = propinaTerminal > 0 ? propinaTerminal : propinaPrevia;
+
+          // El ingreso real de la VENTA (estrictamente SIN propina, ya que las propinas son independientes)
+          const montoVentaSinPropina = isDepositSale
+            ? montoPagado
+            : isCombined
+              ? Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins)
+              : Math.max(0, Math.min(montoBaseEsperado, parseFloat((montoPagado - propina).toFixed(2))));
 
           let propinaDetalles = ventaData.propina_detalles;
           if (propina > 0 && (!Array.isArray(propinaDetalles) || propinaDetalles.length === 0) && Array.isArray(ventaData.items)) {
@@ -476,15 +510,19 @@ exports.mercadoPagoWebhook = onRequest(
             }
           }
 
-          // Calculate dynamic status for update
-          const isFullPay = montoPagado >= (montoOriginal * 0.99); // Tolerance
-          const saldoPendiente = montoOriginal > montoPagado ? (montoOriginal - montoPagado) : 0;
+          // Calculate dynamic status for update (comparando contra montoBaseEsperado en liquidaciones)
+          const targetFullPayThreshold = isDepositSale ? montoOriginal : montoBaseEsperado;
+          const isFullPay = targetFullPayThreshold === 0 || montoPagado >= (targetFullPayThreshold * 0.99);
+          const saldoPendiente = isFullPay
+            ? 0
+            : Math.max(0, (isDepositSale ? montoOriginal : montoBaseEsperado) - montoVentaSinPropina);
 
           const updatedSaleFields = {
             pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
             mercado_pago_status: status,
             mercado_pago_id: String(paymentInfo.id),
-            monto_pagado_real: montoPagado,
+            monto_pagado_real: montoVentaSinPropina,
+            monto_cobrado_terminal: montoPagado,
             saldo_pendiente: saldoPendiente,
             propina: propina,
             ...(propinaDetalles ? { propina_detalles: propinaDetalles } : {}),
@@ -494,8 +532,65 @@ exports.mercadoPagoWebhook = onRequest(
             mp_pos_id: paymentInfo.pos_id || null
           };
 
+          // Verificar si recepción ya confirmó manualmente otro documento de venta para la misma cita
+          let existingManualPaidDoc = null;
+          const stalePendingDocs = [];
+          const depositSiblingDocs = [];
+
+          if (siblingSalesSnap && !siblingSalesSnap.empty) {
+            siblingSalesSnap.docs.forEach(sDoc => {
+              if (sDoc.id === external_reference) return;
+              const sData = sDoc.data() || {};
+              const sIsDep = Boolean(sData.tipo_venta === 'anticipo' || sDoc.id.startsWith('deposit_') || sData.pago_estado === 'deposit_paid');
+              if (sIsDep) {
+                depositSiblingDocs.push(sDoc);
+              } else if (sData.pago_estado === 'Pagado') {
+                existingManualPaidDoc = sDoc;
+              } else if (sData.pago_estado === 'Pendiente' || sData.pago_estado === 'pendiente') {
+                stalePendingDocs.push(sDoc);
+              }
+            });
+          }
+
+          // Limpiar intentos pendientes huérfanos de la misma cita para evitar duplicados
+          for (const staleDoc of stalePendingDocs) {
+            const staleCancelRef = admin.firestore().collection('ventas_canceladas').doc(staleDoc.id);
+            t.set(staleCancelRef, {
+              ...staleDoc.data(),
+              cancelado_en: new Date(),
+              motivo_cancelacion: `superseded_by_approved_terminal_${external_reference}`
+            });
+            t.delete(staleDoc.ref);
+          }
+
+          // Si es liquidación de cita con anticipo previo, marcar el documento de anticipo como absorbido/completado
+          if (!isDepositSale && isFullPay && depositSiblingDocs.length > 0) {
+            const targetAbsorbingId = existingManualPaidDoc ? existingManualPaidDoc.id : external_reference;
+            for (const depDoc of depositSiblingDocs) {
+              t.update(depDoc.ref, {
+                saldo_pendiente: 0,
+                status: 'completed',
+                absorbed_in_sale_id: targetAbsorbingId
+              });
+            }
+          }
+
           // NOW WRITE to Sale
-          if (isRecoveredFromCancel) {
+          if (existingManualPaidDoc && !isDepositSale) {
+            t.update(existingManualPaidDoc.ref, updatedSaleFields);
+            if (!isRecoveredFromCancel && ventaDoc.exists) {
+              t.set(ventaCanceladaRef, {
+                ...ventaData,
+                cancelado_en: new Date(),
+                motivo_cancelacion: `merged_into_manual_sale_${existingManualPaidDoc.id}`
+              });
+              t.delete(ventaRef);
+            } else if (ventaCanceladaDoc.exists) {
+              t.update(ventaCanceladaRef, {
+                motivo_cancelacion: `merged_into_manual_sale_${existingManualPaidDoc.id}`
+              });
+            }
+          } else if (isRecoveredFromCancel) {
             const restoredData = { ...ventaData, ...updatedSaleFields };
             delete restoredData.cancelado_en;
             delete restoredData.motivo_cancelacion;
@@ -507,22 +602,31 @@ exports.mercadoPagoWebhook = onRequest(
 
           // NOW WRITE to Linked Reservation (CÓDIGO CORREGIDO)
           if (reservaDoc && reservaDoc.exists) {
-            // Usamos la misma lógica que calculamos arriba para la venta
-            t.update(reservaRef, {
-              pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
-              estado: isFullPay ? 'Asiste' : 'Confirmado', // SI PAGO COMPLETO -> ASISTE, SINO CONFIRMADO
-              saldo_pendiente: saldoPendiente,
-              anticipo_pagado: montoPagado,
-              anticipoPagado: montoPagado,
-              monto_anticipo: montoPagado,
-              monto_pagado: montoPagado,
-              monto_pagado_real: montoPagado,
-              metodo_pago_anticipo: 'mercadopago',
-              deposit_payment_id: String(paymentInfo.id),
-              deposit_paid_at: new Date()
-            });
+            if (isDepositSale) {
+              t.update(reservaRef, {
+                pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
+                estado: isFullPay ? 'Asiste' : 'Confirmado',
+                saldo_pendiente: saldoPendiente,
+                anticipo_pagado: montoPagado,
+                anticipoPagado: montoPagado,
+                monto_anticipo: montoPagado,
+                monto_pagado: montoPagado,
+                monto_pagado_real: montoPagado,
+                metodo_pago_anticipo: 'mercadopago',
+                deposit_payment_id: String(paymentInfo.id),
+                deposit_paid_at: new Date()
+              });
+            } else {
+              t.update(reservaRef, {
+                pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
+                estado: isFullPay ? 'Asiste' : 'Confirmado',
+                saldo_pendiente: saldoPendiente,
+                monto_pagado: isFullPay ? montoOriginal : (anticipoPrevio + montoVentaSinPropina),
+                monto_pagado_real: isFullPay ? montoOriginal : (anticipoPrevio + montoVentaSinPropina)
+              });
+            }
           }
-          console.log(`[vFinal] Custom: Venta ${external_reference} updated (recovered=${isRecoveredFromCancel}).`);
+          console.log(`[vFinal] Custom: Venta ${external_reference} updated (recovered=${isRecoveredFromCancel}, saleAmt=${montoVentaSinPropina}, tip=${propina}).`);
           return;
         }
 

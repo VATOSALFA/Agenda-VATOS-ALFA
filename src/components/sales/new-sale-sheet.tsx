@@ -58,7 +58,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send, Gift, Sparkles, ShoppingBag, ArrowRight, UserCheck, Check, QrCode, Building2, Copy, ExternalLink, Banknote, Receipt, Store, Coins, Layers, Wallet, User as UserIcon } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send, Gift, Sparkles, ShoppingBag, ArrowRight, UserCheck, Check, QrCode, Building2, Copy, ExternalLink, Banknote, Receipt, Store, Coins, Layers, Wallet, User as UserIcon, Award, Crown } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { ClientInput } from '../reservations/client-input';
 import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
@@ -74,6 +74,7 @@ import {
     calculateJuntosMinPurchase,
     calculateJuntosRewardCoins,
     JUNTOS_REWARD_COINS_PER_PERSON,
+    evaluateClientAlfaTier,
 } from '@/lib/benefit-security';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -602,32 +603,42 @@ const ResumenCarrito = ({
             </div>
         )}
 
-        {/* Puntos y AlfaCoins de Lealtad Alfa Club (Solo usuarios con App descargada) */}
+        {/* Puntos, Nivel y Privilegios de Lealtad Alfa Club (Solo usuarios con App descargada) */}
         {client && hasAppDownloaded && (() => {
             const clientCoins = Number(clientAlfaCoins ?? client.alfaCoins ?? client.alfa_coins ?? client.puntosLealtad ?? client.puntos_lealtad ?? client.puntos ?? 0);
             const unitVal = Number(alfaCoinUnitValue || 0.03);
             const cashEquivalent = Math.round(clientCoins * unitVal * 100) / 100;
             const usableMax = maxUsableAlfaCoins !== undefined ? maxUsableAlfaCoins : Math.min(clientCoins, Math.max(0, Math.ceil((subtotal - totalDiscount - anticipoPagado) / unitVal)));
             const coinsCurrentlySet = (alfaCoinsToUse !== null && alfaCoinsToUse !== undefined) ? alfaCoinsToUse : usableMax;
+            const isTiersActive = Boolean(clientLevelInfo?.activo);
+            const tierPerks: string[] = isTiersActive && Array.isArray(clientLevelInfo?.beneficios)
+                ? clientLevelInfo.beneficios.filter((b: string) => !/alfacoin/i.test(b) && !/tarjeta digital pase alfa/i.test(b))
+                : [];
 
             return (
                 <div className={cn(
                     "p-3 border rounded-xl mx-3 my-2 space-y-2 shrink-0 transition-all",
-                    clientCoins > 0 ? "border-[#C5A880]/30 bg-[#C5A880]/10" : "border-border/50 bg-muted/20"
+                    clientCoins > 0 || (isTiersActive && clientLevelInfo?.tierId !== 'member')
+                        ? "border-[#C5A880]/30 bg-[#C5A880]/10"
+                        : "border-border/50 bg-muted/20"
                 )}>
-                    <div className="flex justify-between items-center">
-                        <div className="space-y-0.5">
-                            <span className={cn("text-xs font-bold flex items-center gap-1.5 font-sans", clientCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
-                                <Coins className={cn("h-3.5 w-3.5", clientCoins > 0 ? "text-[#C5A880]" : "text-slate-400")} /> ALFA COINS: {clientCoins}
-                                {clientLevelInfo?.tierName && (
-                                    <span className="text-[10px] font-normal opacity-85">({clientLevelInfo.tierName})</span>
+                    <div className="flex justify-between items-center gap-2">
+                        <div className="space-y-0.5 min-w-0 flex-1">
+                            <span className={cn("text-xs font-bold flex items-center gap-1.5 flex-wrap font-sans", clientCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
+                                <Coins className={cn("h-3.5 w-3.5 shrink-0", clientCoins > 0 ? "text-[#C5A880]" : "text-slate-400")} />
+                                <span>ALFA COINS: {clientCoins}</span>
+                                {isTiersActive && clientLevelInfo?.tierName && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40">
+                                        {clientLevelInfo.tierId === 'vip' ? <Crown className="h-2.5 w-2.5" /> : <Award className="h-2.5 w-2.5" />}
+                                        {clientLevelInfo.tierName} • {clientLevelInfo.cashbackPct}%
+                                    </span>
                                 )}
                             </span>
                             <p className="text-[10px] text-muted-foreground font-sans">
                                 {clientCoins > 0 ? `Equivalente a $${formatMoney(cashEquivalent)} MXN ($${unitVal.toFixed(2)} c/u)` : 'Sin saldo para canjear'}
                             </p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                             <span className="text-[11px] font-medium text-foreground">
                                 {redeemPoints ? 'Aplicando' : 'Canjear'}
                             </span>
@@ -643,6 +654,31 @@ const ResumenCarrito = ({
                             />
                         </div>
                     </div>
+
+                    {isTiersActive && clientLevelInfo?.productDiscountPct > 0 && (
+                        <div className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center gap-2 text-[11px] text-blue-300 font-sans">
+                            <Percent className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                            <span>
+                                <strong>{clientLevelInfo.productDiscountPct}% Descuento en Productos</strong> aplicado automáticamente por su nivel {clientLevelInfo.tierName}.
+                            </span>
+                        </div>
+                    )}
+
+                    {isTiersActive && tierPerks.length > 0 && (
+                        <div className="pt-1.5 border-t border-[#C5A880]/20 space-y-1">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#C5A880] flex items-center gap-1 font-sans">
+                                <Sparkles className="h-3 w-3 shrink-0" /> Privilegios activos de {clientLevelInfo.tierName}:
+                            </p>
+                            <div className="space-y-0.5">
+                                {tierPerks.map((perk: string, idx: number) => (
+                                    <p key={idx} className="text-[10px] text-foreground/85 leading-snug flex items-start gap-1.5 font-sans">
+                                        <span className="text-[#C5A880] font-bold">•</span>
+                                        <span>{perk}</span>
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {redeemPoints && clientCoins > 0 && (
                         <div className="pt-2 border-t border-[#C5A880]/20 space-y-2">
@@ -1030,16 +1066,48 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [juntosMinorsCount, setJuntosMinorsCount] = useState<number>(0);
     const currentHaircutPrice = useMemo(() => getCurrentHaircutPrice(services), [services]);
     const [nivelesConfig, setNivelesConfig] = useState<any>(null);
+    const [targetStampsConfig, setTargetStampsConfig] = useState<number>(9);
+    const [reconciledClientStats, setReconciledClientStats] = useState<{
+        clientId: string;
+        visits: number;
+        spend: number;
+    } | null>(null);
 
+    // Suscripción en tiempo real a la configuración de Niveles y Rangos (Pase Alfa Club)
     useEffect(() => {
         if (!db) return;
-        getDoc(doc(db, 'configuracion', 'app_movil')).then((snap) => {
-            if (snap.exists()) {
-                const data = snap.data();
-                setNivelesConfig(data.niveles_config || data.pase_alfa?.niveles_config || null);
-            }
-        }).catch(console.error);
-    }, [db, isOpen]);
+        const unsubPase = onSnapshot(
+            doc(db, 'configuracion', 'pase_alfa'),
+            (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.niveles_config) {
+                        setNivelesConfig(data.niveles_config);
+                    }
+                    const sReq = Number(data.sellosRequeridos || 10);
+                    setTargetStampsConfig(sReq === 10 ? 9 : sReq);
+                }
+            },
+            () => {}
+        );
+        const unsubApp = onSnapshot(
+            doc(db, 'configuracion', 'app_movil'),
+            (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const cfg = data.niveles_config || data.pase_alfa?.niveles_config || data['pase_alfa.niveles_config'];
+                    if (cfg) {
+                        setNivelesConfig((prev: any) => prev || cfg);
+                    }
+                }
+            },
+            () => {}
+        );
+        return () => {
+            unsubPase();
+            unsubApp();
+        };
+    }, [db]);
 
     const totalDiscount = useMemo(() => {
         return cart.reduce((acc, item) => {
@@ -1058,80 +1126,107 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         return clients.find(c => c.id === selectedClientId)
     }, [selectedClientId, clients]);
 
+    // Auto-reconciliar historial real de visitas y consumo acumulado ($ MXN) desde la colección `ventas`
+    useEffect(() => {
+        if (!db || !selectedClient?.id) {
+            setReconciledClientStats(null);
+            return;
+        }
+        let cancelled = false;
+        const reconcileFromSales = async () => {
+            try {
+                const qSales = query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id));
+                const snapSales = await getDocs(qSales);
+                let paidVisits = 0;
+                let paidSpend = 0;
+                const visitDays = new Set<string>();
+
+                snapSales.docs.forEach((d) => {
+                    const s = d.data();
+                    const st = String(s.pago_estado || '').toLowerCase();
+                    if (st === 'cancelado' || st === 'pendiente' || st === 'pending_payment' || st === 'pendiente_anticipo') {
+                        return;
+                    }
+                    // Evitar duplicar monto si es un anticipo que ya fue absorbido en una venta de liquidación
+                    if (s.absorbed_in_sale_id) {
+                        return;
+                    }
+                    const saleTotal = Number(s.total ?? s.monto_pagado_real ?? 0);
+                    const coinsDisc = Number(s.descuento_alfacoins ?? 0);
+                    const realPaid = Math.max(0, saleTotal - coinsDisc);
+                    paidSpend += realPaid;
+
+                    const items = Array.isArray(s.items) ? s.items : [];
+                    const hasService = items.length === 0 || items.some((it: any) => it.tipo === 'servicio' || !it.tipo);
+                    if (hasService && s.tipo_venta !== 'anticipo' && !d.id.startsWith('deposit_')) {
+                        const dt = s.fecha_hora_venta?.toDate
+                            ? s.fecha_hora_venta.toDate()
+                            : s.creado_en?.toDate
+                            ? s.creado_en.toDate()
+                            : null;
+                        const dayKey = dt ? dt.toISOString().split('T')[0] : d.id;
+                        visitDays.add(dayKey);
+                    }
+                });
+
+                paidVisits = visitDays.size;
+                paidSpend = Math.round(paidSpend * 100) / 100;
+
+                if (cancelled) return;
+
+                const storedVisits = Math.max(
+                    Number(selectedClient.citas_asistidas ?? 0),
+                    Number((selectedClient as any).visitas_totales ?? 0),
+                    Number(selectedClient.cortes_acumulados ?? selectedClient.cortesAcumulados ?? 0)
+                );
+                const storedSpend = Math.max(
+                    Number((selectedClient as any).consumo_total ?? 0),
+                    Number(selectedClient.gasto_total ?? 0),
+                    Number((selectedClient as any).consumoTotal ?? 0)
+                );
+
+                const bestVisits = Math.max(storedVisits, paidVisits);
+                const bestSpend = Math.max(storedSpend, paidSpend);
+
+                setReconciledClientStats({
+                    clientId: selectedClient.id,
+                    visits: bestVisits,
+                    spend: bestSpend,
+                });
+
+                // Si las ventas reales superan lo guardado en el documento del cliente, sincronizar en Firestore
+                if (bestSpend > storedSpend + 0.5 || bestVisits > storedVisits) {
+                    const evaluated = evaluateClientAlfaTier(selectedClient, nivelesConfig, {
+                        overrideVisits: bestVisits,
+                        overrideSpend: bestSpend,
+                        forceEvaluateWhenPaused: true,
+                    });
+                    await updateDoc(doc(db, 'clientes', selectedClient.id), {
+                        citas_asistidas: bestVisits,
+                        visitas_totales: bestVisits,
+                        consumo_total: bestSpend,
+                        gasto_total: bestSpend,
+                        consumoTotal: bestSpend,
+                        nivel: evaluated.tierName,
+                    }).catch(() => {});
+                }
+            } catch (_) {}
+        };
+
+        reconcileFromSales();
+        return () => {
+            cancelled = true;
+        };
+    }, [db, selectedClient?.id, nivelesConfig]);
+
     const clientLevelInfo = useMemo(() => {
-        const defaultTiers = {
-            member: { nombre: 'Alfa Member', cashbackPct: 3, visitasMin: 0, gastoMin: 0 },
-            gold: { nombre: 'Alfa Gold', cashbackPct: 5, visitasMin: 4, gastoMin: 1500 },
-            vip: { nombre: 'Alfa Black VIP', cashbackPct: 7, visitasMin: 8, gastoMin: 3500 },
-        };
-
-        if (!selectedClient) {
-            return {
-                tierId: 'member',
-                tierName: 'Alfa Member',
-                cashbackPct: 3,
-                coinValue: 0.03,
-            };
-        }
-
-        const cfg = nivelesConfig || {
-            activo: true,
-            criterio: 'ambos_opcional',
-            ...defaultTiers,
-        };
-
-        const criterio = cfg.criterio || 'ambos_opcional';
-        const member = cfg.member || defaultTiers.member;
-        const gold = cfg.gold || defaultTiers.gold;
-        const vip = cfg.vip || defaultTiers.vip;
-
-        const v = Number(selectedClient.cortes_acumulados ?? selectedClient.cortesAcumulados ?? 0);
-        const g = Number((selectedClient as any).consumo_total ?? selectedClient.gasto_total ?? 0);
-
-        let isVip = selectedClient.nivel === 'Alfa Black VIP' || selectedClient.nivel === 'vip';
-        let isGold = selectedClient.nivel === 'Alfa Gold' || selectedClient.nivel === 'gold';
-
-        if (!isVip && !isGold) {
-            if (criterio === 'visitas') {
-                isVip = v >= (vip.visitasMin ?? 8);
-                isGold = v >= (gold.visitasMin ?? 4);
-            } else if (criterio === 'gasto') {
-                isVip = g >= (vip.gastoMin ?? 3500);
-                isGold = g >= (gold.gastoMin ?? 1500);
-            } else {
-                isVip = v >= (vip.visitasMin ?? 8) || g >= (vip.gastoMin ?? 3500);
-                isGold = v >= (gold.visitasMin ?? 4) || g >= (gold.gastoMin ?? 1500);
-            }
-        }
-
-        if (isVip) {
-            const pct = Number(vip.cashbackPct ?? 7);
-            return {
-                tierId: 'vip',
-                tierName: vip.nombre || 'Alfa Black VIP',
-                cashbackPct: pct,
-                coinValue: pct / 100,
-            };
-        }
-
-        if (isGold) {
-            const pct = Number(gold.cashbackPct ?? 5);
-            return {
-                tierId: 'gold',
-                tierName: gold.nombre || 'Alfa Gold',
-                cashbackPct: pct,
-                coinValue: pct / 100,
-            };
-        }
-
-        const pct = Number(member.cashbackPct ?? 3);
-        return {
-            tierId: 'member',
-            tierName: member.nombre || 'Alfa Member',
-            cashbackPct: pct,
-            coinValue: pct / 100,
-        };
-    }, [selectedClient, nivelesConfig]);
+        const isCurrentReconciled =
+            Boolean(reconciledClientStats && selectedClient && reconciledClientStats.clientId === selectedClient.id);
+        return evaluateClientAlfaTier(selectedClient, nivelesConfig, {
+            overrideVisits: isCurrentReconciled ? reconciledClientStats?.visits : undefined,
+            overrideSpend: isCurrentReconciled ? reconciledClientStats?.spend : undefined,
+        });
+    }, [selectedClient, nivelesConfig, reconciledClientStats]);
 
     const alfaCoinUnitValue = clientLevelInfo.coinValue;
 
@@ -1243,6 +1338,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 tipo === 'servicio' &&
                 Boolean(appliedBenefit?.isReferralBenefit) &&
                 !Boolean(appliedBenefit?.isReferralBlocked);
+            const applyTierProductDiscount =
+                tipo === 'producto' &&
+                Boolean(clientLevelInfo.activo) &&
+                Number(clientLevelInfo.productDiscountPct) > 0;
 
             return [...prev, {
                 uniqueId: crypto.randomUUID(),
@@ -1255,10 +1354,35 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 ...(applyReferralDiscount ? {
                     discountValue: String(REFERRAL_DISCOUNT_PERCENT),
                     discountType: 'percentage' as const,
+                } : applyTierProductDiscount ? {
+                    discountValue: String(clientLevelInfo.productDiscountPct),
+                    discountType: 'percentage' as const,
                 } : {})
             }];
         });
     };
+
+    // Aplicar automáticamente el descuento en productos configurado en el Nivel Alfa del cliente
+    useEffect(() => {
+        const tierProdPct = clientLevelInfo.activo ? Number(clientLevelInfo.productDiscountPct || 0) : 0;
+        if (tierProdPct <= 0) return;
+
+        setCart(prev => {
+            let changed = false;
+            const next = prev.map(it => {
+                if (it.tipo === 'producto' && (!it.discountValue || Number(it.discountValue) === 0)) {
+                    changed = true;
+                    return {
+                        ...it,
+                        discountValue: String(tierProdPct),
+                        discountType: 'percentage' as const,
+                    };
+                }
+                return it;
+            });
+            return changed ? next : prev;
+        });
+    }, [clientLevelInfo.activo, clientLevelInfo.productDiscountPct, selectedClientId, cart.length]);
 
     // Aplicar o retirar automáticamente el 20% de descuento de referido sobre los servicios del carrito
     useEffect(() => {
@@ -1818,26 +1942,99 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
 
     const finalizeSaleProcess = async (clientId: string, localId: string) => {
-        // Loyalty Points / AlfaCoins Logic (Exclusivo para clientes con la App Móvil descargada y vinculada)
-        if (db && selectedClient && hasAppDownloaded) {
-            // 1 AlfaCoin ganado por cada $1 MXN pagado en la venta
-            const pointsEarned = total > 0 ? Math.floor(total) : 0;
-            const pointsSpent = effectiveAlfaCoinsToUse || 0;
+        const targetClient = selectedClient || clients.find(c => c.id === clientId);
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
-            if (pointsEarned > 0 || pointsSpent > 0) {
-                try {
-                    const delta = pointsEarned - pointsSpent;
-                    const clientRef = doc(db, 'clientes', selectedClient.id);
-                    await updateDoc(clientRef, {
-                        puntos: increment(delta),
-                        alfaCoins: increment(delta),
-                        alfa_coins: increment(delta),
-                        puntosLealtad: increment(delta),
-                        puntos_lealtad: increment(delta),
-                    });
-                } catch (e) {
-                    console.error("Error updating points in Firestore:", e);
+        // 1. Actualizar Consumo Histórico ($ MXN), Visitas Históricas, Sellos, AlfaCoins y Nivel (Pase Alfa Club)
+        if (db && targetClient) {
+            try {
+                const clientRef = doc(db, 'clientes', targetClient.id);
+                const realMoneySpent = Math.max(0, Math.round((total + Number(anticipoPagado || 0)) * 100) / 100);
+                const hasServiceInCart = cart.some(it => it.tipo === 'servicio');
+                const isFreeCutRedemption =
+                    appliedBenefit?.benefitId === 'decimo_corte' ||
+                    appliedBenefit?.benefitId === 'corte_gratis' ||
+                    appliedBenefit?.folio?.startsWith('VA-CORTE');
+
+                const alreadyCountedToday = (targetClient as any).ultima_visita_fecha === todayStr;
+                const visitDelta = hasServiceInCart && !alreadyCountedToday ? 1 : 0;
+
+                // Evaluar nivel antes y después de la compra actual
+                const prevEvaluated = evaluateClientAlfaTier(targetClient, nivelesConfig, {
+                    overrideVisits:
+                        reconciledClientStats?.clientId === targetClient.id
+                            ? reconciledClientStats.visits
+                            : undefined,
+                    overrideSpend:
+                        reconciledClientStats?.clientId === targetClient.id
+                            ? reconciledClientStats.spend
+                            : undefined,
+                    forceEvaluateWhenPaused: true,
+                });
+
+                const nextEvaluated = evaluateClientAlfaTier(targetClient, nivelesConfig, {
+                    overrideVisits: prevEvaluated.visitasHistoricas + visitDelta,
+                    overrideSpend: Math.round((prevEvaluated.consumoHistorico + realMoneySpent) * 100) / 100,
+                    forceEvaluateWhenPaused: true,
+                });
+
+                const updatePayload: Record<string, any> = {
+                    nivel: nextEvaluated.tierName,
+                };
+
+                if (realMoneySpent > 0) {
+                    updatePayload.consumo_total = increment(realMoneySpent);
+                    updatePayload.gasto_total = increment(realMoneySpent);
+                    updatePayload.consumoTotal = increment(realMoneySpent);
                 }
+
+                if (visitDelta > 0) {
+                    updatePayload.citas_asistidas = increment(1);
+                    updatePayload.visitas_totales = increment(1);
+                    updatePayload.ultima_visita_fecha = todayStr;
+                }
+
+                // Si el cliente tiene la App descargada, actualizar también sus AlfaCoins y Sello del Pase Alfa
+                if (hasAppDownloaded) {
+                    const pointsEarned = total > 0 ? Math.floor(total) : 0;
+                    const pointsSpent = effectiveAlfaCoinsToUse || 0;
+                    const deltaCoins = pointsEarned - pointsSpent;
+
+                    if (pointsEarned > 0 || pointsSpent > 0) {
+                        updatePayload.puntos = increment(deltaCoins);
+                        updatePayload.alfaCoins = increment(deltaCoins);
+                        updatePayload.alfa_coins = increment(deltaCoins);
+                        updatePayload.puntosLealtad = increment(deltaCoins);
+                        updatePayload.puntos_lealtad = increment(deltaCoins);
+                    }
+
+                    if (isFreeCutRedemption) {
+                        updatePayload.cortes_acumulados = 0;
+                        updatePayload.corte_gratis_disponible = false;
+                    } else if (visitDelta > 0 && realMoneySpent > 0) {
+                        const currStamps = Number(targetClient.cortes_acumulados ?? targetClient.cortesAcumulados ?? 0);
+                        const nextStamps = currStamps + 1;
+                        updatePayload.cortes_acumulados = nextStamps;
+                        updatePayload.corte_gratis_disponible = nextStamps >= targetStampsConfig;
+                    }
+                }
+
+                await updateDoc(clientRef, updatePayload);
+
+                // Notificar en Recepción si el cliente subió de nivel automáticamente y los niveles están activos
+                if (
+                    nivelesConfig?.activo !== false &&
+                    nextEvaluated.tierId !== prevEvaluated.tierId &&
+                    (nextEvaluated.tierId === 'gold' || nextEvaluated.tierId === 'vip')
+                ) {
+                    toast({
+                        title: `🏆 ¡Ascenso Automático a ${nextEvaluated.tierName}!`,
+                        description: `${targetClient.nombre} ha alcanzado ${nextEvaluated.visitasHistoricas} visitas / $${formatMoney(nextEvaluated.consumoHistorico)} MXN y ahora disfruta de ${nextEvaluated.cashbackPct}% Cashback y privilegios ${nextEvaluated.tierName}.`,
+                    });
+                }
+            } catch (e) {
+                console.error("Error updating client loyalty & tier in Firestore:", e);
             }
         }
 
@@ -3783,7 +3980,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         <Coins className={cn("h-4 w-4 shrink-0", clientAlfaCoins > 0 ? "text-[#C5A880]" : "text-slate-400")} />
                                                         <div className="min-w-0">
                                                             <span className={cn("text-xs font-bold font-sans block truncate", clientAlfaCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
-                                                                ALFA COINS: {clientAlfaCoins} ({clientLevelInfo.tierName} • {clientLevelInfo.cashbackPct}%)
+                                                                ALFA COINS: {clientAlfaCoins} {clientLevelInfo.activo ? `(${clientLevelInfo.tierName} • ${clientLevelInfo.cashbackPct}%)` : `(${clientLevelInfo.cashbackPct}%)`}
                                                             </span>
                                                             <p className="text-[10px] text-muted-foreground font-sans">
                                                                 {clientAlfaCoins > 0

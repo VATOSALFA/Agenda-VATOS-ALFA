@@ -38,6 +38,8 @@ import {
   Coins,
   FileText,
   Users,
+  Crown,
+  Percent,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -53,6 +55,7 @@ import {
   updateDoc,
   serverTimestamp,
   increment,
+  onSnapshot,
 } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
@@ -68,6 +71,7 @@ import {
   validateJuntosSchedule,
   JUNTOS_REWARD_COINS_PER_PERSON,
   getCurrentHaircutPrice,
+  evaluateClientAlfaTier,
 } from '@/lib/benefit-security';
 
 interface QRScannerModalProps {
@@ -138,6 +142,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   const [rewardName, setRewardName] = useState<string>('Corte de Cortesía');
   const [beneficiosList, setBeneficiosList] = useState<any[]>([]);
   const [currentHaircutPrice, setCurrentHaircutPrice] = useState<number>(140);
+  const [nivelesConfig, setNivelesConfig] = useState<any>(null);
 
   // Estados interactivos para promoción "JUNTOS ES MEJOR" en Recepción
   const [juntosOption, setJuntosOption] = useState<'minors' | 'companions_app' | null>(null);
@@ -168,20 +173,47 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
             bList = d.beneficios_detallados;
           }
+          if (d.niveles_config) setNivelesConfig(d.niveles_config);
         }
         if (snapApp.exists()) {
-          const d = snapApp.data().pase_alfa || snapApp.data();
+          const rawApp = snapApp.data();
+          const d = rawApp.pase_alfa || rawApp;
           if (Number(d.sellosRequeridos) > 0 && !snap.exists()) setTargetStamps(Number(d.sellosRequeridos));
           if (d.recompensa && !snap.exists()) setRewardName(d.recompensa);
           if (bList.length === 0 && Array.isArray(d.beneficios_detallados)) {
             bList = d.beneficios_detallados;
           }
+          const niv = rawApp.niveles_config || d.niveles_config || rawApp['pase_alfa.niveles_config'];
+          if (niv) setNivelesConfig((prev: any) => prev || niv);
         }
         setBeneficiosList(bList);
       } catch (_) {}
     }
     loadPaseAlfaConfig();
+
+    const unsubPase = onSnapshot(
+      doc(db, 'configuracion', 'pase_alfa'),
+      (snap) => {
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.niveles_config) setNivelesConfig(d.niveles_config);
+          if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
+          if (d.recompensa) setRewardName(d.recompensa);
+          if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
+            setBeneficiosList(d.beneficios_detallados);
+          }
+        }
+      },
+      () => {}
+    );
+
+    return () => unsubPase();
   }, []);
+
+  const scannedClientTier = React.useMemo(
+    () => evaluateClientAlfaTier(scannedClient, nivelesConfig),
+    [scannedClient, nivelesConfig]
+  );
 
   const scannerRef = useRef<any>(null);
   const scannerContainerId = 'vatos-qr-reader-element';
@@ -1026,11 +1058,20 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       const currentStamps = Number(scannedClient.cortes_acumulados || 0);
       const newStamps = currentStamps + 1;
       const isFreeEligible = newStamps >= targetStamps;
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+      const nextTierInfo = evaluateClientAlfaTier(scannedClient, nivelesConfig, {
+        extraVisits: 1,
+        forceEvaluateWhenPaused: true,
+      });
 
       await updateDoc(doc(db, 'clientes', scannedClient.id), {
         cortes_acumulados: increment(1),
         citas_asistidas: increment(1),
+        visitas_totales: increment(1),
+        ultima_visita_fecha: todayStr,
         corte_gratis_disponible: isFreeEligible,
+        nivel: nextTierInfo.tierName,
         actualizado_en: serverTimestamp(),
       });
 
@@ -1038,14 +1079,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       setScannedClient({
         ...scannedClient,
         cortes_acumulados: newStamps,
+        citas_asistidas: nextTierInfo.visitasHistoricas,
         corte_gratis_disponible: isFreeEligible,
-      });
+        nivel: nextTierInfo.tierName,
+        ultima_visita_fecha: todayStr,
+      } as any);
 
       toast({
         title: '¡Sello de Visita Registrado!',
         description: isFreeEligible
           ? `¡Felicidades! ${scannedClient.nombre} completó sus ${targetStamps} visitas y tiene su ${rewardName}.`
-          : `Sello añadido con éxito. Ahora tiene ${newStamps} de ${targetStamps} visitas.`,
+          : `Sello añadido con éxito. Ahora tiene ${newStamps} de ${targetStamps} sellos (${nextTierInfo.visitasHistoricas} visitas históricas).`,
       });
     } catch (err: any) {
       console.error('Error sumando sello:', err);
@@ -1509,11 +1553,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
                     {/* Aviso de Cumpleaños Confirmado */}
                     {scannedBenefit.birthdayNotice && !scannedBenefit.isBlocked && (
-                      <div className="mt-3 p-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-200 relative z-10 flex items-center gap-2.5">
-                        <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
-                        <div>
+                      <div className="mt-3 p-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-200 relative z-10 flex items-start gap-2.5">
+                        <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0 mt-0.5" />
+                        <div className="space-y-1">
                           <p className="text-xs font-bold text-[#C5A880]">{scannedBenefit.birthdayNotice}</p>
                           <p className="text-[10px] text-gray-300">Cortesía de cumpleaños válida y autorizada para este año.</p>
+                          {scannedClientTier.activo && scannedClientTier.birthdayBenefitText && (
+                            <p className="text-[11px] font-bold text-white bg-[#C5A880]/20 border border-[#C5A880]/50 px-2 py-1 rounded-lg mt-1">
+                              👑 Privilegio de su nivel ({scannedClientTier.tierName}): {scannedClientTier.birthdayBenefitText}
+                            </p>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1844,22 +1893,32 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
                         {/* Nivel / Tier y AlfaCoins */}
                         <div className="mt-2 flex items-center gap-2 flex-wrap">
-                          <Badge
-                            className={cn(
-                              'text-[10px] font-bold px-2 py-0.5 border',
-                              scannedClient.nivel === 'Alfa Black VIP' || scannedClient.nivel === 'Alfa Gold'
-                                ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/50'
-                                : 'bg-slate-700/50 text-slate-200 border-slate-600'
-                            )}
-                          >
-                            <Award className="h-3 w-3 mr-1 inline text-[#C5A880]" />
-                            {scannedClient.nivel || 'Alfa Member'}
-                          </Badge>
+                          {scannedClientTier.activo && (
+                            <Badge
+                              className={cn(
+                                'text-[10px] font-bold px-2 py-0.5 border',
+                                scannedClientTier.tierId === 'vip' || scannedClientTier.tierId === 'gold'
+                                  ? 'bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/50'
+                                  : 'bg-slate-700/50 text-slate-200 border-slate-600'
+                              )}
+                            >
+                              {scannedClientTier.tierId === 'vip' ? (
+                                <Crown className="h-3 w-3 mr-1 inline text-[#C5A880]" />
+                              ) : (
+                                <Award className="h-3 w-3 mr-1 inline text-[#C5A880]" />
+                              )}
+                              {scannedClientTier.tierName} ({scannedClientTier.cashbackPct}% Cashback)
+                            </Badge>
+                          )}
 
                           <Badge className="bg-[#C5A880]/10 border border-[#C5A880]/30 text-[#C5A880] text-[10px] font-bold px-2 py-0.5">
                             <Coins className="h-3 w-3 mr-1 inline text-[#C5A880]" />
                             {Number(scannedClient.alfaCoins ?? (scannedClient as any).alfa_coins ?? scannedClient.puntosLealtad ?? (scannedClient as any).puntos_lealtad ?? 0)} ALFA COINS
                           </Badge>
+
+                          <span className="text-[10px] text-slate-300 bg-black/30 px-2 py-0.5 rounded border border-white/10 font-sans">
+                            {scannedClientTier.visitasHistoricas} visitas &bull; ${formatMoney(scannedClientTier.consumoHistorico)} MXN
+                          </span>
 
                           {scannedClient.appVinculada && (
                             <span className="text-[10px] text-blue-400 font-semibold flex items-center">
@@ -1870,6 +1929,32 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                         </div>
                       </div>
                     </div>
+
+                    {/* Privilegios Activos del Nivel (cuando el programa de niveles está encendido) */}
+                    {scannedClientTier.activo && scannedClientTier.beneficios.length > 0 && (
+                      <div className="mt-3 p-3 rounded-xl bg-[#0F172A]/85 border border-[#C5A880]/35 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#C5A880] flex items-center gap-1.5">
+                            <Crown className="h-3.5 w-3.5 text-[#C5A880]" />
+                            Privilegios Activos • {scannedClientTier.tierName}
+                          </span>
+                          {scannedClientTier.productDiscountPct > 0 && (
+                            <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[9px] font-bold px-1.5 py-0">
+                              <Percent className="h-2.5 w-2.5 mr-0.5 inline" />
+                              {scannedClientTier.productDiscountPct}% Desc. en Productos (Automático en Caja)
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="space-y-0.5">
+                          {scannedClientTier.beneficios.map((perk: string, idx: number) => (
+                            <p key={idx} className="text-[11px] text-slate-200 leading-snug flex items-start gap-1.5">
+                              <span className="text-[#C5A880] font-bold">✓</span>
+                              <span>{perk}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                   {/* Pase Alfa: Tarjeta de Sellos Visual */}
                   <div className="mt-4 pt-3.5 border-t border-[#C5A880]/20">

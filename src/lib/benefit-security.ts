@@ -465,3 +465,238 @@ export function validateInvitedClientEligibility(
   return { isEligible: true };
 }
 
+// ============================================================================
+// MOTOR DE NIVELES Y RANGOS PASE ALFA CLUB (EVALUACIÓN DINÁMICA Y PRIVILEGIOS)
+// ============================================================================
+
+export interface EvaluatedClientTier {
+  activo: boolean;
+  tierId: 'member' | 'gold' | 'vip';
+  tierName: string;
+  cashbackPct: number;
+  coinValue: number;
+  color: string;
+  colorTexto: string;
+  visitasHistoricas: number;
+  consumoHistorico: number;
+  beneficios: string[];
+  productDiscountPct: number;
+  productDiscountLabel: string | null;
+  birthdayBenefitText: string | null;
+  nextTierName: string | null;
+  faltanVisitas: number;
+  faltaGasto: number;
+}
+
+export function extractProductDiscountFromBenefits(beneficios: string[]): {
+  pct: number;
+  label: string | null;
+} {
+  if (!Array.isArray(beneficios)) return { pct: 0, label: null };
+  let bestPct = 0;
+  let bestLabel: string | null = null;
+
+  for (const raw of beneficios) {
+    const text = String(raw || '').trim();
+    if (!text) continue;
+    const match = text.match(
+      /(\d+(?:\.\d+)?)\s*%\s*(?:de\s*)?(?:descuento|desc\.?|off).*?(?:producto|productos|cera|pomada|aceite|tienda|cuidado|peinado|barba|shampoo|locion|loci[oó]n|gel)/i
+    );
+    if (match) {
+      const val = Number(match[1]);
+      if (!isNaN(val) && val > bestPct && val <= 100) {
+        bestPct = val;
+        bestLabel = text;
+      }
+    }
+  }
+
+  return { pct: bestPct, label: bestLabel };
+}
+
+export function evaluateClientAlfaTier(
+  client: any | null | undefined,
+  nivelesConfig: any | null | undefined,
+  options?: {
+    extraVisits?: number;
+    extraSpend?: number;
+    overrideVisits?: number;
+    overrideSpend?: number;
+    forceEvaluateWhenPaused?: boolean;
+  }
+): EvaluatedClientTier {
+  const defaultTiers = {
+    member: {
+      id: 'member' as const,
+      nombre: 'Alfa Member',
+      cashbackPct: 3,
+      visitasMin: 0,
+      gastoMin: 0,
+      color: '#2563EB',
+      colorTexto: '#FFFFFF',
+      beneficios: [
+        '1 AlfaCoin por cada $1 MXN gastado (Retorno del 3% en monedero)',
+        'Tarjeta digital Pase Alfa (10.° corte de cabello gratis)',
+      ],
+    },
+    gold: {
+      id: 'gold' as const,
+      nombre: 'Alfa Gold',
+      cashbackPct: 5,
+      visitasMin: 4,
+      gastoMin: 1500,
+      color: '#C5A880',
+      colorTexto: '#0F172A',
+      beneficios: [
+        '1 AlfaCoin por cada $1 MXN gastado con valor preferencial (Retorno del 5% en monedero)',
+        '10% de descuento en ceras, pomadas y aceites para barba',
+      ],
+    },
+    vip: {
+      id: 'vip' as const,
+      nombre: 'Alfa Black VIP',
+      cashbackPct: 7,
+      visitasMin: 8,
+      gastoMin: 3500,
+      color: '#0F172A',
+      colorTexto: '#F8FAFC',
+      beneficios: [
+        '1 AlfaCoin por cada $1 MXN gastado con valor VIP exclusivo (Retorno del 7% en monedero)',
+        '15% de descuento en todos los productos para cuidado y peinado',
+      ],
+    },
+  };
+
+  const isProgramActive = nivelesConfig ? nivelesConfig.activo !== false : true;
+  const member = { ...defaultTiers.member, ...(nivelesConfig?.member || {}) };
+  const gold = { ...defaultTiers.gold, ...(nivelesConfig?.gold || {}) };
+  const vip = { ...defaultTiers.vip, ...(nivelesConfig?.vip || {}) };
+  const criterio: 'visitas' | 'gasto' | 'ambos_opcional' =
+    nivelesConfig?.criterio || 'ambos_opcional';
+
+  const baseVisits = client
+    ? Math.max(
+        Number(client.citas_asistidas ?? 0),
+        Number(client.visitas_totales ?? 0),
+        Number(client.visitas ?? 0),
+        Number(client.total_visitas ?? 0),
+        Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0)
+      )
+    : 0;
+
+  const baseSpend = client
+    ? Math.max(
+        Number(client.consumo_total ?? 0),
+        Number(client.gasto_total ?? 0),
+        Number(client.consumoTotal ?? 0),
+        Number(client.consumo ?? 0)
+      )
+    : 0;
+
+  const v = Math.max(
+    0,
+    options?.overrideVisits !== undefined
+      ? Math.max(baseVisits, options.overrideVisits)
+      : baseVisits + (options?.extraVisits || 0)
+  );
+  const g = Math.max(
+    0,
+    Math.round(
+      ((options?.overrideSpend !== undefined
+        ? Math.max(baseSpend, options.overrideSpend)
+        : baseSpend) +
+        (options?.extraSpend || 0)) *
+        100
+    ) / 100
+  );
+
+  // Si no hay cliente seleccionado o si el programa de niveles está en pausa (y no se fuerza evaluación)
+  if (!client || (!isProgramActive && !options?.forceEvaluateWhenPaused)) {
+    const basePct = Number(member.cashbackPct ?? 3);
+    return {
+      activo: isProgramActive,
+      tierId: 'member',
+      tierName: member.nombre || 'Alfa Member',
+      cashbackPct: basePct,
+      coinValue: basePct / 100,
+      color: member.color || '#2563EB',
+      colorTexto: member.colorTexto || '#FFFFFF',
+      visitasHistoricas: v,
+      consumoHistorico: g,
+      beneficios: [],
+      productDiscountPct: 0,
+      productDiscountLabel: null,
+      birthdayBenefitText: null,
+      nextTierName: null,
+      faltanVisitas: 0,
+      faltaGasto: 0,
+    };
+  }
+
+  const vipVisitasMin = Number(vip.visitasMin ?? 8);
+  const vipGastoMin = Number(vip.gastoMin ?? 3500);
+  const goldVisitasMin = Number(gold.visitasMin ?? 4);
+  const goldGastoMin = Number(gold.gastoMin ?? 1500);
+
+  let isVip = false;
+  let isGold = false;
+
+  if (criterio === 'visitas') {
+    isVip = v >= vipVisitasMin;
+    isGold = v >= goldVisitasMin;
+  } else if (criterio === 'gasto') {
+    isVip = g >= vipGastoMin;
+    isGold = g >= goldGastoMin;
+  } else {
+    isVip = v >= vipVisitasMin || g >= vipGastoMin;
+    isGold = v >= goldVisitasMin || g >= goldGastoMin;
+  }
+
+  const selectedTier = isVip ? vip : isGold ? gold : member;
+  const tierId: 'member' | 'gold' | 'vip' = isVip ? 'vip' : isGold ? 'gold' : 'member';
+  const pct = Number(
+    selectedTier.cashbackPct ?? (isVip ? 7 : isGold ? 5 : 3)
+  );
+  const tierBenefits: string[] = Array.isArray(selectedTier.beneficios)
+    ? selectedTier.beneficios.filter((b: any) => typeof b === 'string' && b.trim().length > 0)
+    : [];
+
+  const prodDisc = extractProductDiscountFromBenefits(tierBenefits);
+  const birthdayBenefitText =
+    tierBenefits.find((b: string) => /cumplea[ñn]os/i.test(b)) || null;
+
+  let nextTierName: string | null = null;
+  let faltanVisitas = 0;
+  let faltaGasto = 0;
+
+  if (tierId === 'member') {
+    nextTierName = gold.nombre || 'Alfa Gold';
+    faltanVisitas = Math.max(0, goldVisitasMin - v);
+    faltaGasto = Math.max(0, Math.round((goldGastoMin - g) * 100) / 100);
+  } else if (tierId === 'gold') {
+    nextTierName = vip.nombre || 'Alfa Black VIP';
+    faltanVisitas = Math.max(0, vipVisitasMin - v);
+    faltaGasto = Math.max(0, Math.round((vipGastoMin - g) * 100) / 100);
+  }
+
+  return {
+    activo: isProgramActive,
+    tierId,
+    tierName: selectedTier.nombre || (isVip ? 'Alfa Black VIP' : isGold ? 'Alfa Gold' : 'Alfa Member'),
+    cashbackPct: pct,
+    coinValue: pct / 100,
+    color: selectedTier.color || (isVip ? '#0F172A' : isGold ? '#C5A880' : '#2563EB'),
+    colorTexto: selectedTier.colorTexto || (isGold ? '#0F172A' : '#FFFFFF'),
+    visitasHistoricas: v,
+    consumoHistorico: g,
+    beneficios: tierBenefits,
+    productDiscountPct: prodDisc.pct,
+    productDiscountLabel: prodDisc.label,
+    birthdayBenefitText,
+    nextTierName,
+    faltanVisitas,
+    faltaGasto,
+  };
+}
+
+

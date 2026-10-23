@@ -212,41 +212,44 @@ export function NivelesAlfaManager() {
     }, []);
 
     // Guardar cambios en Firestore
-    const handleSave = async () => {
+    const saveConfiguration = async (cfgToSave: NivelesClubConfig, isToggleOnly = false) => {
         setSaving(true);
         try {
             const payload: NivelesClubConfig = {
-                activo: Boolean(config.activo),
-                criterio: config.criterio,
+                activo: Boolean(cfgToSave.activo),
+                criterio: cfgToSave.criterio,
                 member: {
                     id: 'member',
-                    nombre: config.member.nombre.trim() || 'Alfa Member',
-                    visitasMin: Math.max(0, Number(config.member.visitasMin) || 0),
-                    gastoMin: Math.max(0, Number(config.member.gastoMin) || 0),
-                    color: config.member.color || '#2563EB',
-                    colorTexto: config.member.colorTexto || '#FFFFFF',
-                    descripcion: config.member.descripcion.trim(),
-                    beneficios: (config.member.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                    nombre: cfgToSave.member.nombre.trim() || 'Alfa Member',
+                    visitasMin: Math.max(0, Number(cfgToSave.member.visitasMin) || 0),
+                    gastoMin: Math.max(0, Number(cfgToSave.member.gastoMin) || 0),
+                    cashbackPct: Math.max(1, Number(cfgToSave.member.cashbackPct) || 3),
+                    color: cfgToSave.member.color || '#2563EB',
+                    colorTexto: cfgToSave.member.colorTexto || '#FFFFFF',
+                    descripcion: cfgToSave.member.descripcion.trim(),
+                    beneficios: (cfgToSave.member.beneficios || []).map((b) => b.trim()).filter(Boolean),
                 },
                 gold: {
                     id: 'gold',
-                    nombre: config.gold.nombre.trim() || 'Alfa Gold',
-                    visitasMin: Math.max(1, Number(config.gold.visitasMin) || 4),
-                    gastoMin: Math.max(0, Number(config.gold.gastoMin) || 1500),
-                    color: config.gold.color || '#C5A880',
-                    colorTexto: config.gold.colorTexto || '#0F172A',
-                    descripcion: config.gold.descripcion.trim(),
-                    beneficios: (config.gold.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                    nombre: cfgToSave.gold.nombre.trim() || 'Alfa Gold',
+                    visitasMin: Math.max(1, Number(cfgToSave.gold.visitasMin) || 4),
+                    gastoMin: Math.max(0, Number(cfgToSave.gold.gastoMin) || 1500),
+                    cashbackPct: Math.max(1, Number(cfgToSave.gold.cashbackPct) || 5),
+                    color: cfgToSave.gold.color || '#C5A880',
+                    colorTexto: cfgToSave.gold.colorTexto || '#0F172A',
+                    descripcion: cfgToSave.gold.descripcion.trim(),
+                    beneficios: (cfgToSave.gold.beneficios || []).map((b) => b.trim()).filter(Boolean),
                 },
                 vip: {
                     id: 'vip',
-                    nombre: config.vip.nombre.trim() || 'Alfa Black VIP',
-                    visitasMin: Math.max(2, Number(config.vip.visitasMin) || 8),
-                    gastoMin: Math.max(0, Number(config.vip.gastoMin) || 3500),
-                    color: config.vip.color || '#0F172A',
-                    colorTexto: config.vip.colorTexto || '#F8FAFC',
-                    descripcion: config.vip.descripcion.trim(),
-                    beneficios: (config.vip.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                    nombre: cfgToSave.vip.nombre.trim() || 'Alfa Black VIP',
+                    visitasMin: Math.max(2, Number(cfgToSave.vip.visitasMin) || 8),
+                    gastoMin: Math.max(0, Number(cfgToSave.vip.gastoMin) || 3500),
+                    cashbackPct: Math.max(1, Number(cfgToSave.vip.cashbackPct) || 7),
+                    color: cfgToSave.vip.color || '#0F172A',
+                    colorTexto: cfgToSave.vip.colorTexto || '#F8FAFC',
+                    descripcion: cfgToSave.vip.descripcion.trim(),
+                    beneficios: (cfgToSave.vip.beneficios || []).map((b) => b.trim()).filter(Boolean),
                 },
                 actualizado_el: Timestamp.now(),
                 actualizado_por: user?.email || 'admin',
@@ -282,11 +285,15 @@ export function NivelesAlfaManager() {
                 { merge: true }
             );
 
-            // 2. Guardar en configuracion/app_movil en espejo
+            // 2. Guardar en configuracion/app_movil en espejo (raíz y subobjeto pase_alfa)
             await setDoc(
                 doc(db, 'configuracion', 'app_movil'),
                 {
                     niveles_config: payload,
+                    pase_alfa: {
+                        niveles_config: payload,
+                        niveles: simpleNivelesPayload,
+                    },
                     'pase_alfa.niveles_config': payload,
                     actualizado_el: Timestamp.now(),
                 },
@@ -298,13 +305,21 @@ export function NivelesAlfaManager() {
                 action: 'ACTUALIZAR_NIVELES_ALFA_CLUB',
                 userId: user?.uid || (user as any)?.id || 'admin',
                 userName: user?.displayName || user?.email || 'Administrador',
-                details: `Configuración de niveles actualizada. Criterio: ${payload.criterio}. Member: ${payload.member.visitasMin}v/$${payload.member.gastoMin}, Gold: ${payload.gold.visitasMin}v/$${payload.gold.gastoMin}, VIP: ${payload.vip.visitasMin}v/$${payload.vip.gastoMin}`,
+                details: `Configuración de niveles actualizada (${payload.activo ? 'ACTIVO' : 'PAUSADO'}). Criterio: ${payload.criterio}. Member: ${payload.member.visitasMin}v/$${payload.member.gastoMin} (${payload.member.cashbackPct}%), Gold: ${payload.gold.visitasMin}v/$${payload.gold.gastoMin} (${payload.gold.cashbackPct}%), VIP: ${payload.vip.visitasMin}v/$${payload.vip.gastoMin} (${payload.vip.cashbackPct}%)`,
                 severity: 'info',
             });
 
             toast({
-                title: '¡Niveles Actualizados con Éxito!',
-                description: 'Los nuevos requisitos y beneficios ya están sincronizados en tiempo real con la app móvil.',
+                title: isToggleOnly
+                    ? payload.activo
+                        ? '¡Niveles y Rangos Activados!'
+                        : 'Niveles y Rangos en Pausa'
+                    : '¡Niveles Actualizados con Éxito!',
+                description: isToggleOnly
+                    ? payload.activo
+                        ? 'El sistema de ascenso automático y beneficios por nivel ya está activo en la App y en la Agenda.'
+                        : 'El programa de niveles se ha pausado temporalmente en la App y en la Agenda.'
+                    : 'Los nuevos requisitos, porcentajes de cashback y privilegios ya están sincronizados en tiempo real con la app móvil y recepción.',
                 variant: 'default',
             });
         } catch (err: any) {
@@ -317,6 +332,10 @@ export function NivelesAlfaManager() {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleSave = async () => {
+        await saveConfiguration(config, false);
     };
 
     // Funciones de gestión de beneficios por nivel
@@ -520,7 +539,12 @@ export function NivelesAlfaManager() {
                     <div className="flex items-center gap-2 mr-2">
                         <Switch
                             checked={config.activo}
-                            onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, activo: checked }))}
+                            disabled={saving}
+                            onCheckedChange={(checked) => {
+                                const updated = { ...config, activo: checked };
+                                setConfig(updated);
+                                saveConfiguration(updated, true);
+                            }}
                             id="switch-niveles-activo"
                         />
                         <Label htmlFor="switch-niveles-activo" className="text-xs font-semibold cursor-pointer">

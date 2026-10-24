@@ -217,6 +217,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
   const scannerRef = useRef<any>(null);
   const scannerContainerId = 'vatos-qr-reader-element';
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Iniciar / detener cámara
   const stopCamera = useCallback(async () => {
@@ -926,21 +927,88 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
     [isProcessing, stopCamera, toast, isScanningCompanion, scannedBenefit, scannedClient, juntosCompanions, beneficiosList]
   );
 
+  const handleScanFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setIsProcessing(true);
+      setCameraError(null);
+
+      try {
+        const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
+        let scanner = scannerRef.current;
+        let createdTemporary = false;
+
+        if (!scanner) {
+          const container = document.getElementById(scannerContainerId);
+          if (container) {
+            scanner = new Html5Qrcode(scannerContainerId, {
+              formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+              verbose: false,
+            });
+            createdTemporary = true;
+          }
+        }
+
+        if (!scanner) {
+          throw new Error('No se pudo inicializar el lector de imagen.');
+        }
+
+        const decodedText = await scanner.scanFile(file, false);
+        if (decodedText) {
+          handleScanText(decodedText);
+        }
+
+        if (createdTemporary) {
+          try {
+            await scanner.clear();
+          } catch (_) {}
+        }
+      } catch (err: any) {
+        console.warn('Error decodificando QR desde archivo:', err);
+        toast({
+          variant: 'destructive',
+          title: 'Código QR no detectado',
+          description: 'No se detectó un código QR legible en la imagen. Intenta con una foto más nítida o escribe el código manualmente.',
+        });
+      } finally {
+        setIsProcessing(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    },
+    [handleScanText, toast]
+  );
+
   const startCamera = useCallback(async () => {
     if (!isOpen || (!isScanningCompanion && (scannedClient || scannedPromo || scannedBenefit)) || activeTab !== 'camera') return;
     setCameraError(null);
 
+    // 1. Verificación de entorno seguro y disponibilidad de WebRTC
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (!window.isSecureContext && !isLocalhost) {
+        setCameraError('El acceso a la cámara en vivo requiere HTTPS. Puedes escribir el código o subir una foto del QR.');
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError('Este navegador no soporta acceso directo a la cámara. Puedes tomar una foto o escribir el código.');
+        return;
+      }
+    }
+
     try {
       const { Html5Qrcode, Html5QrcodeSupportedFormats } = await import('html5-qrcode');
 
-      // Si ya hay un scanner activo, limpiarlo
+      // Si ya hay un scanner activo, detenerlo limpiamente
       await stopCamera();
 
-      // Esperar brevemente a que el DOM monte el elemento
-      await new Promise(r => setTimeout(r, 150));
+      // Esperar brevemente a que el modal y el contenedor estén montados en el DOM
+      await new Promise(r => setTimeout(r, 200));
 
       const container = document.getElementById(scannerContainerId);
       if (!container) return;
+      container.innerHTML = '';
 
       const html5QrCode = new Html5Qrcode(scannerContainerId, {
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
@@ -948,39 +1016,86 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       });
       scannerRef.current = html5QrCode;
 
-      // Obtener cámaras disponibles
+      // Intentar obtener lista de cámaras disponibles
+      let devices: Array<{ id: string; label: string }> = [];
       try {
-        const devices = await Html5Qrcode.getCameras();
-        if (devices && devices.length > 0) {
-          setAvailableCameras(devices.map(d => ({ id: d.id, label: d.label || `Cámara ${d.id}` })));
+        const rawDevices = await Html5Qrcode.getCameras();
+        if (rawDevices && rawDevices.length > 0) {
+          devices = rawDevices.map(d => ({ id: d.id, label: d.label || `Cámara ${d.id}` }));
+          setAvailableCameras(devices);
         }
-      } catch (_) {}
+      } catch (camListErr) {
+        console.warn('Aviso: getCameras() falló o no tiene permiso previo:', camListErr);
+      }
 
-      const cameraConfig = selectedCameraId
-        ? { deviceId: { exact: selectedCameraId } }
-        : { facingMode: 'environment' };
+      // Configuración dinámica sin forzar aspectRatio 1.0 (evita OverconstrainedError en iOS Safari y móviles)
+      const qrScanConfig = {
+        fps: 15,
+        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.floor(minEdge * 0.72);
+          return { width: Math.max(size, 160), height: Math.max(size, 160) };
+        },
+      };
 
-      await html5QrCode.start(
-        cameraConfig,
-        {
-          fps: 12,
-          qrbox: { width: 240, height: 240 },
-          aspectRatio: 1.0,
-        },
-        decodedText => {
-          handleScanText(decodedText);
-        },
-        _error => {
-          // Errores de frame silenciosos
+      // Candidatos de cámara en orden de preferencia
+      const candidates: any[] = [];
+      if (selectedCameraId) {
+        candidates.push({ deviceId: { exact: selectedCameraId } });
+        candidates.push(selectedCameraId);
+      } else {
+        // En móviles, buscar la cámara trasera por label
+        const backCam = devices.find(d => /back|rear|trasera|environment|posterior/i.test(d.label));
+        if (backCam) {
+          candidates.push(backCam.id);
         }
-      );
+        // Constraint estándar de cámara trasera
+        candidates.push({ facingMode: 'environment' });
+        // Si hay dispositivos y no era la trasera encontrada
+        if (devices.length > 0 && (!backCam || backCam.id !== devices[0].id)) {
+          candidates.push(devices[0].id);
+        }
+        // Fallback a cámara frontal / webcam
+        candidates.push({ facingMode: 'user' });
+      }
+
+      let started = false;
+      let lastError: any = null;
+
+      for (const config of candidates) {
+        try {
+          await html5QrCode.start(
+            config,
+            qrScanConfig,
+            decodedText => {
+              handleScanText(decodedText);
+            },
+            _error => {
+              // Frame continuo sin código detectado
+            }
+          );
+          started = true;
+          break;
+        } catch (attemptErr: any) {
+          lastError = attemptErr;
+          console.warn('Intento de iniciar cámara con config falló:', config, attemptErr);
+        }
+      }
+
+      if (!started) {
+        throw lastError || new Error('No se pudo acceder a la cámara.');
+      }
     } catch (err: any) {
       console.warn('Error iniciando cámara:', err);
       let msg = 'No se pudo acceder a la cámara.';
-      if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission')) {
-        msg = 'Permiso denegado. Permite el acceso a la cámara en tu navegador.';
-      } else if (err?.name === 'NotFoundError') {
+      if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission') || err?.message?.includes('denied')) {
+        msg = 'Permiso denegado. Permite el acceso a la cámara en los ajustes de tu navegador o celular.';
+      } else if (err?.name === 'NotFoundError' || err?.message?.includes('not found') || err?.name === 'DevicesNotFoundError') {
         msg = 'No se detectó ninguna cámara disponible en tu equipo.';
+      } else if (err?.name === 'NotReadableError' || err?.message?.includes('in use') || err?.name === 'TrackStartError') {
+        msg = 'La cámara está siendo usada por otra aplicación. Ciérrala y reintenta.';
+      } else if (err?.name === 'OverconstrainedError') {
+        msg = 'Tu cámara no soporta la resolución solicitada.';
       }
       setCameraError(msg);
     }
@@ -2207,9 +2322,19 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
                 {activeTab === 'camera' ? (
                   <div className="space-y-3">
+                    {/* Input oculto para tomar foto o subir archivo de QR */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleScanFile}
+                    />
+
                     {/* Visor de Cámara */}
                     <div className="relative w-full aspect-square max-h-[320px] mx-auto rounded-2xl overflow-hidden bg-black border-2 border-[#C5A880]/40 shadow-inner flex items-center justify-center">
-                      <div id={scannerContainerId} className="w-full h-full object-cover" />
+                      <div id={scannerContainerId} className="w-full h-full object-cover [&>video]:w-full [&>video]:h-full [&>video]:object-cover" />
 
                       {/* Marco animado de escaneo */}
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
@@ -2226,48 +2351,72 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                       </div>
 
                       {cameraError && (
-                        <div className="absolute inset-0 bg-black/85 flex flex-col items-center justify-center p-4 text-center space-y-2">
+                        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center space-y-2.5 z-20">
                           <AlertCircle className="h-8 w-8 text-red-400" />
-                          <p className="text-xs text-gray-200">{cameraError}</p>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => startCamera()}
-                            className="text-xs mt-2"
-                          >
-                            Reintentar Cámara
-                          </Button>
+                          <p className="text-xs text-gray-200 max-w-xs">{cameraError}</p>
+                          <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => startCamera()}
+                              className="text-xs"
+                            >
+                              Reintentar Cámara
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="text-xs border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/20"
+                            >
+                              <Camera className="h-3.5 w-3.5 mr-1.5" />
+                              Tomar Foto / Subir QR
+                            </Button>
+                          </div>
                         </div>
                       )}
 
                       {isProcessing && (
-                        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center space-y-2">
+                        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center space-y-2 z-20">
                           <Loader2 className="h-8 w-8 text-[#C5A880] animate-spin" />
                           <p className="text-xs font-semibold text-white">Identificando cliente...</p>
                         </div>
                       )}
                     </div>
 
-                    {/* Selector de cámara si hay más de una */}
-                    {availableCameras.length > 1 && (
-                      <div className="flex items-center justify-center gap-2">
-                        <Camera className="h-3 w-3 text-gray-400" />
-                        <select
-                          value={selectedCameraId || ''}
-                          onChange={e => {
-                            setSelectedCameraId(e.target.value);
-                            setTimeout(() => startCamera(), 150);
-                          }}
-                          className="bg-[#161E35] border border-white/10 text-xs text-gray-300 rounded-lg px-2 py-1"
-                        >
-                          {availableCameras.map(cam => (
-                            <option key={cam.id} value={cam.id}>
-                              {cam.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                    {/* Acciones debajo del visor: selector de cámara o botón alternativo de foto */}
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {availableCameras.length > 1 && (
+                        <div className="flex items-center gap-1.5 bg-[#161E35] border border-white/10 rounded-lg px-2 py-1">
+                          <Camera className="h-3.5 w-3.5 text-gray-400" />
+                          <select
+                            value={selectedCameraId || ''}
+                            onChange={e => {
+                              setSelectedCameraId(e.target.value);
+                              setTimeout(() => startCamera(), 150);
+                            }}
+                            className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer"
+                          >
+                            {availableCameras.map(cam => (
+                              <option key={cam.id} value={cam.id} className="bg-slate-900 text-white">
+                                {cam.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="h-8 text-xs text-[#C5A880] hover:text-[#e4cfb4] hover:bg-[#C5A880]/10 rounded-lg gap-1.5 font-medium"
+                      >
+                        <Camera className="h-3.5 w-3.5" />
+                        <span>Tomar foto o subir QR</span>
+                      </Button>
+                    </div>
 
                     <p className="text-[11px] text-center text-gray-400">
                       Pide al cliente que muestre el código QR de su tarjeta o cupón frente a la cámara.

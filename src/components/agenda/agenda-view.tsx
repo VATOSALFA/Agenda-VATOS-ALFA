@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen, Hourglass } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen, Hourglass, QrCode } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -1632,6 +1632,16 @@ export default function AgendaView() {
                     <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
                       <span className="text-xs font-bold uppercase tracking-wider text-foreground">Filtros</span>
                     </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                      className="w-full flex items-center justify-center gap-2 border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/15 text-xs h-8.5 font-semibold rounded-lg shadow-xs"
+                    >
+                      <QrCode className="h-4 w-4 text-[#C5A880]" />
+                      <span>Escanear QR de Cliente</span>
+                    </Button>
 
                     {user?.role === 'Administrador general' && (
                       <div className="flex flex-col gap-1.5">

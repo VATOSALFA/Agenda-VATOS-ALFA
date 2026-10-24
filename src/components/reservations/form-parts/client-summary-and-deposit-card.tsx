@@ -94,6 +94,10 @@ export function ClientSummaryAndDepositCard({
     if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
     return Boolean(user?.permissions?.includes('ver_numero_telefono'));
   }, [user]);
+  const canEditClient = React.useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('editar_clientes'));
+  }, [user]);
 
   return (
     <div className="space-y-2">
@@ -155,16 +159,18 @@ export function ClientSummaryAndDepositCard({
                 <ChevronDown className="h-3.5 w-3.5" />
               )}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
-              onClick={onEditClient}
-              title="Editar datos del cliente"
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </Button>
+            {canEditClient && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground rounded-lg"
+                onClick={onEditClient}
+                title="Editar datos del cliente"
+              >
+                <Edit className="h-3.5 w-3.5" />
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"

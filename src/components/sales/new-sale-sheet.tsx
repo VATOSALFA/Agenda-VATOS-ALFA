@@ -959,6 +959,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
         return Boolean(user?.permissions?.includes('ver_numero_telefono'));
     }, [user]);
+    const canEditClient = useMemo(() => {
+        if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+        return Boolean(user?.permissions?.includes('editar_clientes'));
+    }, [user]);
     const { enableLoyaltyPoints, loyaltyCashbackPercentage } = useFeatures(); // Import hook
     const [step, setStep] = useState(1);
     const [mobileTab, setMobileTab] = useState<'catalogo' | 'carrito'>('catalogo');
@@ -3598,16 +3602,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1">
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-7 w-7 text-slate-400 hover:text-foreground transition-colors"
-                                                                onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
-                                                                title="Editar cliente"
-                                                            >
-                                                                <Edit className="h-3.5 w-3.5" />
-                                                            </Button>
+                                                            {canEditClient && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 text-slate-400 hover:text-foreground transition-colors"
+                                                                    onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                                                                    title="Editar cliente"
+                                                                >
+                                                                    <Edit className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            )}
                                                             <Button
                                                                 type="button"
                                                                 variant="ghost"
@@ -3927,16 +3933,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
-                                                            <Button
-                                                                type="button"
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
-                                                                onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
-                                                                title="Editar cliente"
-                                                            >
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
+                                                            {canEditClient && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                                                                    onClick={() => { setIsEditingClient(true); setIsClientModalOpen(true); }}
+                                                                    title="Editar cliente"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
                                                             <Button
                                                                 type="button"
                                                                 variant="ghost"

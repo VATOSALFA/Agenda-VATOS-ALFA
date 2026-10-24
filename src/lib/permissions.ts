@@ -43,6 +43,7 @@ export const allPermissionCategories: PermissionCategory[] = [
         icon: Users,
         permissions: [
             { key: 'ver_clientes', label: 'Ver Clientes' },
+            { key: 'editar_clientes', label: 'Editar Clientes' },
             { key: 'ver_numero_telefono', label: 'Ver número de teléfono' },
         ],
     },
@@ -138,7 +139,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
         description: 'Administra un local específico, gestionando profesionales, servicios y viendo reportes de su sucursal.',
         permissions: [
             'ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'bloquear_horarios',
-            'ver_clientes', 'ver_numero_telefono',
+            'ver_clientes', 'editar_clientes', 'ver_numero_telefono',
             'ver_ventas', 'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'registrar_ventas', 'ver_propinas',
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
             'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
@@ -151,7 +152,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
     {
         title: 'Recepcionista',
         description: 'Gestiona la agenda, reservas y clientes. Tiene acceso a la caja y a la creación de ventas.',
-        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas', 'ver_promociones', 'ver_conversaciones', 'atender_chats'],
+        permissions: ['ver_agenda', 'ver_agenda_global', 'crear_reservas', 'editar_reservas', 'ver_clientes', 'editar_clientes', 'ver_ventas', 'ver_caja', 'registrar_ventas', 'ver_promociones', 'ver_conversaciones', 'atender_chats'],
     },
     {
         title: 'Recepcionista (Sin edición)',

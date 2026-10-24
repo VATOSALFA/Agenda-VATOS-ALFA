@@ -549,6 +549,11 @@ export default function ClientsPage() {
     return user?.permissions?.includes('ver_numero_telefono');
   }, [user]);
 
+  const canEditClient = useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('editar_clientes'));
+  }, [user]);
+
   useEffect(() => {
     if (user?.local_id) {
       setLocalFilter(user.local_id);
@@ -1336,14 +1341,16 @@ export default function ClientsPage() {
                         >
                           <User className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(client)}
-                          className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-                          title="Editar"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
+                        {canEditClient && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditModal(client)}
+                            className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                            title="Editar"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setClientToDelete(client)}
@@ -1531,14 +1538,16 @@ export default function ClientsPage() {
                               >
                                 <User className="h-3.5 w-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-                                onClick={() => handleOpenEditModal(client)}
-                                title="Editar"
-                              >
-                                <Edit className="h-3.5 w-3.5" />
-                              </button>
+                              {canEditClient && (
+                                <button
+                                  type="button"
+                                  className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                  onClick={() => handleOpenEditModal(client)}
+                                  title="Editar"
+                                >
+                                  <Edit className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-destructive transition-colors"

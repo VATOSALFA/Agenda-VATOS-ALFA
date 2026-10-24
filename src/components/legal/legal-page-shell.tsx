@@ -113,7 +113,7 @@ export function LegalPageShell({
   badgeText,
   lastUpdated = 'Octubre 2026',
   companyName = 'VATOS ALFA Barber Shop',
-  companyEmail = 'vatosalfa.adm@gmail.com',
+  companyEmail = 'contacto@vatosalfa.com',
   companyPhone = '442 405 4509',
   companyAddress = 'Av. Sombrerete 1001, Col. Cipreses, Querétaro, Qro.',
   children,

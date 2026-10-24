@@ -5,7 +5,7 @@ import { LegalPageShell } from '@/components/legal/legal-page-shell';
 
 export default function EliminarCuentaPage() {
   const companyName = 'VATOS ALFA Barber Shop';
-  const companyEmail = 'vatosalfa.adm@gmail.com';
+  const companyEmail = 'contacto@vatosalfa.com';
   const companyPhone = '442 872 7279';
   const companyAddress = 'Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro, Qro.';
 

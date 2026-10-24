@@ -11,7 +11,7 @@ export default function PrivacidadPage() {
 
     const isLoading = (loadingEmpresa || loadingSettings) && !empresaData;
     const companyName = empresaData?.[0]?.name || 'VATOS ALFA Barber Shop';
-    const companyEmail = empresaData?.[0]?.email || 'vatosalfa.adm@gmail.com';
+    const companyEmail = empresaData?.[0]?.email || 'contacto@vatosalfa.com';
     const companyPhone = empresaData?.[0]?.phone || '442 405 4509';
     const companyAddress = empresaData?.[0]?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro, Qro.';
     const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};

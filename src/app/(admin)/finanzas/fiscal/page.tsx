@@ -71,6 +71,7 @@ interface DeclaracionFiscalData {
     porcentajeEfectivo?: number;
     comisionMercadoPagoFacturada?: number;
     ivaComisionesAcreditable?: number;
+    ivaDevolucionesGastos?: number;
     otrosGastosConFactura?: number;
     ivaOtrosGastosAcreditable?: number;
     folioOperacionSAT?: string;
@@ -82,6 +83,143 @@ interface DeclaracionFiscalData {
     ivaPagadoFinal?: number;
     totalPagadoFinal?: number;
 }
+
+// Registros oficiales de Declaraciones y Acuses SAT 2026
+const OFFICIAL_SAT_DECLARATIONS_2026: Record<string, DeclaracionFiscalData> = {
+    marzo: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 0,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 89,
+        ivaComisionesAcreditable: 0,
+        ivaDevolucionesGastos: 0,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '262050097927',
+        lineaCaptura: 'Sin línea de captura (Declaración en $0)',
+        fechaPago: '2026-04-13',
+        notas: 'Declaración Marzo 2026 presentada en ceros el 13/04/2026 (Operación 262050097927). Ingresos: $0 | ISR: $0 | IVA: $0 (1 factura recibida PUE con IVA $14 no acreditado) | Total Pagado: $0.',
+        montoDeclaradoFinal: 0,
+        isrPagadoFinal: 0,
+        ivaPagadoFinal: 0,
+        totalPagadoFinal: 0,
+    },
+    abril: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 0,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 146,
+        ivaComisionesAcreditable: 0,
+        ivaDevolucionesGastos: 0,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '263240154099',
+        lineaCaptura: 'Sin línea de captura (Declaración en $0)',
+        fechaPago: '2026-05-19',
+        notas: 'Declaración Abril 2026 presentada en ceros el 19/05/2026 (Operación 263240154099). Ingresos: $0 | ISR: $0 | IVA: $0 (1 factura recibida PUE con IVA $23 no acreditado) | Total Pagado: $0.',
+        montoDeclaradoFinal: 0,
+        isrPagadoFinal: 0,
+        ivaPagadoFinal: 0,
+        totalPagadoFinal: 0,
+    },
+    mayo: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 2192.40,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 128,
+        ivaComisionesAcreditable: 20,
+        ivaDevolucionesGastos: 0,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '261780178246',
+        lineaCaptura: 'Pagada según Acuse SAT (Operación 261780178246)',
+        fechaPago: '2026-06-17',
+        notas: 'Declaración Mayo 2026 presentada el 17/06/2026 (Operación 261780178246). CFDI Global PUE Subtotal: $1,890 ($2,192.40 con IVA) | ISR (1%): $19 | IVA Causado: $302 - IVA Acreditable Facturas Ingreso ($20) = $282 | Total Pagado: $301.',
+        montoDeclaradoFinal: 2192.40,
+        isrPagadoFinal: 19,
+        ivaPagadoFinal: 282,
+        totalPagadoFinal: 301,
+    },
+    junio: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 2263.16,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 121,
+        ivaComisionesAcreditable: 19,
+        ivaDevolucionesGastos: 0,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '261090202577',
+        lineaCaptura: '0426 57AD 5900 5048 7270',
+        fechaPago: '2026-07-20',
+        notas: 'Declaración Junio 2026 presentada el 20/07/2026 (Operación 261090202577). Ingreso Base sin IVA: $1,951 ($2,263.16 con IVA) | ISR (1%): $20 | IVA Causado: $312 - IVA Acreditable Facturas Ingreso ($19) = $293 | Total Pagado: $313.',
+        montoDeclaradoFinal: 2263.16,
+        isrPagadoFinal: 20,
+        ivaPagadoFinal: 293,
+        totalPagadoFinal: 313,
+    },
+    julio: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 3365.16,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 1111,
+        ivaComisionesAcreditable: 178,
+        ivaDevolucionesGastos: 0,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '261820227117',
+        lineaCaptura: '0426 5YR8 7700 5076 1224',
+        fechaPago: '2026-08-18',
+        notas: 'Declaración Julio 2026 presentada el 18/08/2026 (Operación 261820227117). CFDI Global PUE Subtotal: $2,901 ($3,365.16 con IVA) | ISR (1%): $29 | IVA Causado: $464 - IVA Acreditable Facturas Ingreso ($178) = $286 | Total Pagado: $315.',
+        montoDeclaradoFinal: 3365.16,
+        isrPagadoFinal: 29,
+        ivaPagadoFinal: 286,
+        totalPagadoFinal: 315,
+    },
+    agosto: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 4159.76,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 3153,
+        ivaComisionesAcreditable: 325,
+        ivaDevolucionesGastos: 11,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '262110250682',
+        lineaCaptura: 'Pagada según Acuse SAT (Operación 262110250682)',
+        fechaPago: '2026-09-18',
+        notas: 'Declaración Agosto 2026 presentada el 18/09/2026 (Operación 262110250682). CFDI Global PUE Subtotal: $3,586 ($4,159.76 con IVA) | ISR (1%): $36 | IVA Causado: $574 - IVA Acreditable del periodo ($325 de $504 en facturas ingreso) + IVA Notas Egreso ($11) = $260 | Total Pagado: $296.',
+        montoDeclaradoFinal: 4159.76,
+        isrPagadoFinal: 36,
+        ivaPagadoFinal: 260,
+        totalPagadoFinal: 296,
+    },
+    septiembre: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 4236.32,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 4306,
+        ivaComisionesAcreditable: 689,
+        ivaDevolucionesGastos: 442,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '262180275773',
+        lineaCaptura: '0426 7KXA 6400 5140 2218',
+        fechaPago: '2026-10-20',
+        notas: 'Declaración Septiembre 2026 presentada el 20/10/2026 (Operación 262180275773). CFDI Global PUE Subtotal: $3,652 ($4,236.32 con IVA) | ISR (1%): $37 | IVA Causado: $584 - IVA Acreditable Facturas Ingreso ($689) + IVA Notas Egreso ($442) = $337 | Total Pagado: $374.',
+        montoDeclaradoFinal: 4236.32,
+        isrPagadoFinal: 37,
+        ivaPagadoFinal: 337,
+        totalPagadoFinal: 374,
+    },
+};
 
 export default function ControlFiscalResicoPage() {
     const { toast } = useToast();
@@ -124,6 +262,7 @@ export default function ControlFiscalResicoPage() {
         porcentajeEfectivo: 20,
         comisionMercadoPagoFacturada: 2100,
         ivaComisionesAcreditable: 289.65,
+        ivaDevolucionesGastos: 0,
         otrosGastosConFactura: 0,
         ivaOtrosGastosAcreditable: 0,
         folioOperacionSAT: '',
@@ -144,15 +283,25 @@ export default function ControlFiscalResicoPage() {
     // Cargar datos de persistencia de Firestore para el mes seleccionado
     useEffect(() => {
         if (!db) return;
+        const officialRecord = selectedYear === 2026 ? OFFICIAL_SAT_DECLARATIONS_2026[monthName] : undefined;
         const unsub = onSnapshot(doc(db, 'finanzas_mensuales', monthDocId), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                if (data.declaracion_fiscal) {
+                if (data.declaracion_fiscal && (!officialRecord || data.declaracion_fiscal.folioOperacionSAT === officialRecord.folioOperacionSAT)) {
                     setFiscalData(prev => ({
                         ...prev,
                         ...data.declaracion_fiscal,
-                        montoPersonalizado: data.declaracion_fiscal.montoPersonalizado || 3200,
+                        ivaDevolucionesGastos: data.declaracion_fiscal.ivaDevolucionesGastos ?? 0,
+                        montoPersonalizado: data.declaracion_fiscal.montoPersonalizado ?? 3200,
                     }));
+                } else if (officialRecord) {
+                    setFiscalData(officialRecord);
+                    setDoc(doc(db, 'finanzas_mensuales', monthDocId), {
+                        declaracion_fiscal: {
+                            ...officialRecord,
+                            updatedAt: Timestamp.now(),
+                        }
+                    }, { merge: true }).catch(() => {});
                 } else {
                     setFiscalData({
                         estado: 'pendiente',
@@ -161,6 +310,7 @@ export default function ControlFiscalResicoPage() {
                         porcentajeEfectivo: 20,
                         comisionMercadoPagoFacturada: 2100,
                         ivaComisionesAcreditable: 289.65,
+                        ivaDevolucionesGastos: 0,
                         otrosGastosConFactura: 0,
                         ivaOtrosGastosAcreditable: 0,
                         folioOperacionSAT: '',
@@ -169,10 +319,34 @@ export default function ControlFiscalResicoPage() {
                         notas: '',
                     });
                 }
+            } else if (officialRecord) {
+                setFiscalData(officialRecord);
+                setDoc(doc(db, 'finanzas_mensuales', monthDocId), {
+                    declaracion_fiscal: {
+                        ...officialRecord,
+                        updatedAt: Timestamp.now(),
+                    }
+                }, { merge: true }).catch(() => {});
+            } else {
+                setFiscalData({
+                    estado: 'pendiente',
+                    estrategia: 'bancarizado',
+                    montoPersonalizado: 3200,
+                    porcentajeEfectivo: 20,
+                    comisionMercadoPagoFacturada: 2100,
+                    ivaComisionesAcreditable: 289.65,
+                    ivaDevolucionesGastos: 0,
+                    otrosGastosConFactura: 0,
+                    ivaOtrosGastosAcreditable: 0,
+                    folioOperacionSAT: '',
+                    lineaCaptura: '',
+                    fechaPago: '',
+                    notas: '',
+                });
             }
         });
         return () => unsub();
-    }, [monthDocId]);
+    }, [monthDocId, monthName, selectedYear]);
 
     // Cargar historial anual de todas las declaraciones del año seleccionado
     const [yearlyFiscalRecords, setYearlyFiscalRecords] = useState<Record<string, any>>({});
@@ -183,12 +357,28 @@ export default function ControlFiscalResicoPage() {
             try {
                 const snap = await getDocs(collection(db, 'finanzas_mensuales'));
                 const records: Record<string, any> = {};
+                if (selectedYear === 2026) {
+                    Object.entries(OFFICIAL_SAT_DECLARATIONS_2026).forEach(([mKey, officialRec]) => {
+                        records[mKey] = officialRec;
+                        setDoc(doc(db, 'finanzas_mensuales', `${mKey}_2026`), {
+                            declaracion_fiscal: {
+                                ...officialRec,
+                                updatedAt: Timestamp.now(),
+                            }
+                        }, { merge: true }).catch(() => {});
+                    });
+                }
                 snap.forEach(d => {
                     if (d.id.includes(String(selectedYear))) {
                         const [m] = d.id.split('_');
                         const data = d.data();
                         if (data.declaracion_fiscal) {
-                            records[m] = data.declaracion_fiscal;
+                            const officialRec = selectedYear === 2026 ? OFFICIAL_SAT_DECLARATIONS_2026[m] : undefined;
+                            if (officialRec && data.declaracion_fiscal.folioOperacionSAT !== officialRec.folioOperacionSAT) {
+                                records[m] = officialRec;
+                            } else {
+                                records[m] = data.declaracion_fiscal;
+                            }
                         }
                     }
                 });
@@ -299,14 +489,19 @@ export default function ControlFiscalResicoPage() {
         return montoADeclararBruto > 0 ? (montoADeclararBruto / 1.16) : 0;
     }, [montoADeclararBruto]);
 
-    // ISR RESICO
-    const tasaIsr = useMemo(() => {
-        return getResicoIsrRate(baseGravableSinIVA);
+    // El portal del SAT redondea la base sin IVA al entero más cercano en los formularios de declaración
+    const baseGravableRedondeadaSAT = useMemo(() => {
+        return Math.round(baseGravableSinIVA);
     }, [baseGravableSinIVA]);
 
+    // ISR RESICO
+    const tasaIsr = useMemo(() => {
+        return getResicoIsrRate(baseGravableRedondeadaSAT);
+    }, [baseGravableRedondeadaSAT]);
+
     const isrCalculado = useMemo(() => {
-        return baseGravableSinIVA * (tasaIsr / 100);
-    }, [baseGravableSinIVA, tasaIsr]);
+        return baseGravableRedondeadaSAT * (tasaIsr / 100);
+    }, [baseGravableRedondeadaSAT, tasaIsr]);
 
     const isrRedondeado = Math.round(isrCalculado);
 
@@ -315,15 +510,23 @@ export default function ControlFiscalResicoPage() {
         return baseGravableSinIVA * 0.16;
     }, [baseGravableSinIVA]);
 
-    // Deducción de IVA Acreditable (Comisiones MP + Insumos)
+    const ivaTrasladadoRedondeadoSAT = useMemo(() => {
+        return Math.round(baseGravableRedondeadaSAT * 0.16);
+    }, [baseGravableRedondeadaSAT]);
+
+    // Deducción de IVA Acreditable (Facturas recibidas tipo Ingreso PUE) y ajuste por Notas de Egreso PUE
     const ivaAcreditableTotal = useMemo(() => {
         const ivaMP = fiscalData.ivaComisionesAcreditable || 0;
         const ivaOtros = fiscalData.ivaOtrosGastosAcreditable || 0;
         return ivaMP + ivaOtros;
     }, [fiscalData.ivaComisionesAcreditable, fiscalData.ivaOtrosGastosAcreditable]);
 
-    const ivaAPagar = Math.max(0, ivaTrasladado - ivaAcreditableTotal);
-    const ivaRedondeado = Math.round(ivaAPagar);
+    const ivaAcreditableIngresoRedondeado = Math.round(ivaAcreditableTotal);
+    const ivaDevolucionesEgresoRedondeado = Math.round(fiscalData.ivaDevolucionesGastos || 0);
+    const ivaAcreditableNetoSAT = Math.max(0, ivaAcreditableIngresoRedondeado - ivaDevolucionesEgresoRedondeado);
+
+    const ivaAPagar = Math.max(0, ivaTrasladado - ivaAcreditableTotal + (fiscalData.ivaDevolucionesGastos || 0));
+    const ivaRedondeado = Math.max(0, ivaTrasladadoRedondeadoSAT - ivaAcreditableIngresoRedondeado + ivaDevolucionesEgresoRedondeado);
 
     const granTotalAPagarSAT = isrRedondeado + ivaRedondeado;
 
@@ -446,7 +649,7 @@ export default function ControlFiscalResicoPage() {
                             </>
                         ) : (
                             <>
-                                <Clock className="h-3.5 w-3.5 text-slate-400" /> Pendiente (Vence día 17)
+                                <Clock className="h-3.5 w-3.5 text-slate-400" /> Pendiente (Vence día 17 + 4 días hábiles)
                             </>
                         )}
                     </Badge>
@@ -955,41 +1158,88 @@ export default function ControlFiscalResicoPage() {
                         <div className="space-y-2 text-xs">
                             <div className="flex justify-between py-1 border-b border-border/40">
                                 <span className="text-muted-foreground">IVA Causado (16% sobre base):</span>
-                                <span className="font-semibold text-foreground">${ivaTrasladado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-foreground">
+                                    ${ivaTrasladado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} → ${ivaTrasladadoRedondeadoSAT.toLocaleString('es-MX')}
+                                </span>
                             </div>
 
-                            {/* Deducción de comisiones MP */}
-                            <div className="flex items-center justify-between py-1 border-b border-border/40">
-                                <div className="space-y-0.5">
+                            {/* Deducción de IVA acreditable por facturas recibidas Tipo Ingreso PUE */}
+                            <div className="flex items-center justify-between py-1 border-b border-border/40 gap-2">
+                                <div className="space-y-0.5 min-w-0">
                                     <span className="text-xs font-medium text-foreground flex items-center gap-1">
-                                        (-) IVA Comisiones Terminal/MP:
+                                        (-) IVA Acreditable Gastos/MP (Tipo Ingreso):
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <button type="button" className="text-slate-400 hover:text-blue-400 transition-colors">
+                                                    <HelpCircle className="h-3 w-3" />
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                                <p className="font-semibold text-blue-400">Facturas recibidas Tipo Ingreso (PUE)</p>
+                                                <p className="text-muted-foreground text-[11px]">
+                                                    El SAT precarga este monto en la casilla <strong>"Determinación del IVA acreditable"</strong> (Hoja 8 de tu declaración). Ejemplo Septiembre: <strong>$689</strong>.
+                                                </p>
+                                            </PopoverContent>
+                                        </Popover>
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">Factura descargable en MP</span>
+                                    <span className="text-[10px] text-muted-foreground block truncate">Precargado en SAT (Facturas PUE recibidas)</span>
                                 </div>
-                                <div className="w-24 sm:w-28">
+                                <div className="w-24 sm:w-28 shrink-0">
                                     <Input 
                                         type="number" 
-                                        value={fiscalData.ivaComisionesAcreditable || ''}
-                                        onChange={(e) => setFiscalData(prev => ({ ...prev, ivaComisionesAcreditable: Number(e.target.value) }))}
-                                        placeholder="289.65"
+                                        value={fiscalData.ivaComisionesAcreditable !== undefined && fiscalData.ivaComisionesAcreditable !== 0 ? fiscalData.ivaComisionesAcreditable : ''}
+                                        onChange={(e) => setFiscalData(prev => ({ ...prev, ivaComisionesAcreditable: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                                        placeholder="689"
                                         className="h-7 text-xs text-right bg-background border-border/60"
                                     />
                                 </div>
                             </div>
 
-                            {/* Deducción de otros gastos facturados */}
-                            <div className="flex items-center justify-between py-1 border-b border-border/40">
-                                <div className="space-y-0.5">
-                                    <span className="text-xs font-medium text-foreground">
-                                        (-) IVA Insumos/Gastos con CFDI:
+                            {/* IVA por devoluciones, descuentos y bonificaciones en gastos (Tipo Egreso PUE) */}
+                            <div className="flex items-center justify-between py-1 border-b border-border/40 gap-2">
+                                <div className="space-y-0.5 min-w-0">
+                                    <span className="text-xs font-medium text-foreground flex items-center gap-1">
+                                        (+) IVA Notas de Egreso / Bonif. (Tipo Egreso):
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <button type="button" className="text-slate-400 hover:text-blue-400 transition-colors">
+                                                    <HelpCircle className="h-3 w-3" />
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1">
+                                                <p className="font-semibold text-blue-400">Facturas recibidas Tipo Egreso (PUE)</p>
+                                                <p className="text-muted-foreground text-[11px]">
+                                                    Mercado Pago suele emitir notas de crédito/bonificación sobre comisiones. El SAT las precarga en <strong>"IVA por devoluciones, descuentos y bonificaciones en gastos"</strong> (Hoja 9) y las suma para ajustar tu IVA acreditable neto. Ejemplo Septiembre: <strong>$442</strong>.
+                                                </p>
+                                            </PopoverContent>
+                                        </Popover>
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">Facturas a tu RFC con IVA</span>
+                                    <span className="text-[10px] text-muted-foreground block truncate">Notas de crédito MP precargadas en SAT</span>
                                 </div>
-                                <div className="w-24 sm:w-28">
+                                <div className="w-24 sm:w-28 shrink-0">
                                     <Input 
                                         type="number" 
-                                        value={fiscalData.ivaOtrosGastosAcreditable || ''}
-                                        onChange={(e) => setFiscalData(prev => ({ ...prev, ivaOtrosGastosAcreditable: Number(e.target.value) }))}
+                                        value={fiscalData.ivaDevolucionesGastos !== undefined && fiscalData.ivaDevolucionesGastos !== 0 ? fiscalData.ivaDevolucionesGastos : ''}
+                                        onChange={(e) => setFiscalData(prev => ({ ...prev, ivaDevolucionesGastos: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                                        placeholder="0"
+                                        className="h-7 text-xs text-right bg-background border-border/60"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Deducción adicional de otros gastos facturados */}
+                            <div className="flex items-center justify-between py-1 border-b border-border/40 gap-2">
+                                <div className="space-y-0.5 min-w-0">
+                                    <span className="text-xs font-medium text-foreground">
+                                        (-) IVA Otros Gastos adicionales (CFDI):
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground block truncate">Si tienes facturas extra no incluidas arriba (IVA neto: ${ivaAcreditableNetoSAT})</span>
+                                </div>
+                                <div className="w-24 sm:w-28 shrink-0">
+                                    <Input 
+                                        type="number" 
+                                        value={fiscalData.ivaOtrosGastosAcreditable !== undefined && fiscalData.ivaOtrosGastosAcreditable !== 0 ? fiscalData.ivaOtrosGastosAcreditable : ''}
+                                        onChange={(e) => setFiscalData(prev => ({ ...prev, ivaOtrosGastosAcreditable: e.target.value === '' ? 0 : Number(e.target.value) }))}
                                         placeholder="0.00"
                                         className="h-7 text-xs text-right bg-background border-border/60"
                                     />
@@ -998,7 +1248,9 @@ export default function ControlFiscalResicoPage() {
 
                             <div className="flex justify-between items-center py-2 px-3 bg-muted/20 border border-border/60 rounded-lg text-foreground font-bold">
                                 <span>IVA a Pagar al SAT:</span>
-                                <span className="text-xs sm:text-sm font-extrabold text-blue-400">${ivaAPagar.toFixed(2)} → ${ivaRedondeado.toLocaleString('es-MX')}</span>
+                                <span className="text-xs sm:text-sm font-extrabold text-blue-400">
+                                    ${ivaTrasladadoRedondeadoSAT} - ${ivaAcreditableIngresoRedondeado}{ivaDevolucionesEgresoRedondeado > 0 ? ` + $${ivaDevolucionesEgresoRedondeado}` : ''} = ${ivaRedondeado.toLocaleString('es-MX')}
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -1583,54 +1835,61 @@ export default function ControlFiscalResicoPage() {
                 </div>
 
                 <div className="space-y-4">
-                    <div className="text-xs text-muted-foreground">
-                        El portal del SAT solicita capturar valores enteros sin centavos. Los botones copian las cantidades redondeadas:
+                    <div className="p-3 bg-muted/20 rounded-xl border border-border/60 text-xs space-y-1">
+                        <div className="font-semibold text-foreground flex items-center gap-1.5">
+                            <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                            Configuración inicial al entrar al portal de Declaraciones SAT:
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Selecciona <strong>Periodicidad: 2-Mensual</strong> | <strong>Ejercicio: {selectedYear}</strong> | <strong>Periodo: {monthLabel}</strong> | <strong>Tipo: Normal</strong> y marca las 2 obligaciones: <strong>ISR simplificado de confianza. Personas físicas</strong> e <strong>IVA simplificado de confianza</strong>.
+                        </p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         {/* Paso a paso ISR */}
                         <div className="space-y-3 p-3.5 rounded-xl border border-border/60 bg-muted/10">
                             <div className="font-bold text-xs uppercase tracking-wider text-blue-400 flex items-center gap-1.5 pb-2 border-b border-border/40">
-                                <ShieldCheck className="h-4 w-4 text-blue-400" /> Formulario ISR RESICO
+                                <ShieldCheck className="h-4 w-4 text-blue-400" /> 1. Pestaña ISR Simplificado de Confianza
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
+                                <div className="p-2 bg-background rounded-lg border border-border/40 space-y-1">
+                                    <div className="font-semibold text-foreground">1. Preguntas de la pestaña "Ingresos":</div>
+                                    <div className="text-[11px] text-muted-foreground space-y-0.5">
+                                        <div>• ¿Obtenidos a través de copropiedad?: <strong className="text-foreground">NO</strong></div>
+                                        <div>• ¿Tienes ingresos a disminuir?: <strong className="text-foreground">NO</strong></div>
+                                        <div>• ¿Tienes ingresos adicionales?: <strong className="text-foreground">NO</strong> <span className="text-[10px]">(Si el prellenado marca $0 porque no timbraste CFDI en el mes, pon <strong>SÍ</strong> → <em>"Ingresos no considerados en el prellenado"</em>)</span></div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
                                     <div>
-                                        <div className="font-semibold text-foreground">1. Total de ingresos cobrados:</div>
-                                        <div className="text-[11px] text-muted-foreground">Casilla principal de ingresos</div>
+                                        <div className="font-semibold text-foreground">2. Detallar ingresos ("Actividad empresarial"):</div>
+                                        <div className="text-[11px] text-muted-foreground">Da clic en "Detallar" y pega este monto para que "Monto por detallar" quede en 0:</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
-                                        onClick={() => copyToClipboard(String(Math.round(baseGravableSinIVA)), 'isr_ingresos')}
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
+                                        onClick={() => copyToClipboard(String(baseGravableRedondeadaSAT), 'isr_ingresos')}
                                     >
                                         {copiedField === 'isr_ingresos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${Math.round(baseGravableSinIVA).toLocaleString('es-MX')}
+                                        ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
-                                    <div>
-                                        <div className="font-semibold text-foreground">2. Ingresos exentos:</div>
-                                        <div className="text-[11px] text-muted-foreground">Para barbería siempre es $0</div>
+                                <div className="p-2 bg-background rounded-lg border border-border/40 space-y-1">
+                                    <div className="font-semibold text-foreground">3. Pestaña "Determinación":</div>
+                                    <div className="text-[11px] text-muted-foreground space-y-0.5">
+                                        <div>• ¿Tienes compensaciones por aplicar?: <strong className="text-foreground">NO</strong></div>
+                                        <div>• ¿Tienes estímulos por aplicar?: <strong className="text-foreground">NO</strong></div>
                                     </div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
-                                        onClick={() => copyToClipboard('0', 'isr_exentos')}
-                                    >
-                                        {copiedField === 'isr_exentos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        $0
-                                    </Button>
                                 </div>
 
                                 <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
                                     <div>
-                                        <div className="font-semibold">3. ISR determinado (SAT):</div>
-                                        <div className="text-[11px] text-muted-foreground">Debe arrojar exactamente:</div>
+                                        <div className="font-semibold">4. ISR a pagar (Pestaña Pago):</div>
+                                        <div className="text-[11px] text-muted-foreground">Tasa {tasaIsr}% sobre ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}:</div>
                                     </div>
                                     <span className="font-extrabold text-sm text-blue-400">${isrRedondeado.toLocaleString('es-MX')}</span>
                                 </div>
@@ -1640,46 +1899,62 @@ export default function ControlFiscalResicoPage() {
                         {/* Paso a paso IVA */}
                         <div className="space-y-3 p-3.5 rounded-xl border border-border/60 bg-muted/10">
                             <div className="font-bold text-xs uppercase tracking-wider text-blue-400 flex items-center gap-1.5 pb-2 border-b border-border/40">
-                                <FileText className="h-4 w-4 text-blue-400" /> Formulario IVA RESICO
+                                <FileText className="h-4 w-4 text-blue-400" /> 2. Pestaña IVA Simplificado de Confianza
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
                                     <div>
-                                        <div className="font-semibold text-foreground">1. Actividades gravadas al 16%:</div>
-                                        <div className="text-[11px] text-muted-foreground">Base neta gravable</div>
+                                        <div className="font-semibold text-foreground">1. Actividades gravadas al 16% (Precargado):</div>
+                                        <div className="text-[11px] text-muted-foreground">Genera un IVA a cargo al 16% de <strong className="text-foreground">${ivaTrasladadoRedondeadoSAT.toLocaleString('es-MX')}</strong></div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
-                                        onClick={() => copyToClipboard(String(Math.round(baseGravableSinIVA)), 'iva_actividades')}
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
+                                        onClick={() => copyToClipboard(String(baseGravableRedondeadaSAT), 'iva_actividades')}
                                     >
                                         {copiedField === 'iva_actividades' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${Math.round(baseGravableSinIVA).toLocaleString('es-MX')}
+                                        ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40">
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
                                     <div>
-                                        <div className="font-semibold text-foreground">2. IVA acreditable del periodo:</div>
-                                        <div className="text-[11px] text-muted-foreground">Comisiones terminal e insumos</div>
+                                        <div className="font-semibold text-foreground">2. Determinación del IVA acreditable:</div>
+                                        <div className="text-[11px] text-muted-foreground">Da clic en "Capturar", copia el IVA de facturas recibidas en "IVA acreditable por actividades gravadas", pon 0 en inversiones y NO en otras cantidades:</div>
                                     </div>
                                     <Button 
                                         variant="outline" 
                                         size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500"
-                                        onClick={() => copyToClipboard(String(Math.round(ivaAcreditableTotal)), 'iva_acreditable')}
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
+                                        onClick={() => copyToClipboard(String(ivaAcreditableIngresoRedondeado), 'iva_acreditable')}
                                     >
                                         {copiedField === 'iva_acreditable' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${Math.round(ivaAcreditableTotal).toLocaleString('es-MX')}
+                                        ${ivaAcreditableIngresoRedondeado.toLocaleString('es-MX')}
+                                    </Button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
+                                    <div>
+                                        <div className="font-semibold text-foreground">3. IVA devoluciones/bonificaciones en gastos:</div>
+                                        <div className="text-[11px] text-muted-foreground">Si hay notas de egreso MP precargadas, da clic en "Ver Detalle" y captura el mismo monto. Luego responde NO a otras cantidades, compensaciones y estímulos:</div>
+                                    </div>
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
+                                        onClick={() => copyToClipboard(String(ivaDevolucionesEgresoRedondeado), 'iva_egresos')}
+                                    >
+                                        {copiedField === 'iva_egresos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
+                                        ${ivaDevolucionesEgresoRedondeado.toLocaleString('es-MX')}
                                     </Button>
                                 </div>
 
                                 <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
                                     <div>
-                                        <div className="font-semibold">3. IVA a cargo (A pagar):</div>
-                                        <div className="text-[11px] text-muted-foreground">Debe arrojar exactamente:</div>
+                                        <div className="font-semibold">4. IVA a cargo (A pagar):</div>
+                                        <div className="text-[11px] text-muted-foreground">${ivaTrasladadoRedondeadoSAT} - ${ivaAcreditableIngresoRedondeado}{ivaDevolucionesEgresoRedondeado > 0 ? ` + $${ivaDevolucionesEgresoRedondeado}` : ''}:</div>
                                     </div>
                                     <span className="font-extrabold text-sm text-blue-400">${ivaRedondeado.toLocaleString('es-MX')}</span>
                                 </div>
@@ -1910,7 +2185,7 @@ export default function ControlFiscalResicoPage() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="py-1.5 px-3 text-right hidden sm:table-cell">
-                                            {rec?.montoDeclaradoFinal ? `$${Number(rec.montoDeclaradoFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : "-"}
+                                            {rec?.montoDeclaradoFinal !== undefined ? `$${Number(rec.montoDeclaradoFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : "-"}
                                         </TableCell>
                                         <TableCell className="py-1.5 px-3 text-right text-blue-400 hidden md:table-cell">
                                             {rec?.isrPagadoFinal !== undefined ? `$${Number(rec.isrPagadoFinal).toLocaleString('es-MX')}` : "-"}

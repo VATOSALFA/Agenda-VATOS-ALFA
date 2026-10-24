@@ -892,23 +892,23 @@ export default function Header() {
             )}
 
             {hasActivePromotions && canSee('ver_promociones') && (
-              <div className="ml-1 lg:ml-2 flex items-center">
-                <Link
-                  href="/promociones"
-                  className={cn(
-                    'px-3.5 py-1.5 rounded-full text-xs lg:text-sm whitespace-nowrap font-bold text-white shadow-md transform hover:scale-105 active:scale-95 duration-200 border flex items-center gap-1.5 animate-gradient-flow bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-500 hover:shadow-lg transition-all',
-                    pathname === '/promociones'
-                      ? 'border-white ring-2 ring-white/20 shadow-purple-500/40 scale-105'
-                      : 'border-white/20 hover:border-white/50'
-                  )}
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                  </span>
-                  Promociones
-                </Link>
-              </div>
+              <Link
+                href="/promociones"
+                className={cn(
+                  'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap flex items-center gap-1.5 border ml-1',
+                  pathname.startsWith('/promociones')
+                    ? 'bg-[#202A49] text-[#C5A880] border-[#C5A880] font-semibold shadow-xs'
+                    : 'text-[#C5A880] bg-[#162038]/60 hover:bg-[#1f2b4c] hover:text-[#e4cfb4] border-[#C5A880]/40'
+                )}
+                title="Promociones activas"
+              >
+                <Gift className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
+                <span>Promociones</span>
+                <span className="relative flex h-2 w-2 ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A880] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C5A880]"></span>
+                </span>
+              </Link>
             )}
 
           </nav>
@@ -921,7 +921,7 @@ export default function Header() {
                     variant="ghost"
                     size="icon"
                     onClick={() => dispatchCustomEvent('open-qr-scanner')}
-                    className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors hidden sm:inline-flex"
+                    className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors inline-flex"
                     aria-label="Escanear QR"
                   >
                     <QrCode className="h-4 w-4 text-[#C5A880]" />

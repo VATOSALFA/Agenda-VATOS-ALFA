@@ -102,7 +102,16 @@ const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
 export function NewClientForm({ onFormSubmit, onCancel, client = null, initialName = '' }: NewClientFormProps) {
   const { toast } = useToast();
-  const { db } = useAuth();
+  const { db, user } = useAuth();
+  const canViewPhone = useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('ver_numero_telefono'));
+  }, [user]);
+
+  const canEditClient = useMemo(() => {
+    if (user?.role === 'Administrador general' || user?.role === 'Administrador local') return true;
+    return Boolean(user?.permissions?.includes('editar_clientes'));
+  }, [user]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!client;
 
@@ -259,10 +268,10 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
       }
       const parsedPhone = parseStoredPhone(client.telefono);
       setPhoneCountryCode(parsedPhone.countryCode);
-      setPhoneLocalDigits(parsedPhone.localDigits);
+      setPhoneLocalDigits(canViewPhone ? parsedPhone.localDigits : '••••••••••');
       form.reset({
         ...client,
-        telefono: buildStoredPhone(parsedPhone.countryCode, parsedPhone.localDigits),
+        telefono: client.telefono || '',
         fecha_nacimiento: birthDate
       });
     } else {
@@ -277,7 +286,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
         fecha_nacimiento: undefined,
       });
     }
-  }, [client, isEditMode, form, initialName]);
+  }, [client, isEditMode, form, initialName, canViewPhone]);
 
   async function onSubmit(data: ClientFormData) {
     setIsSubmitting(true);
@@ -315,7 +324,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     const dataToSave: Partial<Client> = {
       nombre: data.nombre,
       apellido: data.apellido,
-      telefono: data.telefono,
+      telefono: (isEditMode && !canViewPhone && client) ? (client.telefono || '') : data.telefono,
       correo: data.correo,
       notas: data.notas,
       fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
@@ -424,6 +433,27 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
   const fieldSettings = agendaSettings?.customerFields;
   const isSaveDisabled = isSubmitting || isCheckingDuplicates || !!phoneError || !!emailError || !form.formState.isValid;
 
+  if (isEditMode && !canEditClient) {
+    return (
+      <div className="py-8 px-4 text-center space-y-4">
+        <div className="flex justify-center">
+          <AlertCircle className="h-10 w-10 text-muted-foreground" />
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Acceso no autorizado</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            No tienes permisos para editar clientes. Contacta a un administrador para solicitar el permiso correspondiente.
+          </p>
+        </div>
+        {onCancel && (
+          <Button type="button" variant="outline" size="sm" onClick={onCancel}>
+            Cerrar
+          </Button>
+        )}
+      </div>
+    );
+  }
+
   if (isLoadingSettings) {
     return (
       <div className="space-y-4 px-1 py-6 max-h-[60vh]">
@@ -486,8 +516,10 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
                   </FormLabel>
                   <div className="flex items-center gap-1.5">
                     <Select
+                      disabled={isEditMode && !canViewPhone}
                       value={phoneCountryCode}
                       onValueChange={(newCode) => {
+                        if (isEditMode && !canViewPhone) return;
                         const cfg = getCountryPhoneConfig(newCode);
                         const trimmedLocal = phoneLocalDigits.slice(0, cfg.maxDigits);
                         setPhoneCountryCode(newCode);
@@ -497,6 +529,7 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
                     >
                       <SelectTrigger
                         aria-label="Código de país"
+                        disabled={isEditMode && !canViewPhone}
                         className="w-[88px] h-9 px-2 text-xs font-medium shrink-0"
                       >
                         <SelectValue>
@@ -517,9 +550,12 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
                         name={field.name}
                         ref={field.ref}
                         onBlur={field.onBlur}
-                        value={phoneLocalDigits}
+                        value={isEditMode && !canViewPhone ? '••••••••••' : phoneLocalDigits}
+                        disabled={isEditMode && !canViewPhone}
+                        readOnly={isEditMode && !canViewPhone}
                         className="h-9 text-xs flex-1"
                         onChange={(e) => {
+                          if (isEditMode && !canViewPhone) return;
                           const parsed = handlePhoneInputChange(e.target.value, phoneCountryCode);
                           setPhoneCountryCode(parsed.countryCode);
                           setPhoneLocalDigits(parsed.localDigits);

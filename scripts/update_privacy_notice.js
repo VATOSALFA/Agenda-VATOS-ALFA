@@ -13,7 +13,7 @@ VATOS ALFA BARBER SHOP
 Última actualización y entrada en vigor: Octubre 2026 • Santiago de Querétaro, Qro.
 
 CAPÍTULO I. IDENTIDAD Y DOMICILIO DEL RESPONSABLE
-VATOS ALFA BARBER SHOP (en lo sucesivo, el "RESPONSABLE" o "VATOS ALFA"), con domicilio comercial y fiscal en Santiago de Querétaro, Estado de Querétaro, México, portal web oficial https://vatosalfa.com, y canal institucional del Departamento de Protección de Datos Personales: vatosalfa.adm@gmail.com, es el responsable del uso, tratamiento, almacenamiento y protección de sus datos personales. El presente Aviso de Privacidad se emite en estricto cumplimiento con la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP), su Reglamento (RLFPDPPP) y los Lineamientos del Aviso de Privacidad expedidos por el Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI).
+VATOS ALFA BARBER SHOP (en lo sucesivo, el "RESPONSABLE" o "VATOS ALFA"), con domicilio comercial y fiscal en Santiago de Querétaro, Estado de Querétaro, México, portal web oficial https://vatosalfa.com, y canal institucional del Departamento de Protección de Datos Personales: contacto@vatosalfa.com, es el responsable del uso, tratamiento, almacenamiento y protección de sus datos personales. El presente Aviso de Privacidad se emite en estricto cumplimiento con la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP), su Reglamento (RLFPDPPP) y los Lineamientos del Aviso de Privacidad expedidos por el Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI).
 
 CAPÍTULO II. CATEGORÍAS DE DATOS PERSONALES RECABADOS
 Para el cumplimiento de las finalidades señaladas en el presente documento, VATOS ALFA recaba y trata las siguientes categorías de datos personales:
@@ -70,7 +70,7 @@ e) Publicación voluntaria de imágenes o videos de cortes de cabello en redes s
 
 3.3 Mecanismo para Manifestar la Negativa a Finalidades Secundarias:
 Si el CLIENTE no desea que sus datos personales sean tratados para las finalidades secundarias señaladas, podrá manifestar su negativa en cualquier momento:
-- Enviando un correo electrónico a vatosalfa.adm@gmail.com con el asunto "Negativa a Finalidades Secundarias", o
+- Enviando un correo electrónico a contacto@vatosalfa.com con el asunto "Negativa a Finalidades Secundarias", o
 - Respondiendo con la palabra "BAJA" al WhatsApp oficial de atención.
 La negativa al uso de sus datos para finalidades secundarias no será motivo para negarle la prestación de los servicios o venta de productos de VATOS ALFA.
 
@@ -89,7 +89,7 @@ CAPÍTULO V. PROCEDIMIENTO FORMAL PARA EL EJERCICIO DE DERECHOS ARCO
 Usted tiene derecho a conocer qué datos personales tenemos de usted, para qué los usamos y las condiciones del uso que les damos (Acceso); solicitar la corrección de su información en caso de que esté desactualizada, sea inexacta o incompleta (Rectificación); que la eliminemos de nuestros registros o bases de datos cuando considere que la misma no está siendo utilizada conforme a los principios, deberes y obligaciones previstos en la ley (Cancelación); así como oponerse al uso de sus datos personales para fines específicos (Oposición).
 
 5.1 Canal Designado y Oficial de Privacidad:
-Para el ejercicio de cualquiera de sus Derechos ARCO, el titular o su representante legal deberán enviar una solicitud formal por escrito al correo electrónico oficial: vatosalfa.adm@gmail.com, o bien, presentarla físicamente por escrito en la recepción de la sucursal de VATOS ALFA.
+Para el ejercicio de cualquiera de sus Derechos ARCO, el titular o su representante legal deberán enviar una solicitud formal por escrito al correo electrónico oficial: contacto@vatosalfa.com, o bien, presentarla físicamente por escrito en la recepción de la sucursal de VATOS ALFA.
 
 5.2 Requisitos Indispensables de la Solicitud (Art. 29 de la LFPDPPP):
 La solicitud deberá contener y acompañar:
@@ -113,7 +113,7 @@ El titular puede revocar en cualquier momento el consentimiento que nos haya oto
 
 6.2 Limitación de Uso y Registro REPEP:
 Para limitar el uso o divulgación de sus datos para promociones comerciales, usted puede:
-a) Solicitar su inscripción en la Lista de Exclusión Publicitaria Interna de VATOS ALFA mediante correo a vatosalfa.adm@gmail.com.
+a) Solicitar su inscripción en la Lista de Exclusión Publicitaria Interna de VATOS ALFA mediante correo a contacto@vatosalfa.com.
 b) Registrar su número telefónico en el Registro Público para Evitar Publicidad (REPEP) de la Procuraduría Federal del Consumidor (PROFECO), ingresando a https://repep.profeco.gob.mx o comunicándose al teléfono 800 962 8000.
 
 CAPÍTULO VII. TRATAMIENTO DE DATOS EN EL CIRCUITO CERRADO DE VIDEOVIGILANCIA (CCTV)

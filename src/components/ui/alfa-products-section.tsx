@@ -167,9 +167,8 @@ export function AlfaProductsSection({
                     </div>
                   )}
 
-                  {/* Gradient overlays for contrast */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pointer-events-none" />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent pointer-events-none" />
+                  {/* Degradado sutil únicamente en la parte inferior para legibilidad del texto sin oscurecer la imagen (idéntico a servicios) */}
+                  <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/80 via-black/30 to-transparent pointer-events-none" />
 
                   {/* Top Badges & Eye Icon Button */}
                   <div className="absolute top-2 left-2 right-2 sm:top-3 sm:left-3 sm:right-3 flex items-start justify-between z-10">

@@ -221,26 +221,13 @@ export function AlfaBenefitsSection({
       ctaText: 'Aprovechar Beneficio',
     }));
 
-  // Convert Firebase promotions to BenefitItems if available
-  const promoBenefits: BenefitItem[] = promotions.map((p) => ({
-    id: p.id,
-    tag: p.discount ? `OFERTA EXCLUSIVA` : 'PROMOCIÓN ACTIVA',
-    discount: p.discount ? `-${p.discount}% OFF` : (p.code ? `CÓDIGO: ${p.code}` : undefined),
-    badgeType: 'promo' as const,
-    titulo: p.name || p.titulo || 'Beneficio Exclusivo',
-    descripcion: p.description || p.descripcion || 'Aprovecha este beneficio exclusivo en tu próxima cita en VATOS ALFA.',
-    vigencia: p.endDate ? `Válido hasta el ${p.endDate}` : 'Por tiempo limitado',
-    terminos: p.termsAndConditions || p.terminos || 'Válido en sucursales participantes de VATOS ALFA.',
-    codigo: p.code || p.codigo,
-    imagenUrl: p.imageUrl || p.imagenUrl || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?auto=format&fit=crop&w=800&q=80',
-    ctaText: 'Aprovechar Beneficio',
-  }));
 
-  const clubList = dynamicPrivilegios.length > 0
-    ? (paseAlfaData?.activo === false ? dynamicPrivilegios : [defaultClubBenefits[0], ...dynamicPrivilegios])
-    : (paseAlfaData?.activo === false ? defaultClubBenefits.slice(1) : defaultClubBenefits);
-
-  const allBenefits = [...clubList, ...promoBenefits];
+  // Beneficios del Club Alfa exclusivos para usuarios de la app.
+  // Se muestran única y exclusivamente los beneficios reales creados y configurados en el Pase Alfa.
+  const paseAlfaCard = paseAlfaData && paseAlfaData.activo !== false ? [defaultClubBenefits[0]] : [];
+  const allBenefits = dynamicPrivilegios.length > 0
+    ? [...dynamicPrivilegios, ...paseAlfaCard]
+    : (paseAlfaCard.length > 0 ? paseAlfaCard : defaultClubBenefits);
 
   // Seguimiento del scroll de la baraja para animar el reescalado 3D progresivo
   const { scrollYProgress } = useScroll({

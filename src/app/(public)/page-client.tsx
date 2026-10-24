@@ -46,6 +46,10 @@ const AlfaBenefitsSection = dynamic(() => import('@/components/ui/alfa-benefits-
     ssr: false,
     loading: () => <div className="min-h-[400px] w-full" />,
 });
+const AlfaPromotionsSection = dynamic(() => import('@/components/ui/alfa-promotions-section').then((m) => m.AlfaPromotionsSection), {
+    ssr: false,
+    loading: () => <div className="min-h-[350px] w-full" />,
+});
 const JanetChatModal = dynamic(() => import('@/components/ui/janet-chat-modal').then((m) => m.JanetChatModal), {
     ssr: false,
 });
@@ -1141,13 +1145,24 @@ export default function LandingPageClient() {
 
             {/* 4. Beneficios Exclusivos y Pase Alfa Club (Estilo App Móvil) */}
             <AlfaBenefitsSection
-                promotions={activePromotions}
                 paseAlfaData={paseAlfaConfig}
                 onBookBenefit={(_benefit) => {
                     router.push('/reservar');
                 }}
                 onDownloadApp={handleAppDownloadClick}
             />
+
+            {/* 5. Promociones Especiales y Ofertas en Formato Vertical */}
+            {activePromotions && activePromotions.length > 0 && (
+                <ScrollReveal>
+                    <AlfaPromotionsSection
+                        promotions={activePromotions}
+                        onBookPromotion={(_promo) => {
+                            router.push('/reservar');
+                        }}
+                    />
+                </ScrollReveal>
+            )}
 
             {/* Service Details Modal (Estilo App Móvil con Cabecera Oficial y Botón de Agendar) */}
             <Dialog open={!!selectedService} onOpenChange={(open) => !open && setSelectedService(null)}>

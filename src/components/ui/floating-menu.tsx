@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Scissors, User, ShoppingBag, Sparkles, Image as ImageIcon, X } from 'lucide-react';
+import { Scissors, User, ShoppingBag, Sparkles, Image as ImageIcon, X, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FloatingMenuProps {
@@ -35,6 +35,7 @@ export default function FloatingMenu({ totalItems, hasActivePromotions }: Floati
                                 { href: "#inspiracion", label: "Inspiración", icon: ImageIcon },
                                 { href: "#profesionales", label: "Equipo", icon: User },
                                 { href: "#beneficios", label: "Beneficios", icon: Sparkles },
+                                ...(hasActivePromotions ? [{ href: "#promociones", label: "Promociones", icon: Tag }] : []),
                                 { href: "#productos", label: "Productos", icon: ShoppingBag },
                             ].map((item) => (
                                 <motion.div

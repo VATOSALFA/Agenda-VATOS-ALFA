@@ -175,6 +175,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
   const { user } = useAuth();
   const canViewPhone = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('ver_numero_telefono')), [user]);
+  const canEditClient = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('editar_clientes')), [user]);
 
   const [resSortConfig, setResSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
   const [salesSortConfig, setSalesSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
@@ -479,15 +480,17 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
               )}
 
               {/* Botón Editar Cliente - Icono de lápiz sin contenedor */}
-              <button
-                type="button"
-                onClick={() => setIsEditModalOpen(true)}
-                className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
-                title="Editar Cliente"
-                aria-label="Editar Cliente"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {canEditClient && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+                  title="Editar Cliente"
+                  aria-label="Editar Cliente"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
 
               {liveClient.telefono && canViewPhone && (
                 <a
@@ -531,15 +534,17 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   <h3 className="font-bold text-base text-foreground leading-tight">
                     {liveClient.nombre} {liveClient.apellido}
                   </h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-slate-400 hover:text-foreground transition-colors p-1"
-                    title="Editar Cliente"
-                    aria-label="Editar Cliente"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </button>
+                  {canEditClient && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="text-slate-400 hover:text-foreground transition-colors p-1"
+                      title="Editar Cliente"
+                      aria-label="Editar Cliente"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
                 <span className="text-[11px] font-mono text-muted-foreground mt-0.5">
                   Cliente #{liveClient.numero_cliente || 'N/A'}

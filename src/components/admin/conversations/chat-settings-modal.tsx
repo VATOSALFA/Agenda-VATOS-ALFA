@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { cn } from '@/lib/utils';
 import {
   SlidersHorizontal,
   Volume2,
@@ -321,6 +322,15 @@ interface ChatSettingsModalProps {
   assistantName?: string;
 }
 
+const shortColorNames: Record<BubbleColorThemeId, string> = {
+  navy_alfa: 'Azul Alfa',
+  royal_blue: 'Azul Real',
+  gold_vip: 'Pase Dorado',
+  ocean_teal: 'Petróleo',
+  midnight_slate: 'Pizarra',
+  obsidian: 'Carbón',
+};
+
 export function ChatSettingsModal({
   isOpen,
   open,
@@ -359,10 +369,6 @@ export function ChatSettingsModal({
     preferences.bubbleColorTheme,
     'recepcion'
   );
-  const botBubbleClass = getBubbleClassesForTheme(
-    preferences.bubbleColorTheme,
-    'bot'
-  );
   const clientBubbleClass = getClientBubbleClasses(
     preferences.clientBubbleStyle
   );
@@ -371,20 +377,20 @@ export function ChatSettingsModal({
     <Dialog open={modalOpen} onOpenChange={onOpenChange}>
       <DialogContent
         hideCloseButton={true}
-        className="sm:max-w-xl max-h-[90vh] p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background flex flex-col"
+        className="sm:max-w-lg max-h-[90vh] p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background flex flex-col"
       >
         {/* Cabecera Oficial VATOS ALFA */}
-        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-3.5 sm:p-4 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
           <div className="header-light-beam" aria-hidden="true" />
           <div className="relative z-10 flex items-center justify-between w-full">
             <div className="flex items-center gap-2.5">
               <SlidersHorizontal className="w-5 h-5 text-slate-300 shrink-0" />
               <div>
                 <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
-                  Personalización y Ajustes de Mensajes
+                  Personalización del Chat
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-300 mt-0.5">
-                  Ajusta el tono de notificaciones, color de tus tarjetas y tamaño de letra a tu gusto
+                <DialogDescription className="text-[11px] sm:text-xs text-slate-300 mt-0.5">
+                  Ajusta colores, tamaño de letra y sonidos a tu gusto
                 </DialogDescription>
               </div>
             </div>
@@ -400,76 +406,59 @@ export function ChatSettingsModal({
         </div>
 
         {/* Contenido con Scroll Azul Vatos Alfa */}
-        <div className="p-4 sm:p-5 overflow-y-auto space-y-5 flex-1">
-          {/* 1. VISTA PREVIA EN VIVO */}
-          <div className="rounded-xl border border-border/70 bg-muted/20 p-3.5 space-y-2">
-            <div className="flex items-center justify-between text-[11px] text-muted-foreground pb-1 border-b border-border/50">
-              <span className="font-semibold uppercase tracking-wider text-slate-300">
-                Vista Previa en Tiempo Real
-              </span>
-              <span>
-                Letra: {FONT_SIZE_OPTIONS.find((f) => f.id === preferences.fontSize)?.pxLabel}
+        <div className="p-3.5 sm:p-4 overflow-y-auto space-y-4 flex-1">
+          {/* 1. VISTA PREVIA COMPACTA */}
+          <div className="rounded-xl border border-border/50 bg-muted/20 p-2.5 sm:p-3 space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground uppercase tracking-wider font-semibold pb-1 border-b border-border/40">
+              <span className="text-slate-300">Vista Previa</span>
+              <span className="font-normal font-sans lowercase text-muted-foreground">
+                {FONT_SIZE_OPTIONS.find((f) => f.id === preferences.fontSize)?.label} • {FONT_SIZE_OPTIONS.find((f) => f.id === preferences.fontSize)?.pxLabel}
               </span>
             </div>
 
-            <div
-              className={`flex flex-col ${
-                preferences.chatDensity === 'compact' ? 'space-y-1' : 'space-y-2.5'
-              } pt-1`}
-            >
+            <div className="space-y-1.5 pt-0.5">
               {/* Mensaje de Cliente */}
               <div className="flex flex-col items-start">
                 <div
-                  className={`max-w-[82%] rounded-2xl rounded-tl-sm px-3.5 py-2 shadow-xs leading-relaxed ${clientBubbleClass} ${fontSizeClass}`}
+                  className={cn(
+                    "max-w-[85%] rounded-2xl rounded-tl-xs px-3 py-1.5 shadow-xs leading-relaxed",
+                    clientBubbleClass,
+                    fontSizeClass
+                  )}
                 >
-                  <span>¡Hola! ¿Tienen espacio hoy a las 5:00 PM para corte y barba? 💈</span>
-                  <span className="float-right ml-2.5 mt-1 text-[10px] opacity-70">16:15</span>
+                  <span>¡Hola! ¿Tienen espacio hoy a las 5:00 PM? 💈</span>
+                  <span className="float-right ml-2.5 mt-0.5 text-[10px] opacity-70">16:15</span>
                 </div>
               </div>
 
-              {/* Mensaje de Janet / Recepción */}
+              {/* Mensaje de Recepción */}
               <div className="flex flex-col items-end">
                 <div
-                  className={`max-w-[82%] rounded-2xl rounded-tr-sm px-3.5 py-2 shadow-xs leading-relaxed ${staffBubbleClass} ${fontSizeClass}`}
+                  className={cn(
+                    "max-w-[85%] rounded-2xl rounded-tr-xs px-3 py-1.5 shadow-xs leading-relaxed",
+                    staffBubbleClass,
+                    fontSizeClass
+                  )}
                 >
-                  <span>
-                    ¡Claro que sí! Tenemos espacio hoy a las 5:00 PM con Lalo por $290.00 MXN. ✂️
-                  </span>
-                  <span className="float-right ml-2.5 mt-1 text-[10px] text-slate-300/85 inline-flex items-center gap-1">
+                  <span>¡Claro que sí! Con gusto te esperamos a las 5:00 PM. ✂️</span>
+                  <span className="float-right ml-2 mt-0.5 text-[10px] text-slate-300/80 inline-flex items-center gap-1">
                     <CheckCircle2 className="w-2.5 h-2.5 text-blue-400 inline" />
                     <span>Recepción • 16:16</span>
-                  </span>
-                </div>
-              </div>
-
-              {/* Mensaje de Janet Bot */}
-              <div className="flex flex-col items-end">
-                <div
-                  className={`max-w-[82%] rounded-2xl rounded-tr-sm px-3.5 py-2 shadow-xs leading-relaxed ${botBubbleClass} ${fontSizeClass}`}
-                >
-                  <span>Tu cita ha quedado registrada en la agenda. ¡Te esperamos! ✨</span>
-                  <span className="float-right ml-2.5 mt-1 text-[10px] text-slate-300/85 inline-flex items-center gap-1">
-                    <Bot className="w-2.5 h-2.5 text-blue-400 inline" />
-                    <span>{assistantName} • 16:16</span>
                   </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 2. TAMAÑO DE LETRA */}
-          <div className="space-y-2.5">
+          {/* 2. TAMAÑO DE LETRA (BARRA SEGMENTADA ULTRA MINIMALISTA) */}
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Type className="w-4 h-4 text-slate-400" />
-                Tamaño de Letra del Chat
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Type className="w-3.5 h-3.5 text-slate-400" />
+                Tamaño de Letra
               </label>
-              <span className="text-[11px] text-muted-foreground">
-                Elige la lectura más cómoda
-              </span>
             </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 p-1 bg-muted/40 rounded-xl border border-border/50 gap-1">
               {FONT_SIZE_OPTIONS.map((opt) => {
                 const isSelected = preferences.fontSize === opt.id;
                 return (
@@ -477,38 +466,30 @@ export function ChatSettingsModal({
                     key={opt.id}
                     type="button"
                     onClick={() => updateField('fontSize', opt.id)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
+                    className={cn(
+                      "py-1.5 px-1 rounded-lg text-xs transition-all text-center flex flex-col items-center justify-center cursor-pointer",
                       isSelected
-                        ? 'border-blue-500 bg-blue-500/15 text-foreground shadow-xs'
-                        : 'border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                    }`}
+                        ? "bg-[#202A49] text-white shadow-xs border border-blue-500/50 font-semibold"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    )}
                   >
-                    <div className="flex items-center justify-between w-full">
-                      <span className="text-xs font-semibold text-foreground">{opt.label}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-                    </div>
-                    <span className="text-[11px] text-muted-foreground font-sans">
-                      {opt.pxLabel}
-                    </span>
+                    <span className="truncate">{opt.label}</span>
+                    <span className="text-[10px] opacity-70 font-sans">{opt.pxLabel}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* 3. COLOR DE LAS TARJETAS DE TUS MENSAJES */}
-          <div className="space-y-2.5">
+          {/* 3. COLOR DE MENSAJES (PÍLDORAS COMPACTAS) */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Palette className="w-4 h-4 text-slate-400" />
-                Color de Tarjeta de tus Mensajes
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Palette className="w-3.5 h-3.5 text-slate-400" />
+                Color de tus Mensajes
               </label>
-              <span className="text-[11px] text-muted-foreground">
-                Personaliza tus burbujas enviadas
-              </span>
             </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
               {BUBBLE_COLOR_THEMES.map((theme) => {
                 const isSelected = preferences.bubbleColorTheme === theme.id;
                 return (
@@ -516,41 +497,35 @@ export function ChatSettingsModal({
                     key={theme.id}
                     type="button"
                     onClick={() => updateField('bubbleColorTheme', theme.id)}
-                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-2.5 ${
+                    className={cn(
+                      "h-8 px-2.5 rounded-xl border text-xs font-medium transition-all flex items-center justify-between gap-1.5 cursor-pointer",
                       isSelected
-                        ? 'border-blue-500 bg-blue-500/15 shadow-xs'
-                        : 'border-border/60 bg-card/60 hover:bg-muted/40'
-                    }`}
+                        ? "border-2 border-blue-500 bg-blue-500/10 text-foreground font-semibold shadow-xs"
+                        : "border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                    )}
                   >
-                    <span
-                      className="w-6 h-6 rounded-lg shrink-0 border-2 shadow-inner"
-                      style={{
-                        backgroundColor: theme.swatchBg,
-                        borderColor: theme.swatchBorder,
-                      }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <span className="text-xs font-semibold text-foreground truncate">
-                          {theme.name}
-                        </span>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground block truncate">
-                        {theme.subtitle}
-                      </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-3.5 h-3.5 rounded-full shrink-0 border shadow-xs"
+                        style={{
+                          backgroundColor: theme.swatchBg,
+                          borderColor: theme.swatchBorder,
+                        }}
+                      />
+                      <span className="truncate text-xs">{shortColorNames[theme.id] || theme.name}</span>
                     </div>
+                    {isSelected && <Check className="w-3 h-3 text-blue-400 shrink-0" />}
                   </button>
                 );
               })}
             </div>
 
-            {/* Estilo de tarjeta de mensajes recibidos del cliente */}
-            <div className="pt-1">
-              <span className="text-[11px] font-medium text-muted-foreground block mb-1.5">
-                Estilo de tarjeta de los mensajes del cliente:
+            {/* Estilo de tarjeta de mensajes del cliente */}
+            <div className="pt-1 space-y-1">
+              <span className="text-[11px] text-muted-foreground block">
+                Burbuja de mensajes del cliente:
               </span>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 p-1 bg-muted/40 rounded-xl border border-border/50 gap-1">
                 {CLIENT_BUBBLE_STYLES.map((st) => {
                   const isSelected = preferences.clientBubbleStyle === st.id;
                   return (
@@ -558,14 +533,14 @@ export function ChatSettingsModal({
                       key={st.id}
                       type="button"
                       onClick={() => updateField('clientBubbleStyle', st.id)}
-                      className={`px-2.5 py-2 rounded-xl border text-xs font-medium transition-all cursor-pointer flex items-center justify-between gap-1 ${
+                      className={cn(
+                        "py-1 px-1.5 rounded-lg text-xs font-medium transition-all text-center truncate cursor-pointer",
                         isSelected
-                          ? 'border-blue-500 bg-blue-500/15 text-foreground'
-                          : 'border-border/60 bg-card/60 text-muted-foreground hover:text-foreground'
-                      }`}
+                          ? "bg-[#202A49] text-white shadow-xs border border-blue-500/50 font-semibold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                      )}
                     >
-                      <span className="truncate">{st.name}</span>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                      {st.name}
                     </button>
                   );
                 })}
@@ -573,16 +548,16 @@ export function ChatSettingsModal({
             </div>
           </div>
 
-          {/* 4. TONO Y VOLUMEN DE NOTIFICACIONES */}
-          <div className="space-y-2.5">
+          {/* 4. TONO DE NOTIFICACIONES */}
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                 {preferences.soundEnabled ? (
-                  <Volume2 className="w-4 h-4 text-blue-400" />
+                  <Volume2 className="w-3.5 h-3.5 text-blue-400" />
                 ) : (
-                  <VolumeX className="w-4 h-4 text-slate-400" />
+                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
                 )}
-                Tono de Notificaciones de Mensajes
+                Tono de Notificación
               </label>
 
               <div className="flex items-center gap-2">
@@ -597,56 +572,40 @@ export function ChatSettingsModal({
             </div>
 
             {preferences.soundEnabled && (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-2 pt-0.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                   {NOTIFICATION_TONES.map((tone) => {
                     const isSelected = preferences.notificationTone === tone.id;
                     return (
-                      <div
+                      <button
                         key={tone.id}
+                        type="button"
                         onClick={() => {
                           updateField('notificationTone', tone.id);
                           playChatNotificationSound(tone.id, preferences.notificationVolume);
                         }}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                        className={cn(
+                          "h-8 px-2.5 rounded-xl border text-xs font-medium transition-all flex items-center justify-between gap-1.5 cursor-pointer group",
                           isSelected
-                            ? 'border-blue-500 bg-blue-500/15 text-foreground shadow-xs'
-                            : 'border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                        }`}
+                            ? "border-2 border-blue-500 bg-blue-500/10 text-foreground font-semibold shadow-xs"
+                            : "border-border/60 bg-card/60 text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                        )}
+                        title={`Seleccionar y probar: ${tone.name}`}
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-foreground truncate">
-                              {tone.name}
-                            </span>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
-                          </div>
-                          <span className="text-[10px] text-muted-foreground block truncate">
-                            {tone.description}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            playChatNotificationSound(tone.id, preferences.notificationVolume);
-                          }}
-                          className="h-7 px-2 rounded-lg border border-border/60 hover:border-blue-500/50 hover:bg-blue-500/10 text-[10px] font-semibold text-slate-300 hover:text-white flex items-center gap-1 shrink-0 transition-colors"
-                          title="Escuchar tono"
-                        >
-                          <Play className="w-3 h-3 text-blue-400" />
-                          <span>Probar</span>
-                        </button>
-                      </div>
+                        <span className="truncate">{tone.name}</span>
+                        <Volume2 className={cn(
+                          "w-3 h-3 shrink-0 transition-colors",
+                          isSelected ? "text-blue-400" : "text-slate-400 group-hover:text-foreground"
+                        )} />
+                      </button>
                     );
                   })}
                 </div>
 
-                {/* Volumen */}
-                <div className="flex items-center justify-between gap-3 pt-1 px-1">
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    Volumen del tono ({Math.round(preferences.notificationVolume * 100)}%):
+                {/* Control de Volumen */}
+                <div className="flex items-center gap-2.5 pt-0.5">
+                  <span className="text-[11px] text-muted-foreground shrink-0">
+                    Volumen ({Math.round(preferences.notificationVolume * 100)}%):
                   </span>
                   <input
                     type="range"
@@ -673,42 +632,30 @@ export function ChatSettingsModal({
                     className="flex-1 accent-blue-500 cursor-pointer h-1.5 bg-muted rounded-lg"
                   />
                 </div>
-              </>
+              </div>
             )}
           </div>
 
-          {/* 5. COMODIDAD Y EXPERIENCIA DE USO */}
-          <div className="space-y-2 pt-1 border-t border-border/60">
-            <label className="text-xs font-bold text-foreground block">
-              Comodidad y Experiencia de Uso
-            </label>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-xl border border-border/60 bg-card/50 flex items-center justify-between gap-2">
+          {/* 5. PREFERENCIAS ADICIONALES (LISTA LIMPIA CON DIVISORES) */}
+          <div className="space-y-1.5 pt-1 border-t border-border/50">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+              Preferencias
+            </span>
+            <div className="rounded-xl border border-border/50 bg-card/50 divide-y divide-border/40 overflow-hidden text-xs">
+              <div className="px-3 py-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <CornerDownLeft className="w-3.5 h-3.5 text-slate-400" />
-                    Enviar con tecla Enter
-                  </span>
-                  <span className="text-[10px] text-muted-foreground block">
-                    Shift + Enter para salto de línea
-                  </span>
+                  <span className="font-medium text-foreground block">Enviar con tecla Enter</span>
+                  <span className="text-[10px] text-muted-foreground block">Shift + Enter para salto de línea</span>
                 </div>
                 <Switch
                   checked={preferences.enterToSend}
                   onCheckedChange={(checked) => updateField('enterToSend', checked)}
                 />
               </div>
-
-              <div className="p-2.5 rounded-xl border border-border/60 bg-card/50 flex items-center justify-between gap-2">
+              <div className="px-3 py-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                    <Mic className="w-3.5 h-3.5 text-slate-400" />
-                    Transcripción de Audios
-                  </span>
-                  <span className="text-[10px] text-muted-foreground block">
-                    Mostrar texto de notas de voz
-                  </span>
+                  <span className="font-medium text-foreground block">Transcripción de Audios</span>
+                  <span className="text-[10px] text-muted-foreground block">Mostrar texto de notas de voz</span>
                 </div>
                 <Switch
                   checked={preferences.showAudioTranscription}
@@ -721,17 +668,17 @@ export function ChatSettingsModal({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-3.5 bg-muted/30 border-t border-border/60 flex items-center justify-between gap-2 shrink-0">
+        {/* Footer Minimalista */}
+        <div className="p-3 bg-muted/30 border-t border-border/60 flex items-center justify-between gap-2 shrink-0">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             onClick={handleResetDefaults}
-            className="text-xs h-8 px-3 text-muted-foreground hover:text-foreground gap-1.5"
+            className="text-xs h-8 px-2.5 text-muted-foreground hover:text-foreground gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
-            Restablecer valores
+            Restablecer
           </Button>
 
           <Button

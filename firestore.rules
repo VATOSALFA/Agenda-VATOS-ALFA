@@ -134,8 +134,8 @@ service cloud.firestore {
     match /finanzas_mensuales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // 7. Communications
-    match /conversaciones/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /conversations/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /conversaciones/{document=**} { allow read, write: if isAuthenticated(); }
+    match /conversations/{document=**} { allow read, write: if isAuthenticated(); }
     match /whatsapp_configuraciones/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // 8. Other Business Data (Spanish naming conventions found in code)

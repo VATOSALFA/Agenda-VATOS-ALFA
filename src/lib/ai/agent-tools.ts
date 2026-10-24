@@ -1282,8 +1282,10 @@ export const solicitarRecepcionTool = ai.defineTool(
       if (!trustedId) throw new Error('Falta el contexto de la conversación.');
       await db.collection('conversaciones').doc(trustedId).set(
         {
-          modo_atencion: 'humano_al_mando',
+          modo_atencion: 'requiere_atencion',
+          requiere_atencion_humana: true,
           motivo_atencion_humana: motivo,
+          mensajes_no_leidos: FieldValue.increment(1),
           updated_at: new Date(),
         },
         { merge: true }

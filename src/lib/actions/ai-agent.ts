@@ -207,8 +207,7 @@ export async function processAgentMessage({
     // Actualizar datos de la conversación
     let currentMode = convData?.modo_atencion || 'bot_activo';
     if (isTakeover) {
-      currentMode = 'humano_al_mando';
-
+      currentMode = 'requiere_atencion';
     } else if (!botActive) {
       currentMode = 'humano_al_mando';
     }
@@ -227,6 +226,7 @@ export async function processAgentMessage({
         fecha_ultimo_mensaje: now,
         mensajes_no_leidos: FieldValue.increment(1),
         modo_atencion: currentMode,
+        ...(isTakeover ? { requiere_atencion_humana: true, motivo_atencion_humana: 'El cliente solicitó hablar con una persona de recepción.' } : {}),
         canal: channel,
         updated_at: now,
         ...(convDoc.exists ? {} : { created_at: now }),
@@ -568,10 +568,8 @@ DOMINIO TOTAL DE VATOS ALFA: PASE ALFA CLUB, ALFA COINS Y PROMOCIONES:
        • Nivel Alfa Gold (4 o más visitas, o $1,500+ MXN acumulados): Bonificación del 5% -> 1 ALFA COIN vale $0.05 MXN (100 AlfaCoins = $5.00 MXN).
        • Nivel Alfa Black VIP (8 o más visitas, o $3,500+ MXN acumulados): Bonificación del 7% -> 1 ALFA COIN vale $0.07 MXN (100 AlfaCoins = $7.00 MXN).
      * ¿Cómo se canjean?: Los AlfaCoins acumulados se pueden utilizar como descuento directo en pesos mexicanos al pagar cualquier servicio o producto en la recepción de la barbería. No son canjeables por dinero en efectivo ni transferibles entre cuentas.
-  3. BENEFICIO DE CUMPLEAÑOS:
-     * Los miembros registrados cuentan con 1 corte de cabello de cortesía durante la semana de su cumpleaños (válido dentro de los 7 días naturales alrededor de su fecha de nacimiento registrada, presentando identificación oficial vigente en recepción y con cita previa).
-  4. PROMOCIONES Y TÉRMINOS Y CONDICIONES:
-     * Para informar sobre promociones activas, paquetes o descuentos especiales y sus términos y condiciones exactos (vigencia, días aplicables, servicios incluidos y restricción de no acumulabilidad con otras promociones o corte gratis del Pase Alfa), llama siempre a consultar_pase_alfa_y_promociones.
+  3. PROMOCIONES Y TÉRMINOS Y CONDICIONES:
+     * Para informar sobre promociones activas, paquetes o descuentos especiales y sus términos y condiciones exactos (vigencia, días aplicables, servicios incluidos y restricción de no acumulabilidad con otras promociones o corte gratis del Pase Alfa), llama siempre a consultar_pase_alfa_y_promociones. NUNCA inventes regalos de cumpleaños ni promociones que no estén activas en la base de datos.
 
 REGLAS DE OPERACIÓN Y AGENDAMIENTO:
 - Consulta herramientas para servicios, precios, productos, profesionales, horarios, promociones y citas. Nunca inventes disponibilidad, precios, políticas ni resultados de una operación. Todos los precios deben provenir de las herramientas consultar_servicios y consultar_productos o del catálogo en tiempo real.

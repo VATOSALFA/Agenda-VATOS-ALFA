@@ -782,20 +782,29 @@ export async function sendAppointmentChatReminder({
       .replace(/{servicios}/g, servicesText)
       .replace(/{ubicacion}/g, locationStr);
 
-    // Find or create conversation for this client
+    // Find or create conversation for this client (prioritizing 10-digit phone ID used by Mobile App ChatScreen)
     let conversationId = '';
-    const cleanPhone = clientPhone.replace(/\D/g, '');
+    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
 
-    // Search by client_id or phone
-    const convQuery = await db
-      .collection('conversaciones')
-      .where('cliente_id', '==', res.cliente_id || '')
-      .limit(1)
-      .get();
+    if (cleanPhone && cleanPhone.length === 10) {
+      const directDoc = await db.collection('conversaciones').doc(cleanPhone).get();
+      if (directDoc.exists) {
+        conversationId = directDoc.id;
+      }
+    }
 
-    if (!convQuery.empty) {
-      conversationId = convQuery.docs[0].id;
-    } else if (cleanPhone) {
+    if (!conversationId && res.cliente_id) {
+      const convQuery = await db
+        .collection('conversaciones')
+        .where('cliente_id', '==', res.cliente_id)
+        .limit(1)
+        .get();
+      if (!convQuery.empty) {
+        conversationId = convQuery.docs[0].id;
+      }
+    }
+
+    if (!conversationId && cleanPhone) {
       const phoneQuery = await db
         .collection('conversaciones')
         .where('cliente_telefono', '==', cleanPhone)
@@ -807,8 +816,11 @@ export async function sendAppointmentChatReminder({
     }
 
     if (!conversationId) {
-      // Create new conversation
-      const newConvRef = db.collection('conversaciones').doc();
+      // Create new conversation using the 10-digit phone as ID when available so Mobile App syncs automatically
+      const newConvRef =
+        cleanPhone && cleanPhone.length === 10
+          ? db.collection('conversaciones').doc(cleanPhone)
+          : db.collection('conversaciones').doc();
       conversationId = newConvRef.id;
       await newConvRef.set({
         id: conversationId,

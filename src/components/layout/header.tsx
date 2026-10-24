@@ -348,6 +348,106 @@ export default function Header() {
     } catch (_) {}
   };
 
+  // Real-time notifications for Reception / Conversations needing human attention or unread messages
+  const [pendingConversationsCount, setPendingConversationsCount] = useState<number>(0);
+  const [humanRequestConversationsCount, setHumanRequestConversationsCount] = useState<number>(0);
+  const isInitialConvSnapshotRef = useRef<boolean>(true);
+  const prevConvStateRef = useRef<Map<string, { modo: string; unread: number }>>(new Map());
+
+  const canViewConversations = canSee('ver_conversaciones');
+
+  useEffect(() => {
+    if (!db || !user || !canViewConversations) {
+      setPendingConversationsCount(0);
+      setHumanRequestConversationsCount(0);
+      return;
+    }
+
+    isInitialConvSnapshotRef.current = true;
+    prevConvStateRef.current = new Map();
+
+    const q = query(collection(db, 'conversaciones'));
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const docs = snapshot.docs
+          .map((d) => ({ id: d.id, ...(d.data() as any) }))
+          .filter((conv) => !String(conv.id || '').startsWith('sim-sandbox') && conv.canal !== 'simulador');
+
+        let totalAttentionOrUnread = 0;
+        let totalHumanRequests = 0;
+
+        docs.forEach((conv) => {
+          const unread = Number(conv.mensajes_no_leidos || 0);
+          const needsHuman = conv.modo_atencion === 'requiere_atencion';
+          if (needsHuman) {
+            totalHumanRequests += 1;
+          }
+          if (needsHuman || unread > 0) {
+            totalAttentionOrUnread += 1;
+          }
+        });
+
+        setPendingConversationsCount(totalAttentionOrUnread);
+        setHumanRequestConversationsCount(totalHumanRequests);
+
+        if (isInitialConvSnapshotRef.current) {
+          isInitialConvSnapshotRef.current = false;
+          docs.forEach((conv) => {
+            prevConvStateRef.current.set(conv.id, {
+              modo: conv.modo_atencion || 'bot_activo',
+              unread: Number(conv.mensajes_no_leidos || 0),
+            });
+          });
+          return;
+        }
+
+        let shouldPlayAlert = false;
+        docs.forEach((conv) => {
+          const prev = prevConvStateRef.current.get(conv.id);
+          const currentModo = conv.modo_atencion || 'bot_activo';
+          const currentUnread = Number(conv.mensajes_no_leidos || 0);
+          const clientName = conv.cliente_nombre || conv.cliente_telefono || 'Un cliente';
+
+          const justRequestedHuman =
+            currentModo === 'requiere_atencion' && (!prev || prev.modo !== 'requiere_atencion');
+          const hasNewUnreadMessage =
+            currentUnread > (prev?.unread || 0);
+
+          if (justRequestedHuman) {
+            shouldPlayAlert = true;
+            toast({
+              title: '🔔 ¡Solicitud de atención en Recepción!',
+              description: `${clientName} pidió hablar con una persona en el chat.`,
+            });
+          } else if (hasNewUnreadMessage && (currentModo === 'requiere_atencion' || currentModo === 'humano_al_mando')) {
+            shouldPlayAlert = true;
+            toast({
+              title: `💬 Nuevo mensaje de ${clientName}`,
+              description: conv.ultimo_mensaje || 'Nuevo mensaje recibido en Recepción.',
+            });
+          } else if (hasNewUnreadMessage) {
+            shouldPlayAlert = true;
+          }
+
+          prevConvStateRef.current.set(conv.id, {
+            modo: currentModo,
+            unread: currentUnread,
+          });
+        });
+
+        if (shouldPlayAlert) {
+          playStrongNotificationAlert();
+        }
+      },
+      (err) => {
+        console.warn('Error listening to conversations in header:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [db, user, canViewConversations, toast]);
+
   const mainNavLinks = useMemo(() => [
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
     { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
@@ -404,6 +504,7 @@ export default function Header() {
           ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
           { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
           { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
+          { href: '/conversations', label: 'Mensajes', icon: MessageSquare, permission: 'ver_conversaciones' },
         ]
       },
       {
@@ -666,11 +767,23 @@ export default function Header() {
                               href={link.href}
                               onClick={handleLinkClick}
                               className={cn(
-                                "flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 h-[64px] group shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
+                                "relative flex flex-col items-center justify-center p-2 rounded-xl border transition-all duration-200 h-[64px] group shadow-[0_2px_8px_rgba(0,0,0,0.04)]",
                                 "bg-white border-slate-200/80 hover:border-blue-500 hover:shadow-md hover:-translate-y-0.5",
                                 isActive && "border-2 border-blue-500 bg-blue-50/70 shadow-[0_0_12px_rgba(59,130,246,0.18)]"
                               )}
                             >
+                              {link.href === '/conversations' && pendingConversationsCount > 0 && (
+                                <span
+                                  className={cn(
+                                    "absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-sm",
+                                    humanRequestConversationsCount > 0
+                                      ? "bg-amber-500 animate-pulse"
+                                      : "bg-blue-600"
+                                  )}
+                                >
+                                  {pendingConversationsCount}
+                                </span>
+                              )}
                               <Icon className={cn(
                                 "h-4.5 w-4.5 mb-1 group-hover:scale-110 transition-transform duration-200",
                                 isPromo
@@ -738,19 +851,37 @@ export default function Header() {
           <nav className="hidden md:flex items-center min-w-0 flex-1 text-xs font-medium">
             {mainNavLinks.map(({ href, label, permission }) => {
               const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
+              const isConversationsLink = href === '/conversations';
               return (
                 canSee(permission) && (
                   <Link
                     key={href}
                     href={href}
                     className={cn(
-                      'px-2.5 py-1.5 rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                      'relative inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-xs font-medium whitespace-nowrap',
                       isActive
                         ? 'bg-secondary text-secondary-foreground font-semibold'
                         : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                     )}
                   >
-                    {label}
+                    <span>{label}</span>
+                    {isConversationsLink && pendingConversationsCount > 0 && (
+                      <span
+                        title={
+                          humanRequestConversationsCount > 0
+                            ? `${humanRequestConversationsCount} cliente(s) solicitan hablar con una persona`
+                            : `${pendingConversationsCount} conversación(es) con mensajes sin leer`
+                        }
+                        className={cn(
+                          'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white shadow-sm',
+                          humanRequestConversationsCount > 0
+                            ? 'bg-amber-500 animate-pulse ring-2 ring-amber-400/50'
+                            : 'bg-blue-600 animate-pulse'
+                        )}
+                      >
+                        {pendingConversationsCount}
+                      </span>
+                    )}
                   </Link>
                 )
               )
@@ -1332,7 +1463,19 @@ export default function Header() {
                   pathname.startsWith('/conversations') && !isMobileMenuOpen ? "text-blue-400 font-semibold" : "text-slate-400 hover:text-slate-200"
                 )}
               >
-                <MessageSquare className="h-5 w-5 mb-0.5" />
+                <div className="relative">
+                  <MessageSquare className="h-5 w-5 mb-0.5" />
+                  {pendingConversationsCount > 0 && (
+                    <span
+                      className={cn(
+                        "absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs",
+                        humanRequestConversationsCount > 0 ? "bg-amber-500 animate-pulse" : "bg-blue-600"
+                      )}
+                    >
+                      {pendingConversationsCount}
+                    </span>
+                  )}
+                </div>
                 <span className="text-[10px] font-semibold">Mensajes</span>
               </Link>
             );

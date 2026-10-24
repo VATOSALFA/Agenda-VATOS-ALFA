@@ -386,9 +386,8 @@ export const consultarPaseAlfaYPromocionesTool = ai.defineTool(
       `   - ${nivelesClub[2].nivel} (${nivelesClub[2].requisito}): ${nivelesClub[2].cashbackPorcentaje}% de cashback -> 1 ALFA COIN = $${nivelesClub[2].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (100 AlfaCoins = $${nivelesClub[2].ejemplo100CoinsMxn.toFixed(2)} MXN).\n` +
       `3. ¿Cómo se canjean los ALFA COINS?: Se pueden usar directamente al pagar en recepción como dinero electrónico para descontar o liquidar servicios y productos (ceras, polvos de textura, aftershave, bálsamos, cortes, etc.).\n` +
       `4. Tarjeta de Sellos Pase Alfa (${tituloPase}): Cada visita pagada suma 1 sello. Al acumular ${sellosReq - 1} visitas pagadas, la visita #${sellosReq} otorga: ${recompensaSellos}. Términos: ${terminosSellos}\n` +
-      `5. Beneficio de Cumpleaños: Corte de cabello de cortesía durante el mes de cumpleaños presentando identificación oficial (INE o pasaporte) en recepción para validar la fecha de nacimiento.\n` +
       (estadoClienteActual.identificado
-        ? `6. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo vale $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS acumulados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
+        ? `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo vale $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS acumulados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
         : '');
 
     return {
@@ -411,12 +410,11 @@ export const consultarPaseAlfaYPromocionesTool = ai.defineTool(
           'Los ALFA COINS se acreditan automáticamente al finalizar cada venta pagada a clientes con la App Móvil vinculada. Son personales, intransferibles y no canjeables por dinero en efectivo.',
       },
       beneficioCumpleanos: {
-        titulo: 'Corte Gratis en el Mes de tu Cumpleaños',
+        titulo: 'Beneficios vigentes del Club',
         descripcion:
-          'Durante el mes de tu cumpleaños disfruta de tu corte de cabello de cortesía como miembro del Club VATOS ALFA.',
-        recompensa: 'Corte de Cabello de Cumpleaños sin costo',
-        terminos:
-          'Presentar identificación oficial vigente (INE o pasaporte) en recepción el día de tu cita para validar tu fecha de nacimiento. Válido una vez al año durante el mes de cumpleaños para clientes registrados.',
+          'Consulta la lista de promocionesYPrivilegiosActivos para ver únicamente las promociones y beneficios configurados actualmente en el sistema.',
+        recompensa: recompensaSellos,
+        terminos: terminosSellos,
       },
       promocionesYPrivilegiosActivos,
       estadoClienteActual,

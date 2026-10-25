@@ -364,9 +364,9 @@ export default function WeeklyAgendaPage() {
                                       const isJanet = canal.includes('chatbot') || canal.includes('janet') || origen.includes('chatbot') || origen.includes('janet') || notas.includes('asistente virtual');
                                       const isAppClient = !isJanet && (canal.includes('app') || canal.includes('mobile') || origen.includes('app') || origen.includes('mobile') || notas.includes('app vatos alfa'));
                                       const isWeb = !isJanet && !isAppClient && (canal.startsWith('web_publica') || origen.startsWith('web_publica') || canal === 'online' || origen === 'online');
-                                      if (isJanet) return <img src="/janet-avatar.png" alt="Janet" className="w-4 h-4 rounded-full object-cover ring-1 ring-blue-500" title="Agendado por Janet" />;
-                                      if (isAppClient) return <Smartphone className="w-3.5 h-3.5 text-sky-500" title="Agendado desde la App" />;
-                                      if (isWeb) return <Globe className="w-3.5 h-3.5 text-primary" title="Agendado desde la Web" />;
+                                      if (isJanet) return <img src="/janet-avatar.png" alt="Janet" className="w-4 h-4 rounded-full object-cover ring-1 ring-blue-500" />;
+                                      if (isAppClient) return <Smartphone className="w-3.5 h-3.5 text-sky-500" />;
+                                      if (isWeb) return <Globe className="w-3.5 h-3.5 text-primary" />;
                                       return <User className="w-3.5 h-3.5 opacity-70" />;
                                     })()}
                                   </div>

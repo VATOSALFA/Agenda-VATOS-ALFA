@@ -980,19 +980,26 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
     [handleScanText, toast]
   );
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (forcedDeviceId?: string) => {
     if (!isOpen || (!isScanningCompanion && (scannedClient || scannedPromo || scannedBenefit)) || activeTab !== 'camera') return;
     setCameraError(null);
 
     // 1. Verificación de entorno seguro y disponibilidad de WebRTC
     if (typeof window !== 'undefined') {
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '::1';
       if (!window.isSecureContext && !isLocalhost) {
-        setCameraError('El acceso a la cámara en vivo requiere HTTPS. Puedes escribir el código o subir una foto del QR.');
+        setCameraError(
+          'El acceso a la cámara en vivo requiere un entorno seguro (HTTPS o localhost). Para escanear en red local o celular, usa el botón "Tomar Foto / Subir QR".'
+        );
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError('Este navegador no soporta acceso directo a la cámara. Puedes tomar una foto o escribir el código.');
+        setCameraError(
+          'Este navegador no soporta acceso directo a la cámara. Puedes tomar una foto o escribir el código abajo.'
+        );
         return;
       }
     }
@@ -1010,59 +1017,51 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       if (!container) return;
       container.innerHTML = '';
 
-      const html5QrCode = new Html5Qrcode(scannerContainerId, {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false,
-      });
-      scannerRef.current = html5QrCode;
-
-      // Intentar obtener lista de cámaras disponibles
-      let devices: Array<{ id: string; label: string }> = [];
-      try {
-        const rawDevices = await Html5Qrcode.getCameras();
-        if (rawDevices && rawDevices.length > 0) {
-          devices = rawDevices.map(d => ({ id: d.id, label: d.label || `Cámara ${d.id}` }));
-          setAvailableCameras(devices);
-        }
-      } catch (camListErr) {
-        console.warn('Aviso: getCameras() falló o no tiene permiso previo:', camListErr);
-      }
-
-      // Configuración dinámica sin forzar aspectRatio 1.0 (evita OverconstrainedError en iOS Safari y móviles)
+      // Configuración dinámica de escaneo sin forzar dimensiones fijas que excedan el visor
       const qrScanConfig = {
         fps: 15,
         qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
           const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          const size = Math.floor(minEdge * 0.72);
-          return { width: Math.max(size, 160), height: Math.max(size, 160) };
+          if (minEdge <= 0) return { width: 180, height: 180 };
+          const size = Math.max(Math.floor(minEdge * 0.72), 120);
+          return {
+            width: Math.min(size, Math.max(120, viewfinderWidth - 10)),
+            height: Math.min(size, Math.max(120, viewfinderHeight - 10)),
+          };
         },
       };
 
-      // Candidatos de cámara en orden de preferencia
-      const candidates: any[] = [];
-      if (selectedCameraId) {
-        candidates.push({ deviceId: { exact: selectedCameraId } });
-        candidates.push(selectedCameraId);
-      } else {
-        // En móviles, buscar la cámara trasera por label
-        const backCam = devices.find(d => /back|rear|trasera|environment|posterior/i.test(d.label));
-        if (backCam) {
-          candidates.push(backCam.id);
-        }
-        // Constraint estándar de cámara trasera
-        candidates.push({ facingMode: 'environment' });
-        // Si hay dispositivos y no era la trasera encontrada
-        if (devices.length > 0 && (!backCam || backCam.id !== devices[0].id)) {
-          candidates.push(devices[0].id);
-        }
-        // Fallback a cámara frontal / webcam
-        candidates.push({ facingMode: 'user' });
+      // Determinar la lista de configuraciones a probar en orden de preferencia
+      const targetCamId = forcedDeviceId !== undefined ? forcedDeviceId : selectedCameraId;
+      const configsToTry: any[] = [];
+      if (targetCamId) {
+        configsToTry.push({ deviceId: { exact: targetCamId } });
+        configsToTry.push(targetCamId);
       }
+      // En móviles, cámara trasera como primera opción nativa
+      configsToTry.push({ facingMode: 'environment' });
+      // Fallback a cámara frontal o webcam
+      configsToTry.push({ facingMode: 'user' });
 
       let started = false;
       let lastError: any = null;
 
-      for (const config of candidates) {
+      for (const config of configsToTry) {
+        // En cada intento, limpiar el contenedor y crear una nueva instancia limpia para evitar errores de estado interno
+        if (scannerRef.current) {
+          try {
+            await scannerRef.current.stop().catch(() => {});
+            scannerRef.current.clear();
+          } catch (_) {}
+          scannerRef.current = null;
+        }
+        container.innerHTML = '';
+
+        const html5QrCode = new Html5Qrcode(scannerContainerId, {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: false,
+        });
+
         try {
           await html5QrCode.start(
             config,
@@ -1074,29 +1073,47 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
               // Frame continuo sin código detectado
             }
           );
+          scannerRef.current = html5QrCode;
           started = true;
           break;
         } catch (attemptErr: any) {
           lastError = attemptErr;
           console.warn('Intento de iniciar cámara con config falló:', config, attemptErr);
+          try {
+            html5QrCode.clear();
+          } catch (_) {}
         }
       }
 
       if (!started) {
         throw lastError || new Error('No se pudo acceder a la cámara.');
       }
+
+      // Una vez iniciada la cámara con éxito, obtener la lista de dispositivos disponibles para el selector
+      try {
+        const rawDevices = await Html5Qrcode.getCameras();
+        if (rawDevices && rawDevices.length > 0) {
+          const devs = rawDevices.map(d => ({ id: d.id, label: d.label || `Cámara ${d.id}` }));
+          setAvailableCameras(devs);
+        }
+      } catch (_) {}
     } catch (err: any) {
       console.warn('Error iniciando cámara:', err);
+      const errStr = typeof err === 'string' ? err : `${err?.name || ''} ${err?.message || ''} ${String(err || '')}`;
       let msg = 'No se pudo acceder a la cámara.';
-      if (err?.name === 'NotAllowedError' || err?.message?.includes('Permission') || err?.message?.includes('denied')) {
-        msg = 'Permiso denegado. Permite el acceso a la cámara en los ajustes de tu navegador o celular.';
-      } else if (err?.name === 'NotFoundError' || err?.message?.includes('not found') || err?.name === 'DevicesNotFoundError') {
-        msg = 'No se detectó ninguna cámara disponible en tu equipo.';
-      } else if (err?.name === 'NotReadableError' || err?.message?.includes('in use') || err?.name === 'TrackStartError') {
-        msg = 'La cámara está siendo usada por otra aplicación. Ciérrala y reintenta.';
-      } else if (err?.name === 'OverconstrainedError') {
-        msg = 'Tu cámara no soporta la resolución solicitada.';
+
+      if (/NotAllowedError|Permission|denied|dismissed/i.test(errStr)) {
+        msg = 'Permiso de cámara denegado. Por favor toca el icono del candado o ajustes del navegador (o la barra de direcciones) y permite el acceso a la cámara.';
+      } else if (/NotFoundError|not found|DevicesNotFoundError|No camera/i.test(errStr)) {
+        msg = 'No se detectó ninguna cámara disponible en tu equipo o celular.';
+      } else if (/NotReadableError|in use|TrackStartError|Could not start video source|allocate/i.test(errStr)) {
+        msg = 'La cámara está siendo usada por otra aplicación o tardó en responder. Toca "Reintentar Cámara".';
+      } else if (/OverconstrainedError|constraint/i.test(errStr)) {
+        msg = 'Tu cámara no soporta la resolución solicitada. Intenta con "Tomar Foto / Subir QR".';
+      } else if (/secure context|https/i.test(errStr)) {
+        msg = 'El acceso a la cámara en vivo requiere HTTPS o localhost. En red local puedes usar el botón "Tomar Foto / Subir QR".';
       }
+
       setCameraError(msg);
     }
   }, [isOpen, isScanningCompanion, scannedClient, scannedPromo, scannedBenefit, activeTab, selectedCameraId, stopCamera, handleScanText]);
@@ -2358,7 +2375,18 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                             <Button
                               size="sm"
                               variant="secondary"
-                              onClick={() => startCamera()}
+                              onClick={async () => {
+                                setCameraError(null);
+                                if (navigator?.mediaDevices?.getUserMedia) {
+                                  try {
+                                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                    stream.getTracks().forEach(t => t.stop());
+                                  } catch (permErr) {
+                                    console.warn('Permiso directo:', permErr);
+                                  }
+                                }
+                                startCamera();
+                              }}
                               className="text-xs"
                             >
                               Reintentar Cámara
@@ -2392,8 +2420,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                           <select
                             value={selectedCameraId || ''}
                             onChange={e => {
-                              setSelectedCameraId(e.target.value);
-                              setTimeout(() => startCamera(), 150);
+                              const newId = e.target.value;
+                              setSelectedCameraId(newId);
+                              startCamera(newId);
                             }}
                             className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer"
                           >

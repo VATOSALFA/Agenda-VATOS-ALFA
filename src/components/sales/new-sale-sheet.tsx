@@ -2961,8 +2961,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     // Use the first valid one found
                     const doc = snapshot.docs[0];
                     const d = doc.data();
-                    // Strict check: Only grab it if it looks like an active partial sale
-                    if (d.pago_estado === 'deposit_paid' || d.pago_estado === 'Pago Parcial' || d.pago_estado === 'Pendiente' || (d.pago_estado === 'Pagado' && d.monto_pagado_real < d.total)) {
+                    // Strict check: Only grab it if it looks like an active partial sale or an unabsorbed deposit sale
+                    if (
+                        d.pago_estado === 'deposit_paid' ||
+                        d.pago_estado === 'Pago Parcial' ||
+                        d.pago_estado === 'Pendiente' ||
+                        (d.pago_estado === 'Pagado' && d.monto_pagado_real < d.total) ||
+                        ((d.tipo_venta === 'anticipo' || doc.id.startsWith('deposit_')) && !d.absorbed_in_sale_id)
+                    ) {
                         preFoundSaleId = doc.id;
                         preFoundSaleData = d;
                     }
@@ -3193,7 +3199,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 const saleDataToSave: any = {
                     ...data,
-                    metodo_pago: (total === 0 && pointsDiscount > 0) ? 'alfacoins' : (data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo')),
+                    metodo_pago: (total === 0 && pointsDiscount > 0)
+                        ? 'alfacoins'
+                        : (amountBeingPaid === 0 && propinaToSave === 0 && (anticipoPagado > 0 || depositSaleData)
+                            ? (depositSaleData?.metodo_pago || 'anticipo')
+                            : (data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo'))),
                     items: itemsToSave,
                     subtotal: subtotal,
                     descuento: {
@@ -4794,9 +4804,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />}
                                         {total === 0 && pointsDiscount > 0
                                             ? `Finalizar (${effectiveAlfaCoinsToUse} ALFA COINS)`
-                                            : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
-                                                ? `Usa Cobrar en Terminal arriba`
-                                                : `Cobrar $${formatMoney(totalConPropina)} MXN`}
+                                            : (totalConPropina === 0 && anticipoPagado > 0)
+                                                ? `Liquidar Cita ($0.00 MXN)`
+                                                : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
+                                                    ? `Usa Cobrar en Terminal arriba`
+                                                    : `Cobrar $${formatMoney(totalConPropina)} MXN`}
                                     </Button>
                                 </SheetFooter>
                             </div>

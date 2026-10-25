@@ -2,12 +2,12 @@
   "silent": false,
   "showModal": true,
   "title": "Nueva versión disponible",
-  "summary": "Cuadratura contable de cobros en Terminal Point, soporte para teléfonos internacionales y mejoras de punto de venta.",
+  "summary": "Extensión de tolerancia de anticipos a 20 min, blindaje de citas concluidas y mejoras en mensajes y agenda.",
   "notes": [
-    "Cuadratura contable exacta en cobros con Terminal Point: exclusión automática de intentos de cobro pendientes o cancelados en ventas facturadas, flujo de caja, comisiones y propinas.",
-    "Auto-limpieza y reversión inteligente al reintentar cobros en terminal Point para evitar duplicidades.",
-    "Soporte completo para números telefónicos internacionales (Costa Rica, EE.UU., etc.) y números locales de 10 dígitos con enlaces directos de WhatsApp para confirmaciones y recordatorios.",
-    "Validación de promoción 'Juntos es Mejor' y soporte de cobro con AlfaCoins en punto de venta.",
-    "Página pública oficial de eliminación de cuenta conforme a directrices de tiendas de aplicaciones."
+    "Extensión del tiempo de espera para el pago de anticipo de 10 a 20 minutos en la agenda, cancelador automático, panel de reglas y términos oficiales.",
+    "Blindaje de seguridad en agenda: bloqueo total de edición y modificación de estado en citas con servicios concluidos (pagadas al 100%) y de días anteriores.",
+    "Cuadratura contable en anticipos al 100%: prevención de cancelaciones involuntarias y correcta sincronización en ventas facturadas.",
+    "Diseño minimalista y optimizado en la sección de personalización de mensajes y visualización cuadrada de foto de perfil de clientes.",
+    "Estabilidad y recuperación automática mejorada ante intermitencias de navegación entre páginas del sistema."
   ]
 }

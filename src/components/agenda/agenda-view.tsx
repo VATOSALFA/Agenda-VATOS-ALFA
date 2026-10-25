@@ -644,7 +644,7 @@ export default function AgendaView() {
 
   const { allEvents, eventsWithLayout } = useAgendaEvents(effectiveReservations, timeBlocks, clients, professionals);
 
-  // Auto-cancelar citas pendientes de anticipo que superaron los 10 minutos de tolerancia
+  // Auto-cancelar citas pendientes de anticipo que superaron los 20 minutos de tolerancia
   const autoCancellingIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!db || !effectiveReservations || effectiveReservations.length === 0) return;
@@ -656,13 +656,13 @@ export default function AgendaView() {
       if (res.estado === 'Confirmado' || res.estado === 'Asiste' || res.estado === 'Completado') return;
       if (autoCancellingIdsRef.current.has(res.id)) return;
 
-      if (isExpiredPendingDepositReservation(res, nowMs, 10)) {
+      if (isExpiredPendingDepositReservation(res, nowMs, 20)) {
         autoCancellingIdsRef.current.add(res.id);
         const isSandbox = Boolean((res as any).isSandbox);
         const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
         updateDoc(doc(db, targetCol, res.id), {
           estado: 'Cancelado',
-          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
           cancelada_automaticamente: true,
           cancelado_en: Timestamp.now(),
         })
@@ -937,6 +937,20 @@ export default function AgendaView() {
   }
 
   const handleEditFromDetail = () => {
+    if (!selectedReservation) return;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const isPastDate = Boolean(selectedReservation.fecha && selectedReservation.fecha < todayStr);
+    const isFullyPaidAndAttended = Boolean(
+      (selectedReservation.estado === 'Asiste' || selectedReservation.estado === 'Completado' || selectedReservation.estado === 'Venta completada') &&
+      selectedReservation.pago_estado === 'Pagado'
+    );
+    if (isPastDate || isFullyPaidAndAttended) {
+      toast({
+        title: "Cita concluida",
+        description: "Esta cita ya fue completada o corresponde a una fecha pasada y no puede ser modificada.",
+      });
+      return;
+    }
     setReservationInitialData(selectedReservation);
     setIsDetailModalOpen(false);
     setIsReservationModalOpen(true);
@@ -1035,8 +1049,9 @@ export default function AgendaView() {
       const resId = selectedReservation.id;
       const total = (computedTotal && computedTotal > 0) ? computedTotal : (selectedReservation.total || selectedReservation.precio || 0);
       const saldoPendiente = Math.max(0, total - depositAmount);
-      const isFullyPaid = total > 0 && depositAmount >= total;
-      const resolvedPagoEstado = isFullyPaid ? 'Pagado' : 'deposit_paid';
+      // Keep 'deposit_paid' even when depositAmount covers 100% of total so the appointment
+      // still goes through normal POS checkout / closure on the day of the service
+      const resolvedPagoEstado = 'deposit_paid';
 
       const isTerminal = paymentMethod === 'mercadopago';
       const depositSaleId = `deposit_${resId}_${Date.now()}`;
@@ -2274,7 +2289,7 @@ export default function AgendaView() {
                                         )}
 
                                         {event.layout.isPendingDeposit && (
-                                          <div className="h-full pr-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (10 min tolerancia)">
+                                          <div className="h-full pr-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (20 min tolerancia)">
                                             <Hourglass className="h-3.5 w-3.5 text-red-600 dark:text-red-400 animate-pulse" />
                                           </div>
                                         )}
@@ -2311,7 +2326,7 @@ export default function AgendaView() {
                                         <span>Pendiente de pago de anticipo</span>
                                       </div>
                                       <p className="text-[11px] text-muted-foreground leading-snug">
-                                        {`⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 10} min para recibir el anticipo y confirmarse formalmente.`}
+                                        {`⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 20} min para recibir el anticipo y confirmarse formalmente.`}
                                       </p>
                                     </div>
                                   ) : (

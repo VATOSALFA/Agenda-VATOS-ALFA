@@ -220,10 +220,10 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             const data = doc.data();
             if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
 
-            if (isExpiredPendingDepositReservation(data, nowMs, 10)) {
+            if (isExpiredPendingDepositReservation(data, nowMs, 20)) {
                 doc.ref.update({
                     estado: 'Cancelado',
-                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});
@@ -821,10 +821,10 @@ export async function createPublicReservation(data: any) {
             const res = doc.data();
             if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
 
-            if (isExpiredPendingDepositReservation(res, nowCheckMs, 10)) {
+            if (isExpiredPendingDepositReservation(res, nowCheckMs, 20)) {
                 doc.ref.update({
                     estado: 'Cancelado',
-                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});

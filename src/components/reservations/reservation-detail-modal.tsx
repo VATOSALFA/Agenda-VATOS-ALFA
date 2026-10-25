@@ -681,6 +681,15 @@ export function ReservationDetailModal({
     ? 0
     : Math.max(0, totalAmount - depositAmount);
 
+  // Determinar si la cita ya concluyó (fecha pasada o asistida y pagada al 100%)
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const isPastDate = Boolean(reservation.fecha && reservation.fecha < todayStr);
+  const isFullyPaidAndAttended = Boolean(
+    (reservation.estado === 'Asiste' || reservation.estado === 'Completado' || reservation.estado === 'Venta completada') &&
+    (reservation.pago_estado === 'Pagado' || balancePending <= 0)
+  );
+  const isConcluded = isPastDate || isFullyPaidAndAttended;
+
   // Determinar si la cita realmente requiere anticipo (por inasistencias, franja de apertura 10:00 a 10:30 AM, regla >= $190 o estado)
   const isAnticipoRequired = Boolean(
     hasUnattendedAlert ||
@@ -691,7 +700,7 @@ export function ReservationDetailModal({
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
-  // Tolerancia de 10 minutos para anticipo
+  // Tolerancia de 20 minutos para anticipo
   const rawCreated = reservation.creado_en || (reservation as any).createdAt || (reservation as any).creada_el;
   let createdMs: number | null = null;
   if (typeof (rawCreated as any)?.toMillis === 'function') {
@@ -707,8 +716,8 @@ export function ReservationDetailModal({
 
   const nowMs = Date.now();
   const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
-  const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(10 - diffMinutes)) : 10;
-  const isDepositExpired = createdMs ? diffMinutes > 10 : false;
+  const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(20 - diffMinutes)) : 20;
+  const isDepositExpired = createdMs ? diffMinutes > 20 : false;
 
   // Auto-sync estado a 'Confirmado' si la cita tiene anticipo pagado pero seguía en 'Reservado' o 'Pendiente de pago'
   const effectiveReservationEstado = (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado' || reservation.estado === 'Pendiente de pago' || reservation.estado === 'Pendiente de Pago'))
@@ -827,7 +836,11 @@ export function ReservationDetailModal({
                 <div className="space-y-0.5">
                   <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 flex-wrap">
                     <span>Detalle de la Reserva</span>
-                    {(reservation as any).isSandbox && (
+                    {isConcluded ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 tracking-wider uppercase">
+                        {isPastDate ? 'Cita Pasada' : 'Cita Concluida'}
+                      </span>
+                    ) : (reservation as any).isSandbox && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/40 tracking-wider uppercase">
                         Sandbox (Test)
                       </span>
@@ -849,7 +862,7 @@ export function ReservationDetailModal({
 
               {/* Botones de acción y cerrar sin contenedor ni texto */}
               <div className="flex items-center gap-3">
-                {onEdit && (
+                {onEdit && !isConcluded && (
                   <button
                     type="button"
                     onClick={onEdit}
@@ -928,9 +941,10 @@ export function ReservationDetailModal({
                               e.stopPropagation();
                               handleToggleLock();
                             }}
-                            disabled={isTogglingLock}
+                            disabled={isTogglingLock || isConcluded}
                             className={cn(
-                              "p-1 transition-colors cursor-pointer focus:outline-none rounded-md group flex items-center justify-center",
+                              "p-1 transition-colors focus:outline-none rounded-md group flex items-center justify-center",
+                              isConcluded ? "cursor-not-allowed opacity-60 text-slate-500" : "cursor-pointer",
                               currentIsLocked ? "text-slate-400 hover:text-blue-400" : "text-blue-400 hover:text-blue-300"
                             )}
                             aria-label={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
@@ -1115,11 +1129,11 @@ export function ReservationDetailModal({
                           ? "bg-red-500/20 text-red-300 border-red-500/40"
                           : "bg-blue-500/20 text-blue-200 border-blue-400/40 animate-pulse"
                       )}>
-                        {isDepositExpired ? "Tolerancia 10m Vencida" : `${depositMinutesRemaining} min restantes`}
+                        {isDepositExpired ? "Tolerancia 20m Vencida" : `${depositMinutesRemaining} min restantes`}
                       </span>
                     </div>
                     <p className="text-muted-foreground text-[11px] leading-snug">
-                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de 10 minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
+                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de 20 minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
                     </p>
                   </div>
                 </div>
@@ -1286,10 +1300,12 @@ export function ReservationDetailModal({
                     <Button
                       size="sm"
                       variant="alfa"
+                      disabled={isConcluded || isPastDate}
                       onClick={() => handleWhatsAppClick('confirmation')}
                       className={cn(
                         "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                        reservation.whatsappConfirmationSent && "opacity-90"
+                        reservation.whatsappConfirmationSent && "opacity-90",
+                        (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
                       )}
                     >
                       {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3 h-3" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
@@ -1311,10 +1327,12 @@ export function ReservationDetailModal({
                     <Button
                       size="sm"
                       variant="alfa"
+                      disabled={isConcluded || isPastDate}
                       onClick={() => handleWhatsAppClick('reminder')}
                       className={cn(
                         "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                        reservation.whatsappReminderSent && "opacity-90"
+                        reservation.whatsappReminderSent && "opacity-90",
+                        (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
                       )}
                       title={
                         reservation.whatsappReminderSent
@@ -1361,11 +1379,15 @@ export function ReservationDetailModal({
                 <span className="text-xs font-bold text-foreground">
                   {statusOptions.find(s => s.status === effectiveReservationEstado)?.label || effectiveReservationEstado}
                 </span>
-                {reservation.estado === 'Cancelado' && (
+                {isConcluded ? (
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    (Concluida - Solo lectura)
+                  </span>
+                ) : reservation.estado === 'Cancelado' ? (
                   <span className="text-[11px] text-blue-400 font-medium hidden sm:inline">
                     (Toca un color para reactivar)
                   </span>
-                )}
+                ) : null}
               </div>
               <div className="flex items-center gap-2.5 flex-wrap">
                 {statusOptions.map(({ status, hex, label }) => {
@@ -1377,9 +1399,11 @@ export function ReservationDetailModal({
                         <TooltipTrigger asChild>
                           <button
                             type="button"
-                            onMouseEnter={() => setActiveHintId(hintKey)}
+                            disabled={isConcluded}
+                            onMouseEnter={() => !isConcluded && setActiveHintId(hintKey)}
                             onMouseLeave={() => setActiveHintId(null)}
                             onTouchStart={() => {
+                              if (isConcluded) return;
                               isLongPressRef.current = false;
                               if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
                               longPressTimerRef.current = setTimeout(() => {
@@ -1393,9 +1417,10 @@ export function ReservationDetailModal({
                             }}
                             onContextMenu={(e) => {
                               e.preventDefault();
-                              setActiveHintId(hintKey);
+                              if (!isConcluded) setActiveHintId(hintKey);
                             }}
                             onClick={() => {
+                              if (isConcluded) return;
                               if (isLongPressRef.current) {
                                 isLongPressRef.current = false;
                                 return;
@@ -1410,13 +1435,14 @@ export function ReservationDetailModal({
                               }
                             }}
                             aria-label={label}
-                            title={label}
+                            title={isConcluded ? `${label} (Cita concluida - Solo lectura)` : label}
                             className={cn(
                               'w-7 h-7 rounded-full flex items-center justify-center transition-all focus:outline-none',
+                              isConcluded ? 'cursor-default opacity-85' : 'hover:scale-110',
                               isSelected
                                 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
-                                : 'hover:scale-110 opacity-80 hover:opacity-100',
-                              reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && 'cursor-not-allowed opacity-40'
+                                : (isConcluded ? 'opacity-35' : 'opacity-80 hover:opacity-100'),
+                              (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40'
                             )}
                           >
                             <span
@@ -1448,7 +1474,7 @@ export function ReservationDetailModal({
           {/* FOOTER DE ACCIONES */}
           <DialogFooter className="p-3.5 sm:p-4 border-t border-border/80 flex flex-wrap items-center justify-between gap-2 flex-shrink-0 bg-muted/20">
             <div className="shrink-0">
-              {reservation.estado !== 'Cancelado' && (
+              {reservation.estado !== 'Cancelado' && !isConcluded && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1462,7 +1488,16 @@ export function ReservationDetailModal({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
-              {reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && !isDepositPaid && (
+              {isConcluded ? (
+                <div className="flex items-center gap-2">
+                  {(reservation.pago_estado === 'Pagado' || isDepositPaid) && (
+                    <Button onClick={handleViewPayment} disabled={isLoadingSale} variant="outline" size="sm" className="rounded-xl text-xs h-9">
+                      {isLoadingSale ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}
+                      Ver Recibo
+                    </Button>
+                  )}
+                </div>
+              ) : reservation.estado !== 'Cancelado' && reservation.pago_estado !== 'Pagado' && !isDepositPaid ? (
                 <>
                   {/* SOLO se muestra el botón de Link SPEI si la cita realmente requiere anticipo */}
                   {isAnticipoRequired && (
@@ -1485,48 +1520,70 @@ export function ReservationDetailModal({
                     <DollarSign className="mr-1 h-3.5 w-3.5 text-blue-400" /> Registrar Anticipo
                   </Button>
                 </>
-              )}
+              ) : null}
 
-              {reservation.estado === 'Cancelado' ? (
-                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl border-blue-500/60 text-blue-400 hover:bg-blue-500/10 font-bold text-xs h-9 px-2.5"
-                    onClick={() => setIsDepositModalOpen(true)}
-                  >
-                    <DollarSign className="mr-1 h-3.5 w-3.5 text-blue-400" /> Registrar Anticipo
-                  </Button>
-                  <Button
-                    onClick={() => handleReactivateReservation('Confirmado')}
-                    disabled={isReactivating}
-                    size="sm"
-                    className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
-                  >
-                    {isReactivating ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              {!isConcluded && (
+                reservation.estado === 'Cancelado' ? (
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-blue-500/60 text-blue-400 hover:bg-blue-500/10 font-bold text-xs h-9 px-2.5"
+                      onClick={() => setIsDepositModalOpen(true)}
+                    >
+                      <DollarSign className="mr-1 h-3.5 w-3.5 text-blue-400" /> Registrar Anticipo
+                    </Button>
+                    <Button
+                      onClick={() => handleReactivateReservation('Confirmado')}
+                      disabled={isReactivating}
+                      size="sm"
+                      className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
+                    >
+                      {isReactivating ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      Reactivar Cita
+                    </Button>
+                  </div>
+                ) : reservation.pago_estado !== 'Pagado' ? (
+                  <div className="flex items-center gap-2">
+                    {isDepositPaid && (
+                      <Button onClick={handleViewPayment} disabled={isLoadingSale} variant="outline" size="sm" className="rounded-xl text-xs h-9">
+                        {isLoadingSale ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}
+                        Ver Recibo
+                      </Button>
                     )}
-                    Reactivar Cita
-                  </Button>
-                </div>
-              ) : reservation.pago_estado !== 'Pagado' ? (
-                <Button
-                  onClick={onPay}
-                  size="sm"
-                  className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
-                >
-                  <CreditCard className="mr-1.5 h-3.5 w-3.5" />
-                  {isDepositPaid
-                    ? `Cobrar Restante ($${balancePending.toFixed(2)})`
-                    : `Cobrar Total ($${totalAmount.toFixed(2)})`}
-                </Button>
-              ) : (
-                <Button onClick={handleViewPayment} disabled={isLoadingSale} variant="outline" size="sm" className="rounded-xl text-xs h-9">
-                  {isLoadingSale ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}
-                  Ver Recibo
-                </Button>
+                    <Button
+                      onClick={onPay}
+                      size="sm"
+                      className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
+                    >
+                      <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                      {isDepositPaid
+                        ? (balancePending > 0 ? `Cobrar Restante ($${balancePending.toFixed(2)})` : `Cerrar Cita ($0.00)`)
+                        : `Cobrar Total ($${totalAmount.toFixed(2)})`}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button onClick={handleViewPayment} disabled={isLoadingSale} variant="outline" size="sm" className="rounded-xl text-xs h-9">
+                      {isLoadingSale ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Eye className="mr-1.5 h-3.5 w-3.5" />}
+                      Ver Recibo
+                    </Button>
+                    {reservation.estado !== 'Asiste' && reservation.estado !== 'Completado' && (
+                      <Button
+                        onClick={onPay}
+                        size="sm"
+                        className="rounded-xl text-xs font-bold transition-all shadow-xs h-9 px-3.5 btn-vatos-alfa"
+                      >
+                        <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                        Cerrar Cita ($0.00)
+                      </Button>
+                    )}
+                  </div>
+                )
               )}
             </div>
           </DialogFooter>

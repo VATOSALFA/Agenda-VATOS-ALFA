@@ -394,6 +394,26 @@ export function NewReservationForm({
 
   const unattendedCount = clientStats.inasistenciasCount;
 
+  const isConcluded = useMemo(() => {
+    if (!isEditMode || !initialData) return false;
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const initialDateStr = initialData.fecha
+      ? (typeof initialData.fecha === 'string'
+          ? initialData.fecha
+          : (typeof (initialData.fecha as any)?.toDate === 'function'
+              ? format((initialData.fecha as any).toDate(), 'yyyy-MM-dd')
+              : ((initialData.fecha as any) instanceof Date
+                  ? format(initialData.fecha as any, 'yyyy-MM-dd')
+                  : String(initialData.fecha))))
+      : '';
+    const isPast = Boolean(initialDateStr && initialDateStr < todayStr);
+    const isFullyPaidAndAttended = Boolean(
+      (initialData.estado === 'Asiste' || initialData.estado === 'Completado' || initialData.estado === 'Venta completada') &&
+      (initialData.pago_estado === 'Pagado' || Number(initialData.saldo_pendiente ?? 0) <= 0)
+    );
+    return isPast || isFullyPaidAndAttended;
+  }, [isEditMode, initialData]);
+
   const isAnticipoRequiredDueToHistory = isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
 
   const isMontoMinimoActive = bookingRules.anticipo_monto_minimo_activo !== false;
@@ -672,7 +692,7 @@ export function NewReservationForm({
     if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
       const clientConflict = allReservations.some(r => {
         if (r.estado === 'Cancelado' || r.estado === 'No asiste' || r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
-        if (isExpiredPendingDepositReservation(r, nowMs, 10)) return false;
+        if (isExpiredPendingDepositReservation(r, nowMs, 20)) return false;
         return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
       });
       if (clientConflict) {
@@ -814,13 +834,13 @@ export function NewReservationForm({
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
           if (r.estado === 'Cancelado' || r.estado === 'No asiste' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
-          if (isExpiredPendingDepositReservation(r, nowMs, 10)) {
+          if (isExpiredPendingDepositReservation(r, nowMs, 20)) {
             if (db && r.id) {
               const isSandbox = Boolean((r as any).isSandbox);
               const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
               updateDoc(doc(db, targetCol, r.id), {
                 estado: 'Cancelado',
-                motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 10 minutos de tolerancia.',
+                motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
                 cancelada_automaticamente: true,
                 cancelado_en: Timestamp.now(),
               }).catch(() => {});
@@ -1219,6 +1239,14 @@ export function NewReservationForm({
 
 
   async function executeSave(data: any) {
+    if (isConcluded) {
+      toast({
+        variant: 'destructive',
+        title: 'Cita concluida',
+        description: 'Esta cita ya fue completada o corresponde a un día pasado y no puede ser modificada.',
+      });
+      return;
+    }
     setIsSubmitting(true);
     let success = false;
     let createdReservationObj: any = null;
@@ -1332,13 +1360,15 @@ export function NewReservationForm({
       const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
 
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
-      const preservedStatuses = ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
+      const preservedStatuses = effectiveDepositPaid
+        ? ['Asiste', 'En espera', 'Completado', 'Venta completada']
+        : ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
       const cleanInitialEstado = (data.estado === 'Pendiente de pago' || data.estado === 'Pendiente de Pago')
         ? 'Reservado'
         : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
         ? data.estado
-        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
+        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive && !isEditMode ? 'Pendiente de pago' : cleanInitialEstado));
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
@@ -1364,8 +1394,9 @@ export function NewReservationForm({
         requiere_anticipo: Boolean(isAnyAnticipoActive),
         manual_deposit: Boolean(manualDepositEnabled),
         anticipo_esperado: (isAnyAnticipoActive || effectiveDepositPaid) ? targetDepositAmount : 0,
+        ...(isEditMode ? { anticipo_en_sucursal: true } : {}),
         ...(effectiveDepositPaid ? {
-          pago_estado: isFullPaymentCovered || isInitialAlreadyPaid ? 'Pagado' : 'deposit_paid',
+          pago_estado: (isInitialAlreadyPaid && !(initialData as any)?.deposit_payment_id) ? 'Pagado' : 'deposit_paid',
           monto_anticipo: targetDepositAmount,
           monto_pagado: targetDepositAmount,
           monto_pagado_real: targetDepositAmount,
@@ -1374,6 +1405,7 @@ export function NewReservationForm({
           saldo_pendiente: Math.max(0, totalPrecioNum - targetDepositAmount),
           metodo_pago_anticipo: depositMethod,
           deposit_paid_at: paidTimestamp,
+          anticipo_en_sucursal: true,
         } : {
           pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : 'Pendiente',
           monto_anticipo: 0,
@@ -1698,11 +1730,17 @@ export function NewReservationForm({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
-                      {isEditMode ? 'Editar Cita' : 'Nueva Cita en Agenda'}
+                      {isConcluded ? 'Cita Concluida (Solo Lectura)' : (isEditMode ? 'Editar Cita' : 'Nueva Cita en Agenda')}
                     </DialogTitle>
-                    <Badge variant="outline" className="bg-white/10 text-slate-200 border-white/20 text-[10px] py-0 px-2 font-sans">
-                      {currentLocal?.name || 'Vatos Alfa'}
-                    </Badge>
+                    {isConcluded ? (
+                      <Badge variant="outline" className="bg-slate-800 text-slate-300 border-slate-700 text-[10px] py-0 px-2 font-bold uppercase tracking-wider">
+                        Solo Lectura
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-white/10 text-slate-200 border-white/20 text-[10px] py-0 px-2 font-sans">
+                        {currentLocal?.name || 'Vatos Alfa'}
+                      </Badge>
+                    )}
                     {isTargetSandbox && (
                       <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-400/40 text-[10px] py-0 px-2 font-bold uppercase tracking-wider">
                         Modo Sandbox (Prueba)
@@ -1710,7 +1748,9 @@ export function NewReservationForm({
                     )}
                   </div>
                   <DialogDescription className="text-xs text-slate-300 font-normal mt-0.5 hidden sm:block">
-                    {isEditMode ? 'Modifica el horario, profesional o servicios de la reserva.' : 'Registra la cita en la agenda verificando historial del cliente.'}
+                    {isConcluded
+                      ? 'Esta cita ya concluyó o pertenece a una fecha pasada y no puede modificarse.'
+                      : (isEditMode ? 'Modifica el horario, profesional o servicios de la reserva.' : 'Registra la cita en la agenda verificando historial del cliente.')}
                   </DialogDescription>
                 </div>
               </div>
@@ -1722,9 +1762,12 @@ export function NewReservationForm({
                   name="estado"
                   render={({ field }) => (
                     <FormItem className="space-y-0">
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isConcluded}>
                         <FormControl>
-                          <SelectTrigger className="h-8.5 px-3 bg-white/10 border-white/20 text-white hover:bg-white/15 rounded-xl text-xs font-semibold focus:ring-0 gap-2 shrink-0">
+                          <SelectTrigger className={cn(
+                            "h-8.5 px-3 bg-white/10 border-white/20 text-white rounded-xl text-xs font-semibold focus:ring-0 gap-2 shrink-0",
+                            isConcluded ? "opacity-60 cursor-not-allowed" : "hover:bg-white/15"
+                          )}>
                             <div className="flex items-center gap-2 min-w-0">
                               <span
                                 className="rounded-full shrink-0 shadow-xs"
@@ -1785,6 +1828,14 @@ export function NewReservationForm({
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-5 py-3.5 space-y-3.5">
+            {isConcluded && (
+              <div className="p-3 rounded-xl border border-blue-500/40 bg-blue-500/10 text-xs text-blue-200 flex items-center gap-2.5 shadow-xs">
+                <ShieldAlert className="h-4 w-4 text-blue-400 shrink-0" />
+                <span>
+                  <strong>Cita Concluida (Solo Lectura):</strong> Esta cita ya fue finalizada y pagada en su totalidad (o corresponde a una fecha pasada). Sus datos están bloqueados para proteger el registro de ventas, inventario y comisiones.
+                </span>
+              </div>
+            )}
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
                 <FormField
@@ -2373,15 +2424,26 @@ export function NewReservationForm({
                 className="rounded-xl h-9 sm:h-10 px-3 sm:px-4 text-xs font-semibold"
                 onClick={() => onOpenChange && onOpenChange(false)}
               >
-                Cancelar
+                {isConcluded ? 'Cerrar' : 'Cancelar'}
               </Button>
-              <Button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-xl h-9 sm:h-10 px-4 sm:px-6 text-xs font-bold btn-vatos-alfa"
-              >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Reserva')}
-              </Button>
+              {isConcluded ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled
+                  className="rounded-xl h-9 sm:h-10 px-4 sm:px-6 text-xs font-semibold text-slate-400 border-border/60"
+                >
+                  Cita Concluida
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="rounded-xl h-9 sm:h-10 px-4 sm:px-6 text-xs font-bold btn-vatos-alfa"
+                >
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : (isEditMode ? 'Guardar Cambios' : 'Guardar Reserva')}
+                </Button>
+              )}
             </div>
           </div>
         </form>

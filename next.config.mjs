@@ -18,8 +18,20 @@ const withPWA = withPWAInit({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   cacheOnFrontEndNav: false,
-  aggressiveCodeNav: false,
+  aggressiveFrontEndNavCaching: false,
   reloadOnOnline: false,
+  workboxOptions: {
+    cleanupOutdatedCaches: true,
+    runtimeCaching: [
+      {
+        urlPattern: ({ request, url }) =>
+          request.headers.get('RSC') === '1' ||
+          url.searchParams.has('_rsc') ||
+          url.pathname.startsWith('/_next/data/'),
+        handler: 'NetworkOnly',
+      },
+    ],
+  },
 });
 
 /** @type {import('next').NextConfig} */

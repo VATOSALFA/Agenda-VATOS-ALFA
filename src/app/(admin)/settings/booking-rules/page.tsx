@@ -309,6 +309,7 @@ export default function BookingRulesPage() {
         tiempo_minimo_anticipacion_minutos: Number(rules.tiempo_minimo_anticipacion_minutos) || 30,
         dias_maximos_futuro: Number(rules.dias_maximos_futuro) || 14,
         tolerancia_puntualidad_minutos: Number(rules.tolerancia_puntualidad_minutos) || 10,
+        tolerancia_anticipo_minutos: Number(rules.tolerancia_anticipo_minutos) || 20,
         intervalo_horarios_minutos: Number(rules.intervalo_horarios_minutos) || 30,
         reglas_personalizadas: rules.reglas_personalizadas || [],
         reglas_avisos_agenda: rules.reglas_avisos_agenda || DEFAULT_AVISOS_AGENDA_RULES,
@@ -337,6 +338,7 @@ export default function BookingRulesPage() {
           max_inasistencias_permitidas: payload.max_inasistencias_permitidas,
           penalizacion_anticipo_porcentaje: payload.penalizacion_anticipo_porcentaje,
           penalizacion_inasistencias_descripcion: payload.penalizacion_inasistencias_descripcion,
+          tolerancia_anticipo_minutos: payload.tolerancia_anticipo_minutos ?? 20,
           reglas_personalizadas: payload.reglas_personalizadas || [],
           reglas_avisos_agenda: payload.reglas_avisos_agenda || [],
           actualizado_el: Timestamp.now(),
@@ -1426,6 +1428,26 @@ export default function BookingRulesPage() {
                 />
                 <p className="text-[11px] text-muted-foreground">
                   Minutos de espera antes de marcar retraso o liberar la silla (ej. 10 min).
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Tolerancia para pago de anticipo (minutos)</Label>
+                <Input
+                  type="number"
+                  min="5"
+                  max="120"
+                  className="font-medium h-9 text-xs"
+                  value={rules.tolerancia_anticipo_minutos ?? 20}
+                  onChange={(e) =>
+                    setRules((prev) => ({
+                      ...prev,
+                      tolerancia_anticipo_minutos: Number(e.target.value) || 20,
+                    }))
+                  }
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Tiempo de espera para recibir el anticipo antes de que el sistema cancele la cita preliminar automáticamente (ej. 20 min).
                 </p>
               </div>
 

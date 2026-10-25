@@ -552,6 +552,8 @@ export interface Conversation {
   cliente_id?: string;
   cliente_nombre?: string;
   cliente_telefono?: string;
+  cliente_foto?: string;
+  avatarUrl?: string;
   ultimo_mensaje?: string;
   fecha_ultimo_mensaje?: any;
   mensajes_no_leidos?: number;

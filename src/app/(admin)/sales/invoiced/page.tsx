@@ -375,7 +375,9 @@ export default function InvoicedSalesPage() {
 
                         if (isDepositSale) {
                             // If the deleted sale was the deposit itself, clear the deposit from the reservation
+                            // and protect the reservation from the 10-minute auto-cancellation timer
                             transaction.update(reservationRef, {
+                                estado: resData.estado === 'Cancelado' ? 'Reservado' : (resData.estado || 'Reservado'),
                                 pago_estado: 'pendiente',
                                 monto_anticipo: 0,
                                 anticipo_pagado: 0,
@@ -385,6 +387,8 @@ export default function InvoicedSalesPage() {
                                 saldo_pendiente: Number(resData.total || resData.precio || 0),
                                 deposit_payment_id: null,
                                 metodo_pago_anticipo: null,
+                                anticipo_en_sucursal: true,
+                                tolerancia_anticipo_extendida: true,
                             });
                         } else {
                             const anticipo = Number(resData.anticipo_pagado || 0);

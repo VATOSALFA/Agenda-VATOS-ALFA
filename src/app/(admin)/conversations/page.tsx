@@ -535,22 +535,34 @@ function ClientProfileContent({
   activeConversation,
   clientDetails,
   loadingClientDetails,
+  clientPhoto,
   onOpenAppointmentModal,
   onOpenDetailModal,
   onRefreshDetails,
+  onViewPhoto,
 }: {
   activeConversation: Conversation;
   clientDetails: any;
   loadingClientDetails: boolean;
+  clientPhoto?: string;
   onOpenAppointmentModal: () => void;
   onOpenDetailModal?: () => void;
   onRefreshDetails?: () => void;
+  onViewPhoto?: (url: string, name: string, phone?: string) => void;
 }) {
   const { toast } = useToast();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState<boolean>(false);
   const clientObj = clientDetails?.client;
+  const photoUrl =
+    clientPhoto ||
+    clientObj?.foto_perfil_url ||
+    clientObj?.photoURL ||
+    clientObj?.avatarUrl ||
+    clientObj?.fotoUrl ||
+    activeConversation.cliente_foto ||
+    activeConversation.avatarUrl;
   const alfaCoins = Number(clientObj?.alfaCoins ?? clientObj?.alfa_coins ?? clientObj?.puntosLealtad ?? clientObj?.puntos_lealtad ?? clientObj?.puntos ?? 0);
   const stamps = Number(clientObj?.cortes_acumulados ?? clientObj?.cortesAcumulados ?? 0);
   const freeCutReady = Boolean(clientObj?.corte_gratis_disponible ?? clientObj?.corteGratisDisponible ?? stamps >= 9);
@@ -624,7 +636,28 @@ function ClientProfileContent({
     <div className="space-y-4">
       {/* Profile Card */}
       <div className="flex flex-col items-center text-center p-4 rounded-xl bg-background/60 border border-border/50">
-        <Avatar className="w-14 h-14 border-2 border-primary/20 mb-2.5">
+        <Avatar
+          className={`w-14 h-14 border-2 border-primary/20 mb-2.5 overflow-hidden ${
+            photoUrl ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:scale-105 transition-all' : ''
+          }`}
+          onClick={() => {
+            if (photoUrl && onViewPhoto) {
+              onViewPhoto(
+                photoUrl,
+                activeConversation.cliente_nombre || 'Cliente',
+                activeConversation.cliente_telefono || activeConversation.id
+              );
+            }
+          }}
+          title={photoUrl ? 'Clic para ver foto en formato cuadrado' : undefined}
+        >
+          {photoUrl && (
+            <AvatarImage
+              src={photoUrl}
+              alt={activeConversation.cliente_nombre || 'Cliente'}
+              className="object-cover"
+            />
+          )}
           <AvatarFallback className="bg-primary/10 text-primary font-bold text-base">
             {activeConversation.cliente_nombre
               ? activeConversation.cliente_nombre.slice(0, 2).toUpperCase()
@@ -953,6 +986,13 @@ export default function ConversationsDashboardPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [cameraModalTarget, setCameraModalTarget] = useState<'main' | 'simulator'>('main');
+
+  // Photo preview modal state (shows square 1:1 client profile picture)
+  const [photoPreviewModal, setPhotoPreviewModal] = useState<{
+    url: string;
+    name: string;
+    phone?: string;
+  } | null>(null);
 
   // Load saved chat preferences from localStorage
   useEffect(() => {
@@ -1293,6 +1333,54 @@ export default function ConversationsDashboardPage() {
       .slice(0, 30);
   }, [rawClients, searchTerm]);
 
+  // Fast map of clients by ID and by normalized phone numbers for real-time lookups (including avatars)
+  const clientMap = useMemo(() => {
+    if (!rawClients) return new Map<string, Client>();
+    const map = new Map<string, Client>();
+    rawClients.forEach((c) => {
+      if (c.id) map.set(c.id, c);
+      if (c.telefono) {
+        const clean = String(c.telefono).replace(/\D/g, '');
+        if (clean) {
+          map.set(clean, c);
+          if (clean.length > 10) {
+            map.set(clean.slice(-10), c);
+          }
+        }
+      }
+    });
+    return map;
+  }, [rawClients]);
+
+  // Helper to obtain client profile picture from conversation, client doc or linked phone
+  const getClientPhoto = (conv?: Conversation | null): string | undefined => {
+    if (!conv) return undefined;
+    if (conv.cliente_foto) return conv.cliente_foto;
+    if (conv.avatarUrl) return conv.avatarUrl;
+
+    if (conv.cliente_id && clientMap.has(conv.cliente_id)) {
+      const c = clientMap.get(conv.cliente_id);
+      const photo = c?.foto_perfil_url || c?.photoURL || c?.avatarUrl || c?.fotoUrl;
+      if (photo) return photo;
+    }
+
+    const phoneCandidates = [
+      conv.cliente_telefono ? String(conv.cliente_telefono).replace(/\D/g, '') : '',
+      conv.id ? String(conv.id).replace(/\D/g, '') : '',
+    ].filter(Boolean);
+
+    for (const phone of phoneCandidates) {
+      let c = clientMap.get(phone);
+      if (!c && phone.length > 10) {
+        c = clientMap.get(phone.slice(-10));
+      }
+      const photo = c?.foto_perfil_url || c?.photoURL || c?.avatarUrl || c?.fotoUrl;
+      if (photo) return photo;
+    }
+
+    return undefined;
+  };
+
   // Handler to open or start a conversation with a client
   const handleStartConversationWithClient = async (client: Client) => {
     const cleanPhone = String(client.telefono ?? '').replace(/\D/g, '');
@@ -1314,6 +1402,7 @@ export default function ConversationsDashboardPage() {
     const convId = cleanPhone || client.id;
     if (db) {
       try {
+        const clientPhoto = client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl || '';
         const convRef = doc(db, 'conversaciones', convId);
         await setDoc(
           convRef,
@@ -1322,6 +1411,7 @@ export default function ConversationsDashboardPage() {
             cliente_id: client.id,
             cliente_nombre: `${client.nombre || ''} ${client.apellido || ''}`.trim() || 'Cliente',
             cliente_telefono: client.telefono || '',
+            cliente_foto: clientPhoto,
             modo_atencion: 'bot_activo',
             mensajes_no_leidos: 0,
             ultimo_mensaje: 'Conversación iniciada',
@@ -2761,10 +2851,17 @@ export default function ConversationsDashboardPage() {
     }
 
     return (
-      <button
+      <div
         key={conv.id}
-        type="button"
+        role="button"
+        tabIndex={0}
         onClick={() => handleCardClick(conv.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleCardClick(conv.id);
+          }
+        }}
         onTouchStart={() => startLongPress(conv)}
         onTouchEnd={cancelLongPress}
         onTouchMove={cancelLongPress}
@@ -2776,18 +2873,47 @@ export default function ConversationsDashboardPage() {
           cancelLongPress();
           setTagModalConv(conv);
         }}
-        className={`w-full text-left px-3 py-2.5 transition-all flex items-start gap-2.5 hover:bg-muted/50 select-none group relative ${
+        className={`w-full text-left px-3 py-2.5 transition-all flex items-start gap-2.5 hover:bg-muted/50 select-none group relative cursor-pointer ${
           isSelected
             ? 'bg-muted border-l-4 border-l-primary'
             : 'border-l-4 border-l-transparent'
         }`}
         title="Clic para abrir • Mantén presionado o clic derecho para etiquetas"
       >
-        <Avatar className="w-9 h-9 border shrink-0 mt-0.5">
-          <AvatarFallback className="bg-muted/40 text-slate-300 font-bold text-xs">
-            {conv.cliente_nombre ? conv.cliente_nombre.slice(0, 2).toUpperCase() : 'CL'}
-          </AvatarFallback>
-        </Avatar>
+        <div
+          className="shrink-0 mt-0.5"
+          onClick={(e) => {
+            const photo = getClientPhoto(conv);
+            if (photo) {
+              e.stopPropagation();
+              setPhotoPreviewModal({
+                url: photo,
+                name: conv.cliente_nombre || 'Cliente',
+                phone: conv.cliente_telefono || conv.id,
+              });
+            }
+          }}
+        >
+          <Avatar
+            className={`w-9 h-9 border shrink-0 overflow-hidden ${
+              getClientPhoto(conv)
+                ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:scale-105 transition-all'
+                : ''
+            }`}
+            title={getClientPhoto(conv) ? 'Clic para ver foto en formato cuadrado' : undefined}
+          >
+            {getClientPhoto(conv) && (
+              <AvatarImage
+                src={getClientPhoto(conv)}
+                alt={conv.cliente_nombre || 'Cliente'}
+                className="object-cover"
+              />
+            )}
+            <AvatarFallback className="bg-muted/40 text-slate-300 font-bold text-xs">
+              {conv.cliente_nombre ? conv.cliente_nombre.slice(0, 2).toUpperCase() : 'CL'}
+            </AvatarFallback>
+          </Avatar>
+        </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1 mb-0.5">
@@ -2863,7 +2989,7 @@ export default function ConversationsDashboardPage() {
             </div>
           )}
         </div>
-      </button>
+      </div>
     );
   };
 
@@ -3298,8 +3424,33 @@ export default function ConversationsDashboardPage() {
                               }`}
                             >
                               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <Avatar className="w-8 h-8 border shrink-0">
-                                  <AvatarImage src={client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl} />
+                                <Avatar
+                                  className={`w-8 h-8 border shrink-0 overflow-hidden ${
+                                    (client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl)
+                                      ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:scale-105 transition-all'
+                                      : ''
+                                  }`}
+                                  onClick={(e) => {
+                                    const p = client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl;
+                                    if (p) {
+                                      e.stopPropagation();
+                                      setPhotoPreviewModal({
+                                        url: p,
+                                        name: `${client.nombre || ''} ${client.apellido || ''}`.trim() || 'Cliente',
+                                        phone: client.telefono || '',
+                                      });
+                                    }
+                                  }}
+                                  title={
+                                    (client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl)
+                                      ? 'Clic para ver foto en formato cuadrado'
+                                      : undefined
+                                  }
+                                >
+                                  <AvatarImage
+                                    src={client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl}
+                                    className="object-cover"
+                                  />
                                   <AvatarFallback className="bg-muted/40 text-slate-300 font-bold text-xs">
                                     {(client.nombre || 'C').charAt(0).toUpperCase()}
                                   </AvatarFallback>
@@ -3383,15 +3534,40 @@ export default function ConversationsDashboardPage() {
                   </Button>
 
                   <Avatar
-                    className="w-8 h-8 md:w-9 md:h-9 border shrink-0 cursor-pointer hover:opacity-85 transition-opacity"
+                    className={`w-8 h-8 md:w-9 md:h-9 border shrink-0 cursor-pointer hover:opacity-90 transition-all overflow-hidden ${
+                      getClientPhoto(activeConversation)
+                        ? 'hover:ring-2 hover:ring-blue-500 hover:scale-105'
+                        : ''
+                    }`}
                     onClick={() => {
-                      if (window.innerWidth < 768) {
-                        setIsMobileSheetOpen(true);
+                      const photo = getClientPhoto(activeConversation);
+                      if (photo) {
+                        setPhotoPreviewModal({
+                          url: photo,
+                          name: activeConversation.cliente_nombre || 'Cliente',
+                          phone: activeConversation.cliente_telefono || activeConversation.id,
+                        });
                       } else {
-                        setShowRightPanel(!showRightPanel);
+                        if (window.innerWidth < 768) {
+                          setIsMobileSheetOpen(true);
+                        } else {
+                          setShowRightPanel(!showRightPanel);
+                        }
                       }
                     }}
+                    title={
+                      getClientPhoto(activeConversation)
+                        ? 'Clic para ver foto en formato cuadrado'
+                        : 'Ver ficha del cliente'
+                    }
                   >
+                    {getClientPhoto(activeConversation) && (
+                      <AvatarImage
+                        src={getClientPhoto(activeConversation)}
+                        alt={activeConversation.cliente_nombre || 'Cliente'}
+                        className="object-cover"
+                      />
+                    )}
                     <AvatarFallback className="bg-primary/15 text-primary font-bold text-xs">
                       {activeConversation.cliente_nombre
                         ? activeConversation.cliente_nombre.slice(0, 2).toUpperCase()
@@ -4449,6 +4625,8 @@ export default function ConversationsDashboardPage() {
                 activeConversation={activeConversation}
                 clientDetails={clientDetails}
                 loadingClientDetails={loadingClientDetails}
+                clientPhoto={getClientPhoto(activeConversation)}
+                onViewPhoto={(url, name, phone) => setPhotoPreviewModal({ url, name, phone })}
                 onOpenAppointmentModal={() => setIsNewAppointmentModalOpen(true)}
                 onOpenDetailModal={() => setIsClientDetailModalOpen(true)}
                 onRefreshDetails={loadClientDetails}
@@ -4474,6 +4652,8 @@ export default function ConversationsDashboardPage() {
                 activeConversation={activeConversation}
                 clientDetails={clientDetails}
                 loadingClientDetails={loadingClientDetails}
+                clientPhoto={getClientPhoto(activeConversation)}
+                onViewPhoto={(url, name, phone) => setPhotoPreviewModal({ url, name, phone })}
                 onOpenAppointmentModal={() => {
                   setIsMobileSheetOpen(false);
                   setIsNewAppointmentModalOpen(true);
@@ -5266,6 +5446,95 @@ export default function ConversationsDashboardPage() {
         }}
         assistantName={assistantName}
       />
+
+      {/* ============================================================ */}
+      {/* MODAL: VISOR DE FOTO DE PERFIL EN FORMATO CUADRADO */}
+      {/* ============================================================ */}
+      <Dialog
+        open={!!photoPreviewModal}
+        onOpenChange={(open) => !open && setPhotoPreviewModal(null)}
+      >
+        <DialogContent
+          hideCloseButton={true}
+          className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
+        >
+          {/* Cabecera Oficial VATOS ALFA */}
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+            <div className="header-light-beam" aria-hidden="true" />
+            <div className="relative z-10 flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <User className="w-4 h-4 text-slate-300 shrink-0" />
+                <div className="min-w-0">
+                  <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide truncate">
+                    {photoPreviewModal?.name || 'Foto de Perfil'}
+                  </DialogTitle>
+                  {photoPreviewModal?.phone && (
+                    <DialogDescription className="text-xs text-slate-300 mt-0.5 truncate font-sans">
+                      {photoPreviewModal.phone}
+                    </DialogDescription>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhotoPreviewModal(null)}
+                className="p-1 text-slate-300 hover:text-white transition-colors"
+                aria-label="Cerrar visor de foto"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Contenedor Cuadrado Oficial (1:1) */}
+          <div className="p-4 sm:p-5 flex flex-col items-center justify-center bg-slate-950/80">
+            <div className="w-full max-w-[320px] sm:max-w-[360px] aspect-square rounded-xl overflow-hidden border border-slate-800 shadow-2xl relative bg-black flex items-center justify-center group">
+              {photoPreviewModal?.url ? (
+                <img
+                  src={photoPreviewModal.url}
+                  alt={photoPreviewModal.name || 'Foto de perfil'}
+                  className="w-full h-full object-cover select-none"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-slate-400 p-6 text-center">
+                  <User className="w-16 h-16 text-slate-600 mb-2" />
+                  <p className="text-sm font-semibold text-slate-300">
+                    {photoPreviewModal?.name || 'Cliente'}
+                  </p>
+                  <p className="text-xs text-slate-500">Sin foto de perfil asignada</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer de Acciones Rápidas */}
+          <div className="p-3 bg-muted/30 border-t flex items-center justify-between">
+            {photoPreviewModal?.url ? (
+              <a
+                href={photoPreviewModal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors px-2 py-1 rounded-md hover:bg-white/5"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>Ver en tamaño original</span>
+              </a>
+            ) : (
+              <div />
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPhotoPreviewModal(null)}
+              className="text-xs h-8 px-4"
+            >
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

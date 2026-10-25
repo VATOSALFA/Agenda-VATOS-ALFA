@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, MessageCircle, Search, X, Check, Phone, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -244,7 +244,14 @@ export function NewConversationModal({
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    <Avatar className="w-9 h-9 border border-border/40 shrink-0">
+                    <Avatar className="w-9 h-9 border border-border/40 shrink-0 overflow-hidden">
+                      {(client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl) && (
+                        <AvatarImage
+                          src={client.foto_perfil_url || client.photoURL || client.avatarUrl || client.fotoUrl}
+                          alt={fullName}
+                          className="object-cover"
+                        />
+                      )}
                       <AvatarFallback className="bg-muted text-foreground font-semibold text-xs">
                         {initials.toUpperCase() || 'CL'}
                       </AvatarFallback>
@@ -285,7 +292,14 @@ export function NewConversationModal({
         {selectedClient && (
           <div className="px-4 py-2.5 bg-blue-500/5 border-t border-blue-500/20 flex items-center justify-between gap-3 shrink-0 animate-in fade-in-0 duration-150">
             <div className="flex items-center gap-2.5 min-w-0">
-              <Avatar className="w-7 h-7 border border-blue-500/30 shrink-0">
+              <Avatar className="w-7 h-7 border border-blue-500/30 shrink-0 overflow-hidden">
+                {(selectedClient.foto_perfil_url || selectedClient.photoURL || selectedClient.avatarUrl || selectedClient.fotoUrl) && (
+                  <AvatarImage
+                    src={selectedClient.foto_perfil_url || selectedClient.photoURL || selectedClient.avatarUrl || selectedClient.fotoUrl}
+                    alt={selectedClient.nombre}
+                    className="object-cover"
+                  />
+                )}
                 <AvatarFallback className="bg-blue-500/10 text-blue-400 font-bold text-[10px]">
                   {((selectedClient.nombre?.slice(0, 1) || '') + (selectedClient.apellido?.slice(0, 1) || '')).toUpperCase() || 'CL'}
                 </AvatarFallback>

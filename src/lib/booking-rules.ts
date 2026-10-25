@@ -153,7 +153,7 @@ export function isShortNoticeAppointment(
 
 /**
  * Determina si una reserva se encuentra actualmente esperando el pago de su anticipo
- * (estado preliminar de 10 minutos de tolerancia).
+ * (estado preliminar de 20 minutos de tolerancia).
  */
 export function isPendingDepositReservation(res: any): boolean {
   if (!res) return false;
@@ -216,13 +216,13 @@ export function isPendingDepositReservation(res: any): boolean {
 }
 
 /**
- * Calcula el tiempo transcurrido y si ya vencieron los 10 minutos de tolerancia
+ * Calcula el tiempo transcurrido y si ya vencieron los 20 minutos de tolerancia
  * para una cita con anticipo pendiente.
  */
 export function getPendingDepositTiming(
   res: any,
   nowMs: number = Date.now(),
-  toleranceMinutes: number = 10
+  toleranceMinutes: number = 20
 ): {
   isPendingDeposit: boolean;
   createdMs: number | null;
@@ -271,12 +271,12 @@ export function getPendingDepositTiming(
 }
 
 /**
- * Devuelve true si la cita requería anticipo, no ha sido pagada y ya superó los 10 minutos de tolerancia.
+ * Devuelve true si la cita requería anticipo, no ha sido pagada y ya superó los 20 minutos de tolerancia.
  */
 export function isExpiredPendingDepositReservation(
   res: any,
   nowMs: number = Date.now(),
-  toleranceMinutes: number = 10
+  toleranceMinutes: number = 20
 ): boolean {
   return getPendingDepositTiming(res, nowMs, toleranceMinutes).depositExpired;
 }
@@ -313,6 +313,7 @@ export interface ReglasReservasConfig {
   tiempo_minimo_anticipacion_minutos: number;
   dias_maximos_futuro: number;
   tolerancia_puntualidad_minutos: number;
+  tolerancia_anticipo_minutos?: number;
   intervalo_horarios_minutos?: number;
 
   // 5. Reglas Personalizadas Dinámicas
@@ -355,6 +356,7 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
   tiempo_minimo_anticipacion_minutos: 30,
   dias_maximos_futuro: 14,
   tolerancia_puntualidad_minutos: 10,
+  tolerancia_anticipo_minutos: 20,
   intervalo_horarios_minutos: 30,
 
   reglas_personalizadas: [],

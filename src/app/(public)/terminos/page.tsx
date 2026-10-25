@@ -74,6 +74,9 @@ export default function TerminosPage() {
                         <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                             El anticipo constituye una garantía de apartado y bloqueo exclusivo de la agenda del barbero seleccionado. El importe pagado en concepto de anticipo será acreditado y descontado automáticamente del total a pagar en caja al momento de su visita.
                         </p>
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+                            <strong>Tolerancia de 20 minutos para confirmación de pago:</strong> Al generar una cita sujeta a anticipo, el cliente dispone de una ventana de tolerancia de <strong>veinte (20) minutos naturales</strong> para realizar y acreditar el pago a través de la pasarela autorizada. De no completarse en dicho periodo, la cita preliminar se cancelará automáticamente y el horario se liberará para otros clientes.
+                        </p>
                     </section>
 
                     <section className="space-y-3">

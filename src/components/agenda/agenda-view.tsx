@@ -16,7 +16,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen, Hourglass, QrCode } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, Eye, Plus, Lock, Pencil, Mail, User, Circle, Trash2, Loader2, Globe, Bot, Smartphone, PanelLeftClose, PanelLeftOpen, Cast, HelpCircle, CalendarDays, Zap, CheckCircle2, MoreVertical, ShieldCheck, BookOpen, Hourglass, QrCode } from 'lucide-react';
 import { format, addMinutes, subDays, isToday, parse, getHours, getMinutes, set, getDay, addDays as dateFnsAddDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -71,6 +71,7 @@ import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
 import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
 import { getNormalizedDayOfWeek, getEffectiveBarberDaySchedule } from '@/lib/scheduling/schedule-engine';
+import { checkAndSendPendingChatReminders } from '@/lib/actions/conversation-actions';
 
 
 
@@ -254,6 +255,15 @@ export default function AgendaView() {
 
   // Quick Consult Modal State
   const [isQuickConsultOpen, setIsQuickConsultOpen] = useState(false);
+
+  // Automatic Janet Chat Reminder dispatcher when Agenda is open
+  useEffect(() => {
+    checkAndSendPendingChatReminders().catch(() => {});
+    const reminderInterval = setInterval(() => {
+      checkAndSendPendingChatReminders().catch(() => {});
+    }, 60 * 1000);
+    return () => clearInterval(reminderInterval);
+  }, []);
 
   // Sidebar collapse state persisted per user preference
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
@@ -440,6 +450,14 @@ export default function AgendaView() {
     if (!selectedLocalId) return undefined;
     return [
       where('fecha', '==', format(targetDate, 'yyyy-MM-dd')),
+    ];
+  }, [date, selectedLocalId]);
+
+  const blocksQueryConstraint = useMemo(() => {
+    const targetDate = date || new Date();
+    if (!selectedLocalId) return undefined;
+    return [
+      where('fecha', '==', format(targetDate, 'yyyy-MM-dd')),
       where('local_id', '==', selectedLocalId)
     ];
   }, [date, selectedLocalId]);
@@ -453,7 +471,7 @@ export default function AgendaView() {
     `sandbox-${reservationsQueryKey}`,
     ...(reservationsQueryConstraint || [])
   );
-  const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(reservationsQueryConstraint || []));
+  const { data: timeBlocks, loading: timeBlocksLoading } = useFirestoreQuery<TimeBlock>('bloqueos_horario', blocksQueryKey, ...(blocksQueryConstraint || []));
 
   const { timeSlots, startHour, endHour } = useMemo(() => {
     if (!selectedLocal || !selectedLocal.schedule) {
@@ -531,8 +549,69 @@ export default function AgendaView() {
   const [clientsLoading, setClientsLoading] = useState(false);
   const fetchedClientIdsRef = useRef<Set<string>>(new Set());
 
+  const normalizedRealReservations = useMemo(() => {
+    const matchesSelectedLocal = (r: Reservation) => {
+      if (!selectedLocalId) return true;
+      const rLocal = (r as any).local_id || (r as any).sucursal_id || '';
+      if (!rLocal || rLocal === selectedLocalId) return true;
+      if (
+        selectedLocalId === 'rkbEgvwP67JliXQ1Qeyj' &&
+        (rLocal === 'sombrerete' || rLocal === 'cipreses')
+      ) {
+        return true;
+      }
+      return false;
+    };
+
+    return (reservations || [])
+      .filter(matchesSelectedLocal)
+      .map(r => {
+        const isMobileUnpaidMarkedPaid =
+          ((r as any).origen === 'app_movil' || (r as any).canal_reserva === 'app_movil') &&
+          r.pago_estado === 'Pagado' &&
+          Number(r.saldo_pendiente || 0) > 0 &&
+          Number(r.anticipo_pagado || 0) === 0 &&
+          !(r as any).cobrado_en &&
+          !(r as any).paid_at;
+
+        if (isMobileUnpaidMarkedPaid || (r as any).local_id === 'sombrerete') {
+          return {
+            ...r,
+            local_id: selectedLocalId || 'rkbEgvwP67JliXQ1Qeyj',
+            ...(isMobileUnpaidMarkedPaid ? { pago_estado: 'Pendiente' } : {}),
+          };
+        }
+        return r;
+      });
+  }, [reservations, selectedLocalId]);
+
+  // Auto-heal reservations created from mobile app with legacy branch slug 'sombrerete'
+  const healedMobileIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!db || !reservations || reservations.length === 0) return;
+    reservations.forEach(r => {
+      if (!r?.id || healedMobileIdsRef.current.has(r.id)) return;
+      const needsLocalFix = (r as any).local_id === 'sombrerete' || (r as any).local_id === 'cipreses';
+      const needsPagoFix =
+        ((r as any).origen === 'app_movil' || (r as any).canal_reserva === 'app_movil') &&
+        r.pago_estado === 'Pagado' &&
+        Number(r.saldo_pendiente || 0) > 0 &&
+        Number(r.anticipo_pagado || 0) === 0 &&
+        !(r as any).cobrado_en &&
+        !(r as any).paid_at;
+
+      if (needsLocalFix || needsPagoFix) {
+        healedMobileIdsRef.current.add(r.id);
+        const updates: Record<string, any> = {};
+        if (needsLocalFix) updates.local_id = 'rkbEgvwP67JliXQ1Qeyj';
+        if (needsPagoFix) updates.pago_estado = 'Pendiente';
+        updateDoc(doc(db, 'reservas', r.id), updates).catch(() => {});
+      }
+    });
+  }, [reservations, db]);
+
   const effectiveReservations = useMemo(() => {
-    if (!isLocalhost) return reservations || [];
+    if (!isLocalhost) return normalizedRealReservations;
 
     const taggedSandbox = (sandboxReservations || []).map(r => {
       const client = r.cliente_id ? clientsMap.get(r.cliente_id) : null;
@@ -559,10 +638,10 @@ export default function AgendaView() {
       return taggedSandbox;
     }
     if (sandboxViewMode === 'real_only') {
-      return reservations || [];
+      return normalizedRealReservations;
     }
-    return [...(reservations || []), ...taggedSandbox];
-  }, [reservations, sandboxReservations, isLocalhost, sandboxViewMode, clientsMap]);
+    return [...normalizedRealReservations, ...taggedSandbox];
+  }, [normalizedRealReservations, sandboxReservations, isLocalhost, sandboxViewMode, clientsMap]);
 
   useEffect(() => {
     if (!effectiveReservations || effectiveReservations.length === 0 || !db) return;
@@ -1858,10 +1937,14 @@ export default function AgendaView() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Globe className="w-5 h-5 text-primary flex-shrink-0" />
-                          <span className="text-sm">Reserva desde la web pública</span>
+                          <span className="text-sm">Reserva desde la página web</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Bot className="w-5 h-5 text-blue-500 flex-shrink-0" />
+                          <Smartphone className="w-5 h-5 text-sky-500 flex-shrink-0" />
+                          <span className="text-sm">Reserva desde la App por el cliente</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <img src="/janet-avatar.png" alt="Janet" className="w-5 h-5 rounded-full object-cover ring-1 ring-blue-500 flex-shrink-0" />
                           <span className="text-sm">Reserva agendada por Janet (Chat App)</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2214,9 +2297,19 @@ export default function AgendaView() {
                                     !event.layout.isMinimized &&
                                     event.pago_estado !== 'Pagado' &&
                                     (event as any).estado !== 'No asiste' &&
-                                    (event as any).estado !== 'En espera' && (
-                                      (whatsappConfirmationAnimation && !event.whatsappConfirmationSent) ||
-                                      (whatsappReminderAnimation && !event.whatsappReminderSent)
+                                    (event as any).estado !== 'En espera' &&
+                                    !Boolean(
+                                      event.canal_reserva?.includes('chatbot') ||
+                                      event.origen?.includes('chatbot') ||
+                                      event.canal_reserva?.includes('janet') ||
+                                      event.origen?.includes('janet') ||
+                                      event.canal_reserva?.includes('app') ||
+                                      event.origen?.includes('app') ||
+                                      String((event as any).notas || '').toLowerCase().includes('asistente virtual') ||
+                                      String((event as any).notas || '').toLowerCase().includes('app vatos alfa')
+                                    ) && (
+                                      (whatsappConfirmationAnimation && !event.whatsappConfirmationSent && !(event as any).confirmationSentViaApp) ||
+                                      (whatsappReminderAnimation && !event.whatsappReminderSent && !(event as any).chatReminderSent)
                                     )) && "animate-pending-notification"
                                 )}
                                 style={{ ...calculatePosition(event.start, event.duration), width: `calc(${event.layout.width}% - 2px)`, left: `${event.layout.left}%` }}
@@ -2251,17 +2344,61 @@ export default function AgendaView() {
                                               TEST
                                             </span>
                                           )}
-                                          {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && (
-                                            <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
-                                          )}
-                                          {(event.canal_reserva === 'chatbot' || event.origen === 'chatbot') && (
-                                            <Bot className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                                          )}
-                                          {((event.professional_lock === true) || (event.professional_lock === undefined && (event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica') || event.canal_reserva === 'chatbot' || event.origen === 'chatbot'))) && (
-                                            <Lock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                          )}
+                                          {(() => {
+                                            const canal = String(event.canal_reserva || '').toLowerCase();
+                                            const origen = String(event.origen || '').toLowerCase();
+                                            const notas = String((event as any).notas || '').toLowerCase();
+                                            const isJanet =
+                                              canal.includes('chatbot') ||
+                                              canal.includes('janet') ||
+                                              origen.includes('chatbot') ||
+                                              origen.includes('janet') ||
+                                              notas.includes('asistente virtual');
+                                            const isAppClient =
+                                              !isJanet &&
+                                              (canal.includes('app') ||
+                                                canal.includes('mobile') ||
+                                                origen.includes('app') ||
+                                                origen.includes('mobile') ||
+                                                notas.includes('app vatos alfa'));
+                                            const isWeb =
+                                              !isJanet &&
+                                              !isAppClient &&
+                                              (canal.startsWith('web_publica') ||
+                                                origen.startsWith('web_publica') ||
+                                                canal === 'online' ||
+                                                origen === 'online');
+
+                                            return (
+                                              <>
+                                                {isWeb && (
+                                                  <span title="Agendado desde la Página Web" className="shrink-0 flex items-center">
+                                                    <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
+                                                  </span>
+                                                )}
+                                                {isAppClient && (
+                                                  <span title="Agendado desde la App por el cliente" className="shrink-0 flex items-center">
+                                                    <Smartphone className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                                                  </span>
+                                                )}
+                                                {isJanet && (
+                                                  <span title="Agendado por Janet desde el Chat de la App" className="shrink-0 flex items-center">
+                                                    <img
+                                                      src="/janet-avatar.png"
+                                                      alt="Janet"
+                                                      className="w-4 h-4 rounded-full object-cover ring-1 ring-blue-500 shrink-0"
+                                                    />
+                                                  </span>
+                                                )}
+                                                {((event.professional_lock === true) ||
+                                                  (event.professional_lock === undefined && (isWeb || isAppClient || isJanet))) && (
+                                                  <Lock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                                )}
+                                              </>
+                                            );
+                                          })()}
                                           {(event as any).confirmada_por_cliente && (
-                                            <span title="Cita confirmada por el cliente vía WhatsApp" className="shrink-0 flex items-center">
+                                            <span title="Cita confirmada por el cliente" className="shrink-0 flex items-center">
                                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                                             </span>
                                           )}
@@ -2305,8 +2442,51 @@ export default function AgendaView() {
                                   <div className="flex justify-between items-start">
                                     <p className="font-bold text-base text-foreground">{formatClientName(event.customer?.nombre, event.customer?.apellido)}</p>
                                     <div className="flex flex-wrap gap-1">
-                                      {(event.canal_reserva?.startsWith('web_publica') || event.origen?.startsWith('web_publica')) && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Globe className="w-3 h-3 mr-1" /> Web</Badge>}
-                                      {(event.canal_reserva === 'chatbot' || event.origen === 'chatbot') && <Badge variant="secondary" className="text-[10px] h-5 px-1"><Bot className="w-3 h-3 mr-1" /> Bot</Badge>}
+                                      {(() => {
+                                        const canal = String(event.canal_reserva || '').toLowerCase();
+                                        const origen = String(event.origen || '').toLowerCase();
+                                        const notas = String((event as any).notas || '').toLowerCase();
+                                        const isJanet =
+                                          canal.includes('chatbot') ||
+                                          canal.includes('janet') ||
+                                          origen.includes('chatbot') ||
+                                          origen.includes('janet') ||
+                                          notas.includes('asistente virtual');
+                                        const isAppClient =
+                                          !isJanet &&
+                                          (canal.includes('app') ||
+                                            canal.includes('mobile') ||
+                                            origen.includes('app') ||
+                                            origen.includes('mobile') ||
+                                            notas.includes('app vatos alfa'));
+                                        const isWeb =
+                                          !isJanet &&
+                                          !isAppClient &&
+                                          (canal.startsWith('web_publica') ||
+                                            origen.startsWith('web_publica') ||
+                                            canal === 'online' ||
+                                            origen === 'online');
+
+                                        return (
+                                          <>
+                                            {isWeb && (
+                                              <Badge variant="secondary" className="text-[10px] h-5 px-1">
+                                                <Globe className="w-3 h-3 mr-1" /> Web
+                                              </Badge>
+                                            )}
+                                            {isAppClient && (
+                                              <Badge variant="secondary" className="text-[10px] h-5 px-1 text-sky-500 border-sky-500/30 bg-sky-500/10">
+                                                <Smartphone className="w-3 h-3 mr-1" /> App
+                                              </Badge>
+                                            )}
+                                            {isJanet && (
+                                              <Badge variant="secondary" className="text-[10px] h-5 px-1.5 text-blue-500 border-blue-500/30 bg-blue-500/10">
+                                                <img src="/janet-avatar.png" alt="Janet" className="w-3.5 h-3.5 rounded-full object-cover mr-1" /> Janet
+                                              </Badge>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
                                       {(event as any).confirmada_por_cliente && (
                                         <Badge variant="outline" className="text-[10px] h-5 px-1 border-emerald-500/50 bg-emerald-500/10 text-emerald-600 font-semibold">
                                           <CheckCircle2 className="w-3 h-3 mr-1 text-emerald-600" /> Confirmada

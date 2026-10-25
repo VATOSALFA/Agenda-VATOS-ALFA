@@ -296,34 +296,48 @@ export function ReservationDetailModal({
   // Canal de creación y auditoría
   const originInfo = useMemo(() => {
     const canal = (reservation.canal_reserva || reservation.origen || '').toLowerCase();
+    const notas = String((reservation as any).notas || '').toLowerCase();
 
-    // 1. App Móvil (preparada para cuando esté activa la app)
-    if (canal.includes('app') || canal.includes('mobile')) {
-      return {
-        type: 'app',
-        label: 'App Móvil Vatos Alfa',
-        badgeTitle: 'App Móvil',
-        icon: Smartphone,
-        accentColor: 'text-[#C5A880]',
-        badgeClass: 'border-[#C5A880]/40 bg-[#C5A880]/10 text-[#C5A880]',
-        cardBg: 'bg-[#C5A880]/5 border-[#C5A880]/20',
-        creator: reservation.creada_por ? resolvedCreatorName : 'Cliente (Vía App)',
-        description: 'Cita reservada directamente por el cliente desde la aplicación móvil oficial de Vatos Alfa.',
-      };
-    }
+    const JanetAvatarIcon = ({ className }: { className?: string }) => (
+      <img
+        src="/janet-avatar.png"
+        alt="Janet"
+        className={cn("rounded-full object-cover ring-1 ring-blue-500 shrink-0", className)}
+      />
+    );
 
-    // 2. Chatbot / Janet (Chat App)
-    if (canal.includes('chatbot') || canal.includes('janet') || canal.includes('bot')) {
+    // 1. Chatbot / Janet (Chat App)
+    if (
+      canal.includes('chatbot') ||
+      canal.includes('janet') ||
+      canal.includes('bot') ||
+      notas.includes('asistente virtual')
+    ) {
       return {
         type: 'chatbot',
         label: 'Janet (Chat App)',
         badgeTitle: 'Janet (Chat App)',
-        icon: Bot,
+        icon: JanetAvatarIcon,
         accentColor: 'text-blue-600 dark:text-blue-400',
         badgeClass: 'border-blue-500/40 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
         cardBg: 'bg-blue-50/40 dark:bg-blue-950/15 border-blue-200/60 dark:border-blue-800/40',
         creator: 'Janet (Agente Inteligente)',
         description: 'Cita agendada de forma automática por la agente inteligente Janet a través del chat de la aplicación.',
+      };
+    }
+
+    // 2. App Móvil (Cliente por su cuenta)
+    if (canal.includes('app') || canal.includes('mobile') || notas.includes('app vatos alfa')) {
+      return {
+        type: 'app',
+        label: 'App Móvil Vatos Alfa',
+        badgeTitle: 'App Móvil',
+        icon: Smartphone,
+        accentColor: 'text-sky-500',
+        badgeClass: 'border-sky-500/40 bg-sky-500/10 text-sky-500',
+        cardBg: 'bg-sky-500/5 border-sky-500/20',
+        creator: reservation.creada_por ? resolvedCreatorName : 'Cliente (Vía App)',
+        description: 'Cita reservada directamente por el cliente desde la aplicación móvil oficial de Vatos Alfa.',
       };
     }
 

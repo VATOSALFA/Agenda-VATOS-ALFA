@@ -439,10 +439,13 @@ export async function processAgentMessage({
       executionContext.clientEmail = clientRegisteredEmail || resolvedClientEmail;
       executionContext.clientPhone = clientRegisteredPhone || resolvedClientPhone;
 
-      // Cargar catálogo real resumido de servicios activos desde Firestore (cero precios hardcodeados)
+      // Cargar catálogo real resumido de servicios y productos activos desde Firestore (cero precios hardcodeados)
       let liveServicesPromptCatalog = '';
       try {
-        const activeServsSnap = await db.collection('servicios').where('active', '==', true).get();
+        const [activeServsSnap, activeProdsSnap] = await Promise.all([
+          db.collection('servicios').where('active', '==', true).get(),
+          db.collection('productos').where('active', '==', true).get().catch(() => null),
+        ]);
         const activeServsList = activeServsSnap.docs
           .filter((d) => !d.data().deleted)
           .map((d) => {
@@ -451,8 +454,16 @@ export async function processAgentMessage({
             const sPrice = Number(sd.price || sd.precio || 0).toFixed(2);
             return `${sName}: $${sPrice} MXN`;
           });
-        if (activeServsList.length > 0) {
-          liveServicesPromptCatalog = `\nCATÁLOGO DE SERVICIOS VIGENTE EN TIEMPO REAL (FIRESTORE):\n- ${activeServsList.join(' | ')}\n(Para ver detalles por barbero llama a consultar_servicios; para productos físicos y su stock actual llama a consultar_productos. JAMÁS inventes precios ni uses tarifas que no estén en la base de datos).`;
+        const activeProdsList = (activeProdsSnap?.docs || [])
+          .filter((d) => !d.data().deleted && Number(d.data().stock ?? 1) > 0)
+          .map((d) => {
+            const pd = d.data();
+            const pName = pd.nombre || pd.name || 'Producto';
+            const pPrice = Number(pd.public_price || pd.precio_publico || pd.precio || pd.price || 0).toFixed(2);
+            return `${pName}: $${pPrice} MXN`;
+          });
+        if (activeServsList.length > 0 || activeProdsList.length > 0) {
+          liveServicesPromptCatalog = `\nCATÁLOGO OFICIAL VIGENTE EN TIEMPO REAL (FIRESTORE):\n- Servicios: ${activeServsList.join(' | ')}\n- Productos físicos en barbería (para venta cruzada / apartar en cita): ${activeProdsList.join(' | ')}\n(Para ver detalles por barbero llama a consultar_servicios; para stock detallado llama a consultar_productos. JAMÁS inventes precios ni uses tarifas que no estén en la base de datos).`;
         }
       } catch (_) {}
 
@@ -712,7 +723,12 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
       const fullPromptText = `${dateGuidance}\n\nHistorial de la conversación:\n${recentHistory || '(Inicio de conversación)'}\n\nCliente acaba de ${audioUrl ? 'enviar una nota de voz diciendo' : 'escribir'}: "${effectiveUserMessage}"\n\n${greetingGuidance}\n${identificationGuidance}\n\nResponde como ${assistantName} (recepcionista de VATOS ALFA):`;
 
       const genkitResponse = await chatContextStorage.run(
-        Object.assign(executionContext, { clientNotes, clientId: executionContext.clientId || convData?.cliente_id }),
+        Object.assign(executionContext, {
+          clientNotes,
+          clientId: executionContext.clientId || convData?.cliente_id,
+          alreadyOfferedUpsellToday,
+          userMessage: effectiveUserMessage,
+        }),
         async () => {
           if (imageUrl) {
             try {

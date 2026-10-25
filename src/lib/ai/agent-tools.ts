@@ -629,6 +629,42 @@ export const crearCitaTool = ai.defineTool(
       const resolvedProducts = await resolveProducts(db, productosNombres, productoNombre);
       const extraProductsAmount = resolvedProducts.reduce((sum, p) => sum + (p.precio * (p.cantidad || 1)), 0);
 
+      const chatContext = chatContextStorage.getStore();
+      const userExplicitlyAnsweredUpsell = Boolean(
+        chatContext?.userMessage &&
+        /(solo el corte|solo corte|nada m[aá]s|sin nada|as[ií] est[aá] bien|no gracias|no, gracias|solo eso|sin producto|s[ií].*(cera|polvo|barba|ceja|mascarilla|shampoo|after)|agrega|apartame|ap[aá]rtame)/i.test(
+          chatContext.userMessage
+        )
+      );
+
+      // Guardián determinista de venta cruzada ("Como Buena Vendedora"):
+      // Si aún no se le ha ofrecido un producto (como Cera para peinar) o servicio extra en esta conversación hoy,
+      // interceptamos el cierre para que Janet ofrezca UNA SOLA VEZ antes de crear la cita.
+      if (
+        chatContext &&
+        !chatContext.alreadyOfferedUpsellToday &&
+        !userExplicitlyAnsweredUpsell &&
+        resolvedProducts.length === 0 &&
+        selectedServices.length <= 1
+      ) {
+        if (chatContext.conversationId) {
+          try {
+            await db.collection('conversaciones').doc(chatContext.conversationId).set(
+              { fecha_ultima_oferta_cruzada: new Date() },
+              { merge: true }
+            );
+          } catch (_) {}
+        }
+        return {
+          exito: false,
+          mensaje:
+            `¡DETENTE ANTES DE CERRAR LA CITA! El horario del ${targetFecha} a las ${time12h} con ${finalBarberName} está disponible, pero como buena vendedora de VATOS ALFA aún NO le has ofrecido venta cruzada al cliente. ` +
+            `NO digas todavía que su cita ya está agendada ni entregues folio. ` +
+            `En su lugar, confírmale con entusiasmo que tienes libre el espacio de las ${time12h} con ${finalBarberName} y pregúntale amablemente UNA SOLA VEZ si antes de cerrar su cita le gustaría que le apartes una Cera para peinar ($179.00 MXN) o Polvo textura ($180.00 MXN) para su peinado diario, o bien agregar un Arreglo de barba exprés ($100.00 MXN) o Arreglo de ceja ($30.00 MXN). ` +
+            `En cuanto te responda sí o no en el siguiente mensaje, llamarás inmediatamente a crear_cita.`,
+        };
+      }
+
       const anticipoCalc = await calcularAnticipoParaServicios(selectedServices, extraProductsAmount, normalizedTime);
 
       const nameParts = (nombreCliente || 'Cliente').trim().split(/\s+/);
@@ -642,7 +678,6 @@ export const crearCitaTool = ai.defineTool(
         anticipoCalc.requiereAnticipo ? `Requiere anticipo: $${anticipoCalc.montoAnticipo}` : 'Agendado por Asistente Virtual Janet',
       ].filter(Boolean).join(' | ');
 
-      const chatContext = chatContextStorage.getStore();
       const resolvedEmail = (correoCliente || chatContext?.clientEmail || '').trim().toLowerCase();
       const cleanPhone = (telefonoCliente || chatContext?.clientPhone || '').replace(/\D/g, '').slice(-10);
 
@@ -716,6 +751,21 @@ export const crearCitaTool = ai.defineTool(
 
       const reservationId = (res as any).reservationId || (res as any).id;
       const bookedClientId = (res as any).clientId || chatContext?.clientId;
+
+      if (reservationId) {
+        try {
+          const targetCol = isSimulation ? 'reservas_sandbox' : 'reservas';
+          await db.collection(targetCol).doc(reservationId).set(
+            {
+              origen: 'chatbot',
+              canal_reserva: 'chatbot_janet',
+              whatsappConfirmationSent: true,
+              confirmationSentViaApp: true,
+            },
+            { merge: true }
+          );
+        } catch (_) {}
+      }
 
       await syncConversationClientIdentity(db, {
         clientId: bookedClientId,

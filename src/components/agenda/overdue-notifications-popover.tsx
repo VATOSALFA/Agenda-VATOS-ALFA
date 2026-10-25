@@ -201,13 +201,27 @@ export function OverdueNotificationsPopover({
             return;
           }
 
-          const canal = (res.canal_reserva || res.origen || '').toLowerCase();
-          const isOnline =
-            canal.startsWith('web') ||
-            canal.startsWith('app') ||
-            canal.startsWith('mobile') ||
-            canal.startsWith('chat') ||
-            canal.startsWith('janet');
+          const canal = (res.canal_reserva || '').toLowerCase();
+          const origen = (res.origen || '').toLowerCase();
+          const notas = String((res as any).notas || '').toLowerCase();
+
+          // Citas hechas desde la App o por Janet mandan confirmación automática a la sala de chat de la App
+          const isAppOrJanet =
+            canal.includes('app') ||
+            canal.includes('mobile') ||
+            canal.includes('chat') ||
+            canal.includes('janet') ||
+            origen.includes('app') ||
+            origen.includes('mobile') ||
+            origen.includes('chat') ||
+            origen.includes('janet') ||
+            notas.includes('asistente virtual') ||
+            notas.includes('app vatos alfa') ||
+            Boolean((res as any).confirmationSentViaApp);
+
+          if (isAppOrJanet) return;
+
+          const isOnline = canal.startsWith('web') || origen.startsWith('web');
 
           if (!isOnline) return;
 
@@ -245,13 +259,22 @@ export function OverdueNotificationsPopover({
           const sandboxList: Reservation[] = [];
           snap.forEach((d) => {
             const res = { id: d.id, ...d.data(), isSandbox: true } as unknown as Reservation;
-            const canal = (res.canal_reserva || res.origen || '').toLowerCase();
-            const isOnline =
-              canal.startsWith('web') ||
-              canal.startsWith('app') ||
-              canal.startsWith('mobile') ||
-              canal.startsWith('chat') ||
-              canal.startsWith('janet');
+            const canal = (res.canal_reserva || '').toLowerCase();
+            const origen = (res.origen || '').toLowerCase();
+            const notas = String((res as any).notas || '').toLowerCase();
+            const isAppOrJanet =
+              canal.includes('app') ||
+              canal.includes('mobile') ||
+              canal.includes('chat') ||
+              canal.includes('janet') ||
+              origen.includes('app') ||
+              origen.includes('mobile') ||
+              origen.includes('chat') ||
+              origen.includes('janet') ||
+              notas.includes('asistente virtual') ||
+              notas.includes('app vatos alfa') ||
+              Boolean((res as any).confirmationSentViaApp);
+            const isOnline = !isAppOrJanet && (canal.startsWith('web') || origen.startsWith('web'));
             if (
               isOnline &&
               !res.whatsappConfirmationSent &&
@@ -289,13 +312,22 @@ export function OverdueNotificationsPopover({
     onlineReservationsFromDb.forEach((r) => map.set(r.id, r));
 
     (reservations || []).forEach((r) => {
-      const canal = (r.canal_reserva || r.origen || '').toLowerCase();
-      const isOnline =
-        canal.startsWith('web') ||
-        canal.startsWith('app') ||
-        canal.startsWith('mobile') ||
-        canal.startsWith('chat') ||
-        canal.startsWith('janet');
+      const canal = (r.canal_reserva || '').toLowerCase();
+      const origen = (r.origen || '').toLowerCase();
+      const notas = String((r as any).notas || '').toLowerCase();
+      const isAppOrJanet =
+        canal.includes('app') ||
+        canal.includes('mobile') ||
+        canal.includes('chat') ||
+        canal.includes('janet') ||
+        origen.includes('app') ||
+        origen.includes('mobile') ||
+        origen.includes('chat') ||
+        origen.includes('janet') ||
+        notas.includes('asistente virtual') ||
+        notas.includes('app vatos alfa') ||
+        Boolean((r as any).confirmationSentViaApp);
+      const isOnline = !isAppOrJanet && (canal.startsWith('web') || origen.startsWith('web'));
 
       if (
         isOnline &&
@@ -484,8 +516,27 @@ export function OverdueNotificationsPopover({
     return reservations.filter((res) => {
       if (dismissedReminderIds.has(res.id)) return false;
       if (res.fecha !== todayStr) return false;
-      if (res.whatsappReminderSent) return false;
+      if (res.whatsappReminderSent || (res as any).chatReminderSent) return false;
       if (res.whatsappReminderNotNeeded) return false;
+
+      // Citas de App / Janet reciben recordatorio automático de Janet en el chat de la App
+      const canal = (res.canal_reserva || '').toLowerCase();
+      const origen = (res.origen || '').toLowerCase();
+      const notas = String((res as any).notas || '').toLowerCase();
+      const isAppOrJanet =
+        canal.includes('app') ||
+        canal.includes('mobile') ||
+        canal.includes('chat') ||
+        canal.includes('janet') ||
+        origen.includes('app') ||
+        origen.includes('mobile') ||
+        origen.includes('chat') ||
+        origen.includes('janet') ||
+        notas.includes('asistente virtual') ||
+        notas.includes('app vatos alfa') ||
+        Boolean((res as any).confirmationSentViaApp);
+
+      if (isAppOrJanet) return false;
 
       if (
         res.estado === 'Cancelado' ||

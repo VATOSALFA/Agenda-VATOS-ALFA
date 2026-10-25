@@ -7,7 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, ArrowLeft, Loader2, Lock, Globe, Monitor, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Store, Clock, DollarSign, Phone, ArrowLeft, Loader2, Lock, Globe, Smartphone, Monitor, User } from 'lucide-react';
 import { format, addDays, subDays, startOfWeek, endOfWeek, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -357,11 +357,18 @@ export default function WeeklyAgendaPage() {
                                         <DollarSign className="w-2.5 h-2.5 text-white" />
                                       </div>
                                     )}
-                                    {appointment.origen === 'online' ? (
-                                      <Globe className="w-3.5 h-3.5 opacity-70" />
-                                    ) : (
-                                      <User className="w-3.5 h-3.5 opacity-70" />
-                                    )}
+                                    {(() => {
+                                      const canal = String(appointment.canal_reserva || '').toLowerCase();
+                                      const origen = String(appointment.origen || '').toLowerCase();
+                                      const notas = String((appointment as any).notas || '').toLowerCase();
+                                      const isJanet = canal.includes('chatbot') || canal.includes('janet') || origen.includes('chatbot') || origen.includes('janet') || notas.includes('asistente virtual');
+                                      const isAppClient = !isJanet && (canal.includes('app') || canal.includes('mobile') || origen.includes('app') || origen.includes('mobile') || notas.includes('app vatos alfa'));
+                                      const isWeb = !isJanet && !isAppClient && (canal.startsWith('web_publica') || origen.startsWith('web_publica') || canal === 'online' || origen === 'online');
+                                      if (isJanet) return <img src="/janet-avatar.png" alt="Janet" className="w-4 h-4 rounded-full object-cover ring-1 ring-blue-500" title="Agendado por Janet" />;
+                                      if (isAppClient) return <Smartphone className="w-3.5 h-3.5 text-sky-500" title="Agendado desde la App" />;
+                                      if (isWeb) return <Globe className="w-3.5 h-3.5 text-primary" title="Agendado desde la Web" />;
+                                      return <User className="w-3.5 h-3.5 opacity-70" />;
+                                    })()}
                                   </div>
                                 </div>
                               </div>

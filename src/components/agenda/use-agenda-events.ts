@@ -82,8 +82,12 @@ export function useAgendaEvents(
                 const isOnlineOrigin = Boolean(
                     res.canal_reserva?.startsWith('web_publica') ||
                     res.origen?.startsWith('web_publica') ||
-                    res.canal_reserva === 'chatbot' ||
-                    res.origen === 'chatbot'
+                    res.canal_reserva?.includes('chatbot') ||
+                    res.origen?.includes('chatbot') ||
+                    res.canal_reserva?.includes('janet') ||
+                    res.origen?.includes('janet') ||
+                    res.canal_reserva?.includes('app') ||
+                    res.origen?.includes('app')
                 );
 
                 const resolveGroupLock = (groupItems: any[]) => {

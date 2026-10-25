@@ -184,7 +184,7 @@ export async function processAgentMessage({
     const bankAccountHolder = sofiaConfig?.bankAccountHolder || 'VATOS ALFA Barber Shop';
     const bankClabe = sofiaConfig?.bankClabe || '';
     const depositInstructions = sofiaConfig?.depositInstructions || 'El enlace seguro de Mercado Pago te permite pagar con tarjeta o mediante transferencia SPEI directa con confirmación automática instantánea.';
-    const takeoverKeywordsStr = sofiaConfig?.takeoverKeywords || 'humano, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor';
+    const takeoverKeywordsStr = sofiaConfig?.takeoverKeywords || 'humano, humana, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor, operador, atencion humana, persona real';
     const punctualityTolerance = sofiaConfig?.punctualityToleranceMinutes ?? 10;
     const minChildAge = sofiaConfig?.minChildAge ?? 3;
     const addressReferences = sofiaConfig?.addressReferences || 'Sobre Av. Cerro Sombrerete, Col. Cipreses. Contamos con cajones de estacionamiento al frente para clientes.';
@@ -813,6 +813,10 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
       ultimo_mensaje: botReplyText,
       fecha_ultimo_mensaje: new Date(),
     };
+
+    if (currentMode === 'bot_activo') {
+      convUpdatePayload.mensajes_no_leidos = 0;
+    }
 
     if (offeredUpsellNow) {
       convUpdatePayload.fecha_ultima_oferta_cruzada = now;

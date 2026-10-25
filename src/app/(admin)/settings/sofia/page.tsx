@@ -89,7 +89,7 @@ const defaultSofiaSettings: SofiaSettings = {
   depositInstructions: 'Puedes pagar con tarjeta o por transferencia SPEI directa dentro del enlace de Mercado Pago con confirmación automática instantánea.',
   botActive: true,
   responseSchedule: '24_7',
-  takeoverKeywords: 'humano, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor',
+  takeoverKeywords: 'humano, humana, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor, operador, atencion humana, persona real',
   punctualityToleranceMinutes: 10,
   minChildAge: 3,
   addressReferences: 'Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro. Contamos con cajones de estacionamiento al frente.',

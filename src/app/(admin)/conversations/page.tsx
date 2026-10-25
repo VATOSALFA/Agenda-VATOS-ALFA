@@ -1526,11 +1526,15 @@ export default function ConversationsDashboardPage() {
       (snapshot) => {
         // Sound notification on incoming client message if not initial load
         if (!isInitialLoadRef.current && chatPrefs.soundEnabled) {
-          const hasNewClientMsg = snapshot.docChanges().some(
-            (change) => change.type === 'added' && change.doc.data().de === 'cliente'
-          );
-          if (hasNewClientMsg) {
-            playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
+          const currentModo = activeConvRef.current?.modo_atencion || 'bot_activo';
+          // Solo reproducir timbre si la conversación requiere atención humana o está bajo mando de recepción
+          if (currentModo !== 'bot_activo') {
+            const hasNewClientMsg = snapshot.docChanges().some(
+              (change) => change.type === 'added' && change.doc.data().de === 'cliente'
+            );
+            if (hasNewClientMsg) {
+              playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
+            }
           }
         }
 

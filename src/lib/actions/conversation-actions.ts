@@ -830,7 +830,7 @@ export async function sendAppointmentChatReminder({
         cliente_email: res.customer?.correo || res.cliente_email || null,
         canal: 'app',
         modo_atencion: 'bot_activo',
-        mensajes_no_leidos: 1,
+        mensajes_no_leidos: 0,
         ultimo_mensaje: formattedMessage,
         fecha_ultimo_mensaje: now,
         created_at: now,
@@ -865,7 +865,7 @@ export async function sendAppointmentChatReminder({
     await convRef.update({
       ultimo_mensaje: formattedMessage,
       fecha_ultimo_mensaje: now,
-      mensajes_no_leidos: 1,
+      mensajes_no_leidos: 0,
       updated_at: now,
     });
 

@@ -380,10 +380,15 @@ export default function Header() {
         docs.forEach((conv) => {
           const unread = Number(conv.mensajes_no_leidos || 0);
           const needsHuman = conv.modo_atencion === 'requiere_atencion';
+          const isHumanWithUnread = conv.modo_atencion === 'humano_al_mando' && unread > 0;
           if (needsHuman) {
             totalHumanRequests += 1;
           }
-          if (needsHuman || unread > 0) {
+          // Solo se contabilizan en recepción conversaciones que requieren atención humana directa:
+          // 1. Clientes que solicitaron hablar con una persona (requiere_atencion).
+          // 2. Chats bajo mando de recepción (humano_al_mando) con mensajes sin leer.
+          // Mientras Janet esté atendiendo (bot_activo), no se alerta a la recepcionista.
+          if (needsHuman || isHumanWithUnread) {
             totalAttentionOrUnread += 1;
           }
         });
@@ -420,15 +425,21 @@ export default function Header() {
               title: '🔔 ¡Solicitud de atención en Recepción!',
               description: `${clientName} pidió hablar con una persona en el chat.`,
             });
-          } else if (hasNewUnreadMessage && (currentModo === 'requiere_atencion' || currentModo === 'humano_al_mando')) {
+          } else if (hasNewUnreadMessage && currentModo === 'requiere_atencion') {
+            shouldPlayAlert = true;
+            toast({
+              title: '🔔 ¡Atención requerida!',
+              description: `Nuevo mensaje de ${clientName} en espera de atención humana.`,
+            });
+          } else if (hasNewUnreadMessage && currentModo === 'humano_al_mando') {
             shouldPlayAlert = true;
             toast({
               title: `💬 Nuevo mensaje de ${clientName}`,
               description: conv.ultimo_mensaje || 'Nuevo mensaje recibido en Recepción.',
             });
-          } else if (hasNewUnreadMessage) {
-            shouldPlayAlert = true;
           }
+          // Si currentModo === 'bot_activo', Janet es quien atiende y responde al cliente.
+          // No se detona alerta sonora ni toast a recepción.
 
           prevConvStateRef.current.set(conv.id, {
             modo: currentModo,
@@ -777,7 +788,7 @@ export default function Header() {
                                   className={cn(
                                     "absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-sm",
                                     humanRequestConversationsCount > 0
-                                      ? "bg-amber-500 animate-pulse"
+                                      ? "bg-red-600 animate-pulse ring-2 ring-red-500/40"
                                       : "bg-blue-600"
                                   )}
                                 >
@@ -875,7 +886,7 @@ export default function Header() {
                         className={cn(
                           'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white shadow-sm',
                           humanRequestConversationsCount > 0
-                            ? 'bg-amber-500 animate-pulse ring-2 ring-amber-400/50'
+                            ? 'bg-red-600 animate-pulse ring-2 ring-red-500/40'
                             : 'bg-blue-600 animate-pulse'
                         )}
                       >
@@ -1469,7 +1480,7 @@ export default function Header() {
                     <span
                       className={cn(
                         "absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold text-white flex items-center justify-center shadow-xs",
-                        humanRequestConversationsCount > 0 ? "bg-amber-500 animate-pulse" : "bg-blue-600"
+                        humanRequestConversationsCount > 0 ? "bg-red-600 animate-pulse ring-2 ring-red-500/40" : "bg-blue-600"
                       )}
                     >
                       {pendingConversationsCount}

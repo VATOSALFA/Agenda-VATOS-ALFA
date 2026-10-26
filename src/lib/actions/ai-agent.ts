@@ -204,10 +204,26 @@ export async function processAgentMessage({
     // Verificar si el mensaje del usuario contiene palabras clave de traspaso humano
     const isTakeover = requestsHuman(effectiveUserMessage, takeoverKeywordsStr);
 
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const lastActivityTime =
+      convData?.fecha_ultimo_mensaje?.toDate?.()?.getTime?.() ||
+      (convData?.fecha_ultimo_mensaje instanceof Date ? convData.fecha_ultimo_mensaje.getTime() : 0) ||
+      (typeof convData?.fecha_ultimo_mensaje?.seconds === 'number' ? convData.fecha_ultimo_mensaje.seconds * 1000 : 0) ||
+      convData?.updated_at?.toDate?.()?.getTime?.() ||
+      (convData?.updated_at instanceof Date ? convData.updated_at.getTime() : 0) ||
+      (typeof convData?.updated_at?.seconds === 'number' ? convData.updated_at.seconds * 1000 : 0) ||
+      0;
+
+    const isInactiveForOneHour =
+      lastActivityTime > 0 && Date.now() - lastActivityTime >= ONE_HOUR_MS;
+
     // Actualizar datos de la conversación
     let currentMode = convData?.modo_atencion || 'bot_activo';
     if (isTakeover) {
       currentMode = 'requiere_atencion';
+    } else if (isInactiveForOneHour && (currentMode === 'humano_al_mando' || currentMode === 'requiere_atencion')) {
+      // Seguro de inactividad de 1 hora: si pasaron 60 minutos sin actividad, Janet retoma el control automáticamente
+      currentMode = 'bot_activo';
     } else if (!botActive) {
       currentMode = 'humano_al_mando';
     }
@@ -226,7 +242,11 @@ export async function processAgentMessage({
         fecha_ultimo_mensaje: now,
         mensajes_no_leidos: FieldValue.increment(1),
         modo_atencion: currentMode,
-        ...(isTakeover ? { requiere_atencion_humana: true, motivo_atencion_humana: 'El cliente solicitó hablar con una persona de recepción.' } : {}),
+        ...(isTakeover
+          ? { requiere_atencion_humana: true, motivo_atencion_humana: 'El cliente solicitó hablar con una persona de recepción.' }
+          : isInactiveForOneHour && currentMode === 'bot_activo'
+          ? { requiere_atencion_humana: false, motivo_atencion_humana: null }
+          : {}),
         canal: channel,
         updated_at: now,
         ...(convDoc.exists ? {} : { created_at: now }),

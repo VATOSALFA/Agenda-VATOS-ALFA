@@ -950,9 +950,58 @@ export async function checkAndSendPendingChatReminders() {
       }
     }
 
+    // Seguro de inactividad: reactivar automáticamente a Janet en conversaciones con > 1 hora sin interacción
+    await autoReactivateInactiveConversations().catch(() => {});
+
     return { success: true, processed: processedCount };
   } catch (error: any) {
     console.error('Error in checkAndSendPendingChatReminders:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function autoReactivateInactiveConversations() {
+  try {
+    const db = getDb();
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const now = Date.now();
+
+    const [snapHumano, snapRequiere] = await Promise.all([
+      db.collection('conversaciones').where('modo_atencion', '==', 'humano_al_mando').get(),
+      db.collection('conversaciones').where('modo_atencion', '==', 'requiere_atencion').get(),
+    ]);
+
+    const docsToInspect = [...snapHumano.docs, ...snapRequiere.docs];
+    let reactivated = 0;
+
+    for (const docSnap of docsToInspect) {
+      const data = docSnap.data();
+      const lastActivity =
+        data.fecha_ultimo_mensaje?.toDate?.()?.getTime?.() ||
+        (data.fecha_ultimo_mensaje instanceof Date ? data.fecha_ultimo_mensaje.getTime() : 0) ||
+        (typeof data.fecha_ultimo_mensaje?.seconds === 'number' ? data.fecha_ultimo_mensaje.seconds * 1000 : 0) ||
+        data.updated_at?.toDate?.()?.getTime?.() ||
+        (data.updated_at instanceof Date ? data.updated_at.getTime() : 0) ||
+        (typeof data.updated_at?.seconds === 'number' ? data.updated_at.seconds * 1000 : 0) ||
+        0;
+
+      if (lastActivity > 0 && now - lastActivity >= ONE_HOUR_MS) {
+        await docSnap.ref.set(
+          {
+            modo_atencion: 'bot_activo',
+            requiere_atencion_humana: false,
+            motivo_atencion_humana: null,
+            updated_at: new Date(),
+          },
+          { merge: true }
+        );
+        reactivated++;
+      }
+    }
+
+    return { success: true, count: reactivated };
+  } catch (error: any) {
+    console.error('Error auto-reactivating inactive conversations:', error);
     return { success: false, error: error.message };
   }
 }

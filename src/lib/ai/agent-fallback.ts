@@ -67,6 +67,7 @@ export async function executeFallbackLogic({
   let activeServices: Array<{
     id: string;
     name: string;
+    description?: string;
     price: number;
     duration: number;
     durationPorProfesional?: Record<string, number>;
@@ -83,6 +84,7 @@ export async function executeFallbackLogic({
         return {
           id: d.id,
           name: data.name || data.nombre || 'Corte de Cabello',
+          description: String(data.description || data.descripcion || '').trim(),
           price: Number(data.price || data.precio || 0),
           duration: Number(data.duration || data.duracion || 30),
           durationPorProfesional: data.durationPorProfesional,
@@ -320,6 +322,58 @@ export async function executeFallbackLogic({
     }
 
     return `¡Hola! Con gusto te atendemos con tu ${serviceName}. Para esos días la agenda de ${barberSampleName || 'los barberos'} está completa. ¿Te gustaría que te revise para la próxima semana?`;
+  }
+
+  // CASO 5.8: Pregunta por duración, qué incluye un servicio/paquete o comparativa de paquetes
+  const stripAccents = (str: string) =>
+    (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const normText = stripAccents(text);
+  const explicitPkgOrSrv = activeServices.find((s) => {
+    const sn = stripAccents(s.name).replace(/^\d+\s+/, '').trim();
+    if (normText.includes('heroe') && sn.includes('heroe')) return true;
+    if (normText.includes('caballero') && sn.includes('caballero')) return true;
+    if (normText.includes('renovacion') && sn.includes('renovacion')) return true;
+    if (normText.includes('superior') && sn.includes('superior')) return true;
+    if (normText.includes('campeon') && sn.includes('campeon')) return true;
+    return sn.length > 4 && normText.includes(sn);
+  });
+
+  const isAskingDurationOrPackage =
+    /(cuanto dura|duracion|que incluye|en que consiste|paquete)/i.test(normText) ||
+    Boolean(explicitPkgOrSrv && /(dura|incluye|cuesta|precio|info|saber|cual)/i.test(normText));
+
+  if (isAskingDurationOrPackage && !isAskingHours) {
+    const formatDur = (mins: number) => {
+      if (mins >= 60) {
+        const hrs = Math.floor(mins / 60);
+        const rem = mins % 60;
+        const hLabel = hrs === 1 ? '1 hora' : `${hrs} horas`;
+        return rem > 0 ? `${mins} minutos (${hLabel} y ${rem} minutos)` : `${mins} minutos (${hLabel})`;
+      }
+      return `${mins} minutos`;
+    };
+    const packages = activeServices.filter((s) => /^\d+\s/.test(s.name) || /paquete/i.test(s.name));
+    if (explicitPkgOrSrv) {
+      const descLine = explicitPkgOrSrv.description ? `\n• ¿Qué incluye?: ${explicitPkgOrSrv.description}` : '';
+      let msg =
+        `¡Con mucho gusto te doy el dato exacto! 💈\n\n` +
+        `El servicio/paquete ${explicitPkgOrSrv.name} tiene:\n` +
+        `• Duración aproximada: ${formatDur(explicitPkgOrSrv.duration)}\n` +
+        `• Precio: ${explicitPkgOrSrv.price.toFixed(2)} MXN${descLine}`;
+      if (/(no tengo claro|cual seria|paquetes)/i.test(normText) && packages.length > 1) {
+        msg += `\n\nAquí tienes todos nuestros paquetes para ayudarte a elegir:\n` +
+          packages.map((p) => `• ${p.name} (${p.duration} min - ${p.price.toFixed(2)} MXN): ${p.description || ''}`).join('\n');
+      }
+      msg += `\n\n¿Te gustaría que revisemos horarios disponibles para agendártelo?`;
+      return msg;
+    }
+    if (packages.length > 0) {
+      return (
+        `¡Claro que sí! Estos son nuestros paquetes en VATOS ALFA con su duración, precio y lo que incluye cada uno:\n\n` +
+        packages.map((p) => `• ${p.name}: ${p.price.toFixed(2)} MXN (${formatDur(p.duration)})${p.description ? ` — Incluye: ${p.description}` : ''}`).join('\n') +
+        `\n\n¿Cuál de ellos te llama más la atención para buscarte horario? 💈`
+      );
+    }
   }
 
   // CASO 6: Pregunta por precios o catálogo (100% dinámico desde Firestore)

@@ -7,12 +7,13 @@ export const consultarServiciosTool = ai.defineTool(
   {
     name: 'consultar_servicios',
     description:
-      'Obtiene el catálogo de servicios activos de VATOS ALFA con sus IDs, nombres, duración base en minutos, duración específica por cada barbero/experto (ej. Beatriz 30 min, Lalo 60 min, Ivon 40 min), precio en pesos mexicanos y si requiere anticipo.',
+      'Obtiene el catálogo de servicios y paquetes activos de VATOS ALFA con sus IDs, nombres, descripción detallada de lo que incluye cada servicio o paquete, duración base en minutos, duración específica por cada barbero/experto (ej. Beatriz 30 min, Lalo 60 min, Ivon 40 min), precio en pesos mexicanos y si requiere anticipo.',
     inputSchema: z.object({}),
     outputSchema: z.array(
       z.object({
         id: z.string(),
         nombre: z.string(),
+        descripcion: z.string().optional(),
         duracion: z.number(),
         duracionPorBarbero: z.record(z.string(), z.number()).optional(),
         duracionesDetalle: z.string().optional(),
@@ -94,6 +95,7 @@ export const consultarServiciosTool = ai.defineTool(
           return {
             id: doc.id,
             nombre: d.name || d.nombre || 'Servicio',
+            descripcion: String(d.description || d.descripcion || '').trim() || undefined,
             duracion: Number(d.duration || d.duracion || 30),
             duracionPorBarbero: Object.keys(customDurations).length > 0 ? customDurations : undefined,
             duracionesDetalle: detailsArr.length > 0 ? detailsArr.join(' | ') : undefined,

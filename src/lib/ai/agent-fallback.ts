@@ -246,7 +246,22 @@ export async function executeFallbackLogic({
       },
       { merge: true }
     );
-    return 'Con mucho gusto. Le acabo de avisar al equipo de recepción para que un compañero tome la conversación y te atienda directamente en un momento por aquí.';
+    const now = new Date();
+    const timeZone = 'America/Mexico_City';
+    const dayStr = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
+    const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const day = dayMap[dayStr] ?? now.getDay();
+    const timeParts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
+    const [hStr, mStr] = timeParts.split(':');
+    const currentMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+    const openMinutes = 10 * 60;
+    const closeMinutes = (day === 0 ? 20 : 21) * 60;
+    const isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+
+    if (!isOpen) {
+      return 'Con mucho gusto. He dejado la notificación a nuestro equipo de recepción. Nuestro horario de atención en sucursal es de lunes a sábado de 10:00 am a 9:00 pm y domingos de 10:00 am a 8:00 pm, por lo que te responderán en cuanto estemos en horario de servicio. Si gustas, puedes dejar tu mensaje o consulta por aquí.';
+    }
+    return 'Con mucho gusto. Ya le avisé al equipo de recepción para que un compañero tome la conversación y te atienda directamente en un momento por aquí.';
   }
 
   // CASO 2: Cancelar cita

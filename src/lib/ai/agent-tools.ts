@@ -16,6 +16,7 @@ import {
   cleanSearchStr,
   getMexicoDateInfo,
   resolveTargetDates,
+  extractContextualDateHint,
   resolveServices,
   getBarberServiceDuration,
   isBarberCapableOfServices,
@@ -85,17 +86,17 @@ export const consultarDisponibilidadTool = ai.defineTool(
   {
     name: 'consultar_disponibilidad',
     description:
-      'Consulta los horarios libres reales en la agenda de VATOS ALFA. Puede consultar para una fecha específica o buscar automáticamente en los próximos 3 a 7 días los horarios más próximos disponibles con un barbero específico o con todos los barberos. Calcula automáticamente la duración exacta por barbero/experto según la configuración del servicio (por ejemplo: Beatriz tarda 30 min, Lalo tarda 60 min en corte), permitiendo encontrar espacios continuos reales y precisos.',
+      'Consulta los horarios libres reales en la agenda de VATOS ALFA. IMPORTANTE: Si el cliente pregunta qué barberos trabajan cierto día, cuál es el primer horario disponible ("el primero disponible") o pide disponibilidad para una fecha sin especificar un único barbero, LLAMA A ESTA HERRAMIENTA UNA SOLA VEZ OMITIENDO barberoNombre; así evalúa a todos los barberos al mismo tiempo y los devuelve ordenados cronológicamente desde el turno más temprano (ej. 10:00 AM con Alfredo). Calcula automáticamente la duración exacta por barbero según el servicio.',
     inputSchema: z.object({
       fecha: z
         .string()
         .optional()
-        .describe('Fecha en formato AAAA-MM-DD según el calendario actual del contexto. También acepta hoy, mañana y pasado mañana. Si no se especifica día, busca los próximos días.'),
+        .describe('Fecha en formato AAAA-MM-DD, día de la semana (ej. "miércoles", "jueves") o "hoy", "mañana", "pasado mañana". Si no se especifica día, busca los próximos días.'),
       profesionalId: z.string().optional().describe('ID opcional del barbero'),
       barberoNombre: z
         .string()
         .optional()
-        .describe('Nombre del barbero (ej. Beatriz, Bety, Lalo, Eduardo, Ivon, Lupita, Alfredo)'),
+        .describe('Nombre opcional de un barbero específico (ej. Beatriz, Bety, Lalo, Eduardo, Ivon, Lupita, Alfredo). OMÍTELO si el cliente pregunta por todos los barberos de un día o cuál es el primer horario disponible.'),
       servicioNombre: z
         .string()
         .optional()
@@ -114,15 +115,20 @@ export const consultarDisponibilidadTool = ai.defineTool(
     }),
     outputSchema: z.object({
       diaMasProximo: z.string().optional().describe('El día más cercano que tiene al menos un horario disponible'),
-      opcionesMasProximas: z.array(z.string()).optional().describe('Las 2 o 3 opciones más tempranas del día más próximo'),
+      primerHorarioDisponible: z.string().optional().describe('El primer horario más temprano disponible en ese día y con qué barbero (ej. "10:00 AM con Alfredo")'),
+      barberosDisponiblesEseDia: z.array(z.string()).optional().describe('Lista de barberos que trabajan ese día ordenados del que inicia más temprano al que inicia más tarde'),
+      opcionesMasProximas: z.array(z.string()).optional().describe('Todas las horas disponibles del día más próximo ordenadas cronológicamente'),
       disponibilidadPorFecha: z.array(
         z.object({
           fecha: z.string(),
           diaSemana: z.string(),
           barberoId: z.string(),
           barberoNombre: z.string(),
+          primerHorario: z.string().optional(),
+          ultimoHorario: z.string().optional(),
           duracionMinutos: z.number().int().positive().max(720).optional(),
           horarios: z.array(z.string()),
+          horarios12h: z.array(z.string()).optional(),
         })
       ),
       resumenTexto: z.string(),
@@ -174,11 +180,17 @@ export const consultarDisponibilidadTool = ai.defineTool(
         }));
 
       let targetBarbers = barbers;
+      const cleanBarberQuery = String(barberoNombre || '').trim().toLowerCase();
+      const isGenericBarberQuery =
+        !cleanBarberQuery ||
+        /^(todos|cualquiera|el primero|primero disponible|quien sea|el que sea|cualquier barbero|sin preferencia)$/i.test(cleanBarberQuery);
+
       if (profesionalId) {
-        targetBarbers = barbers.filter((b) => b.id === profesionalId);
-      } else if (barberoNombre) {
+        const byId = barbers.filter((b) => b.id === profesionalId);
+        if (byId.length > 0) targetBarbers = byId;
+      } else if (barberoNombre && !isGenericBarberQuery) {
         const matched = barbers.filter((b) => matchBarberName(barberoNombre, b));
-        targetBarbers = matched;
+        if (matched.length > 0) targetBarbers = matched;
       }
 
       // Filtrar sólo barberos habilitados para realizar los servicios solicitados
@@ -187,7 +199,8 @@ export const consultarDisponibilidadTool = ai.defineTool(
       const config = (await db.collection('settings').doc('sofia').get()).data() || {};
       const todayIso = getMexicoDateInfo().todayIso;
       const latest = Date.parse(`${todayIso}T12:00:00Z`) + (config.maxDaysInFuture ?? 14) * 86400000;
-      const datesToCheck = resolveTargetDates({ fechaInput: fecha, diasABuscar }).filter(date => Date.parse(`${date}T12:00:00Z`) <= latest);
+      const effectiveFecha = fecha || extractContextualDateHint(currentCtx?.userMessage, currentCtx?.recentHistory);
+      const datesToCheck = resolveTargetDates({ fechaInput: effectiveFecha, diasABuscar }).filter(date => Date.parse(`${date}T12:00:00Z`) <= latest);
       const earliest = Date.now() + (config.minReservationBuffer ?? 30) * 60000;
 
       const results: Array<{
@@ -202,6 +215,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
       for (const curDate of datesToCheck) {
         const parsed = new Date(curDate + 'T12:00:00');
         const dayLabel = format(parsed, "EEEE d 'de' MMMM", { locale: es });
+        const perDateResults: typeof results = [];
 
         for (const b of targetBarbers) {
           try {
@@ -233,7 +247,7 @@ export const consultarDisponibilidadTool = ai.defineTool(
               res.slots = res.slots.filter(time => Date.parse(`${curDate}T${time}:00-06:00`) >= earliest);
             }
             if (res && 'slots' in res && Array.isArray((res as any).slots) && (res as any).slots.length > 0) {
-              results.push({
+              perDateResults.push({
                 fecha: curDate,
                 diaSemana: dayLabel,
                 barberoId: b.id,
@@ -246,10 +260,16 @@ export const consultarDisponibilidadTool = ai.defineTool(
             console.error(`Error fetching slots for barber ${b.id} on ${curDate}:`, slotErr);
           }
         }
+
+        // Ordenar barberos de este día cronológicamente desde el que inicia más temprano
+        perDateResults.sort((a, b) => (a.horarios[0] || '99:99').localeCompare(b.horarios[0] || '99:99'));
+        results.push(...perDateResults);
       }
 
       let resumenTexto = '';
       let diaMasProximo: string | undefined;
+      let primerHorarioDisponible: string | undefined;
+      let barberosDisponiblesEseDia: string[] = [];
       let opcionesMasProximas: string[] = [];
 
       if (results.length === 0) {
@@ -258,7 +278,9 @@ export const consultarDisponibilidadTool = ai.defineTool(
       } else {
         const diasConDisponibilidad = Array.from(new Set(results.map((r) => r.fecha)));
         const primerDiaFecha = diasConDisponibilidad[0];
-        const resultadosPrimerDia = results.filter((r) => r.fecha === primerDiaFecha);
+        const resultadosPrimerDia = results
+          .filter((r) => r.fecha === primerDiaFecha)
+          .sort((a, b) => (a.horarios[0] || '99:99').localeCompare(b.horarios[0] || '99:99'));
 
         const slotsPrimerDia: Array<{ hora: string; hora12: string; barberoNombre: string }> = [];
         for (const r of resultadosPrimerDia) {
@@ -286,21 +308,32 @@ export const consultarDisponibilidadTool = ai.defineTool(
         opcionesMasProximas = todasLasHoras.map(([hora12, barberos]) => {
           return `${hora12} con ${barberos.join(' o ')}`;
         });
+        primerHorarioDisponible = opcionesMasProximas[0];
 
         const diaSemanaLabel = resultadosPrimerDia[0].diaSemana;
         diaMasProximo = `${diaSemanaLabel} (${primerDiaFecha})`;
 
+        barberosDisponiblesEseDia = resultadosPrimerDia.map((r) => {
+          const first12 = formatTime12h(r.horarios[0]);
+          const last12 = formatTime12h(r.horarios[r.horarios.length - 1]);
+          return `${r.barberoNombre} (inicia ${first12}, último turno ${last12})`;
+        });
+
         const desglosePrimerDia = resultadosPrimerDia
           .map((r) => {
+            const first12 = formatTime12h(r.horarios[0]);
+            const last12 = formatTime12h(r.horarios[r.horarios.length - 1]);
             const all12h = r.horarios.map((h) => formatTime12h(h)).join(', ');
-            return `- ${r.barberoNombre}: ${all12h}`;
+            return `• ${r.barberoNombre} (inicia ${first12} - último turno ${last12}): ${all12h}`;
           })
           .join('\n');
 
         resumenTexto = `HORARIOS DISPONIBLES EN TIEMPO REAL (IDÉNTICOS A LA PÁGINA WEB):\n` +
           `- Día: ${diaSemanaLabel} (${primerDiaFecha})\n` +
+          `★ PRIMER HORARIO DISPONIBLE DEL DÍA: ${primerHorarioDisponible}\n` +
+          `★ BARBEROS DISPONIBLES ESTE DÍA (ORDENADOS CRONOLÓGICAMENTE DEL MÁS TEMPRANO AL MÁS TARDE):\n` +
           `${desglosePrimerDia}\n\n` +
-          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Comparte TODOS los horarios disponibles del ${diaSemanaLabel} para el barbero solicitado (o las opciones del día si no especificó barbero), SIN OMITIR NINGÚN HORARIO (por ejemplo, incluye también los de las 7:00 PM, 7:30 PM, 8:30 PM si aparecen en la lista). Los horarios que menciones deben coincidir al 100% con los de la página web para no desperdiciar ningún espacio disponible de los barberos. No desgloses días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}) a menos que el cliente pida otra fecha.\n\n` +
+          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Si el cliente pregunta cuál es el primer horario disponible ("el primero disponible"), indica con exactitud que es a las ${primerHorarioDisponible}. Si pregunta qué barberos trabajan ese día, menciónalos en orden cronológico indicando a qué hora inicia cada uno. Si pide los horarios disponibles de un barbero o del día, comparte TODOS los horarios disponibles del ${diaSemanaLabel} SIN OMITIR NINGÚN HORARIO (incluyendo también los de las 7:00 PM, 7:30 PM, 8:00 PM, 8:30 PM si aparecen en la lista). No desgloses días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}) a menos que el cliente pida otra fecha.\n\n` +
           `Referencia de días posteriores (solo por si el cliente pide otra fecha):\n` +
           results
             .map((r) => {
@@ -312,9 +345,13 @@ export const consultarDisponibilidadTool = ai.defineTool(
 
       return {
         diaMasProximo,
+        primerHorarioDisponible,
+        barberosDisponiblesEseDia,
         opcionesMasProximas,
         disponibilidadPorFecha: results.map((r) => ({
           ...r,
+          primerHorario: formatTime12h(r.horarios[0]),
+          ultimoHorario: formatTime12h(r.horarios[r.horarios.length - 1]),
           horarios12h: r.horarios.map((h) => formatTime12h(h)),
         })),
         resumenTexto,
@@ -1341,9 +1378,26 @@ export const solicitarRecepcionTool = ai.defineTool(
         { merge: true }
       );
 
+      const now = new Date();
+      const timeZone = 'America/Mexico_City';
+      const dayStr = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
+      const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      const day = dayMap[dayStr] ?? now.getDay();
+      const timeParts = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
+      const [hStr, mStr] = timeParts.split(':');
+      const currentMinutes = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+      const openMinutes = 10 * 60;
+      const closeMinutes = (day === 0 ? 20 : 21) * 60;
+      const isOpen = currentMinutes >= openMinutes && currentMinutes < closeMinutes;
+
+      const mensaje = isOpen
+        ? 'He avisado a nuestro equipo de recepción. En breve una persona de recepción continuará la conversación contigo.'
+        : 'He dejado la notificación a nuestro equipo de recepción. Nuestro horario de atención en sucursal es de lunes a sábado de 10:00 am a 9:00 pm y domingos de 10:00 am a 8:00 pm, por lo que te responderán en cuanto iniciemos labores. Puedes dejar cualquier duda o mensaje por aquí.';
+
       return {
         exito: true,
-        mensaje: 'He avisado a nuestro equipo de recepción. En breve un recepcionista continuará la conversación contigo.',
+        dentroDeHorario: isOpen,
+        mensaje,
       };
     } catch (e: any) {
       console.error('Error in solicitar_recepcion:', e);

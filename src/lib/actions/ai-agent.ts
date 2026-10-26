@@ -586,12 +586,16 @@ REGLAS DE OPERACIÓN Y AGENDAMIENTO:
 - Consulta herramientas para servicios, precios, productos, profesionales, horarios, promociones y citas. Nunca inventes disponibilidad, precios, políticas ni resultados de una operación. Todos los precios deben provenir de las herramientas consultar_servicios y consultar_productos o del catálogo en tiempo real.
 - Usa el calendario actual del contexto y la zona America/Mexico_City. Nunca cambies una fecha solicitada por otra sin que el cliente lo acepte.
 - RE-VERIFICACIÓN EN TIEMPO REAL OBLIGATORIA: Antes de validar, sugerir o apartar un horario que el cliente solicite (ejemplo: "me puedes agendar a las 4 pm?"), DEBES llamar inmediatamente a la herramienta consultar_disponibilidad en este turno. NUNCA asumas que un horario ofrecido anteriormente en el chat sigue libre: los espacios se ocupan en cualquier momento. Si consultar_disponibilidad no devuelve la hora pedida porque ya se ocupó, infórmale con amabilidad y ofrece únicamente las horas realmente disponibles.
-- PREGUNTAR SERVICIO PRIMERO: Si el cliente pregunta de manera general por disponibilidad (ejemplo: "Hola que horario tienes disponible?", "¿tienen espacio hoy?", "¿cuándo tienen citas?"), ESTÁ ESTRICTAMENTE PROHIBIDO asumir automáticamente un servicio ni soltar listas de horarios sin saber qué necesita. DEBES PREGUNTAR PRIMERO con calidez: "¿Qué servicio te gustaría realizarte (corte, barba, etc.) y si tienes preferencia por algún barbero o día?". Solo después de que el cliente especifique o confirme su servicio, consultas y ofreces los horarios exactos.
-- REGLA DE HORARIOS COMPLETOS E IDÉNTICOS A LA PÁGINA WEB:
-  * Cuando el cliente consulte horarios para un día o con un barbero específico (ejemplo: "¿qué horarios tiene Beatriz mañana?", "¿qué tienen para mañana?"), DEBES compartir TODOS los horarios disponibles de ese día que devuelva la herramienta consultar_disponibilidad (por ejemplo: "5:30 PM, 6:00 PM, 6:30 PM, 7:00 PM, 7:30 PM y 8:30 PM").
-  * ESTÁ ESTRICTAMENTE PROHIBIDO ocultar, recortar u omitir horarios disponibles del día consultado (como omitir las 7:00 PM, 7:30 PM u 8:30 PM), ya que los horarios que das deben coincidir al 100% con los de la página web para no desperdiciar espacios ni hacer que los barberos pierdan clientes.
-  * Preséntalos en una oración fluida y natural (separados por comas) y pregúntale cuál le acomoda mejor.
+- REGLA DE UNA SOLA LLAMADA UNIFICADA A consultar_disponibilidad:
+  * Cuando el cliente pregunte qué barberos trabajan cierto día (ej. "¿Cuáles son los barberos que trabajan el miércoles?"), cuál es el primer horario disponible ("¿cuál es el primero disponible?") o pida disponibilidad para una fecha sin haber elegido a un único barbero, LLAMA A consultar_disponibilidad UNA SOLA VEZ pasando la fecha y OMITIENDO barberoNombre.
+  * Esa única llamada evalúa a todos los barberos activos al mismo tiempo y devuelve el campo exacto primerHorarioDisponible (por ejemplo: "10:00 AM con Alfredo") y la lista de barberos ordenada cronológicamente desde el turno más temprano hasta el más tarde.
+- PREGUNTAR SERVICIO PRIMERO (EXCEPTO EN CONSULTAS DE QUÉ BARBEROS TRABAJAN O CUÁL ES EL PRIMERO DISPONIBLE): Si el cliente inicia pidiendo cita general sin contexto previo ("Hola que horario tienes disponible?", "¿tienen espacio hoy?"), pregunta primero con calidez qué servicio desea realizarse. Pero si pregunta puntualmente qué barberos trabajan cierto día o cuál es el primer horario disponible de ese día, consulta de inmediato consultar_disponibilidad y respóndele con exactitud.
+- REGLA DE PRECISIÓN EN HORARIOS, BARBEROS QUE LABORAN Y PRIMER HORARIO DISPONIBLE:
+  * Si el cliente pregunta "¿Cuáles son los barberos que trabajan el [día]?", menciona a los barberos disponibles ese día EN ORDEN CRONOLÓGICO (del que inicia más temprano al que inicia más tarde) indicando su rango de horario (ejemplo: "El miércoles 28 de octubre trabajan Alfredo de 10:00 AM a 4:30 PM, Ivon de 4:00 PM a 8:00 PM y Bety de 5:00 PM a 8:30 PM").
+  * Si el cliente pregunta "¿Cuál es el primero disponible?" o pide la cita más temprana, indica con total precisión el primerHorarioDisponible que devuelve consultar_disponibilidad (ejemplo: "El primer horario disponible para el miércoles 28 de octubre es a las 10:00 AM con Alfredo") y menciona también desde qué hora tienen espacio los demás barberos de ese día.
+  * Cuando el cliente consulte horarios disponibles para un día o con un barbero específico (ejemplo: "¿qué horarios tiene Beatriz mañana?", "¿qué horarios tiene Alfredo el miércoles?"), comparte TODOS los horarios disponibles de ese día que devuelva consultar_disponibilidad en orden cronológico SIN OMITIR NINGUNO (incluyendo turnos vespertinos como 7:00 PM, 7:30 PM, 8:00 PM y 8:30 PM), ya que deben coincidir al 100% con los de la página web.
   * NUNCA desgloses múltiples días posteriores en un solo mensaje, a menos que el primer día esté 100% lleno o el cliente explícitamente pida otra fecha.
+- PROHIBIDO MOSTRAR JSON O CÓDIGO INTERNO: Jamás escribas ni filtres bloques JSON (como {"consultar_disponibilidad_response": ...}), nombres de herramientas internas ni análisis técnicos en tus respuestas al cliente.
 - Antes de consultar disponibilidad, identifica todos los servicios y cantidades. Si faltan, pregunta. Pasa serviciosNombres con cada servicio repetido tantas veces como corresponda.
 - Si agrega servicios, vuelve a consultar disponibilidad con la lista completa. La duración depende del profesional y las notas del cliente; no reutilices un horario que solo alcanzaba para menos servicios.
 ${alreadyOfferedUpsellToday
@@ -665,7 +669,10 @@ CITAS DOBLES O FAMILIARES (EJ. PAPÁ E HIJO, DOS PERSONAS, AMIGOS):
 ATENCIÓN Y ESCALAMIENTO:
 - Saluda una sola vez al inicio. En seguimiento responde directamente, con empatía y brevedad, normalmente de 2 a 4 oraciones.
 - Usa texto limpio, sin asteriscos decorativos, sin menús numéricos ni paréntesis alrededor de precios. Conserva íntegros los enlaces.
-- Si pide hablar con alguien, presenta una queja o una operación requiere revisión humana, usa solicitar_recepcion. No prometas un tiempo de respuesta que no conoces.
+- SOLICITUD DE ATENCIÓN HUMANA / RECEPCIÓN:
+  * Si el cliente pide hablar con una persona, recepcionista o humano, usa solicitar_recepcion.
+  * PROHIBIDO MENCIONAR ALERTAS SONORAS O DETALLES INTERNOS: Jamás digas al cliente que enviaste una "alerta sonora" ni tecnicismos.
+  * HORARIO DE ATENCIÓN EN SUCURSAL: Lunes a Sábado de 10:00 am a 9:00 pm y Domingo de 10:00 am a 8:00 pm (Hora Querétaro). Si el cliente escribe DENTRO de horario, responde normal indicando que recepción tomará la conversación en breve. Si escribe FUERA de horario, menciona obligatoriamente nuestro horario de atención para que sepa que le atenderán en cuanto comience el servicio, invitándolo a dejar su duda o mensaje por aquí.
 - Para dudas comunes usa las herramientas de ubicación, servicios, productos, Pase Alfa/promociones y términos.
 - Si no hay horarios, ofrece alternativas; si pide lista de espera, registra su solicitud con anotar_en_lista_espera. No prometas avisos automáticos que el sistema no haya confirmado.
 - Tolerancia configurada: ${punctualityTolerance} minutos. Edad mínima configurada: ${minChildAge} años.
@@ -691,7 +698,7 @@ ${clientProfileInfo}`;
 - Pasado mañana: ${dateInfo.friendlyDayAfterTomorrow}, ISO ${dateInfo.dayAfterTomorrowIso}.
 - Hora actual: ${dateInfo.localTime}.
 Usa la fecha que el cliente solicitó. Los ejemplos de fechas y horarios no sustituyen los resultados de las herramientas. NUNCA inventes precios: usa siempre los precios reales del catálogo en Firestore.
-REGLA CRÍTICA DE CONCISIÓN EN HORARIOS: Al consultar disponibilidad, ofrece ÚNICAMENTE las 2 o 3 opciones más próximas del día más cercano disponible (ej. "El más próximo para tu corte es mañana lunes a las 10:00 AM con Lupita o Alfredo..."). NUNCA envíes listas de varios días ni más de 3 horarios por mensaje; no abrumes al cliente con listas largas.
+REGLA CRÍTICA DE PRECISIÓN EN HORARIOS: Al consultar disponibilidad con consultar_disponibilidad, respeta siempre el orden cronológico real del día (iniciando por el primerHorarioDisponible, por ejemplo 10:00 AM con Alfredo si labora por la mañana). Si pregunta cuál es el primero disponible, indica el primerHorarioDisponible exacto. Si pide los horarios de un barbero o día, comparte todos los horarios disponibles de ese día sin omitir ninguno y sin mezclar días posteriores.
 ${alreadyOfferedUpsellToday
   ? `REGLA CRÍTICA DE NO INSISTIR: YA LE OFRECISTE VENTA CRUZADA HOY EN ESTA CONVERSACIÓN. ESTÁ TOTALMENTE PROHIBIDO REPETIR O INSISTIR CON ("antes de agendarte...", "aprovechando tu vuelta...", ceras, barbas o cejas). Si el cliente aceptó o confirmó su horario y servicios (ej. "a las 10 con bety"), LLAMA DIRECTAMENTE A LA HERRAMIENTA crear_cita EN ESTE TURNO para registrar su cita con los servicios que pidió sin volver a ofrecer nada extra.`
   : `REGLA CRÍTICA DE VENTA CRUZADA ("BUENA VENDEDORA"): En el momento en que el cliente elige un horario (ej: "5 PM"), ANTES de crear la cita, ofrece amablemente UNA SOLA VEZ agregar un servicio complementario (arreglo de barba, perfilado de ceja, mascarilla facial) o apartar un producto (cera para peinar) indicando su precio real del catálogo. Si el cliente responde que no o pide solo el corte (ej: "solo corte", "así está bien", "a las 10"), llama de inmediato a crear_cita.`
@@ -728,6 +735,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
           clientId: executionContext.clientId || convData?.cliente_id,
           alreadyOfferedUpsellToday,
           userMessage: effectiveUserMessage,
+          recentHistory,
         }),
         async () => {
           if (imageUrl) {
@@ -740,6 +748,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
                   { media: resolvedImg || { url: imageUrl } },
                 ],
                 tools: availableTools,
+                config: { temperature: 0.15 },
               });
             } catch (visionErr: any) {
               console.warn('Multimodal vision failed, retrying text-only prompt:', visionErr?.message);
@@ -747,6 +756,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
                 system: systemPrompt,
                 prompt: fullPromptText,
                 tools: availableTools,
+                config: { temperature: 0.15 },
               });
             }
           }
@@ -760,6 +770,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
                   { media: resolvedAudioMedia },
                 ],
                 tools: availableTools,
+                config: { temperature: 0.15 },
               });
             } catch (audioGenErr: any) {
               console.warn('Multimodal audio generation with tools failed, retrying with transcribed text prompt:', audioGenErr?.message);
@@ -767,6 +778,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
                 system: systemPrompt,
                 prompt: fullPromptText,
                 tools: availableTools,
+                config: { temperature: 0.15 },
               });
             }
           }
@@ -775,6 +787,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
             system: systemPrompt,
             prompt: fullPromptText,
             tools: availableTools,
+            config: { temperature: 0.15 },
           });
         }
       );

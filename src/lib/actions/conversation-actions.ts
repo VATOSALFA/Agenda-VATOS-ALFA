@@ -123,9 +123,9 @@ export async function toggleConversationMode({
     const msgRef = convRef.collection('mensajes').doc();
     const notificationText =
       mode === 'humano_al_mando'
-        ? '👤 La recepción tomó el control de la conversación (Bot pausado).'
+        ? '👤 La recepción tomó el control de la conversación (Janet en espera).'
         : mode === 'bot_activo'
-        ? '🤖 Asistente virtual (Bot) reactivado.'
+        ? '🤖 Janet reactivada.'
         : '⚠️ Marcado como: Requiere atención de recepción.';
 
     await msgRef.set({

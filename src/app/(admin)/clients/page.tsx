@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2, Smartphone } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2, Smartphone, Check } from "lucide-react";
 import { isClientWithApp, isClientActiveInApp, getClientLastAppAccess, getClientAppInfo } from "@/lib/client-app-helper";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
@@ -963,6 +963,117 @@ export default function ClientsPage() {
     return <ArrowDown className="ml-1 h-3.5 w-3.5 text-primary" />;
   };
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (activeFilters.local !== 'todos') count++;
+    if (activeFilters.dateRange !== undefined) count++;
+    if (activeFilters.birthdayMonth !== 'todos') count++;
+    if (activeFilters.newClientsMonth !== 'todos') count++;
+    if (activeFilters.newClientsYear !== 'todos') count++;
+    if (activeFilters.professional !== 'todos') count++;
+    if (activeFilters.inactiveTime !== 'todos') count++;
+    if (activeFilters.topSpent !== 'todos') count++;
+    if (activeFilters.app !== 'todos') count++;
+    return count;
+  }, [activeFilters]);
+
+  const sortLabel = useMemo(() => {
+    if (!sortField) return 'Ordenar';
+    switch (sortField) {
+      case 'gasto_total':
+        return sortDirection === 'desc' ? 'Mayor consumo' : 'Menor consumo';
+      case 'ultima_visita':
+        return sortDirection === 'desc' ? 'Última visita' : 'Más inactivos';
+      case 'nombre':
+        return sortDirection === 'asc' ? 'Nombre (A-Z)' : 'Nombre (Z-A)';
+      case 'numero_cliente':
+        return sortDirection === 'asc' ? '# Cliente (1-9)' : '# Cliente (9-1)';
+      case 'creado_en':
+        return sortDirection === 'desc' ? 'Más recientes' : 'Más antiguos';
+      case 'app':
+        return 'Con App móvil';
+      default:
+        return 'Ordenar';
+    }
+  }, [sortField, sortDirection]);
+
+  const sortOptions = [
+    { label: 'Mayor consumo ($)', field: 'gasto_total' as SortField, dir: 'desc' as SortDirection },
+    { label: 'Menor consumo ($)', field: 'gasto_total' as SortField, dir: 'asc' as SortDirection },
+    { label: 'Última visita más reciente', field: 'ultima_visita' as SortField, dir: 'desc' as SortDirection },
+    { label: 'Más tiempo sin visita', field: 'ultima_visita' as SortField, dir: 'asc' as SortDirection },
+    { label: 'Nombre (A → Z)', field: 'nombre' as SortField, dir: 'asc' as SortDirection },
+    { label: 'Nombre (Z → A)', field: 'nombre' as SortField, dir: 'desc' as SortDirection },
+    { label: '# Cliente (1 → 9999)', field: 'numero_cliente' as SortField, dir: 'asc' as SortDirection },
+    { label: 'Más recientes (Registro)', field: 'creado_en' as SortField, dir: 'desc' as SortDirection },
+    { label: 'Con App móvil primero', field: 'app' as SortField, dir: 'desc' as SortDirection },
+  ];
+
+  const renderSortDropdown = (isMobile: boolean = false) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn(
+            "h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-xl border-border/80 transition-colors",
+            sortField && "border-blue-500 bg-blue-500/10 text-blue-500 font-semibold"
+          )}
+        >
+          <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+          <span className={cn("truncate", isMobile ? "max-w-[130px]" : "max-w-[150px]")}>
+            {sortField ? sortLabel : 'Ordenar'}
+          </span>
+          <ChevronDown className="h-3 w-3 text-slate-400 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align={isMobile ? "start" : "end"}
+        className="w-60 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5 space-y-0.5 z-50 bg-popover"
+      >
+        <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          Ordenar clientes por
+        </div>
+        {sortOptions.map((opt) => {
+          const isSelected = sortField === opt.field && sortDirection === opt.dir;
+          return (
+            <DropdownMenuItem
+              key={opt.field + '-' + opt.dir}
+              onClick={() => {
+                setSortField(opt.field);
+                setSortDirection(opt.dir);
+                setCurrentPage(1);
+              }}
+              className={cn(
+                "text-xs py-2 px-2.5 rounded-lg cursor-pointer flex items-center justify-between",
+                isSelected && "bg-blue-500/15 text-blue-500 font-semibold"
+              )}
+            >
+              <span>{opt.label}</span>
+              {isSelected && <Check className="w-3.5 h-3.5 text-blue-500" />}
+            </DropdownMenuItem>
+          );
+        })}
+        {sortField && (
+          <>
+            <div className="border-t border-border/40 my-1" />
+            <DropdownMenuItem
+              onClick={() => {
+                setSortField(null);
+                setSortDirection('asc');
+                setCurrentPage(1);
+              }}
+              className="text-xs py-1.5 px-2.5 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer flex items-center gap-1.5"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Restablecer orden</span>
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const hasActiveFilters = useMemo(() => {
     return (
       activeFilters.local !== 'todos' ||
@@ -1195,17 +1306,75 @@ export default function ClientsPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          <aside className={cn(
-            "lg:col-span-1",
-            showMobileFilters ? "block" : "hidden lg:block"
-          )}>
-            <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm">
+        {/* MODAL DE FILTROS EN MÓVIL (< lg) */}
+        <Dialog open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+          <DialogContent
+            hideCloseButton={true}
+            className="p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 max-w-md w-[94vw] sm:w-full max-h-[90vh] flex flex-col bg-background"
+          >
+            {/* Cabecera oficial Vatos Alfa */}
+            <div className="relative px-5 py-3.5 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-b border-blue-500/20 flex items-center justify-between overflow-hidden shrink-0">
+              <div className="header-light-beam" />
+              <div className="flex items-center gap-2.5 z-10">
+                <SlidersHorizontal className="h-4 w-4 text-slate-300 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">Filtros de Clientes</h3>
+                  <p className="text-[10px] text-slate-300">
+                    {activeFilterCount > 0 ? (activeFilterCount + ' filtro(s) activo(s)') : 'Filtra por consumo, fechas o actividad'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMobileFilters(false)}
+                className="z-10 rounded-lg p-1 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                title="Cerrar filtros"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Contenido scrolleable de filtros */}
+            <div className="p-4 overflow-y-auto flex-1 max-h-[calc(90vh-130px)]">
               <FiltersSidebar
                 onApply={() => {
                   handleApplyFilters();
                   setShowMobileFilters(false);
                 }}
+                onReset={() => {
+                  handleResetFilters();
+                  setShowMobileFilters(false);
+                }}
+                dateRange={dateRange} setDateRange={setDateRange}
+                localFilter={localFilter} setLocalFilter={setLocalFilter}
+                birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
+                newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
+                newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
+                professionalFilter={professionalFilter}
+                setProfessionalFilter={setProfessionalFilter}
+                inactiveTimeFilter={inactiveTimeFilter}
+                setInactiveTimeFilter={setInactiveTimeFilter}
+                topSpentFilter={topSpentFilter}
+                setTopSpentFilter={setTopSpentFilter}
+                appFilter={appFilter}
+                setAppFilter={setAppFilter}
+                professionals={professionals}
+                locales={locales}
+                isLoading={isLoading}
+                isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
+                logoUrl={logoUrl}
+                empresaLoading={empresaLoading}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* SIDEBAR DE FILTROS EN DESKTOP (fijo en columna izquierda) */}
+          <aside className="hidden lg:block lg:col-span-1">
+            <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm sticky top-4">
+              <FiltersSidebar
+                onApply={handleApplyFilters}
                 onReset={handleResetFilters}
                 dateRange={dateRange} setDateRange={setDateRange}
                 localFilter={localFilter} setLocalFilter={setLocalFilter}
@@ -1230,49 +1399,138 @@ export default function ClientsPage() {
             </div>
           </aside>
 
-          <main className="lg:col-span-3 space-y-4">
-            <div className="flex items-center justify-between gap-2 sm:gap-4">
-              <div className="flex-1 flex items-center gap-2">
-                <ClientSearchBar onSearch={handleSearchChange} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  type="button"
-                  onClick={() => setShowMobileFilters(!showMobileFilters)}
-                  className={cn(
-                    "lg:hidden h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 border-border/80",
-                    showMobileFilters && "border-blue-500 bg-blue-500/10 text-blue-600 font-semibold"
-                  )}
-                >
-                  <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="hidden xs:inline">Filtros</span>
-                  {hasActiveFilters && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                  )}
-                </Button>
+          <main className="lg:col-span-3 space-y-3 sm:space-y-4">
+            {/* Barra de Búsqueda, Filtros, Ordenar y Acciones */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 sm:gap-3">
+                <div className="flex-1 flex items-center gap-2">
+                  <ClientSearchBar onSearch={handleSearchChange} />
+                  
+                  {/* Botón Filtros (visible en móvil y tablet < lg) */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    type="button"
+                    onClick={() => setShowMobileFilters(true)}
+                    className={cn(
+                      "lg:hidden h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-xl border-border/80 transition-colors",
+                      activeFilterCount > 0
+                        ? "border-blue-500 bg-blue-500/10 text-blue-500 font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
+                    <span>Filtros</span>
+                    {activeFilterCount > 0 && (
+                      <span className="h-4 min-w-4 px-1 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </Button>
+
+                  {/* Botón Ordenar (Desktop) */}
+                  <div className="hidden sm:block">
+                    {renderSortDropdown(false)}
+                  </div>
+                </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="h-9 text-xs rounded-xl">
+                      Acciones <ChevronDown className="ml-1.5 h-3.5 w-3.5 text-slate-400" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5">
+                    <DropdownMenuItem onSelect={() => {
+                      setTimeout(() => setIsCombineModalOpen(true), 150);
+                    }}>
+                      <Combine className="mr-2 h-4 w-4" />
+                      <span>Combinar clientes</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => {
+                      setTimeout(() => setIsDownloadModalOpen(true), 150);
+                    }}>
+                      <Download className="mr-2 h-4 w-4" />
+                      <span>Descargar este listado</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="h-9 text-xs">
-                    Acciones <ChevronDown className="ml-1.5 h-3.5 w-3.5 text-slate-400" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => {
-                    setTimeout(() => setIsCombineModalOpen(true), 150);
-                  }}>
-                    <Combine className="mr-2 h-4 w-4" />
-                    <span>Combinar clientes</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => {
-                    setTimeout(() => setIsDownloadModalOpen(true), 150);
-                  }}>
-                    <Download className="mr-2 h-4 w-4" />
-                    <span>Descargar este listado</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Barra Rápida Móvil: Ordenar + Chips Rápidos (sm:hidden) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:hidden scrollbar-none">
+                {renderSortDropdown(true)}
+
+                {/* Chip Rápido: Con App */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFilter = activeFilters.app === 'con_app' ? 'todos' : 'con_app';
+                    setAppFilter(newFilter);
+                    setActiveFilters(prev => ({ ...prev, app: newFilter }));
+                    if (newFilter === 'con_app' && !sortField) {
+                      setSortField('app');
+                      setSortDirection('desc');
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    activeFilters.app === 'con_app'
+                      ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
+                      : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Smartphone className="h-3 w-3" />
+                  <span>Con App ({totalClientsWithApp})</span>
+                </button>
+
+                {/* Chip Rápido: Top Consumo */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFilter = activeFilters.topSpent === 'top25' ? 'todos' : 'top25';
+                    setTopSpentFilter(newFilter);
+                    setActiveFilters(prev => ({ ...prev, topSpent: newFilter }));
+                    if (newFilter === 'top25') {
+                      setSortField('gasto_total');
+                      setSortDirection('desc');
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    activeFilters.topSpent === 'top25'
+                      ? "border-[#C5A880] bg-[#C5A880]/15 text-[#C5A880] font-bold"
+                      : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span>Top Consumo</span>
+                </button>
+
+                {/* Chip Rápido: Inactivos (+2 meses) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFilter = activeFilters.inactiveTime === '2' ? 'todos' : '2';
+                    setInactiveTimeFilter(newFilter);
+                    setActiveFilters(prev => ({ ...prev, inactiveTime: newFilter }));
+                    if (newFilter === '2') {
+                      setSortField('ultima_visita');
+                      setSortDirection('asc');
+                    }
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    activeFilters.inactiveTime === '2'
+                      ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
+                      : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span>+2 Meses sin visita</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground px-0.5">

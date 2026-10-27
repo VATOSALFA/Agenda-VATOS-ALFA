@@ -235,37 +235,8 @@ export function getEffectiveBarberDaySchedule(params: {
 
     const workingIntervals: { start: number; end: number }[] = [];
 
-    if (regSchedule && regSchedule.enabled && regSchedule.start && regSchedule.end && isLocalOpen) {
-      let regStart = parseMins(regSchedule.start);
-      let regEnd = parseMins(regSchedule.end);
-      if (localDay && localDay.enabled && localDay.start && localDay.end) {
-        regStart = Math.max(regStart, parseMins(localDay.start));
-        regEnd = Math.min(regEnd, parseMins(localDay.end));
-      }
-      if (regStart < regEnd) {
-        let regSegments: { start: number; end: number }[] = [{ start: regStart, end: regEnd }];
-        if (regSchedule.breaks && Array.isArray(regSchedule.breaks)) {
-          regSchedule.breaks.forEach((brk: any) => {
-            if (!brk.start || !brk.end) return;
-            const bStart = parseMins(brk.start);
-            const bEnd = parseMins(brk.end);
-            if (bStart >= bEnd) return;
-            const nextSegs: { start: number; end: number }[] = [];
-            regSegments.forEach(seg => {
-              if (bEnd <= seg.start || bStart >= seg.end) {
-                nextSegs.push(seg);
-              } else {
-                if (bStart > seg.start) nextSegs.push({ start: seg.start, end: bStart });
-                if (bEnd < seg.end) nextSegs.push({ start: bEnd, end: seg.end });
-              }
-            });
-            regSegments = nextSegs;
-          });
-        }
-        workingIntervals.push(...regSegments);
-      }
-    }
-
+    // IMPORTANTE: La Jornada Especial ('jornadas_especiales') SUSTITUYE por completo el horario regular.
+    // No se suma ni se mezcla con el turno regular del profesional. El resto del día queda no disponible.
     barberJourneys.forEach((j: any) => {
       if (j.hora_inicio && j.hora_fin) {
         const s = parseMins(j.hora_inicio);

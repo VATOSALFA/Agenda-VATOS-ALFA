@@ -64,6 +64,7 @@ import {
   computeTimeSelectorOptions,
   getNormalizedDayOfWeek,
   getLocalDaySchedule,
+  getEffectiveBarberDaySchedule,
   isTimeRangeCoveredBySpecialSchedule,
 } from '@/lib/scheduling/schedule-engine';
 import { ClientSummaryAndDepositCard } from './form-parts/client-summary-and-deposit-card';
@@ -748,7 +749,12 @@ export function NewReservationForm({
       }
 
       const dayOfWeek = getNormalizedDayOfWeek(fecha);
-      const daySchedule = professional.schedule?.[dayOfWeek as keyof typeof professional.schedule];
+      const daySchedule = getEffectiveBarberDaySchedule({
+        barber: professional,
+        date: fecha,
+        localSchedule: currentLocal?.schedule as any,
+        specialJourneys,
+      });
       const localDay = getLocalDaySchedule(currentLocal?.schedule as any, dayOfWeek);
       const isLocalOpen = localDay.enabled;
       const localStart = localDay.start;

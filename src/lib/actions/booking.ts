@@ -111,11 +111,27 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
         const scheduleDay = profData.schedule?.[dayName];
 
         // Build unified working intervals:
-        // (A) Regular schedule (if enabled and local is open, clamped to local hours, minus regular breaks)
-        // (B) Special journeys ('jornadas_especiales' from Admin -> Profesionales, which can be before/after local hours or on closed days)
+        // (A) Special journeys ('jornadas_especiales' from Admin -> Profesionales):
+        //     IMPORTANTE: La Jornada Especial SUSTITUYE por completo el horario regular del profesional en esa fecha.
+        //     No se suma al horario regular; el resto del día queda no disponible.
+        // (B) Regular schedule (if enabled and local is open, clamped to local hours, minus regular breaks) ONLY if no special journey.
         const workingIntervals: { start: number, end: number }[] = [];
 
-        if (scheduleDay && scheduleDay.enabled && localScheduleDay && localScheduleDay.enabled) {
+        if (!specialDaysSnap.empty) {
+            // Add Special Journeys ('jornadas_especiales') - replaces regular schedule
+            specialDaysSnap.docs.forEach(d => {
+                const j = d.data();
+                const js = parseTimeSafe(j.hora_inicio);
+                const je = parseTimeSafe(j.hora_fin);
+                if (js && je) {
+                    const jStartM = js.h * 60 + js.m;
+                    const jEndM = je.h * 60 + je.m;
+                    if (jStartM < jEndM) {
+                        workingIntervals.push({ start: jStartM, end: jEndM });
+                    }
+                }
+            });
+        } else if (scheduleDay && scheduleDay.enabled && localScheduleDay && localScheduleDay.enabled) {
             const profStart = parseTimeSafe(scheduleDay.start);
             const profEnd = parseTimeSafe(scheduleDay.end);
             const localStart = parseTimeSafe(localScheduleDay.start);
@@ -155,22 +171,6 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
                     workingIntervals.push(...regSegments);
                 }
             }
-        }
-
-        // Add Special Journeys ('jornadas_especiales') - unrestricted by local opening/closing hours
-        if (!specialDaysSnap.empty) {
-            specialDaysSnap.docs.forEach(d => {
-                const j = d.data();
-                const js = parseTimeSafe(j.hora_inicio);
-                const je = parseTimeSafe(j.hora_fin);
-                if (js && je) {
-                    const jStartM = js.h * 60 + js.m;
-                    const jEndM = je.h * 60 + je.m;
-                    if (jStartM < jEndM) {
-                        workingIntervals.push({ start: jStartM, end: jEndM });
-                    }
-                }
-            });
         }
 
         if (workingIntervals.length === 0) {

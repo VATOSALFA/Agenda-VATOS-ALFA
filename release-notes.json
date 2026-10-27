@@ -1,13 +1,9 @@
 {
-  "silent": false,
-  "showModal": true,
-  "title": "Nueva versión disponible",
-  "summary": "Extensión de tolerancia de anticipos a 20 min, blindaje de citas concluidas y mejoras en mensajes y agenda.",
-  "notes": [
-    "Extensión del tiempo de espera para el pago de anticipo de 10 a 20 minutos en la agenda, cancelador automático, panel de reglas y términos oficiales.",
-    "Blindaje de seguridad en agenda: bloqueo total de edición y modificación de estado en citas con servicios concluidos (pagadas al 100%) y de días anteriores.",
-    "Cuadratura contable en anticipos al 100%: prevención de cancelaciones involuntarias y correcta sincronización en ventas facturadas.",
-    "Diseño minimalista y optimizado en la sección de personalización de mensajes y visualización cuadrada de foto de perfil de clientes.",
-    "Estabilidad y recuperación automática mejorada ante intermitencias de navegación entre páginas del sistema."
-  ]
+  "silent": true,
+  "showModal": false,
+  "preserveVersion": true,
+  "version": "1792975331594",
+  "title": "",
+  "summary": "",
+  "notes": []
 }

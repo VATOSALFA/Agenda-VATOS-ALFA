@@ -274,7 +274,7 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
                 Jornada Especial: {profesional.name}
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-300">
-                Agrega o edita fechas y turnos extraordinarios
+                Sustituye el horario regular en fechas específicas (el resto del día queda bloqueado)
               </p>
             </div>
           </div>
@@ -392,7 +392,12 @@ export function SpecialDayModal({ profesional, isOpen, onClose }: SpecialDayModa
 
           {/* ── Add New Day Section ── */}
           <div className="space-y-3">
-            <h4 className="font-semibold text-sm">Agregar nueva jornada</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-sm">Agregar nueva jornada</h4>
+              <span className="text-[11px] text-muted-foreground">
+                Sustituye el turno regular de la fecha elegida
+              </span>
+            </div>
             <div className="p-4 border rounded-lg space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <Controller

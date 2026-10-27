@@ -1054,6 +1054,38 @@ export default function ConversationsDashboardPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  // Discrete Voice playback state for voice notes (replaces heavy browser audio player)
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const activeAudioInstanceRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleToggleVoicePlayback = (msgId: string, audioUrl?: string) => {
+    if (!audioUrl) return;
+    if (playingAudioId === msgId) {
+      if (activeAudioInstanceRef.current) {
+        activeAudioInstanceRef.current.pause();
+      }
+      setPlayingAudioId(null);
+    } else {
+      if (activeAudioInstanceRef.current) {
+        activeAudioInstanceRef.current.pause();
+      }
+      const audio = new Audio(audioUrl);
+      activeAudioInstanceRef.current = audio;
+      audio.onended = () => setPlayingAudioId(null);
+      audio.onerror = () => setPlayingAudioId(null);
+      audio.play().catch(() => setPlayingAudioId(null));
+      setPlayingAudioId(msgId);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (activeAudioInstanceRef.current) {
+        activeAudioInstanceRef.current.pause();
+      }
+    };
+  }, []);
   const [assistantName, setAssistantName] = useState<string>('Janet');
   const [sofiaConfig, setSofiaConfig] = useState<any>(null);
 
@@ -3013,71 +3045,346 @@ export default function ConversationsDashboardPage() {
 
   return (
     <div className="flex flex-col h-[calc(100dvh-9rem)] md:h-[calc(100dvh-4rem)] w-full overflow-hidden bg-background">
-      {/* Top Header Bar */}
-      <header className="h-14 md:h-16 border-b px-3 md:px-6 flex items-center justify-between bg-card/60 backdrop-blur-sm z-10 shrink-0">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <MessageSquare className="w-5 h-5 text-slate-400 shrink-0" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base md:text-lg font-bold tracking-tight truncate">Mensajes</h1>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                {assistantName} AI
-              </span>
-            </div>
+      {/* Top Header Bar - Fila unificada de Mensajes y Conversación Activa */}
+      <header className="h-14 md:h-16 border-b flex items-center bg-card/60 backdrop-blur-sm z-10 shrink-0 p-0">
+        {/* SECCIÓN IZQUIERDA (Cabecera de Lista de Conversaciones) */}
+        <div
+          className={`h-full items-center justify-between px-3 md:px-4 border-r shrink-0 transition-all ${
+            !isChatListVisible
+              ? 'hidden'
+              : selectedConvId
+              ? 'hidden md:flex md:w-80 lg:w-96'
+              : 'flex w-full md:w-80 lg:w-96'
+          }`}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-5 h-5 text-slate-400 shrink-0" />
+            <h1 className="text-base md:text-lg font-bold tracking-tight truncate">Mensajes</h1>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-500 border border-blue-500/20 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              {assistantName} AI
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-1 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportVCard}
+              disabled={isExportingVCard}
+              title="Exportar contactos (.vcf)"
+              aria-label="Exportar contactos (.vcf)"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
+            >
+              {isExportingVCard ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsNewConvModalOpen(true)}
+              title="Nuevo chat"
+              aria-label="Nuevo chat"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
-        {/* Global Actions */}
-        <div className="flex items-center space-x-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsSettingsModalOpen(true)}
-            className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-border/70 text-slate-300 hover:bg-blue-500/10 hover:text-white hover:border-blue-500/40 transition-colors shadow-xs"
-            title="Personalizar tono de notificación, color de tarjetas y tamaño de letra"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
-            <span className="hidden sm:inline">Personalizar Chat</span>
-          </Button>
+        {/* SECCIÓN DERECHA (Cabecera de Conversación Activa - En la misma fila horizontal!) */}
+        <div
+          className={`h-full flex-1 items-center justify-between px-3 md:px-4 min-w-0 ${
+            !selectedConvId ? 'hidden md:flex' : 'flex'
+          }`}
+        >
+          {activeConversation ? (
+            <>
+              {/* Lado izquierdo: Botón volver móvil, toggle lista, Foto, Nombre, Teléfono, Estado y Tags */}
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                {/* Mobile Back Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedConvId(null)}
+                  className="h-8 w-8 -ml-1 md:hidden text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 shrink-0"
+                  title="Volver a la lista de mensajes"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsSimulatorOpen(true)}
-            className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-blue-500/40 text-blue-500 hover:bg-blue-500/10 hover:text-blue-600 transition-colors shadow-xs"
-            title="Abrir Simulador de Pruebas (Sandbox)"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-            <span>Simulador IA</span>
-          </Button>
+                {/* Toggle Show/Hide Chat List (Desktop) */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsChatListVisible(!isChatListVisible)}
+                  className="h-8 w-8 -ml-1 hidden md:flex text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 shrink-0"
+                  title={isChatListVisible ? "Ocultar lista de chats" : "Mostrar lista de chats"}
+                >
+                  {isChatListVisible ? (
+                    <PanelLeftClose className="w-4 h-4" />
+                  ) : (
+                    <PanelLeftOpen className="w-4 h-4" />
+                  )}
+                </Button>
 
-          <button
-            type="button"
-            onClick={handleExportVCard}
-            disabled={isExportingVCard}
-            title="Exportar contactos (.vcf)"
-            aria-label="Exportar contactos (.vcf)"
-            className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors disabled:opacity-50"
-          >
-            {isExportingVCard ? (
-              <RefreshCw className="h-5 w-5 animate-spin" />
-            ) : (
-              <Download className="h-5 w-5" />
-            )}
-          </button>
+                {/* Avatar del cliente */}
+                <Avatar
+                  className={`w-9 h-9 border border-border/60 shrink-0 cursor-pointer hover:opacity-90 transition-all overflow-hidden ${
+                    getClientPhoto(activeConversation)
+                      ? 'hover:ring-2 hover:ring-blue-500 hover:scale-105'
+                      : ''
+                  }`}
+                  onClick={() => {
+                    const photo = getClientPhoto(activeConversation);
+                    if (photo) {
+                      setPhotoPreviewModal({
+                        url: photo,
+                        name: activeConversation.cliente_nombre || 'Cliente',
+                        phone: activeConversation.cliente_telefono || activeConversation.id,
+                      });
+                    } else {
+                      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                        setIsMobileSheetOpen(true);
+                      } else {
+                        setShowRightPanel(!showRightPanel);
+                      }
+                    }
+                  }}
+                  title={
+                    getClientPhoto(activeConversation)
+                      ? 'Clic para ver foto en formato cuadrado'
+                      : 'Ver ficha del cliente'
+                  }
+                >
+                  {getClientPhoto(activeConversation) && (
+                    <AvatarImage
+                      src={getClientPhoto(activeConversation)}
+                      alt={activeConversation.cliente_nombre || 'Cliente'}
+                      className="object-cover"
+                    />
+                  )}
+                  <AvatarFallback className="bg-muted text-slate-300 font-bold text-xs">
+                    {activeConversation.cliente_nombre
+                      ? activeConversation.cliente_nombre.slice(0, 2).toUpperCase()
+                      : 'CL'}
+                  </AvatarFallback>
+                </Avatar>
 
-          <button
-            type="button"
-            onClick={() => setIsNewConvModalOpen(true)}
-            title="Nuevo chat"
-            aria-label="Nuevo chat"
-            className="h-8 w-8 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
+                {/* Nombre, Teléfono, Estado y Tags */}
+                <div
+                  className="min-w-0 cursor-pointer"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setIsMobileSheetOpen(true);
+                    } else {
+                      setShowRightPanel(!showRightPanel);
+                    }
+                  }}
+                  title="Ver/ocultar ficha del cliente"
+                >
+                  <div className="flex items-center gap-1.5 md:gap-2">
+                    <h2 className="font-semibold text-xs md:text-sm text-foreground truncate hover:text-blue-400 transition-colors">
+                      {activeConversation.cliente_nombre || 'Cliente'}
+                    </h2>
+                    <span className="text-[10px] md:text-[11px] text-muted-foreground font-sans hidden sm:inline">
+                      {activeConversation.cliente_telefono || activeConversation.id}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <p className="text-[10px] md:text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                      {activeConversation.modo_atencion === 'requiere_atencion' ? (
+                        <span className="text-red-400 font-medium flex items-center gap-1">
+                          <AlertTriangle className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" /> Requiere atención
+                        </span>
+                      ) : activeConversation.modo_atencion === 'humano_al_mando' ? (
+                        <span className="text-blue-400 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Recepcionista
+                        </span>
+                      ) : (
+                        <span className="text-blue-500 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> {assistantName} activa
+                        </span>
+                      )}
+                    </p>
+
+                    {/* Active Conversation Tags */}
+                    {activeConversation.etiquetas?.map((tagId) => {
+                      const tInfo = AVAILABLE_TAGS.find((at) => at.id === tagId);
+                      return (
+                        <span
+                          key={tagId}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTag(tagId);
+                          }}
+                          title="Haz clic para quitar etiqueta"
+                          className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full border font-medium cursor-pointer hover:opacity-75 ${
+                            tInfo ? tInfo.color : 'bg-muted text-muted-foreground'
+                          }`}
+                        >
+                          {tInfo ? tInfo.label : tagId}
+                          <X className="w-2.5 h-2.5" />
+                        </span>
+                      );
+                    })}
+
+                    {/* Add Tag Dropdown */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded-full border border-dashed border-border/80 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                          title="Gestionar etiquetas"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>Tag</span>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-48 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                        {AVAILABLE_TAGS.map((t) => {
+                          const isAssigned = activeConversation.etiquetas?.includes(t.id);
+                          return (
+                            <DropdownMenuItem
+                              key={t.id}
+                              onClick={() => handleToggleTag(t.id)}
+                              className="flex items-center justify-between text-xs cursor-pointer"
+                            >
+                              <span className="font-medium">{t.label}</span>
+                              {isAssigned && <Check className="w-3.5 h-3.5 text-primary" />}
+                            </DropdownMenuItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de acción derecha */}
+              <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
+                {/* Chat Settings / Customization Icon Button (Only Icon!) */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg"
+                  title="Personalizar tono, color de burbuja y tamaño de letra"
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-blue-500" />
+                </Button>
+
+                {/* Sound Notifications Toggle */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const nextSound = !soundEnabled;
+                    setSoundEnabled(nextSound);
+                    if (nextSound) {
+                      playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
+                    }
+                    toast({
+                      title: nextSound ? '🔔 Sonido activado' : '🔕 Sonido silenciado',
+                      description: nextSound
+                        ? 'Escucharás el tono elegido cuando lleguen mensajes del cliente.'
+                        : 'Sonido de notificaciones desactivado.',
+                    });
+                  }}
+                  className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg"
+                  title={soundEnabled ? 'Silenciar timbre' : 'Activar timbre'}
+                >
+                  {soundEnabled ? (
+                    <Volume2 className="w-4 h-4 text-blue-500" />
+                  ) : (
+                    <VolumeX className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                  )}
+                </Button>
+
+                {/* Botón Avatar de Janet (Color = Activa / Grayscale = Pausada) */}
+                <button
+                  type="button"
+                  disabled={isTogglingMode}
+                  onClick={() => handleToggleMode(activeConversation.modo_atencion !== 'humano_al_mando')}
+                  className={`relative h-9 w-9 rounded-full flex items-center justify-center transition-all shrink-0 group ${
+                    isTogglingMode ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:scale-105 active:scale-95'
+                  }`}
+                  title={
+                    activeConversation.modo_atencion === 'humano_al_mando'
+                      ? `${assistantName} pausada (Clic para activar respuestas IA)`
+                      : `${assistantName} activa (Clic para pausar y tomar control en recepción)`
+                  }
+                  aria-label={`Estado de ${assistantName}: ${activeConversation.modo_atencion === 'humano_al_mando' ? 'Pausada' : 'Activa'}`}
+                >
+                  <div className={`w-8 h-8 rounded-full overflow-hidden border transition-all ${
+                    activeConversation.modo_atencion === 'humano_al_mando'
+                      ? 'border-slate-300 dark:border-slate-700 opacity-40 grayscale contrast-75 hover:opacity-75'
+                      : 'border-blue-500 ring-2 ring-blue-500/40 shadow-[0_0_12px_rgba(59,130,246,0.35)] opacity-100'
+                  }`}>
+                    <img
+                      src="/janet-avatar.png"
+                      alt={assistantName}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Indicador de estado */}
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background flex items-center justify-center transition-colors ${
+                      activeConversation.modo_atencion === 'humano_al_mando'
+                        ? 'bg-slate-400'
+                        : 'bg-blue-500'
+                    }`}
+                  >
+                    {activeConversation.modo_atencion !== 'humano_al_mando' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    )}
+                  </span>
+                </button>
+
+                {/* Toggle details sidebar / mobile sheet */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                      setIsMobileSheetOpen(true);
+                    } else {
+                      setShowRightPanel(!showRightPanel);
+                    }
+                  }}
+                  className={`h-8 w-8 rounded-lg transition-colors ${
+                    showRightPanel
+                      ? "text-blue-500 bg-blue-500/15 hover:bg-blue-500/25"
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10"
+                  }`}
+                  title={showRightPanel ? "Ocultar ficha del cliente" : "Ver ficha del cliente"}
+                >
+                  <Info className="w-4 h-4" />
+                </Button>
+
+                {/* Delete Conversation Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleOpenDeleteModal(activeConversation)}
+                  disabled={isDeletingConversation}
+                  className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-500/10 rounded-lg"
+                  title="Eliminar conversación"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center text-xs text-muted-foreground italic">
+              Selecciona una conversación para interactuar
+            </div>
+          )}
         </div>
       </header>
 
@@ -3508,279 +3815,6 @@ export default function ConversationsDashboardPage() {
         <main className={`flex-1 flex flex-col bg-background/50 overflow-hidden ${!selectedConvId ? 'hidden md:flex' : 'flex'}`}>
           {activeConversation ? (
             <>
-              {/* Chat Header */}
-              <div className="h-14 md:h-16 border-b px-3 md:px-4 flex items-center justify-between bg-card/50 backdrop-blur-sm shrink-0">
-                <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                  {/* Mobile Back Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setSelectedConvId(null)}
-                    className="h-8 w-8 -ml-1 md:hidden text-muted-foreground hover:text-foreground shrink-0"
-                    title="Volver a la lista de mensajes"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                  </Button>
-
-                  {/* Toggle Show/Hide Chat List (Desktop) */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsChatListVisible(!isChatListVisible)}
-                    className="h-8 w-8 -ml-1 hidden md:flex text-slate-400 hover:text-white hover:bg-white/10 shrink-0"
-                    title={isChatListVisible ? "Ocultar lista de chats" : "Mostrar lista de chats"}
-                  >
-                    {isChatListVisible ? (
-                      <PanelLeftClose className="w-4 h-4" />
-                    ) : (
-                      <PanelLeftOpen className="w-4 h-4" />
-                    )}
-                  </Button>
-
-                  <Avatar
-                    className={`w-8 h-8 md:w-9 md:h-9 border shrink-0 cursor-pointer hover:opacity-90 transition-all overflow-hidden ${
-                      getClientPhoto(activeConversation)
-                        ? 'hover:ring-2 hover:ring-blue-500 hover:scale-105'
-                        : ''
-                    }`}
-                    onClick={() => {
-                      const photo = getClientPhoto(activeConversation);
-                      if (photo) {
-                        setPhotoPreviewModal({
-                          url: photo,
-                          name: activeConversation.cliente_nombre || 'Cliente',
-                          phone: activeConversation.cliente_telefono || activeConversation.id,
-                        });
-                      } else {
-                        if (window.innerWidth < 768) {
-                          setIsMobileSheetOpen(true);
-                        } else {
-                          setShowRightPanel(!showRightPanel);
-                        }
-                      }
-                    }}
-                    title={
-                      getClientPhoto(activeConversation)
-                        ? 'Clic para ver foto en formato cuadrado'
-                        : 'Ver ficha del cliente'
-                    }
-                  >
-                    {getClientPhoto(activeConversation) && (
-                      <AvatarImage
-                        src={getClientPhoto(activeConversation)}
-                        alt={activeConversation.cliente_nombre || 'Cliente'}
-                        className="object-cover"
-                      />
-                    )}
-                    <AvatarFallback className="bg-primary/15 text-primary font-bold text-xs">
-                      {activeConversation.cliente_nombre
-                        ? activeConversation.cliente_nombre.slice(0, 2).toUpperCase()
-                        : 'CL'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div
-                    className="min-w-0 cursor-pointer"
-                    onClick={() => {
-                      if (window.innerWidth < 768) {
-                        setIsMobileSheetOpen(true);
-                      } else {
-                        setShowRightPanel(!showRightPanel);
-                      }
-                    }}
-                    title="Ver/ocultar ficha del cliente"
-                  >
-                    <div className="flex items-center gap-1.5 md:gap-2">
-                      <h2 className="font-semibold text-xs md:text-sm truncate hover:text-blue-400 transition-colors">
-                        {activeConversation.cliente_nombre || 'Cliente'}
-                      </h2>
-                      <span className="text-[10px] md:text-[11px] text-muted-foreground font-mono hidden sm:inline">
-                        {activeConversation.cliente_telefono || activeConversation.id}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                      <p className="text-[10px] md:text-[11px] text-muted-foreground flex items-center gap-1 truncate">
-                        {activeConversation.modo_atencion === 'requiere_atencion' ? (
-                          <span className="text-red-400 font-medium flex items-center gap-1">
-                            <AlertTriangle className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" /> Requiere atención
-                          </span>
-                        ) : activeConversation.modo_atencion === 'humano_al_mando' ? (
-                          <span className="text-blue-400 font-medium flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Recepcionista
-                          </span>
-                        ) : (
-                          <span className="text-blue-500 font-medium flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> {assistantName} activa
-                          </span>
-                        )}
-                      </p>
-
-                      {/* Active Conversation Tags */}
-                      {activeConversation.etiquetas?.map((tagId) => {
-                        const tInfo = AVAILABLE_TAGS.find((at) => at.id === tagId);
-                        return (
-                          <span
-                            key={tagId}
-                            onClick={() => handleToggleTag(tagId)}
-                            title="Haz clic para quitar etiqueta"
-                            className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.2 rounded-full border font-medium cursor-pointer hover:opacity-75 ${
-                              tInfo ? tInfo.color : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            {tInfo ? tInfo.label : tagId}
-                            <X className="w-2.5 h-2.5" />
-                          </span>
-                        );
-                      })}
-
-                      {/* Add Tag Dropdown */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.2 rounded-full border border-dashed border-border/80 text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
-                            title="Gestionar etiquetas"
-                          >
-                            <Plus className="w-2.5 h-2.5" />
-                            <span>Tag</span>
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-48 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                          {AVAILABLE_TAGS.map((t) => {
-                            const isAssigned = activeConversation.etiquetas?.includes(t.id);
-                            return (
-                              <DropdownMenuItem
-                                key={t.id}
-                                onClick={() => handleToggleTag(t.id)}
-                                className="flex items-center justify-between text-xs cursor-pointer"
-                              >
-                                <span className="font-medium">{t.label}</span>
-                                {isAssigned && <Check className="w-3.5 h-3.5 text-primary" />}
-                              </DropdownMenuItem>
-                            );
-                          })}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right controls: Probar Recordatorio, Personalizar Chat, Sound Toggle, Tomar Control Switch & Info Panel Toggle */}
-                <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
-                  {/* Quick Test Reminder Button */}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isSendingDirectReminder}
-                    onClick={handleSendDirectReminderTest}
-                    className="h-8 text-xs font-semibold px-2.5 gap-1.5 border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/10 hover:text-[#C5A880] transition-colors shrink-0"
-                    title="Enviar recordatorio interactivo con los 3 botones a este chat"
-                  >
-                    {isSendingDirectReminder ? (
-                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Bell className="h-3.5 w-3.5 text-[#C5A880]" />
-                    )}
-                    <span className="hidden lg:inline">Probar Recordatorio</span>
-                  </Button>
-
-                  {/* Chat Settings / Customization Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setIsSettingsModalOpen(true)}
-                    className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg"
-                    title="Personalizar tono, color de burbuja y tamaño de letra"
-                  >
-                    <SlidersHorizontal className="w-4 h-4 text-blue-400" />
-                  </Button>
-
-                  {/* Sound Notifications Toggle */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      const nextSound = !soundEnabled;
-                      setSoundEnabled(nextSound);
-                      if (nextSound) {
-                        playChatNotificationTone(chatPrefs.notificationTone, chatPrefs.notificationVolume);
-                      }
-                      toast({
-                        title: nextSound ? '🔔 Sonido activado' : '🔕 Sonido silenciado',
-                        description: nextSound
-                          ? 'Escucharás el tono elegido cuando lleguen mensajes del cliente.'
-                          : 'Sonido de notificaciones desactivado.',
-                      });
-                    }}
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title={soundEnabled ? 'Silenciar timbre' : 'Activar timbre'}
-                  >
-                    {soundEnabled ? (
-                      <Volume2 className="w-4 h-4 text-blue-400" />
-                    ) : (
-                      <VolumeX className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </Button>
-
-                  {/* Bot Takeover Switch */}
-                  <div className="flex items-center gap-1.5 md:gap-2 bg-muted/60 px-2 md:px-2.5 py-1 rounded-lg border border-border/50">
-                    <div className="flex flex-col text-right">
-                      <span className="text-[11px] md:text-xs font-semibold">
-                        {activeConversation.modo_atencion === 'humano_al_mando'
-                          ? 'Humano'
-                          : assistantName}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground hidden sm:inline">
-                        {activeConversation.modo_atencion === 'humano_al_mando'
-                          ? 'Pausado'
-                          : 'Auto'}
-                      </span>
-                    </div>
-                    <Switch
-                      checked={activeConversation.modo_atencion === 'humano_al_mando'}
-                      onCheckedChange={handleToggleMode}
-                      disabled={isTogglingMode}
-                      aria-label="Tomar control de la conversación"
-                      className="scale-90 md:scale-100"
-                    />
-                  </div>
-
-                  {/* Toggle details sidebar / mobile sheet */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && window.innerWidth < 768) {
-                        setIsMobileSheetOpen(true);
-                      } else {
-                        setShowRightPanel(!showRightPanel);
-                      }
-                    }}
-                    className={`h-8 w-8 rounded-lg transition-colors ${
-                      showRightPanel
-                        ? "text-blue-400 bg-blue-500/15 hover:bg-blue-500/25"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                    title={showRightPanel ? "Ocultar ficha del cliente" : "Ver ficha del cliente"}
-                  >
-                    <Info className="w-4 h-4 md:w-5 md:h-5" />
-                  </Button>
-
-                  {/* Delete Conversation Button */}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleOpenDeleteModal(activeConversation)}
-                    disabled={isDeletingConversation}
-                    className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8"
-                    title="Eliminar conversación"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
               {/* Handover Alert Banner */}
               {activeConversation.modo_atencion === 'requiere_atencion' && (
                 <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2 flex items-center justify-between text-xs text-red-400">
@@ -3901,29 +3935,33 @@ export default function ConversationsDashboardPage() {
                           >
                             {/* Attached Media: Voice Audio Player, Document File Card, or Image Preview */}
                             {isVoiceNote ? (
-                              <div className="mb-2 p-2.5 rounded-xl bg-background/90 border border-border/60 shadow-xs flex flex-col gap-1.5 min-w-[230px]">
-                                <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
-                                  <span className="flex items-center gap-1.5 font-semibold text-blue-400">
-                                    <Mic className="w-3.5 h-3.5 text-blue-400" />
-                                    Nota de voz
-                                  </span>
+                              <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-blue-500 dark:text-blue-400 mb-1 select-none">
+                                <div className="flex items-center gap-1.5">
+                                  <Mic className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                                  <span className="font-semibold">Mensaje de voz</span>
+                                  <span className="text-muted-foreground text-[10px]">• Transcripción IA</span>
                                   {msg.metadata?.duration ? (
-                                    <span className="text-[10px] font-sans font-semibold text-foreground/80">
-                                      {Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')}
+                                    <span className="text-[10px] text-muted-foreground font-sans ml-0.5">
+                                      ({Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')})
                                     </span>
                                   ) : null}
                                 </div>
-                                <audio
-                                  controls
-                                  src={msg.mediaUrl}
-                                  className="w-full h-8 rounded-lg focus:outline-none"
-                                  preload="metadata"
-                                />
-                                {chatPrefs.showAudioTranscription && msg.metadata?.transcripcion && (
-                                  <div className="mt-1 pt-1.5 border-t border-border/50 px-1 text-[11px] text-foreground/85 italic leading-snug">
-                                    <span className="font-semibold not-italic text-blue-400 mr-1">Transcripción IA:</span>
-                                    &ldquo;{msg.metadata.transcripcion}&rdquo;
-                                  </div>
+                                {msg.mediaUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleVoicePlayback(msg.id, msg.mediaUrl);
+                                    }}
+                                    className="p-1 rounded-md text-slate-400 hover:text-foreground hover:bg-muted/50 transition-colors"
+                                    title={playingAudioId === msg.id ? 'Pausar audio' : 'Escuchar audio original'}
+                                  >
+                                    {playingAudioId === msg.id ? (
+                                      <VolumeX className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                                    ) : (
+                                      <Volume2 className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
                                 )}
                               </div>
                             ) : isFileDoc && msg.mediaUrl ? (
@@ -3965,7 +4003,7 @@ export default function ConversationsDashboardPage() {
                             ) : null}
 
                             <div className="break-words">
-                              <FormattedChatText text={msg.texto} className={fontSizeCls} />
+                              <FormattedChatText text={msg.texto || msg.metadata?.transcripcion || ''} className={fontSizeCls} />
 
                               {/* Interactive Action Buttons (Appointment Reminder / Confirmation) */}
                               {msg.metadata?.buttons && msg.metadata.buttons.length > 0 && (
@@ -4107,137 +4145,44 @@ export default function ConversationsDashboardPage() {
                 )}
 
                 <div className="max-w-3xl mx-auto space-y-2">
-                  {/* Selector de rol de envío y herramientas rápidas */}
-                  <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
-                    <div className="inline-flex p-0.5 rounded-lg bg-muted/80 border border-border/40">
-                      <button
-                        type="button"
-                        onClick={() => setSendRole('cliente')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all text-xs font-medium ${
-                          sendRole === 'cliente'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                        title="Simular mensaje o nota de voz enviada por el cliente para probar a Janet"
-                      >
-                        <User className="w-3 h-3 text-blue-500" />
-                        <span>Probar (Cliente)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSendRole('recepcion')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all text-xs font-medium ${
-                          sendRole === 'recepcion'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        <Scissors className="w-3 h-3 text-blue-400" />
-                        <span>Recepción</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSendRole('nota_interna')}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all text-xs font-medium ${
-                          sendRole === 'nota_interna'
-                            ? 'bg-[#202A49] text-white font-semibold shadow-sm'
-                            : 'text-slate-400 hover:text-foreground'
-                        }`}
-                      >
-                        <Lock className="w-3 h-3 text-slate-400" />
-                        <span>Nota Interna</span>
-                      </button>
-                    </div>
+                  {/* Hidden File Input for Device Photos */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleProcessImageFile(e.target.files[0], 'main');
+                      }
+                    }}
+                  />
 
-                    {/* Quick Replies Dropdown & Options */}
-                    <div className="flex items-center gap-1.5">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground border-border/60"
-                          >
-                            <Bookmark className="w-3 h-3 text-muted-foreground" />
-                            <span>Respuestas Rápidas</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5 space-y-1">
-                          {quickRepliesList.map((qr) => (
-                            <DropdownMenuItem
-                              key={qr.id}
-                              className="flex flex-col items-start gap-1 text-xs py-2 px-2.5 cursor-pointer rounded-lg hover:bg-muted/60 transition-colors border border-transparent hover:border-border/50"
-                              onClick={() => {
-                                setStaffInput(qr.text);
-                                if (sendRole === 'nota_interna') setSendRole('recepcion');
-                              }}
-                            >
-                              <div className="flex items-center justify-between w-full">
-                                <span className="font-semibold text-foreground text-xs">{qr.title}</span>
-                                <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-normal">
-                                  {qr.category}
-                                </Badge>
-                              </div>
-                              <span className="text-[11px] text-muted-foreground line-clamp-1 leading-relaxed">
-                                {qr.text.split('\n')[0] || qr.text}
-                              </span>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                  {/* Hidden File Input for Any Device File (Documents, PDFs, Audio, Images) */}
+                  <input
+                    ref={generalFileInputRef}
+                    type="file"
+                    accept="*/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleProcessImageFile(e.target.files[0], 'main');
+                      }
+                    }}
+                  />
 
-                      {/* Hidden File Input for Device Photos */}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleProcessImageFile(e.target.files[0], 'main');
-                          }
-                        }}
-                      />
-
-                      {/* Hidden File Input for Any Device File (Documents, PDFs, Audio, Images) */}
-                      <input
-                        ref={generalFileInputRef}
-                        type="file"
-                        accept="*/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleProcessImageFile(e.target.files[0], 'main');
-                          }
-                        }}
-                      />
-
-                      {/* Hidden File Input for Simulator */}
-                      <input
-                        ref={simFileInputRef}
-                        type="file"
-                        accept="*/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleProcessImageFile(e.target.files[0], 'simulator');
-                          }
-                        }}
-                      />
-
-                      {sendRole === 'recepcion' && (
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none ml-1">
-                          <input
-                            type="checkbox"
-                            checked={pauseBotOnSend}
-                            onChange={(e) => setPauseBotOnSend(e.target.checked)}
-                            className="rounded border-muted-foreground/30 accent-primary w-3 h-3"
-                          />
-                          <span className="hidden sm:inline">Pausar a {assistantName}</span>
-                        </label>
-                      )}
-                    </div>
-                  </div>
+                  {/* Hidden File Input for Simulator */}
+                  <input
+                    ref={simFileInputRef}
+                    type="file"
+                    accept="*/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleProcessImageFile(e.target.files[0], 'simulator');
+                      }
+                    }}
+                  />
 
                   {/* Manual URL input if toggled */}
                   {showImageInput && !attachedImageUrl && !attachedFileInfo && (
@@ -4380,8 +4325,6 @@ export default function ConversationsDashboardPage() {
                           placeholder={
                             sendRole === 'nota_interna'
                               ? 'Escribe una nota interna para el equipo...'
-                              : sendRole === 'cliente'
-                              ? 'Escribe o graba audio como cliente para probar a Janet...'
                               : canReply
                               ? 'Escribe un mensaje...'
                               : 'No tienes permiso para responder.'
@@ -4405,7 +4348,7 @@ export default function ConversationsDashboardPage() {
                           className={`min-h-[38px] max-h-[180px] resize-none overflow-y-auto border-0 focus-visible:ring-0 focus-visible:ring-offset-0 px-2 py-2 bg-transparent shadow-none leading-relaxed transition-[height] duration-75 ${getFontSizeClass(chatPrefs.fontSize)}`}
                         />
 
-                        {/* 4 Functional Tool Icons: Clip (Device Files), Cámara (Live Camera), Micrófono (Audio IA), Emojis (WhatsApp Picker) */}
+                        {/* Functional Tool Icons: Clip, Cámara, Micrófono, Emojis, Nota Interna, Respuestas Rápidas */}
                         <div className="flex items-center gap-0.5 mb-0.5 shrink-0">
                           {/* 1. Clip - Compartir Archivos desde el Dispositivo */}
                           <DropdownMenu>
@@ -4414,11 +4357,11 @@ export default function ConversationsDashboardPage() {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg transition-colors"
                                 disabled={isRecordingAudio || isUploadingImage}
                                 title="Compartir archivo, documento o imagen desde el dispositivo"
                               >
-                                <Paperclip className="w-4 h-4 text-slate-400" />
+                                <Paperclip className="w-4 h-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -4466,7 +4409,7 @@ export default function ConversationsDashboardPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg transition-colors"
                             onClick={() => {
                               setCameraModalTarget('main');
                               setIsCameraModalOpen(true);
@@ -4477,7 +4420,7 @@ export default function ConversationsDashboardPage() {
                             {isUploadingImage ? (
                               <RefreshCw className="w-4 h-4 animate-spin text-blue-400" />
                             ) : (
-                              <Camera className="w-4 h-4 text-slate-400" />
+                              <Camera className="w-4 h-4" />
                             )}
                           </Button>
 
@@ -4486,7 +4429,7 @@ export default function ConversationsDashboardPage() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                            className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg transition-colors"
                             onClick={() => startVoiceRecording('main')}
                             disabled={(sendRole === 'recepcion' && !canReply) || isSendingStaff || isProcessingAI || isUploadingImage || isRecordingAudio}
                             title={
@@ -4495,7 +4438,7 @@ export default function ConversationsDashboardPage() {
                                 : 'Grabar nota de voz'
                             }
                           >
-                            <Mic className="w-4 h-4 text-slate-400" />
+                            <Mic className="w-4 h-4" />
                           </Button>
 
                           {/* 4. Emoji - Selector Moderno Estilo WhatsApp */}
@@ -4505,10 +4448,10 @@ export default function ConversationsDashboardPage() {
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                                className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg transition-colors"
                                 title="Insertar emojis modernos estilo WhatsApp"
                               >
-                                <Smile className="w-4 h-4 text-slate-400" />
+                                <Smile className="w-4 h-4" />
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent
@@ -4518,6 +4461,78 @@ export default function ConversationsDashboardPage() {
                               <WhatsAppEmojiPicker onSelectEmoji={handleInsertEmoji} />
                             </PopoverContent>
                           </Popover>
+
+                          {/* 5. Nota Interna - Privada del equipo */}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSendRole(sendRole === 'nota_interna' ? 'recepcion' : 'nota_interna')}
+                            className={`h-8 w-8 rounded-lg transition-colors ${
+                              sendRole === 'nota_interna'
+                                ? 'text-blue-500 bg-blue-500/15 hover:bg-blue-500/25 ring-1 ring-blue-500/40'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10'
+                            }`}
+                            title={
+                              sendRole === 'nota_interna'
+                                ? 'Modo Nota Interna activo (Clic para volver a mensaje público)'
+                                : 'Crear nota interna privada (no visible para el cliente)'
+                            }
+                          >
+                            <Lock className="w-4 h-4" />
+                          </Button>
+
+                          {/* 6. Respuestas Rápidas - Plantillas oficiales */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-white/10 rounded-lg transition-colors"
+                                title="Respuestas Rápidas predefinidas"
+                              >
+                                <Bookmark className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="w-80 max-h-96 overflow-y-auto border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5 space-y-1 z-50 bg-popover"
+                            >
+                              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                Respuestas Rápidas
+                              </div>
+                              {quickRepliesList.map((qr) => (
+                                <DropdownMenuItem
+                                  key={qr.id}
+                                  className="flex flex-col items-start gap-1 text-xs py-2 px-2.5 cursor-pointer rounded-lg hover:bg-muted/60 transition-colors border border-transparent hover:border-border/50"
+                                  onClick={() => {
+                                    setStaffInput(qr.text);
+                                    if (sendRole === 'nota_interna') setSendRole('recepcion');
+                                    if (chatTextareaRef.current) {
+                                      chatTextareaRef.current.focus();
+                                      setTimeout(() => {
+                                        if (chatTextareaRef.current) {
+                                          chatTextareaRef.current.style.height = 'auto';
+                                          chatTextareaRef.current.style.height = `${Math.max(38, Math.min(chatTextareaRef.current.scrollHeight, 180))}px`;
+                                        }
+                                      }, 50);
+                                    }
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between w-full">
+                                    <span className="font-semibold text-foreground text-xs">{qr.title}</span>
+                                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 font-normal">
+                                      {qr.category}
+                                    </Badge>
+                                  </div>
+                                  <span className="text-[11px] text-muted-foreground line-clamp-1 leading-relaxed">
+                                    {qr.text.split('\n')[0] || qr.text}
+                                  </span>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
 
                         <Button
@@ -4562,10 +4577,6 @@ export default function ConversationsDashboardPage() {
                             <span className="text-blue-400 font-medium flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
                               Procesando archivo del dispositivo...
-                            </span>
-                          ) : sendRole === 'cliente' ? (
-                            <span className="text-blue-400 font-medium flex items-center gap-1">
-                              <Bot className="w-3 h-3 text-blue-400" /> Modo Cliente activo: envía texto, foto, archivo o nota de voz y {assistantName} te responderá.
                             </span>
                           ) : sendRole === 'nota_interna' ? (
                             <span className="text-blue-400 font-medium flex items-center gap-1">
@@ -4801,30 +4812,34 @@ export default function ConversationsDashboardPage() {
                             : `${getClientBubbleClasses(chatPrefs.clientBubbleStyle)} rounded-tl-sm`
                         }`}
                       >
-                        {isVoiceNote && msg.mediaUrl ? (
-                          <div className="mb-2 p-2 rounded-xl bg-background/90 border border-border/60 shadow-xs flex flex-col gap-1.5 min-w-[220px]">
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground px-1">
-                              <span className="flex items-center gap-1 font-semibold text-blue-400">
-                                <Mic className="w-3.5 h-3.5 text-blue-400" />
-                                Nota de voz
-                              </span>
+                        {isVoiceNote ? (
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-blue-500 dark:text-blue-400 mb-1 select-none">
+                            <div className="flex items-center gap-1.5">
+                              <Mic className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                              <span className="font-semibold">Mensaje de voz</span>
+                              <span className="text-muted-foreground text-[10px]">• Transcripción IA</span>
                               {msg.metadata?.duration ? (
-                                <span className="text-[10px] font-sans font-semibold text-foreground/80">
-                                  {Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')}
+                                <span className="text-[10px] text-muted-foreground font-sans ml-0.5">
+                                  ({Math.floor(msg.metadata.duration / 60)}:{String(msg.metadata.duration % 60).padStart(2, '0')})
                                 </span>
                               ) : null}
                             </div>
-                            <audio
-                              controls
-                              src={msg.mediaUrl}
-                              className="w-full h-8 rounded-lg focus:outline-none"
-                              preload="metadata"
-                            />
-                            {chatPrefs.showAudioTranscription && msg.metadata?.transcripcion && (
-                              <div className="mt-1 pt-1.5 border-t border-border/50 px-1 text-[11px] text-foreground/85 italic leading-snug">
-                                <span className="font-semibold not-italic text-blue-400 mr-1">Transcripción IA:</span>
-                                &ldquo;{msg.metadata.transcripcion}&rdquo;
-                              </div>
+                            {msg.mediaUrl && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleVoicePlayback(msg.id, msg.mediaUrl);
+                                }}
+                                className="p-1 rounded-md text-slate-400 hover:text-foreground hover:bg-muted/50 transition-colors"
+                                title={playingAudioId === msg.id ? 'Pausar audio' : 'Escuchar audio original'}
+                              >
+                                {playingAudioId === msg.id ? (
+                                  <VolumeX className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                                ) : (
+                                  <Volume2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
                             )}
                           </div>
                         ) : isFileDoc && msg.mediaUrl ? (
@@ -4864,7 +4879,7 @@ export default function ConversationsDashboardPage() {
                           </div>
                         ) : null}
 
-                        <FormattedChatText text={msg.texto} className={fontSizeCls} />
+                        <FormattedChatText text={msg.texto || msg.metadata?.transcripcion || ''} className={fontSizeCls} />
 
                         {/* Interactive Buttons in Simulator */}
                         {msg.metadata?.buttons && msg.metadata.buttons.length > 0 && (

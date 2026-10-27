@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2 } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2, Smartphone } from "lucide-react";
+import { isClientWithApp, isClientActiveInApp, getClientLastAppAccess, getClientAppInfo } from "@/lib/client-app-helper";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -73,6 +74,7 @@ const FiltersSidebar = ({
   professionalFilter, setProfessionalFilter,
   inactiveTimeFilter, setInactiveTimeFilter,
   topSpentFilter, setTopSpentFilter,
+  appFilter, setAppFilter,
   locales,
   professionals,
   isLoading,
@@ -97,6 +99,8 @@ const FiltersSidebar = ({
   inactiveTimeFilter: string,
   setInactiveTimeFilter: (val: string) => void,
   topSpentFilter: string,
+  appFilter: string,
+  setAppFilter: (val: string) => void,
   setTopSpentFilter: (val: string) => void,
   locales: Local[],
   professionals: Profesional[],
@@ -177,6 +181,22 @@ const FiltersSidebar = ({
               <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
               <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
               <SelectItem value="min5000">Consumo mayor a $5,000</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <Smartphone className="h-3 w-3 text-slate-400" />
+            <span>App Móvil</span>
+          </Label>
+          <Select value={appFilter} onValueChange={setAppFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los clientes</SelectItem>
+              <SelectItem value="con_app">Solo con App móvil</SelectItem>
+              <SelectItem value="activos_30d">App activa (últimos 30 días)</SelectItem>
+              <SelectItem value="sin_app">Sin App móvil</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -378,7 +398,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | 'ultima_visita' | 'gasto_total' | null;
+  type SortField = 'numero_cliente' | 'nombre' | 'apellido' | 'creado_en' | 'ultima_visita' | 'gasto_total' | 'app' | null;
   type SortDirection = 'asc' | 'desc';
   const [sortField, setSortField] = useState<SortField>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -391,6 +411,7 @@ export default function ClientsPage() {
   const [professionalFilter, setProfessionalFilter] = useState('todos');
   const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
   const [topSpentFilter, setTopSpentFilter] = useState('todos');
+  const [appFilter, setAppFilter] = useState('todos');
 
   const [activeFilters, setActiveFilters] = useState({
     dateRange: dateRange,
@@ -400,7 +421,8 @@ export default function ClientsPage() {
     newClientsYear: 'todos',
     professional: 'todos',
     inactiveTime: 'todos',
-    topSpent: 'todos'
+    topSpent: 'todos',
+    app: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
@@ -501,6 +523,21 @@ export default function ClientsPage() {
 
     return map;
   }, [sales, historicalSales, historicalReservations, hasLoadedHistory]);
+
+  const appClientIdsFromReservations = useMemo(() => {
+    const set = new Set<string>();
+    if (historicalReservations && historicalReservations.length > 0) {
+      historicalReservations.forEach(r => {
+        const canal = String(r.canal || r.canal_reserva || '').toLowerCase();
+        const origen = String(r.origen || '').toLowerCase();
+        const notas = String(r.notas || '').toLowerCase();
+        if (canal.includes('app') || canal.includes('mobile') || origen.includes('app') || origen.includes('mobile') || notas.includes('app vatos alfa')) {
+          if (r.cliente_id) set.add(r.cliente_id);
+        }
+      });
+    }
+    return set;
+  }, [historicalReservations]);
 
   const clientSpentMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -603,6 +640,9 @@ export default function ClientsPage() {
     if (topSpentFilter !== 'todos') {
       setSortField('gasto_total');
       setSortDirection('desc');
+    } else if (appFilter === 'con_app' && !sortField) {
+      setSortField('app');
+      setSortDirection('desc');
     } else if ((newClientsMonthFilter !== 'todos' || newClientsYearFilter !== 'todos') && !sortField) {
       setSortField('creado_en');
       setSortDirection('desc');
@@ -616,7 +656,8 @@ export default function ClientsPage() {
       newClientsYear: newClientsYearFilter,
       professional: professionalFilter,
       inactiveTime: inactiveTimeFilter,
-      topSpent: topSpentFilter
+      topSpent: topSpentFilter,
+      app: appFilter
     });
     setCurrentPage(1);
     toast({ title: "Filtros aplicados" });
@@ -631,6 +672,7 @@ export default function ClientsPage() {
     setProfessionalFilter('todos');
     setInactiveTimeFilter('todos');
     setTopSpentFilter('todos');
+    setAppFilter('todos');
     setSortField(null);
     setSortDirection('asc');
     setActiveFilters({
@@ -641,12 +683,17 @@ export default function ClientsPage() {
       newClientsYear: 'todos',
       professional: 'todos',
       inactiveTime: 'todos',
-      topSpent: 'todos'
+      topSpent: 'todos',
+    app: 'todos'
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
     toast({ title: "Filtros restablecidos" });
   };
+
+  const totalClientsWithApp = useMemo(() => {
+    return clients.filter(c => isClientWithApp(c, appClientIdsFromReservations)).length;
+  }, [clients, appClientIdsFromReservations]);
 
   const filteredClients = useMemo(() => {
     let filtered = [...clients];
@@ -659,7 +706,9 @@ export default function ClientsPage() {
       activeFilters.newClientsYear !== 'todos' ||
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
-      activeFilters.topSpent !== 'todos';
+      activeFilters.topSpent !== 'todos' ||
+      activeFilters.app !== 'todos' ||
+      activeFilters.app !== 'todos';
 
     if (hasAdvancedFilters) {
       // Filter by Inactive Time
@@ -778,6 +827,17 @@ export default function ClientsPage() {
         });
       }
 
+      // Filter by App Móvil
+      if (activeFilters.app !== 'todos') {
+        if (activeFilters.app === 'con_app') {
+          filtered = filtered.filter(c => isClientWithApp(c, appClientIdsFromReservations));
+        } else if (activeFilters.app === 'activos_30d') {
+          filtered = filtered.filter(c => isClientActiveInApp(c, 30, appClientIdsFromReservations));
+        } else if (activeFilters.app === 'sin_app') {
+          filtered = filtered.filter(c => !isClientWithApp(c, appClientIdsFromReservations));
+        }
+      }
+
       // Filter by Top Spenders (Mejores Clientes)
       if (activeFilters.topSpent !== 'todos') {
         if (activeFilters.topSpent === 'top10') {
@@ -821,7 +881,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap, clientLastVisitMap]);
+  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap, clientLastVisitMap, appClientIdsFromReservations]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -864,6 +924,10 @@ export default function ClientsPage() {
           valA = clientLastVisitMap.get(a.id)?.getTime() || 0;
           valB = clientLastVisitMap.get(b.id)?.getTime() || 0;
           break;
+        case 'app':
+          valA = isClientWithApp(a, appClientIdsFromReservations) ? (getClientLastAppAccess(a)?.getTime() || 1) : 0;
+          valB = isClientWithApp(b, appClientIdsFromReservations) ? (getClientLastAppAccess(b)?.getTime() || 1) : 0;
+          break;
         case 'gasto_total':
           valA = clientSpentMap.get(a.id) || 0;
           valB = clientSpentMap.get(b.id) || 0;
@@ -876,7 +940,7 @@ export default function ClientsPage() {
       if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [filteredClients, sortField, sortDirection, clientSpentMap, clientLastVisitMap]);
+  }, [filteredClients, sortField, sortDirection, clientSpentMap, clientLastVisitMap, appClientIdsFromReservations]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -888,7 +952,7 @@ export default function ClientsPage() {
       }
     } else {
       setSortField(field);
-      setSortDirection((field === 'gasto_total' || field === 'ultima_visita') ? 'desc' : 'asc');
+      setSortDirection((field === 'gasto_total' || field === 'ultima_visita' || field === 'app') ? 'desc' : 'asc');
     }
     setCurrentPage(1);
   };
@@ -909,6 +973,7 @@ export default function ClientsPage() {
       activeFilters.professional !== 'todos' ||
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
+      activeFilters.app !== 'todos' ||
       Boolean(searchTerm)
     );
   }, [activeFilters, searchTerm]);
@@ -1037,6 +1102,8 @@ export default function ClientsPage() {
         'Cliente desde': client.creado_en ? formatDate(client.creado_en, 'dd/MM/yy') : 'N/A',
         'Última visita': lastVisit ? formatDate(lastVisit, 'dd/MM/yy') : 'Sin visitas',
         'Número de cliente': client.numero_cliente || '',
+        'Tiene App Móvil': isClientWithApp(client, appClientIdsFromReservations) ? 'SÍ' : 'NO',
+        'Último acceso App': getClientAppInfo(client, appClientIdsFromReservations).lastAccessFormatted,
         'Citas totales': client.citas_totales ?? totalAppointments,
         'Citas asistidas': client.citas_asistidas ?? attendedAppointments,
         'Citas no asistidas': client.citas_no_asistidas ?? unattendedAppointments,
@@ -1151,6 +1218,8 @@ export default function ClientsPage() {
                 setInactiveTimeFilter={setInactiveTimeFilter}
                 topSpentFilter={topSpentFilter}
                 setTopSpentFilter={setTopSpentFilter}
+                appFilter={appFilter}
+                setAppFilter={setAppFilter}
                 professionals={professionals}
                 locales={locales}
                 isLoading={isLoading}
@@ -1220,6 +1289,28 @@ export default function ClientsPage() {
                         (de {clients.length.toLocaleString('es-MX')} en total)
                       </span>
                     )}
+                    <span className="text-muted-foreground mx-1.5">•</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newFilter = activeFilters.app === 'con_app' ? 'todos' : 'con_app';
+                        setAppFilter(newFilter);
+                        setActiveFilters(prev => ({ ...prev, app: newFilter }));
+                        if (newFilter === 'con_app' && !sortField) {
+                          setSortField('app');
+                          setSortDirection('desc');
+                        }
+                        setCurrentPage(1);
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-1 font-medium transition-colors hover:underline cursor-pointer",
+                        activeFilters.app === 'con_app' ? "text-blue-500 font-bold" : "text-blue-600 dark:text-blue-400"
+                      )}
+                      title="Haz clic para alternar filtro de usuarios con la App"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                      <span>{totalClientsWithApp.toLocaleString('es-MX')} con App móvil</span>
+                    </button>
                   </>
                 )}
               </span>
@@ -1390,6 +1481,29 @@ export default function ClientsPage() {
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                         <span>Desde: {formatDate(client.creado_en, 'dd/MM/yy')}</span>
                         {(() => {
+                          const hasApp = isClientWithApp(client, appClientIdsFromReservations);
+                          if (hasApp) {
+                            return (
+                              <span className="inline-flex items-center gap-1 text-blue-500 font-medium">
+                                <Smartphone className="h-3 w-3 shrink-0" />
+                                <span>App móvil</span>
+                              </span>
+                            );
+                          }
+                          return <span className="text-muted-foreground/50">Sin app</span>;
+                        })()}
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        {(() => {
+                          const hasApp = isClientWithApp(client, appClientIdsFromReservations);
+                          const appInfo = hasApp ? getClientAppInfo(client, appClientIdsFromReservations) : null;
+                          return appInfo?.lastAccess ? (
+                            <span className="text-muted-foreground/80">
+                              Acceso app: <span className="text-foreground font-medium">{appInfo.relativeTime}</span>
+                            </span>
+                          ) : <span />;
+                        })()}
+                        {(() => {
                           const lv = clientLastVisitMap.get(client.id);
                           return (
                             <span>
@@ -1426,6 +1540,9 @@ export default function ClientsPage() {
                       </TableHead>
                       <TableHead className="py-1.5 px-3 text-xs h-8">Correo</TableHead>
                       <TableHead className="py-1.5 px-3 text-xs h-8">Teléfono</TableHead>
+                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-center w-[55px]" onClick={() => handleSort('app')}>
+                        <span className="flex items-center justify-center">App <SortIcon field="app" /></span>
+                      </TableHead>
                       <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
@@ -1447,6 +1564,7 @@ export default function ClientsPage() {
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-24" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs text-center"><Skeleton className="h-4 w-4 mx-auto" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
                           <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
@@ -1476,6 +1594,21 @@ export default function ClientsPage() {
                           <TableCell className="py-1.5 px-3 text-xs truncate max-w-[120px]">{client.apellido}</TableCell>
                           <TableCell className="py-1.5 px-3 text-xs truncate max-w-[160px]">{client.correo}</TableCell>
                           <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{canViewPhone ? client.telefono : '****-****'}</TableCell>
+                          <TableCell className="py-1.5 px-3 text-xs text-center">
+                            {(() => {
+                              const hasApp = isClientWithApp(client, appClientIdsFromReservations);
+                              if (!hasApp) return <span className="text-muted-foreground/30 text-[11px] select-none">—</span>;
+                              const appInfo = getClientAppInfo(client, appClientIdsFromReservations);
+                              return (
+                                <div
+                                  className="flex items-center justify-center cursor-help"
+                                  title={`App móvil activa\n• Último acceso: ${appInfo.lastAccessFormatted}${appInfo.relativeTime ? ` (${appInfo.relativeTime})` : ''}\n• Plataforma: ${appInfo.platformName}`}
+                                >
+                                  <Smartphone className="h-4 w-4 text-blue-500 shrink-0" />
+                                </div>
+                              );
+                            })()}
+                          </TableCell>
                           <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{formatDate(client.creado_en)}</TableCell>
                           <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">
                             {(() => {

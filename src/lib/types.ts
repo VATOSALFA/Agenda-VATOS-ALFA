@@ -29,6 +29,11 @@ export interface Client {
   corteGratisDisponible?: boolean;
   nivel?: string;
   appVinculada?: boolean;
+  appInstalada?: boolean;
+  ultimoAccesoApp?: any;
+  plataformaApp?: string;
+  authUid?: string;
+  origen?: string;
   alfaCoins?: number;
   alfa_coins?: number;
   puntosLealtad?: number;
@@ -119,6 +124,7 @@ export interface Reservation {
   creado_en: Timestamp; // Firestore Timestamp
   creada_por?: string;
   creado_por?: string;
+  canal?: string;
   canal_reserva?: string;
   origen?: string;
   local_id?: string; // Added local_id to reservations

@@ -744,6 +744,58 @@ export async function sendAppointmentChatReminder({
       return { success: true, message: 'El recordatorio ya fue enviado previamente.' };
     }
 
+    const clientPhone = res.customer?.telefono || res.cliente_telefono || '';
+    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
+
+    // VERIFICACIÓN ESTRICTA: Solo enviar recordatorio por chat si el cliente tiene la app móvil instalada
+    let hasApp = false;
+    let clientDocData: any = null;
+
+    if (res.cliente_id && res.cliente_id !== 'guest') {
+      const clientDoc = await db.collection('clientes').doc(res.cliente_id).get();
+      if (clientDoc.exists) {
+        clientDocData = clientDoc.data();
+      }
+    }
+
+    if (!clientDocData && cleanPhone && cleanPhone.length === 10) {
+      const clientQuery = await db.collection('clientes').where('telefono', '==', cleanPhone).limit(1).get();
+      if (!clientQuery.empty) {
+        clientDocData = clientQuery.docs[0].data();
+      }
+    }
+
+    if (clientDocData) {
+      hasApp =
+        clientDocData.appInstalada === true ||
+        clientDocData.appVinculada === true ||
+        Boolean(clientDocData.ultimoAccesoApp) ||
+        Boolean(clientDocData.authUid && String(clientDocData.authUid).trim().length > 0) ||
+        Boolean(clientDocData.expoPushToken) ||
+        Boolean(clientDocData.fcmToken) ||
+        String(clientDocData.origen || '').toLowerCase().includes('app_movil') ||
+        String(clientDocData.origen || '').toLowerCase().includes('app_store_reviewer');
+    }
+
+    if (res.canal_reserva === 'app_movil' || res.origen === 'app_movil') {
+      hasApp = true;
+    }
+
+    // Si el cliente NO tiene la app instalada en su dispositivo, NO enviar recordatorio por chat
+    // para evitar conversaciones fantasma que el cliente no puede ver.
+    if (!hasApp) {
+      await resRef.update({
+        chatReminderSent: true,
+        chatReminderSkippedNoApp: true,
+        chatReminderDate: now,
+      });
+      return {
+        success: true,
+        skipped: true,
+        message: 'El cliente no tiene la app instalada; se omitió el recordatorio por chat.',
+      };
+    }
+
     // Load Janet settings from settings/sofia
     let sofiaConfig: any = null;
     const sofiaSnap = await db.collection('settings').doc('sofia').get();
@@ -761,7 +813,6 @@ export async function sendAppointmentChatReminder({
 
     // Format text
     const clientName = res.customer?.nombre || res.cliente_nombre || 'Cliente';
-    const clientPhone = res.customer?.telefono || res.cliente_telefono || '';
     const profName =
       res.customer?.professionalName ||
       res.items?.[0]?.barbero_name ||
@@ -784,7 +835,6 @@ export async function sendAppointmentChatReminder({
 
     // Find or create conversation for this client (prioritizing 10-digit phone ID used by Mobile App ChatScreen)
     let conversationId = '';
-    const cleanPhone = clientPhone.replace(/\D/g, '').slice(-10);
 
     if (cleanPhone && cleanPhone.length === 10) {
       const directDoc = await db.collection('conversaciones').doc(cleanPhone).get();
@@ -945,8 +995,10 @@ export async function checkAndSendPendingChatReminders() {
 
       // Check if appointment is within the reminder window
       if (aptMinutes >= nowMinutes && aptMinutes <= windowEndMinutes) {
-        await sendAppointmentChatReminder({ reservationId: docSnap.id });
-        processedCount++;
+        const result = await sendAppointmentChatReminder({ reservationId: docSnap.id });
+        if (result.success && !(result as any).skipped) {
+          processedCount++;
+        }
       }
     }
 

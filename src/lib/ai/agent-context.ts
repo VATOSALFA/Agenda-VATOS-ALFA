@@ -12,6 +12,7 @@ export interface ChatExecutionContext {
   mutationAttempted?: boolean;
   alreadyOfferedUpsellToday?: boolean;
   userMessage?: string;
+  recentHistory?: string;
 }
 
 export const chatContextStorage = new AsyncLocalStorage<ChatExecutionContext>();

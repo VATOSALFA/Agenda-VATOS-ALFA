@@ -119,7 +119,7 @@ export const consultarBarberosTool = ai.defineTool(
   {
     name: 'consultar_barberos',
     description:
-      'Obtiene la lista de barberos y profesionales activos de VATOS ALFA con su nombre público, qué servicios realiza cada uno y qué días de la semana labora regularmente (sin exponer datos personales ni privados).',
+      'Obtiene la lista de barberos y profesionales activos de VATOS ALFA con su nombre público, qué servicios realiza cada uno, qué días de la semana labora regularmente y sus horarios habituales por día (sin exponer datos personales ni privados).',
     inputSchema: z.object({}),
     outputSchema: z.array(
       z.object({
@@ -127,6 +127,7 @@ export const consultarBarberosTool = ai.defineTool(
         nombre: z.string(),
         serviciosRealizados: z.array(z.string()).optional(),
         diasLaborales: z.array(z.string()).optional(),
+        horariosSemanales: z.record(z.string(), z.string()).optional(),
       })
     ),
   },
@@ -145,16 +146,31 @@ export const consultarBarberosTool = ai.defineTool(
       });
 
       const dayNamesOrder = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+      const dayLabels: Record<string, string> = {
+        lunes: 'Lunes',
+        martes: 'Martes',
+        miercoles: 'Miércoles',
+        jueves: 'Jueves',
+        viernes: 'Viernes',
+        sabado: 'Sábado',
+        domingo: 'Domingo',
+      };
 
       return profsSnap.docs
         .filter((doc) => !doc.data().deleted)
         .map((doc) => {
           const d = doc.data();
           const workingDays: string[] = [];
+          const horariosSemanales: Record<string, string> = {};
           if (d.schedule && typeof d.schedule === 'object') {
             dayNamesOrder.forEach((dayKey) => {
-              if (d.schedule[dayKey]?.enabled) {
-                workingDays.push(dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
+              const dayCfg = d.schedule[dayKey];
+              if (dayCfg?.enabled) {
+                const label = dayLabels[dayKey] || (dayKey.charAt(0).toUpperCase() + dayKey.slice(1));
+                workingDays.push(label);
+                if (dayCfg.start && dayCfg.end) {
+                  horariosSemanales[label] = `${formatTime12h(dayCfg.start)} a ${formatTime12h(dayCfg.end)}`;
+                }
               }
             });
           }
@@ -172,6 +188,7 @@ export const consultarBarberosTool = ai.defineTool(
             nombre: d.publicName || d.name || 'Barbero',
             serviciosRealizados: profServices.length > 0 ? profServices : undefined,
             diasLaborales: workingDays.length > 0 ? workingDays : undefined,
+            horariosSemanales: Object.keys(horariosSemanales).length > 0 ? horariosSemanales : undefined,
           };
         });
     } catch (e: any) {

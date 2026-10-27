@@ -156,23 +156,60 @@ export function resolveTargetDates({
   let explicitDate: string | null = null;
 
   if (fechaInput && typeof fechaInput === 'string') {
-    const clean = fechaInput.trim().toLowerCase();
+    const clean = fechaInput
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
     if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
       if (!isValidBookingDate(clean) || clean < todayIso) throw new Error('Indica una fecha válida que no esté en el pasado.');
       explicitDate = clean;
-    } else if (clean.includes('pasado') && (clean.includes('mañana') || clean.includes('manana'))) {
+    } else if (clean.includes('pasado') && clean.includes('manan')) {
       explicitDate = dayAfterTomorrowIso;
-    } else if (clean.includes('mañana') || clean.includes('manana') || clean === 'tomorrow') {
+    } else if (clean.includes('manan') || clean === 'tomorrow') {
       explicitDate = tomorrowIso;
     } else if (clean === 'hoy' || clean === 'today') {
       explicitDate = todayIso;
     } else {
-      for (let i = 0; i < 7; i++) {
-        const testD = new Date(new Date(todayIso + 'T12:00:00').getTime() + i * 86400000);
-        const name = format(testD, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        if (clean.includes(name)) {
-          explicitDate = format(testD, 'yyyy-MM-dd');
-          break;
+      // Check explicit day + month in Spanish (e.g. "28 de octubre", "28 oct")
+      const monthsMap: Record<string, number> = {
+        enero: 1, ene: 1,
+        febrero: 2, feb: 2,
+        marzo: 3, mar: 3,
+        abril: 4, abr: 4,
+        mayo: 5, may: 5,
+        junio: 6, jun: 6,
+        julio: 7, jul: 7,
+        agosto: 8, ago: 8,
+        septiembre: 9, sep: 9, sept: 9,
+        octubre: 10, oct: 10,
+        noviembre: 11, nov: 11,
+        diciembre: 12, dic: 12,
+      };
+      const dmMatch = clean.match(/\b(\d{1,2})\s*(?:de\s+)?(enero|ene|febrero|feb|marzo|mar|abril|abr|mayo|may|junio|jun|julio|jul|agosto|ago|septiembre|sep|sept|octubre|oct|noviembre|nov|diciembre|dic)\b/);
+      if (dmMatch) {
+        const dayNum = parseInt(dmMatch[1], 10);
+        const monthNum = monthsMap[dmMatch[2]];
+        if (dayNum >= 1 && dayNum <= 31 && monthNum) {
+          const [ty, tm] = todayIso.split('-').map(Number);
+          const yearNum = monthNum < tm ? ty + 1 : ty;
+          const candidateIso = `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+          if (isValidBookingDate(candidateIso) && candidateIso >= todayIso) {
+            explicitDate = candidateIso;
+          }
+        }
+      }
+
+      if (!explicitDate) {
+        for (let i = 0; i <= 7; i++) {
+          const testD = new Date(new Date(todayIso + 'T12:00:00').getTime() + i * 86400000);
+          const name = format(testD, 'eeee', { locale: es }).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (clean.includes(name)) {
+            if (i === 0 && clean !== name) continue;
+            explicitDate = format(testD, 'yyyy-MM-dd');
+            break;
+          }
         }
       }
       if (!explicitDate) throw new Error('No pude interpretar la fecha. Indica el día en formato AAAA-MM-DD.');
@@ -204,9 +241,47 @@ export function resolveTargetDates({
  * Limpia el texto de salida del bot para eliminar asteriscos decorativos,
  * paréntesis redundantes alrededor de precios y asegurar enlaces limpios.
  */
+export function extractContextualDateHint(userMsg?: string, recentHistoryText?: string): string | undefined {
+  const findDateToken = (raw?: string): string | undefined => {
+    if (!raw) return undefined;
+    const clean = raw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const isoMatch = clean.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (isoMatch) return isoMatch[1];
+    if (clean.includes('pasado') && clean.includes('manan')) return 'pasado mañana';
+    if (/\bmanana\b/.test(clean)) return 'mañana';
+    if (/\bhoy\b/.test(clean)) return 'hoy';
+    const dmMatch = clean.match(
+      /\b(\d{1,2}\s*(?:de\s+)?(?:enero|ene|febrero|feb|marzo|mar|abril|abr|mayo|may|junio|jun|julio|jul|agosto|ago|septiembre|sep|sept|octubre|oct|noviembre|nov|diciembre|dic))\b/
+    );
+    if (dmMatch) return dmMatch[1];
+    const wdMatch = clean.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+    if (wdMatch) return wdMatch[1];
+    return undefined;
+  };
+
+  const fromUser = findDateToken(userMsg);
+  if (fromUser) return fromUser;
+
+  if (recentHistoryText) {
+    const lines = recentHistoryText.split('\n').reverse();
+    for (const line of lines) {
+      const fromLine = findDateToken(line);
+      if (fromLine) return fromLine;
+    }
+  }
+  return undefined;
+}
+
 export function sanitizeBotMessage(rawText: string): string {
   if (!rawText) return '';
   let text = rawText;
+
+  // 0. Eliminar cualquier bloque JSON crudo filtrado accidentalmente por el modelo (ej: {"consultar_disponibilidad_response": ...})
+  text = text.replace(/^\s*\{\s*"[a-zA-Z0-9_]+_response"\s*:[\s\S]*?\}\s*\}\s*$/gm, '');
+  text = text.replace(/\{\s*"consultar_[a-zA-Z0-9_]+"\s*:[\s\S]*?\}\s*\}/g, '');
 
   // 1. Normalizar viñetas (guiones, asteriscos o viñetas al inicio de línea) a viñeta limpia '• '
   text = text.replace(/^[\t ]*[-*•][\t ]+/gm, '• ');

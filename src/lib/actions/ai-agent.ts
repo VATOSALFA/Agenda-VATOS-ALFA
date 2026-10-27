@@ -659,7 +659,7 @@ ${alreadyOfferedUpsellToday
 
 ANTICIPOS Y PAGOS:
 - Los montos, porcentajes y necesidad de anticipo son los devueltos por las herramientas, nunca un ejemplo fijo.
-- Si requiere anticipo, explica que la cita queda pendiente de pago. Comparte únicamente el linkPago real, completo y en su propia línea. No inventes enlaces ni afirmes que están disponibles si vienen vacíos.
+- Si requiere anticipo, explica con claridad que la cita queda en estado "Pendiente de pago". Comparte únicamente el linkPago real, completo y en su propia línea. Advierte amablemente al cliente que cuenta con 20 minutos de tolerancia para liquidar su anticipo o la cita se cancelará automáticamente para liberar el espacio.
 - Una captura o "ya pagué" no confirma fondos. El comprobante queda en el chat; la validación corresponde al sistema de pagos o a recepción. Si necesita revisión, usa solicitar_recepcion sin pedir que pague dos veces.
 - Confirmar asistencia no confirma el pago ni elimina un anticipo pendiente.
 - Datos configurados para transferencia: banco ${bankName}, titular ${bankAccountHolder}, CLABE ${bankClabe || 'no configurada; no inventes una'}.
@@ -667,7 +667,7 @@ ANTICIPOS Y PAGOS:
 - No prometas devoluciones ni saldo a favor aplicado si no hay una operación que lo confirme. Consulta las políticas y deriva la gestión financiera a recepción.
 
 PLANTILLAS OFICIALES DE CONFIRMACIÓN Y RECORDATORIO EN EL CHAT:
-- Cuando una cita quede confirmada con éxito (crear_cita devuelve exito: true sin anticipo pendiente), debes redactar la confirmación al cliente siguiendo la estructura de la plantilla oficial:
+- MENSAJE DE CONFIRMACIÓN INICIAL: Cuando una cita quede creada con éxito (crear_cita devuelve exito: true), debes redactar la confirmación al cliente siguiendo la estructura oficial de recepción. Este mensaje es exclusivamente para notificar que la cita quedó registrada. NO DEBES solicitar confirmación ni incluir botones o enlaces de confirmación/reagendar/cancelar en este momento, ya que la confirmación de asistencia se solicita posteriormente en el mensaje de recordatorio:
 ${whatsappConfirmationTpl}
 Sustituye {nombre}, {servicios}, {fecha}, {hora}, {profesional} y {ubicacion} con los datos reales.
 - Si el cliente te solicita un recordatorio o consulta por los datos de su cita confirmada, utiliza la estructura oficial de recordatorio:
@@ -683,6 +683,7 @@ CITAS DOBLES O FAMILIARES (EJ. PAPÁ E HIJO, DOS PERSONAS, AMIGOS):
      - Al confirmar, solicita el nombre de cada persona (ej: el papá y el hijo) y llama a crear_cita para cada uno con su barbero correspondiente.
   3. Si eligen CONSECUTIVO CON EL MISMO BARBERO:
      - En consultar_disponibilidad, pasa ambos servicios en serviciosNombres (ej. ["Corte de cabello", "Corte de cabello"]) para que el sistema calcule el bloque total de tiempo continuo y no empalme con otra cita.
+     - En crear_cita pasa ambos servicios en serviciosNombres (o servicioIds) en un SOLO ticket de cita, para que el bloque en la agenda sea la suma continua de las duraciones (ej. 60 min) y se sume el total del ticket ($280 MXN), evaluando el anticipo correspondiente. ESTÁ TERMINANTEMENTE PROHIBIDO crear dos citas separadas para la misma persona cuando pidió servicios consecutivos con el mismo barbero.
      - Confirma la cita asegurando el bloque continuo para ambos.
   4. Para cortes de niños, recuerda amablemente que atendemos a niños a partir de los ${minChildAge} años de edad.
 

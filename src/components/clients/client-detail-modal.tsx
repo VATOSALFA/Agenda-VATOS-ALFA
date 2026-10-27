@@ -23,6 +23,7 @@ import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { ArrowUpDown } from 'lucide-react';
 import { NewClientForm } from './new-client-form';
+import { getClientAppInfo, isClientWithApp } from '@/lib/client-app-helper';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -149,7 +150,8 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   }, [isOpen, client?.id]);
 
   const clientPhoto = liveClient.fotoUrl || liveClient.avatarUrl || (liveClient as any).foto_perfil_url || (liveClient as any).photoURL || (liveClient as any).photoUrl;
-  const hasAppLinked = Boolean(liveClient.appVinculada === true || (liveClient as any).fecha_registro_app);
+  const appInfo = useMemo(() => getClientAppInfo(liveClient), [liveClient]);
+  const hasAppLinked = appInfo.hasApp;
   const alfaCoins = hasAppLinked ? Number(liveClient.alfaCoins ?? liveClient.alfa_coins ?? liveClient.puntosLealtad ?? liveClient.puntos_lealtad ?? liveClient.puntos ?? 0) : 0;
   const stamps = Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0);
   const freeCutReady = Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
@@ -670,9 +672,23 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
               {/* Estado de App Móvil */}
               {hasAppLinked ? (
-                <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
-                  <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
-                  <span>App Móvil Activa</span>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <Smartphone className="h-3.5 w-3.5 text-blue-400" />
+                      <span>App Móvil Activa</span>
+                    </div>
+                    {appInfo.platformName && (
+                      <span className="text-[10px] text-blue-300/80 bg-blue-500/20 px-1.5 py-0.5 rounded">
+                        {appInfo.platformName}
+                      </span>
+                    )}
+                  </div>
+                  {appInfo.lastAccess && (
+                    <p className="text-[11px] text-muted-foreground text-center">
+                      Último acceso: <span className="text-foreground font-medium">{appInfo.relativeTime || appInfo.lastAccessFormatted}</span>
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-muted/40 border border-border/50 text-muted-foreground text-[11px]">

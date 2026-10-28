@@ -275,6 +275,110 @@ export function extractContextualDateHint(userMsg?: string, recentHistoryText?: 
   return undefined;
 }
 
+export function restructureAvailabilityWall(text: string): string {
+  if (!text) return '';
+  if (text.includes('☀️') || text.includes('🌤️') || text.includes('🌙')) {
+    return text;
+  }
+
+  const timeChunkPattern = /(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)(?:\s+con\s+([a-zA-ZáéíóúÁÉÍÓÚ\s]+?))?(?=,\s*\d{1,2}:\d{2}|$|\.|\?|¿)/g;
+  const matches: { timeStr: string; barbers: string; index: number; length: number }[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = timeChunkPattern.exec(text)) !== null) {
+    matches.push({
+      timeStr: m[1].trim(),
+      barbers: (m[2] || '').trim(),
+      index: m.index,
+      length: m[0].length,
+    });
+  }
+
+  if (matches.length < 4) {
+    return text;
+  }
+
+  interface ParsedSlot {
+    hr: number;
+    time12: string;
+    barbers: string;
+  }
+
+  const slots: ParsedSlot[] = [];
+  for (const item of matches) {
+    const timeMatch = item.timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/i);
+    if (!timeMatch) continue;
+
+    let hr = parseInt(timeMatch[1], 10);
+    const meridiem = (timeMatch[3] || '').toUpperCase();
+    if (meridiem === 'PM' && hr < 12) hr += 12;
+    else if (meridiem === 'AM' && hr === 12) hr = 0;
+    else if (!meridiem && hr >= 1 && hr <= 8) hr += 12;
+
+    slots.push({
+      hr,
+      time12: item.timeStr,
+      barbers: item.barbers,
+    });
+  }
+
+  const manana: ParsedSlot[] = [];
+  const tarde: ParsedSlot[] = [];
+  const noche: ParsedSlot[] = [];
+
+  for (const s of slots) {
+    if (s.hr < 14) manana.push(s);
+    else if (s.hr < 18) tarde.push(s);
+    else noche.push(s);
+  }
+
+  const formatShift = (items: ParsedSlot[]): string => {
+    const grouped: { b: string; times: string[] }[] = [];
+    for (const it of items) {
+      if (grouped.length > 0 && grouped[grouped.length - 1].b === it.barbers) {
+        grouped[grouped.length - 1].times.push(it.time12);
+      } else {
+        grouped.push({ b: it.barbers, times: [it.time12] });
+      }
+    }
+    return grouped
+      .map(g => {
+        const timesStr = g.times.join(', ');
+        return g.b ? '• ' + timesStr + ' (' + g.b + ')' : '• ' + timesStr;
+      })
+      .join('\n');
+  };
+
+  const blocks: string[] = [];
+  if (manana.length > 0) {
+    blocks.push('☀️ *Mañana* (10:00 AM a 1:30 PM):\n' + formatShift(manana));
+  }
+  if (tarde.length > 0) {
+    blocks.push('🌤️ *Tarde* (2:00 PM a 5:30 PM):\n' + formatShift(tarde));
+  }
+  if (noche.length > 0) {
+    blocks.push('🌙 *Noche* (6:00 PM en adelante):\n' + formatShift(noche));
+  }
+
+  if (blocks.length === 0) return text;
+
+  const firstStart = matches[0].index;
+  const lastMatch = matches[matches.length - 1];
+  const lastEnd = lastMatch.index + lastMatch.length;
+
+  let lead = text.slice(0, firstStart).trim();
+  lead = lead.replace(/(?:tenemos(?:\s+a\s+las)?|disponibles?(?:\s*:)?)\s*$/i, '').trim();
+  if (lead && !lead.endsWith(':') && !lead.endsWith('.')) {
+    lead += ':';
+  }
+
+  let trail = text.slice(lastEnd).trim();
+  trail = trail.replace(/^[.,\s]+/, '').trim();
+
+  const parts = [lead, blocks.join('\n\n'), trail].filter(Boolean);
+  return parts.join('\n\n');
+}
+
 export function sanitizeBotMessage(rawText: string): string {
   if (!rawText) return '';
   let text = rawText;
@@ -283,19 +387,20 @@ export function sanitizeBotMessage(rawText: string): string {
   text = text.replace(/^\s*\{\s*"[a-zA-Z0-9_]+_response"\s*:[\s\S]*?\}\s*\}\s*$/gm, '');
   text = text.replace(/\{\s*"consultar_[a-zA-Z0-9_]+"\s*:[\s\S]*?\}\s*\}/g, '');
 
-  // 1. Normalizar viñetas (guiones, asteriscos o viñetas al inicio de línea) a viñeta limpia '• '
+  // 1. Normalizar viñetas a viñeta limpia '• '
   text = text.replace(/^[\t ]*[-*•][\t ]+/gm, '• ');
 
-  // 2. Eliminar asteriscos dobles y simples usados para negritas o itálicas (sin cruzar saltos de línea)
-  text = text.replace(/\*\*([^*\n]+)\*\*/g, '$1');
-  text = text.replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '$1');
-  text = text.replace(/\*/g, '');
+  // 2. Reestructurar paredes de texto de horarios en turnos visuales (☀️ Mañana, 🌤️ Tarde, 🌙 Noche)
+  text = restructureAvailabilityWall(text);
 
-  // 3. Eliminar paréntesis que encierran precios o montos (ej: "($159.50 MXN)" -> "$159.50 MXN", "($319 MXN)" -> "$319 MXN")
+  // 3. Normalizar formato de negrita (convertir ** a * para WhatsApp y compatibilidad multiplataforma)
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, '*$1*');
+
+  // 4. Eliminar paréntesis que encierran precios o montos
   text = text.replace(/\(\s*(\$\d+(?:\.\d{1,2})?(?:\s*MXN)?)\s*\)/gi, '$1');
   text = text.replace(/\(\s*(\d+%\s*(?:de\s*)?anticipo)\s*\)/gi, '$1');
 
-  // 4. Asegurar que los links de Mercado Pago y vatosalfa estén en su propia línea limpia
+  // 5. Asegurar que los links de Mercado Pago y vatosalfa estén en su propia línea limpia
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$2');
   text = text.replace(/https?:\/\/[^\s]+/g, (url) => `\n${url}\n`);
   text = text.replace(/\n{3,}/g, '\n\n');

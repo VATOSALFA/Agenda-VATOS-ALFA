@@ -328,12 +328,69 @@ export const consultarDisponibilidadTool = ai.defineTool(
           })
           .join('\n');
 
+        // Agrupar turnos visuales con viñetas (☀️ Mañana, 🌤️ Tarde, 🌙 Noche)
+        const hourMap = new Map<string, { hora12: string; barbers: string[] }>();
+        for (const s of slotsPrimerDia) {
+          if (!hourMap.has(s.hora)) {
+            hourMap.set(s.hora, { hora12: s.hora12, barbers: [] });
+          }
+          const entry = hourMap.get(s.hora)!;
+          if (!entry.barbers.includes(s.barberoNombre)) {
+            entry.barbers.push(s.barberoNombre);
+          }
+        }
+
+        const mananaItems: { hora: string; hora12: string; barbers: string[] }[] = [];
+        const tardeItems: { hora: string; hora12: string; barbers: string[] }[] = [];
+        const nocheItems: { hora: string; hora12: string; barbers: string[] }[] = [];
+
+        for (const [hora, data] of hourMap.entries()) {
+          const hr = parseInt(hora.split(':')[0], 10);
+          const item = { hora, hora12: data.hora12, barbers: data.barbers };
+          if (hr < 14) mananaItems.push(item);
+          else if (hr < 18) tardeItems.push(item);
+          else nocheItems.push(item);
+        }
+
+        const formatShift = (items: { hora: string; hora12: string; barbers: string[] }[]) => {
+          const grouped: { barbersKey: string; barbers: string[]; times: string[] }[] = [];
+          for (const it of items) {
+            const bKey = [...it.barbers].sort().join(',');
+            if (grouped.length > 0 && grouped[grouped.length - 1].barbersKey === bKey) {
+              grouped[grouped.length - 1].times.push(it.hora12);
+            } else {
+              grouped.push({ barbersKey: bKey, barbers: it.barbers, times: [it.hora12] });
+            }
+          }
+          return grouped
+            .map(g => {
+              const timeStr = g.times.join(', ');
+              const barberStr = g.barbers.join(' o ');
+              return barberStr ? `• ${timeStr} (${barberStr})` : `• ${timeStr}`;
+            })
+            .join('\n');
+        };
+
+        const turnosBlocks: string[] = [];
+        if (mananaItems.length > 0) {
+          turnosBlocks.push(`☀️ **Mañana** (10:00 AM a 1:30 PM):\n${formatShift(mananaItems)}`);
+        }
+        if (tardeItems.length > 0) {
+          turnosBlocks.push(`🌤️ **Tarde** (2:00 PM a 5:30 PM):\n${formatShift(tardeItems)}`);
+        }
+        if (nocheItems.length > 0) {
+          turnosBlocks.push(`🌙 **Noche** (6:00 PM en adelante):\n${formatShift(nocheItems)}`);
+        }
+        const horariosPorTurno = turnosBlocks.join('\n\n');
+
         resumenTexto = `HORARIOS DISPONIBLES EN TIEMPO REAL (IDÉNTICOS A LA PÁGINA WEB):\n` +
           `- Día: ${diaSemanaLabel} (${primerDiaFecha})\n` +
-          `★ PRIMER HORARIO DISPONIBLE DEL DÍA: ${primerHorarioDisponible}\n` +
-          `★ BARBEROS DISPONIBLES ESTE DÍA (ORDENADOS CRONOLÓGICAMENTE DEL MÁS TEMPRANO AL MÁS TARDE):\n` +
+          `★ PRIMER HORARIO DISPONIBLE DEL DÍA: ${primerHorarioDisponible}\n\n` +
+          `★ FORMATO OFICIAL POR TURNOS (USA ESTA MISMA ESTRUCTURA VISUAL EN TU RESPUESTA AL CLIENTE):\n` +
+          `${horariosPorTurno}\n\n` +
+          `★ BARBEROS DISPONIBLES ESTE DÍA:\n` +
           `${desglosePrimerDia}\n\n` +
-          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Si el cliente pregunta cuál es el primer horario disponible ("el primero disponible"), indica con exactitud que es a las ${primerHorarioDisponible}. Si pregunta qué barberos trabajan ese día, menciónalos en orden cronológico indicando a qué hora inicia cada uno. Si pide los horarios disponibles de un barbero o del día, comparte TODOS los horarios disponibles del ${diaSemanaLabel} SIN OMITIR NINGÚN HORARIO (incluyendo también los de las 7:00 PM, 7:30 PM, 8:00 PM, 8:30 PM si aparecen en la lista). No desgloses días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}) a menos que el cliente pida otra fecha.\n\n` +
+          `INSTRUCCIÓN OBLIGATORIA PARA EL ASISTENTE (JANET): Si el cliente pregunta cuál es el primer horario disponible ("el primero disponible"), indica con exactitud que es a las ${primerHorarioDisponible}. Si pregunta qué barberos trabajan ese día, menciónalos en orden cronológico indicando a qué hora inicia cada uno. Si pide los horarios disponibles de un barbero o del día, presenta SIEMPRE los horarios organizados limpiamente por turnos (☀️ Mañana, 🌤️ Tarde, 🌙 Noche) con saltos de línea claros y viñetas como arriba. ESTÁ PROHIBIDO redactar los horarios en un solo párrafo corrido con comas. No desgloses días posteriores (${diasConDisponibilidad.slice(1).join(', ') || 'ninguno más'}) a menos que el cliente pida otra fecha.\n\n` +
           `Referencia de días posteriores (solo por si el cliente pide otra fecha):\n` +
           results
             .map((r) => {

@@ -581,8 +581,9 @@ export function JanetFloatingAssistant() {
       {/* =========================================================================
           BOTÓN FLOTANTE CIRCULAR ARRASTRABLE (IDÉNTICO A LA APP MÓVIL)
           - Video animado en bucle con fallback a imagen
-          - Luz láser continua girando sobre el contorno exacto (.animate-conic-laser)
-          - Aura de respiración eléctrica azul
+          - Luz láser continua girando sobre el contorno exacto (idéntico al botón "+" inferior)
+          - Doble efecto oficial: láser perimetral continuo + haz de luz oblicuo
+          - Sin letreros ni globitos (limpio 100%)
           - Arrastre táctil y ratón para no estorbar en ninguna sección
           ========================================================================= */}
       {!isOpen && btnPos && (
@@ -597,47 +598,47 @@ export function JanetFloatingAssistant() {
           {/* Aura azul eléctrica sutil de respiración */}
           <div className="absolute inset-[-6px] rounded-full bg-blue-600/25 blur-sm animate-pulse pointer-events-none" />
 
-          {/* Contenedor circular principal con borde láser */}
+          {/* Botón interactivo con el efecto de luz láser oficial Vatos Alfa */}
           <button
             type="button"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            className="group relative w-14 h-14 sm:w-15 sm:h-15 rounded-full p-[2px] overflow-hidden bg-[#0A132C] shadow-[0_8px_25px_rgba(37,99,235,0.45)] hover:scale-105 active:scale-95 transition-transform cursor-grab active:cursor-grabbing flex items-center justify-center border-none outline-none"
+            className="btn-vatos-alfa relative w-14 h-14 sm:w-16 sm:h-16 rounded-full p-[1.5px] border-none overflow-hidden inline-flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_14px_rgba(59,130,246,0.35)] hover:scale-105 active:scale-95 transition-transform cursor-grab active:cursor-grabbing outline-none select-none z-10"
             title={
               isGeneralOwner
                 ? 'Janet CEO · Arrastra para mover o toca para abrir'
                 : 'Janet Gerencia · Arrastra para mover o toca para abrir'
             }
           >
-            {/* Haz de luz láser giratorio perimetral continuo (idéntico a ShinyButton y App Móvil) */}
-            <div className="absolute inset-[-100%] animate-conic-laser pointer-events-none" />
+            {/* 1. Haz de luz láser que recorre el contorno exterior exacto (idéntico a Button alfa y botón +) */}
+            <span
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none animate-conic-laser z-0"
+              aria-hidden="true"
+            />
 
-            {/* Recorte circular interior con video de Janet */}
-            <div className="relative w-full h-full rounded-full overflow-hidden bg-slate-950 flex items-center justify-center">
-              <video
-                src="/janet-avatar.mp4"
-                poster="/janet-avatar.png"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover select-none pointer-events-none"
-                draggable={false}
+            {/* 2. Cuerpo interior del botón (degradado navy profundo) */}
+            <span className="relative z-[1] inline-flex items-center justify-center w-full h-full text-white overflow-hidden select-none pointer-events-none rounded-full bg-gradient-to-b from-[#18223c] to-[#0d1424]">
+              {/* 3. Haz de luz oblicuo que viaja periódicamente de izquierda a derecha */}
+              <span
+                className="absolute inset-0 w-1/2 h-full -skew-x-20 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-btn-light-sweep pointer-events-none z-[2]"
+                aria-hidden="true"
               />
-            </div>
 
-            {/* Insignia de rol discreta: CEO o GER */}
-            <div className="absolute -bottom-0.5 -left-0.5 px-1.5 py-0.2 rounded-full bg-[#10172b] border border-[#C5A880]/80 text-[#C5A880] text-[9px] font-black tracking-wider shadow-sm select-none pointer-events-none font-sans">
-              {isGeneralOwner ? 'CEO' : 'GER'}
-            </div>
-
-            {/* Contador de avisos / recordatorios pendientes */}
-            {pendingBadgeCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-blue-600 border-2 border-slate-900 text-white text-[10px] font-extrabold flex items-center justify-center shadow-md animate-pulse font-sans select-none pointer-events-none">
-                {pendingBadgeCount}
+              {/* 4. Avatar de Janet en video en bucle sin letreros ni globitos */}
+              <span className="relative z-10 w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-950">
+                <video
+                  src="/janet-avatar.mp4"
+                  poster="/janet-avatar.png"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover select-none pointer-events-none"
+                  draggable={false}
+                />
               </span>
-            )}
+            </span>
           </button>
         </div>
       )}

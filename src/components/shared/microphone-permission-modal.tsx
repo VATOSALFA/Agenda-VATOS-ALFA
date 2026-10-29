@@ -174,48 +174,34 @@ export function MicrophonePermissionModal({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
-                    Método 1: En tu navegador o barra superior (Más rápido)
+                    Paso 1: Toca el botón azul de abajo (Más fácil)
                   </span>
                   <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/30">
                     Recomendado
                   </Badge>
                 </div>
-                <ol className="space-y-2 text-xs text-muted-foreground list-decimal list-inside leading-relaxed">
-                  <li>
-                    Toca el icono de los <strong className="text-foreground">3 puntos (⋮)</strong> en la esquina superior derecha o el icono de <strong className="text-foreground">candado / ajustes</strong> junto al nombre de la página.
-                  </li>
-                  <li>
-                    Selecciona <strong className="text-foreground">"Permisos"</strong> o <strong className="text-foreground">"Configuración del sitio"</strong>.
-                  </li>
-                  <li>
-                    Busca <strong className="text-foreground">"Micrófono"</strong> y cámbialo a <strong className="text-blue-400 font-semibold">"Permitir"</strong>.
-                  </li>
-                  <li>
-                    Regresa aquí y presiona el botón azul de abajo <strong className="text-foreground">"Reintentar y Probar Micrófono"</strong>.
-                  </li>
-                </ol>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Presiona el botón <strong className="text-foreground">"Reintentar y Probar Micrófono"</strong> aquí abajo. Tu teléfono mostrará la ventana oficial de Android preguntando: <em className="text-foreground">"¿Permitir que VATOS ALFA grabe audio?"</em>. Solo selecciona <strong className="text-blue-400 font-semibold">"Mientras la app esté en uso"</strong>.
+                </p>
               </div>
 
-              {/* Opción B: Desde los Ajustes del Teléfono */}
+              {/* Opción B: Si no sale la ventana, configurar en Chrome */}
               <div className="p-3.5 rounded-xl border border-border/60 bg-muted/20 space-y-2">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Settings className="w-4 h-4 text-slate-400 shrink-0" />
-                  Método 2: Si el permiso está bloqueado en el teléfono
+                  ¿Por qué no aparece el micrófono en los Ajustes de VATOS ALFA?
                 </span>
-                <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside leading-relaxed">
-                  <li>
-                    Abre los <strong className="text-foreground">Ajustes / Configuración</strong> de tu teléfono Android.
-                  </li>
-                  <li>
-                    Entra a <strong className="text-foreground">Aplicaciones</strong> &gt; <strong className="text-foreground">Administrar aplicaciones</strong>.
-                  </li>
-                  <li>
-                    Busca <strong className="text-foreground">Chrome</strong> (o la app <strong className="text-foreground">VATOS ALFA</strong> si la instalaste en tu pantalla de inicio).
-                  </li>
-                  <li>
-                    Toca en <strong className="text-foreground">Permisos</strong> &gt; <strong className="text-foreground">Micrófono</strong> y elige <strong className="text-blue-400 font-semibold">"Permitir solo con la app en uso"</strong>.
-                  </li>
-                </ol>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  En Android, las aplicaciones web instaladas (PWA) delegan el hardware a <strong className="text-foreground">Google Chrome</strong>. Por eso, en los Ajustes del sistema de VATOS ALFA solo aparece "Notificaciones".
+                </p>
+                <div className="pt-1 space-y-1.5 text-xs text-muted-foreground">
+                  <p className="font-semibold text-foreground">Si tu teléfono bloqueó el permiso en Chrome:</p>
+                  <ol className="space-y-1 text-xs list-decimal list-inside leading-relaxed">
+                    <li>Abre los <strong className="text-foreground">Ajustes</strong> de tu teléfono &gt; <strong className="text-foreground">Aplicaciones</strong>.</li>
+                    <li>Selecciona <strong className="text-foreground">Chrome</strong> (no VATOS ALFA).</li>
+                    <li>Entra a <strong className="text-foreground">Permisos</strong> &gt; <strong className="text-foreground">Micrófono</strong> y cámbialo a <strong className="text-blue-400 font-semibold">"Permitir solo con la app en uso"</strong>.</li>
+                  </ol>
+                </div>
               </div>
             </div>
           )}

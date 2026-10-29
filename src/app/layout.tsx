@@ -1,4 +1,3 @@
-
 import type { ReactNode } from 'react';
 import './globals.css';
 import { Inter } from 'next/font/google';
@@ -10,12 +9,12 @@ import { ThemeProvider } from '@/components/layout/theme-provider';
 import { getDb } from '@/lib/firebase-server';
 import { Metadata, Viewport } from 'next';
 
-
 import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 import { GoogleAdsScript } from '@/components/providers/google-ads-script';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
 import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
 import { SeasonalEffectsWebOverlay } from '@/components/shared/seasonal-effects-web-overlay';
+import { AuthGuard } from '@/components/layout/auth-guard';
 
 export const revalidate = 60; // Revalidate every 60 seconds
 
@@ -55,6 +54,15 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: icon,
       apple: icon,
     },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: 'black-translucent',
+      title: 'VATOS ALFA',
+    },
+    other: {
+      'mobile-web-app-capable': 'yes',
+      'apple-mobile-web-app-capable': 'yes',
+    },
     ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? {
       verification: {
         google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
@@ -67,10 +75,8 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#000000',
+  themeColor: '#10172b',
 };
-
-import { AuthGuard } from '@/components/layout/auth-guard';
 
 export default function RootLayout({
   children,

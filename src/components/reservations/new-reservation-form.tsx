@@ -410,7 +410,7 @@ export function NewReservationForm({
     const isPast = Boolean(initialDateStr && initialDateStr < todayStr);
     const isFullyPaidAndAttended = Boolean(
       (initialData.estado === 'Asiste' || initialData.estado === 'Completado' || initialData.estado === 'Venta completada') &&
-      (initialData.pago_estado === 'Pagado' || Number(initialData.saldo_pendiente ?? 0) <= 0)
+      initialData.pago_estado === 'Pagado'
     );
     return isPast || isFullyPaidAndAttended;
   }, [isEditMode, initialData]);

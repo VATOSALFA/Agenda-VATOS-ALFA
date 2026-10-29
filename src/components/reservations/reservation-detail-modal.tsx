@@ -695,14 +695,14 @@ export function ReservationDetailModal({
     ? 0
     : Math.max(0, totalAmount - depositAmount);
 
-  // Determinar si la cita ya concluyó (fecha pasada o asistida y pagada al 100%)
+  // Determinar si la cita ya concluyó (estrictamente pagada al 100% y en estado Asiste/Completado, o fecha pasada si ya fue pagada)
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const isPastDate = Boolean(reservation.fecha && reservation.fecha < todayStr);
   const isFullyPaidAndAttended = Boolean(
     (reservation.estado === 'Asiste' || reservation.estado === 'Completado' || reservation.estado === 'Venta completada') &&
-    (reservation.pago_estado === 'Pagado' || balancePending <= 0)
+    reservation.pago_estado === 'Pagado'
   );
-  const isConcluded = isPastDate || isFullyPaidAndAttended;
+  const isConcluded = reservation.pago_estado === 'Pagado' && (isPastDate || isFullyPaidAndAttended);
 
   // Determinar si la cita realmente requiere anticipo (por inasistencias, franja de apertura 10:00 a 10:30 AM, regla >= $190 o estado)
   const isAnticipoRequired = Boolean(

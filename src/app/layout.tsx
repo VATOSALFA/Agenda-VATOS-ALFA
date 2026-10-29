@@ -23,11 +23,11 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 export async function generateMetadata(): Promise<Metadata> {
   const defaultTitle = 'VATOS ALFA Barber Shop';
   const defaultDesc = 'Agenda tu cita con los mejores profesionales.';
-  const defaultIcon = '/logo-vatos-alfa.png';
+  const defaultIcon = '/icon-512x512.png?v=2';
 
   let title = defaultTitle;
   let description = defaultDesc;
-  let icon = defaultIcon;
+  let customIconUrl: string | null = null;
 
   try {
     const db = getDb();
@@ -38,7 +38,7 @@ export async function generateMetadata(): Promise<Metadata> {
       if (data) {
         if (data.name) title = data.name;
         if (data.description) description = data.description;
-        if (data.icon_url) icon = data.icon_url;
+        if (data.icon_url) customIconUrl = data.icon_url;
       }
     }
   } catch (error) {
@@ -49,10 +49,17 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL('https://vatosalfa.com'),
     title: title,
     description: description,
-    manifest: '/manifest.json',
+    manifest: '/manifest.json?v=2',
     icons: {
-      icon: icon,
-      apple: icon,
+      icon: [
+        { url: '/icon-192x192.png?v=2', sizes: '192x192', type: 'image/png' },
+        { url: defaultIcon, sizes: '512x512', type: 'image/png' },
+        ...(customIconUrl ? [{ url: customIconUrl }] : []),
+      ],
+      shortcut: '/icon-192x192.png?v=2',
+      apple: [
+        { url: '/apple-touch-icon.png?v=2', sizes: '180x180', type: 'image/png' },
+      ],
     },
     appleWebApp: {
       capable: true,

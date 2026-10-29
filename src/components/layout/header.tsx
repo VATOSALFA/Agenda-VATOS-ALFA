@@ -40,6 +40,7 @@ import {
   Bell,
   Clock,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -507,6 +508,11 @@ export default function Header() {
       }));
   }, [allPromotions]);
 
+  const isExclusiveCeoOwner =
+    user?.role === 'Administrador general' &&
+    (user?.uid === 'JxK6BLZPOBcBpjnuVZPsgmIHbZ12' ||
+      user?.email?.toLowerCase() === 'vatosalfa@gmail.com');
+
   const filteredMenuGroups = useMemo(() => {
     const rawGroups = [
       {
@@ -516,6 +522,7 @@ export default function Header() {
           { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
           { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
           { href: '/conversations', label: 'Mensajes', icon: MessageSquare, permission: 'ver_conversaciones' },
+          ...(isExclusiveCeoOwner ? [{ href: '/ceo', label: 'Janet CEO', icon: Sparkles, permission: 'ver_finanzas' }] : []),
         ]
       },
       {
@@ -582,7 +589,7 @@ export default function Header() {
         links: visibleLinks
       };
     }).filter(group => group.links.length > 0);
-  }, [canSee, enableBarberDashboard, hasActivePromotions, activePromosLinks]);
+  }, [canSee, enableBarberDashboard, hasActivePromotions, activePromosLinks, isExclusiveCeoOwner]);
 
   const isAuthPage = pathname === '/login';
   const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones/');
@@ -771,7 +778,7 @@ export default function Header() {
                         {group.links.map((link) => {
                           const Icon = link.icon;
                           const isActive = pathname === link.href || (link.href === '/agenda' && pathname.startsWith('/agenda'));
-                          const isPromo = link.href.startsWith('/promociones');
+                          const isPromo = link.href.startsWith('/promociones') || link.href === '/ceo';
                           return (
                             <Link
                               key={link.href}
@@ -1050,6 +1057,22 @@ export default function Header() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#C5A880] opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-[#C5A880]"></span>
                 </span>
+              </Link>
+            )}
+
+            {isExclusiveCeoOwner && (
+              <Link
+                href="/ceo"
+                className={cn(
+                  'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap flex items-center gap-1.5 border ml-1',
+                  pathname.startsWith('/ceo')
+                    ? 'bg-[#202A49] text-[#C5A880] border-[#C5A880] font-semibold shadow-xs'
+                    : 'text-[#C5A880] bg-[#162038]/60 hover:bg-[#1f2b4c] hover:text-[#e4cfb4] border-[#C5A880]/40'
+                )}
+                title="Janet CEO — Sala de Juntas Ejecutiva Exclusiva"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
+                <span>Janet CEO</span>
               </Link>
             )}
 

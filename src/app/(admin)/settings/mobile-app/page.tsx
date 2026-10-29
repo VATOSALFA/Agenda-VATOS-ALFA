@@ -11,6 +11,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { db } from '@/lib/firebase-client';
 import { collection, onSnapshot } from 'firebase/firestore';
 import type { Client, CanjeBeneficio } from '@/lib/types';
+import { isClientWithApp } from '@/lib/client-app-helper';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
 import { NivelesAlfaManager } from '@/components/admin/niveles-alfa-manager';
@@ -62,24 +63,22 @@ export default function MobileAppSettingsPage() {
 
     const appClients = useMemo(() => {
         if (!clientsList) return [];
-        return clientsList.filter(c =>
-            Boolean(c.appVinculada || (c as any).correo_app || (c as any).fecha_registro_app || c.fotoUrl || (Number(c.cortes_acumulados || 0) > 0) || (Number(c.alfaCoins || (c as any).alfa_coins || 0) > 0))
-        );
+        return clientsList.filter(c => isClientWithApp(c));
     }, [clientsList]);
 
     const activePassClients = useMemo(() => {
         if (!clientsList) return [];
-        return clientsList.filter(c => Number(c.cortes_acumulados || 0) > 0);
+        return clientsList.filter(c => isClientWithApp(c) && Number(c.cortes_acumulados || 0) > 0);
     }, [clientsList]);
 
     const freeCutEligibleClients = useMemo(() => {
         if (!clientsList) return [];
-        return clientsList.filter(c => Boolean(c.corte_gratis_disponible || Number(c.cortes_acumulados || 0) >= 9));
+        return clientsList.filter(c => isClientWithApp(c) && Boolean(c.corte_gratis_disponible || Number(c.cortes_acumulados || 0) >= 9));
     }, [clientsList]);
 
     const totalCoinsInCirculation = useMemo(() => {
         if (!clientsList) return 0;
-        return clientsList.reduce((acc, c) => acc + Number(c.alfaCoins || (c as any).alfa_coins || c.puntosLealtad || (c as any).puntos || 0), 0);
+        return clientsList.reduce((acc, c) => acc + (isClientWithApp(c) ? Number(c.alfaCoins || (c as any).alfa_coins || c.puntosLealtad || (c as any).puntos || 0) : 0), 0);
     }, [clientsList]);
 
     const filteredAppClients = useMemo(() => {
@@ -331,7 +330,7 @@ export default function MobileAppSettingsPage() {
                                                 const clientPhoto = client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url;
                                                 const stamps = Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0);
                                                 const coins = Number(client.alfaCoins ?? (client as any).alfa_coins ?? client.puntosLealtad ?? (client as any).puntos ?? 0);
-                                                const level = client.nivel || (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member');
+                                                const level = isClientWithApp(client) ? (client.nivel || (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member')) : 'Sin Nivel';
                                                 const freeCut = Boolean(client.corte_gratis_disponible ?? stamps >= 9);
 
                                                 return (

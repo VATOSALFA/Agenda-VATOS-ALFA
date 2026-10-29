@@ -153,8 +153,8 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const appInfo = useMemo(() => getClientAppInfo(liveClient), [liveClient]);
   const hasAppLinked = appInfo.hasApp;
   const alfaCoins = hasAppLinked ? Number(liveClient.alfaCoins ?? liveClient.alfa_coins ?? liveClient.puntosLealtad ?? liveClient.puntos_lealtad ?? liveClient.puntos ?? 0) : 0;
-  const stamps = Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0);
-  const freeCutReady = Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
+  const stamps = hasAppLinked ? Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0) : 0;
+  const freeCutReady = hasAppLinked && Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
 
   const isBirthdayMonth = useMemo(() => {
     if (!liveClient.fecha_nacimiento) return false;
@@ -281,6 +281,18 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     }, 0);
 
   const clientLevelInfo = useMemo(() => {
+    if (!hasAppLinked) {
+      return {
+        nombre: 'Sin Nivel',
+        color: '#64748B',
+        colorTexto: '#94A3B8',
+        id: 'none',
+        nextNombre: null,
+        faltanVisitas: 0,
+        faltaGasto: 0,
+      };
+    }
+
     const defaultTiers = {
       member: { nombre: 'Alfa Member', color: '#2563EB', visitasMin: 0, gastoMin: 0 },
       gold: { nombre: 'Alfa Gold', color: '#C5A880', visitasMin: 4, gastoMin: 1500 },
@@ -346,9 +358,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
       faltanVisitas: Math.max(0, (gold.visitasMin ?? 4) - v),
       faltaGasto: Math.max(0, (gold.gastoMin ?? 1500) - g),
     };
-  }, [nivelesConfig, stamps, totalSpent, liveClient]);
+  }, [nivelesConfig, stamps, totalSpent, liveClient, hasAppLinked]);
 
-  const clientLevel = liveClient.nivel || clientLevelInfo.nombre;
+  const clientLevel = hasAppLinked ? (liveClient.nivel || clientLevelInfo.nombre) : 'Sin Nivel';
 
   const attendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length : (client.citas_asistidas || 0);
   const unattendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'No asiste').length : (client.citas_no_asistidas || 0);
@@ -432,17 +444,21 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-[11px] border border-white/10">
                     ID: #{liveClient.numero_cliente || liveClient.id?.slice(0, 6) || 'N/A'}
                   </span>
-                  <span>•</span>
-                  <span
-                    className="font-bold px-1.5 py-0.5 rounded text-[11px]"
-                    style={{
-                      backgroundColor: `${clientLevelInfo.color}33`,
-                      color: clientLevelInfo.color === '#0F172A' ? '#E2E8F0' : clientLevelInfo.color,
-                      border: `1px solid ${clientLevelInfo.color}66`,
-                    }}
-                  >
-                    {clientLevel}
-                  </span>
+                  {hasAppLinked && clientLevel && clientLevel !== 'Sin Nivel' && (
+                    <>
+                      <span>•</span>
+                      <span
+                        className="font-bold px-1.5 py-0.5 rounded text-[11px]"
+                        style={{
+                          backgroundColor: `${clientLevelInfo.color}33`,
+                          color: clientLevelInfo.color === '#0F172A' ? '#E2E8F0' : clientLevelInfo.color,
+                          border: `1px solid ${clientLevelInfo.color}66`,
+                        }}
+                      >
+                        {clientLevel}
+                      </span>
+                    </>
+                  )}
                   {hasAppLinked && (
                     <>
                       <span>•</span>
@@ -616,57 +632,65 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
               )}
 
               {/* Pase Alfa Mini Card (Minimalista & Elegante con Nivel Dinámico) */}
-              <div className="rounded-xl bg-gradient-to-br from-[#10172b] to-[#1c2847] border border-[#C5A880]/30 p-3 text-white space-y-2 shadow-sm">
+              <div className="rounded-xl bg-gradient-to-br from-[#10172b] to-[#1c2847] border border-border/40 p-3 text-white space-y-2 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider flex items-center gap-1">
-                    <Scissors className="h-3 w-3" /> Pase Alfa
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                    <Scissors className="h-3 w-3 text-slate-400" /> Pase Alfa
                   </span>
                   <Badge
-                    className="text-[10px] px-2 py-0 h-4 font-bold border-none shadow-xs"
+                    className="text-[10px] px-2 py-0 h-4 font-semibold border-none shadow-xs"
                     style={{
-                      backgroundColor: clientLevelInfo.color,
-                      color: clientLevelInfo.colorTexto || '#FFFFFF',
+                      backgroundColor: hasAppLinked ? clientLevelInfo.color : '#334155',
+                      color: hasAppLinked ? (clientLevelInfo.colorTexto || '#FFFFFF') : '#94A3B8',
                     }}
                   >
-                    {clientLevel}
+                    {hasAppLinked ? clientLevel : 'Requiere App'}
                   </Badge>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px] text-slate-300">
-                    <span>Visitas acumuladas</span>
-                    <span className="font-bold text-[#C5A880]">{stamps} / 10</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-[#C5A880] h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, (stamps / 10) * 100)}%` }}
-                    />
-                  </div>
-                </div>
+                {hasAppLinked ? (
+                  <>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-slate-300">
+                        <span>Visitas acumuladas</span>
+                        <span className="font-bold text-[#C5A880]">{stamps} / 10</span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-[#C5A880] h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.min(100, (stamps / 10) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
 
-                {clientLevelInfo.nextNombre && (
-                  <div className="text-[10px] text-slate-300 bg-white/5 rounded px-2 py-1 flex items-center justify-between">
-                    <span className="text-slate-400">Próximo rango:</span>
-                    <span className="font-semibold text-amber-300">
-                      {clientLevelInfo.faltanVisitas > 0 ? `${clientLevelInfo.faltanVisitas} visitas` : ''}
-                      {clientLevelInfo.faltanVisitas > 0 && clientLevelInfo.faltaGasto > 0 ? ' o ' : ''}
-                      {clientLevelInfo.faltaGasto > 0 ? `$${clientLevelInfo.faltaGasto.toLocaleString('es-MX')}` : ''}
-                    </span>
-                  </div>
-                )}
+                    {clientLevelInfo.nextNombre && (
+                      <div className="text-[10px] text-slate-300 bg-white/5 rounded px-2 py-1 flex items-center justify-between">
+                        <span className="text-slate-400">Próximo rango:</span>
+                        <span className="font-semibold text-amber-300">
+                          {clientLevelInfo.faltanVisitas > 0 ? `${clientLevelInfo.faltanVisitas} visitas` : ''}
+                          {clientLevelInfo.faltanVisitas > 0 && clientLevelInfo.faltaGasto > 0 ? ' o ' : ''}
+                          {clientLevelInfo.faltaGasto > 0 ? `$${clientLevelInfo.faltaGasto.toLocaleString('es-MX')}` : ''}
+                        </span>
+                      </div>
+                    )}
 
-                <div className="flex items-center justify-between text-[11px] pt-1 text-slate-300 border-t border-white/10">
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <Sparkles className="h-3 w-3 text-[#C5A880]" /> Balance
-                  </span>
-                  <span className="font-bold text-[#C5A880]">{alfaCoins} ALFA COINS</span>
-                </div>
+                    <div className="flex items-center justify-between text-[11px] pt-1 text-slate-300 border-t border-white/10">
+                      <span className="flex items-center gap-1 text-slate-400">
+                        <Sparkles className="h-3 w-3 text-[#C5A880]" /> Balance
+                      </span>
+                      <span className="font-bold text-[#C5A880]">{alfaCoins} ALFA COINS</span>
+                    </div>
 
-                {freeCutReady && (
-                  <div className="mt-1 text-[10px] font-bold bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 rounded px-1.5 py-0.5 text-center">
-                    ✨ ¡10.° Corte Gratis Listo!
-                  </div>
+                    {freeCutReady && (
+                      <div className="mt-1 text-[10px] font-bold bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 rounded px-1.5 py-0.5 text-center">
+                        ✨ ¡10.° Corte Gratis Listo!
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-400 leading-snug">
+                    El Pase Alfa Club y los niveles de lealtad están disponibles al usar la App Móvil.
+                  </p>
                 )}
               </div>
 
@@ -757,9 +781,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
                     <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />
                     <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${validSales.length} compras`} />
-                    <StatCard title="ALFA COINS (App)" value={alfaCoins} icon={Sparkles} description="Monedas digitales en app" />
-                    <StatCard title="Pase Alfa" value={`${stamps} / 10`} icon={Scissors} description={freeCutReady ? '¡10.° Corte DISPONIBLE!' : `Faltan ${Math.max(0, 10 - stamps)} visitas`} />
-                    <StatCard title="Nivel del Cliente" value={clientLevel} icon={Award} description="Categoría Pase Alfa Club" />
+                    <StatCard title="ALFA COINS (App)" value={hasAppLinked ? alfaCoins : 0} icon={Sparkles} description={hasAppLinked ? "Monedas digitales en app" : "Requiere App Móvil"} />
+                    <StatCard title="Pase Alfa" value={hasAppLinked ? `${stamps} / 10` : "No activo"} icon={Scissors} description={hasAppLinked ? (freeCutReady ? '¡10.° Corte DISPONIBLE!' : `Faltan ${Math.max(0, 10 - stamps)} visitas`) : "Disponible con App"} />
+                    <StatCard title="Nivel del Cliente" value={hasAppLinked ? clientLevel : "Sin Nivel"} icon={Award} description={hasAppLinked ? "Categoría Pase Alfa Club" : "Requiere App Móvil"} />
                   </div>
                 </TabsContent>
                 <TabsContent value="reservations" className="m-0 h-full">
@@ -842,6 +866,22 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                 </TabsContent>
 
                 <TabsContent value="app" className="m-0 space-y-4">
+                  {!hasAppLinked ? (
+                    <div className="bg-[#0F172A] border border-border/60 rounded-2xl p-6 sm:p-8 text-white shadow-xl text-center space-y-3">
+                      <Smartphone className="h-10 w-10 text-slate-400 mx-auto" />
+                      <h4 className="text-base sm:text-lg font-bold text-white">Programa Pase Alfa Club No Disponible</h4>
+                      <p className="text-xs sm:text-sm text-gray-300 max-w-lg mx-auto leading-relaxed">
+                        Este cliente aún no ha descargado ni iniciado sesión en la <strong>App Móvil VATOS ALFA</strong>. Los niveles de lealtad (Alfa Member, Alfa Gold, Alfa Black VIP), los sellos para el 10.º corte gratis y la acumulación de ALFA COINS están reservados exclusivamente para clientes con la aplicación móvil activa.
+                      </p>
+                      <div className="pt-2">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                          <Smartphone className="h-3.5 w-3.5 text-slate-400" />
+                          Sin cuenta registrada en la aplicación
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                   {/* Tarjeta Digital Pase Alfa */}
                   <div className="bg-[#0F172A] border border-[#C5A880]/30 rounded-2xl p-5 text-white shadow-xl relative overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#C5A880]/20 pb-4">
@@ -1019,6 +1059,8 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                       )}
                     </CardContent>
                   </Card>
+                    </>
+                  )}
                 </TabsContent>
               </div>
             </Tabs>

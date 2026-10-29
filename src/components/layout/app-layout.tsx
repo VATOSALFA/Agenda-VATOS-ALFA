@@ -3,6 +3,7 @@
 import React from 'react';
 import Header from "@/components/layout/header";
 import AppInitializer from "./app-initializer";
+import { JanetFloatingAssistant } from "@/components/ai/janet-floating-assistant";
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { usePathname } from 'next/navigation';
 
@@ -37,6 +38,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       <main className={cn("pt-16 min-h-screen", mainBottomPadding)}>
         {children}
       </main>
+      <JanetFloatingAssistant />
     </>
   )
 }

@@ -96,7 +96,7 @@ export function BuzonClientesManager() {
                         clienteNombre: data.clienteNombre || 'Cliente Alfa',
                         clienteTelefono: data.clienteTelefono || '',
                         clienteEmail: data.clienteEmail || '',
-                        nivelCliente: data.nivelCliente || 'Alfa Member',
+                        nivelCliente: data.nivelCliente || null,
                         anonimo: Boolean(data.anonimo),
                         estado: data.estado === 'atendido' ? 'atendido' : 'pendiente',
                         nota_admin: data.nota_admin || '',

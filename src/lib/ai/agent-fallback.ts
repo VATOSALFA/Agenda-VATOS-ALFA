@@ -181,8 +181,10 @@ export async function executeFallbackLogic({
         ? `\n\nPromociones y privilegios vigentes:\n${loyaltyRes.promocionesYPrivilegiosActivos.map((p) => `• ${p.titulo} (${p.descuentoORecompensa}): ${p.descripcion}. Términos: ${p.terminosYCondiciones}`).join('\n')}`
         : '';
       const clientText =
-        loyaltyRes.estadoClienteActual?.identificado && loyaltyRes.estadoClienteActual.nivelActual
-          ? `\n\nTu estado actual (${loyaltyRes.estadoClienteActual.nombre || 'Cliente'}): Nivel ${loyaltyRes.estadoClienteActual.nivelActual}, ${loyaltyRes.estadoClienteActual.sellosAcumulados ?? 0} sellos acumulados (te faltan ${loyaltyRes.estadoClienteActual.sellosParaCorteGratis ?? 10} para tu corte gratis) y saldo de ${loyaltyRes.estadoClienteActual.saldoAlfaCoins ?? 0} ALFA COINS ($${(loyaltyRes.estadoClienteActual.equivalenteEnPesosMxn ?? 0).toFixed(2)} MXN).`
+        loyaltyRes.estadoClienteActual?.identificado
+          ? (loyaltyRes.estadoClienteActual.appVinculada && loyaltyRes.estadoClienteActual.nivelActual && loyaltyRes.estadoClienteActual.nivelActual !== 'Sin Nivel'
+              ? `\n\nTu estado actual (${loyaltyRes.estadoClienteActual.nombre || 'Cliente'}): Nivel ${loyaltyRes.estadoClienteActual.nivelActual}, ${loyaltyRes.estadoClienteActual.sellosAcumulados ?? 0} sellos acumulados (te faltan ${loyaltyRes.estadoClienteActual.sellosParaCorteGratis ?? 10} para tu corte gratis) y saldo de ${loyaltyRes.estadoClienteActual.saldoAlfaCoins ?? 0} ALFA COINS ($${(loyaltyRes.estadoClienteActual.equivalenteEnPesosMxn ?? 0).toFixed(2)} MXN).`
+              : `\n\nTu estado actual (${loyaltyRes.estadoClienteActual.nombre || 'Cliente'}): Aún no tienes activa la App Móvil VATOS ALFA (Sin Nivel). ¡Descarga la App para activar tu Pase Alfa, acumular sellos para cortes gratis y ganar ALFA COINS en cada visita!`)
           : '';
       return `¡Con mucho gusto te explico cómo funciona nuestro Pase Alfa Club y los ALFA COINS!\n\n• Sellos Pase Alfa: ${loyaltyRes.paseAlfaClub.descripcion} (${loyaltyRes.paseAlfaClub.terminosSellos})\n• ALFA COINS: ${loyaltyRes.alfaCoinsExplicacion.comoSeGanan} ${loyaltyRes.alfaCoinsExplicacion.cuantoValeUnAlfaCoin}\n• Cómo canjearlos: ${loyaltyRes.alfaCoinsExplicacion.comoSeCanjean}\n• Cumpleaños: ${loyaltyRes.beneficioCumpleanos.descripcion} (${loyaltyRes.beneficioCumpleanos.terminos})${promosText}${clientText}`;
     } catch (_) {

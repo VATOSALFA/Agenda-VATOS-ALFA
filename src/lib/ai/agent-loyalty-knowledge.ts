@@ -3,9 +3,10 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { chatContextStorage } from './agent-context';
 import { cleanSearchStr } from './agent-utils';
+import { isClientWithApp } from '@/lib/client-app-helper';
 
 export interface ClientLoyaltySummary {
-  tierId: 'member' | 'gold' | 'vip';
+  tierId: 'member' | 'gold' | 'vip' | 'none';
   tierName: string;
   cashbackPct: number;
   coinUnitValueMxn: number;
@@ -51,15 +52,16 @@ export function computeClientLoyaltySummary(
   const gold = nivelesCfg.gold || DEFAULT_TIERS.gold;
   const vip = nivelesCfg.vip || DEFAULT_TIERS.vip;
 
-  if (!clientData) {
-    const pct = Number(member.cashbackPct ?? 3);
-    const tName = member.nombre || 'Alfa Member';
-    const unitVal = pct / 100;
+  const hasAppLinked = isClientWithApp(clientData as any);
+
+  // Si no hay datos de cliente o el cliente NO tiene la app móvil instalada y usada:
+  // Los clientes sin app NO tienen nivel, sellos de pase alfa ni ALFA COINS.
+  if (!clientData || !hasAppLinked) {
     return {
-      tierId: 'member',
-      tierName: tName,
-      cashbackPct: pct,
-      coinUnitValueMxn: unitVal,
+      tierId: 'none',
+      tierName: 'Sin Nivel',
+      cashbackPct: 0,
+      coinUnitValueMxn: 0,
       alfaCoinsBalance: 0,
       alfaCoinsCashEquivalentMxn: 0,
       stampsAccumulated: 0,
@@ -67,7 +69,7 @@ export function computeClientLoyaltySummary(
       stampsRemainingForFreeCut: stampsRequired,
       rewardName,
       hasAppLinked: false,
-      resumenTexto: `Nivel ${tName} (${pct}% bonificación, 1 ALFA COIN = $${unitVal.toFixed(2)} MXN) | Sellos: 0/${stampsRequired} | Saldo: 0 ALFA COINS ($0.00 MXN)`,
+      resumenTexto: 'El cliente no tiene cuenta activa en la App Móvil VATOS ALFA (Sin Nivel). El Pase Alfa Club, los sellos de visitas y los ALFA COINS están reservados exclusivamente para usuarios de la aplicación móvil.',
     };
   }
 
@@ -106,7 +108,6 @@ export function computeClientLoyaltySummary(
   }
 
   const coinUnitValueMxn = cashbackPct / 100;
-  const hasAppLinked = Boolean(clientData.appVinculada === true || clientData.fecha_registro_app);
   const rawCoins = Number(
     clientData.alfaCoins ?? clientData.alfa_coins ?? clientData.puntos ?? clientData.puntosLealtad ?? 0
   );
@@ -387,7 +388,9 @@ export const consultarPaseAlfaYPromocionesTool = ai.defineTool(
       `3. ¿Cómo se canjean los ALFA COINS?: Se pueden usar directamente al pagar en recepción como dinero electrónico para descontar o liquidar servicios y productos (ceras, polvos de textura, aftershave, bálsamos, cortes, etc.).\n` +
       `4. Tarjeta de Sellos Pase Alfa (${tituloPase}): Cada visita pagada suma 1 sello. Al acumular ${sellosReq - 1} visitas pagadas, la visita #${sellosReq} otorga: ${recompensaSellos}. Términos: ${terminosSellos}\n` +
       (estadoClienteActual.identificado
-        ? `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo vale $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS acumulados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
+        ? (estadoClienteActual.appVinculada
+            ? `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo vale $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS acumulados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
+            : `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): No cuenta con la App Móvil VATOS ALFA vinculada (Sin Nivel). Invítalo amablemente a descargar la App para activar su Pase Alfa, empezar a acumular sellos para cortes gratis y ganar ALFA COINS con cashback en cada visita.`)
         : '');
 
     return {

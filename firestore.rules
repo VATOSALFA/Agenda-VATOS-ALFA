@@ -18,6 +18,13 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.token.email != 'app_client_sync@vatosalfa.com';
     }
 
+    function isGeneralAdmin() {
+      return isAuthenticated() && (
+        request.auth.uid == 'JxK6BLZPOBcBpjnuVZPsgmIHbZ12' ||
+        request.auth.token.email == 'vatosalfa@gmail.com'
+      );
+    }
+
     // ---------------------------------------------------------
     // RULES
     // ---------------------------------------------------------
@@ -160,6 +167,18 @@ service cloud.firestore {
     // Work Sessions (Nómina)
     match /sesiones_trabajo/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     match /pagos_nomina/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+
+    // 9. Janet CEO - Bóveda Exclusiva del Administrador General (Zero-Trust)
+    match /ceo_sesiones/{document=**} { allow read, write: if isGeneralAdmin(); }
+    match /ceo_memoria/{document=**} { allow read, write: if isGeneralAdmin(); }
+    match /ceo_alertas/{document=**} { allow read, write: if isGeneralAdmin(); }
+    match /ceo_config/{document=**} { allow read, write: if isGeneralAdmin(); }
+    match /ceo_propuestas/{document=**} { allow read, write: if isGeneralAdmin(); }
+
+    // 10. Janet Gerencia - Asistente Operativa de Sucursal (Administrador Local / General)
+    match /gerencia_sesiones/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /gerencia_recordatorios/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /gerencia_propuestas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
 
     // DENY ALL OTHERS BY DEFAULT
   }

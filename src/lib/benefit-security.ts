@@ -1,3 +1,5 @@
+import { isClientWithApp } from './client-app-helper';
+
 export const MONTH_NAMES_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
@@ -471,8 +473,9 @@ export function validateInvitedClientEligibility(
 
 export interface EvaluatedClientTier {
   activo: boolean;
-  tierId: 'member' | 'gold' | 'vip';
+  tierId: 'member' | 'gold' | 'vip' | 'none';
   tierName: string;
+  hasApp?: boolean;
   cashbackPct: number;
   coinValue: number;
   color: string;
@@ -523,6 +526,7 @@ export function evaluateClientAlfaTier(
     overrideVisits?: number;
     overrideSpend?: number;
     forceEvaluateWhenPaused?: boolean;
+    appReservationClientIds?: Set<string>;
   }
 ): EvaluatedClientTier {
   const defaultTiers = {
@@ -610,13 +614,40 @@ export function evaluateClientAlfaTier(
     ) / 100
   );
 
-  // Si no hay cliente seleccionado o si el programa de niveles está en pausa (y no se fuerza evaluación)
-  if (!client || (!isProgramActive && !options?.forceEvaluateWhenPaused)) {
+  const hasApp = isClientWithApp(client, options?.appReservationClientIds);
+
+  // Si no hay cliente seleccionado o el cliente NO tiene la app móvil instalada y usada:
+  // Los clientes sin app NO tienen nivel ni beneficios del Pase Alfa Club.
+  if (!client || !hasApp) {
+    return {
+      activo: false,
+      tierId: 'none',
+      tierName: 'Sin Nivel',
+      hasApp: false,
+      cashbackPct: 0,
+      coinValue: 0,
+      color: '#64748B',
+      colorTexto: '#FFFFFF',
+      visitasHistoricas: 0,
+      consumoHistorico: 0,
+      beneficios: [],
+      productDiscountPct: 0,
+      productDiscountLabel: null,
+      birthdayBenefitText: null,
+      nextTierName: null,
+      faltanVisitas: 0,
+      faltaGasto: 0,
+    };
+  }
+
+  // Si el programa de niveles está en pausa (y no se fuerza evaluación)
+  if (!isProgramActive && !options?.forceEvaluateWhenPaused) {
     const basePct = Number(member.cashbackPct ?? 3);
     return {
       activo: isProgramActive,
       tierId: 'member',
       tierName: member.nombre || 'Alfa Member',
+      hasApp: true,
       cashbackPct: basePct,
       coinValue: basePct / 100,
       color: member.color || '#2563EB',
@@ -683,6 +714,7 @@ export function evaluateClientAlfaTier(
     activo: isProgramActive,
     tierId,
     tierName: selectedTier.nombre || (isVip ? 'Alfa Black VIP' : isGold ? 'Alfa Gold' : 'Alfa Member'),
+    hasApp: true,
     cashbackPct: pct,
     coinValue: pct / 100,
     color: selectedTier.color || (isVip ? '#0F172A' : isGold ? '#C5A880' : '#2563EB'),

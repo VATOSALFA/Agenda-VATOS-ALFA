@@ -154,6 +154,7 @@ import {
   sendTestChatReminder,
 } from '@/lib/actions/conversation-actions';
 import type { Conversation, ChatMessage, Client } from '@/lib/types';
+import { isClientWithApp } from '@/lib/client-app-helper';
 
 const CHAT_PREFS_STORAGE_KEY = 'vatos_alfa_chat_preferences_v1';
 
@@ -563,10 +564,11 @@ function ClientProfileContent({
     clientObj?.fotoUrl ||
     activeConversation.cliente_foto ||
     activeConversation.avatarUrl;
-  const alfaCoins = Number(clientObj?.alfaCoins ?? clientObj?.alfa_coins ?? clientObj?.puntosLealtad ?? clientObj?.puntos_lealtad ?? clientObj?.puntos ?? 0);
-  const stamps = Number(clientObj?.cortes_acumulados ?? clientObj?.cortesAcumulados ?? 0);
-  const freeCutReady = Boolean(clientObj?.corte_gratis_disponible ?? clientObj?.corteGratisDisponible ?? stamps >= 9);
-  const clientLevel = clientObj?.nivel || (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member');
+  const hasAppLinked = isClientWithApp(clientObj);
+  const alfaCoins = hasAppLinked ? Number(clientObj?.alfaCoins ?? clientObj?.alfa_coins ?? clientObj?.puntosLealtad ?? clientObj?.puntos_lealtad ?? clientObj?.puntos ?? 0) : 0;
+  const stamps = hasAppLinked ? Number(clientObj?.cortes_acumulados ?? clientObj?.cortesAcumulados ?? 0) : 0;
+  const freeCutReady = hasAppLinked && Boolean(clientObj?.corte_gratis_disponible ?? clientObj?.corteGratisDisponible ?? stamps >= 9);
+  const clientLevel = hasAppLinked ? (clientDetails?.loyalty?.tierName || clientObj?.nivel || (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member')) : 'Sin Nivel';
   const metrics = clientDetails?.metrics || {
     total: clientObj?.citas_totales || 0,
     asistidas: clientObj?.citas_asistidas || 0,
@@ -696,43 +698,59 @@ function ClientProfileContent({
         )}
       </div>
 
-      {/* Pase Alfa Card (Estilo Oficial Vatos Alfa con Dorado Mate) */}
-      <div className="rounded-xl bg-gradient-to-br from-[#10172b] to-[#1c2847] border border-[#C5A880]/30 p-3 text-white space-y-2 shadow-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider flex items-center gap-1.5">
-            <Scissors className="h-3.5 w-3.5 text-[#C5A880]" /> Pase Alfa
-          </span>
-          <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/30 text-[10px] px-1.5 py-0 h-4 font-semibold">
-            {clientLevel}
-          </Badge>
-        </div>
-
-        <div className="space-y-1">
-          <div className="flex justify-between text-[11px] text-slate-300">
-            <span>Visitas acumuladas</span>
-            <span className="font-bold text-[#C5A880]">{stamps} / 10</span>
+      {/* Pase Alfa Card (Estilo Oficial Vatos Alfa con Dorado Mate o Estado Sin App) */}
+      {hasAppLinked ? (
+        <div className="rounded-xl bg-gradient-to-br from-[#10172b] to-[#1c2847] border border-[#C5A880]/30 p-3 text-white space-y-2 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold text-[#C5A880] uppercase tracking-wider flex items-center gap-1.5">
+              <Scissors className="h-3.5 w-3.5 text-[#C5A880]" /> Pase Alfa
+            </span>
+            <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/30 text-[10px] px-1.5 py-0 h-4 font-semibold">
+              {clientLevel}
+            </Badge>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
-            <div
-              className="bg-[#C5A880] h-full rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(100, (stamps / 10) * 100)}%` }}
-            />
-          </div>
-        </div>
 
-        <div className="flex items-center justify-between text-[11px] pt-1 text-slate-300 border-t border-white/10">
-          <span className="flex items-center gap-1.5 text-slate-400">
-            <Sparkles className="h-3 w-3 text-[#C5A880]" /> Balance
-          </span>
-          <span className="font-bold text-[#C5A880]">{alfaCoins} AlfaCoins</span>
-        </div>
-
-        {freeCutReady && (
-          <div className="mt-1 text-[10px] font-bold bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 rounded px-1.5 py-0.5 text-center">
-            ✨ ¡10.° Corte Gratis Listo!
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px] text-slate-300">
+              <span>Visitas acumuladas</span>
+              <span className="font-bold text-[#C5A880]">{stamps} / 10</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="bg-[#C5A880] h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, (stamps / 10) * 100)}%` }}
+              />
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex items-center justify-between text-[11px] pt-1 text-slate-300 border-t border-white/10">
+            <span className="flex items-center gap-1.5 text-slate-400">
+              <Sparkles className="h-3 w-3 text-[#C5A880]" /> Balance
+            </span>
+            <span className="font-bold text-[#C5A880]">{alfaCoins} AlfaCoins</span>
+          </div>
+
+          {freeCutReady && (
+            <div className="mt-1 text-[10px] font-bold bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 rounded px-1.5 py-0.5 text-center">
+              ✨ ¡10.° Corte Gratis Listo!
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl bg-slate-900/50 border border-border/60 p-3 text-slate-400 space-y-1.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Scissors className="h-3.5 w-3.5 text-slate-500" /> Pase Alfa
+            </span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal text-slate-400 border-slate-700 bg-slate-800/40">
+              Requiere App
+            </Badge>
+          </div>
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            El Pase Alfa, sellos de lealtad y niveles se activan automáticamente cuando el cliente instala y usa la App Móvil.
+          </p>
+        </div>
+      )}
 
       {/* Action: Quick Create Appointment (Botón Oficial Vatos Alfa) */}
       <Button

@@ -76,6 +76,7 @@ import {
     JUNTOS_REWARD_COINS_PER_PERSON,
     evaluateClientAlfaTier,
 } from '@/lib/benefit-security';
+import { isClientWithApp } from '@/lib/client-app-helper';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Combobox } from '../ui/combobox';
@@ -1206,14 +1207,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         overrideSpend: bestSpend,
                         forceEvaluateWhenPaused: true,
                     });
-                    await updateDoc(doc(db, 'clientes', selectedClient.id), {
+                    const updateFields: any = {
                         citas_asistidas: bestVisits,
                         visitas_totales: bestVisits,
                         consumo_total: bestSpend,
                         gasto_total: bestSpend,
                         consumoTotal: bestSpend,
-                        nivel: evaluated.tierName,
-                    }).catch(() => {});
+                    };
+                    // Los niveles son exclusivos para usuarios que tienen la app móvil
+                    if (isClientWithApp(selectedClient) && evaluated.tierName && evaluated.tierName !== 'Sin Nivel') {
+                        updateFields.nivel = evaluated.tierName;
+                    }
+                    await updateDoc(doc(db, 'clientes', selectedClient.id), updateFields).catch(() => {});
                 }
             } catch (_) {}
         };
@@ -1236,8 +1241,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const alfaCoinUnitValue = clientLevelInfo.coinValue;
 
     const hasAppDownloaded = useMemo(() => {
-        if (!selectedClient) return false;
-        return Boolean(selectedClient.appVinculada === true || selectedClient.fecha_registro_app);
+        return isClientWithApp(selectedClient);
     }, [selectedClient]);
 
     const clientAlfaCoins = useMemo(() => {
@@ -1985,9 +1989,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     forceEvaluateWhenPaused: true,
                 });
 
-                const updatePayload: Record<string, any> = {
-                    nivel: nextEvaluated.tierName,
-                };
+                const updatePayload: Record<string, any> = {};
+
+                // Los niveles y ascensos son exclusivos para usuarios que tienen la app móvil
+                if (hasAppDownloaded && nextEvaluated.tierName && nextEvaluated.tierName !== 'Sin Nivel') {
+                    updatePayload.nivel = nextEvaluated.tierName;
+                }
 
                 if (realMoneySpent > 0) {
                     updatePayload.consumo_total = increment(realMoneySpent);

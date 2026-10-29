@@ -56,6 +56,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
+import { MicrophonePermissionModal } from '@/components/shared/microphone-permission-modal';
 import {
   getGerenciaDashboardSnapshot,
   processGerenciaAgentMessage,
@@ -298,8 +300,9 @@ export function JanetFloatingAssistant() {
   const [chatPrefs, setChatPrefs] = useState<ExecChatPrefs>(DEFAULT_EXEC_CHAT_PREFS);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // Sub-modales de herramientas del chat (Emojis, Clip Adjuntar, Cámara en Vivo, Foto de Perfil, Visor de Imagen)
+  // Sub-modales de herramientas del chat (Emojis, Clip Adjuntar, Cámara en Vivo, Foto de Perfil, Visor de Imagen, Permiso Micrófono)
   const [isEmojiModalOpen, setIsEmojiModalOpen] = useState(false);
+  const [isMicPermissionModalOpen, setIsMicPermissionModalOpen] = useState(false);
   const [activeEmojiCat, setActiveEmojiCat] = useState<string>('caritas');
   const [recentEmojis, setRecentEmojis] = useState<string[]>([
     '💈', '✂️', '🔥', '🙌', '👍', '😊', '📅', '🏆', '💰', '✅',
@@ -789,10 +792,20 @@ export function JanetFloatingAssistant() {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
     } catch {
+      setIsMicPermissionModalOpen(true);
       toast({
         variant: 'destructive',
         title: 'Permiso de Micrófono',
-        description: 'Permite el acceso al micrófono para dictar o enviar notas de voz a Janet.',
+        description: 'Toca aquí para ver los pasos de cómo activarlo en tu dispositivo.',
+        action: (
+          <ToastAction
+            altText="Ver cómo activar"
+            onClick={() => setIsMicPermissionModalOpen(true)}
+            className="border-white/30 text-white hover:bg-white/20 font-semibold"
+          >
+            ¿Dónde activar?
+          </ToastAction>
+        ),
       });
     }
   };
@@ -3065,6 +3078,14 @@ export function JanetFloatingAssistant() {
           )}
         </div>
       )}
+
+      {/* Modal interactivo de ayuda para otorgar permiso de micrófono */}
+      <MicrophonePermissionModal
+        isOpen={isMicPermissionModalOpen}
+        onOpenChange={setIsMicPermissionModalOpen}
+        onPermissionGranted={() => handleStartVoiceRecording()}
+        assistantName={activeAgentMode === 'ceo' ? 'Janet CEO' : 'Janet Gerencia'}
+      />
     </>
   );
 }

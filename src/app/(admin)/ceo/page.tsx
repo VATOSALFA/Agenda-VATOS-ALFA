@@ -53,6 +53,8 @@ import {
   Pause,
   Image as ImageIcon,
 } from 'lucide-react';
+import { ToastAction } from '@/components/ui/toast';
+import { MicrophonePermissionModal } from '@/components/shared/microphone-permission-modal';
 import {
   ChatSettingsModal,
   DEFAULT_CHAT_PREFERENCES,
@@ -154,6 +156,7 @@ export default function JanetCeoPage() {
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState<boolean>(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState<boolean>(false);
+  const [isMicPermissionModalOpen, setIsMicPermissionModalOpen] = useState<boolean>(false);
   const [previewImageModalUrl, setPreviewImageModalUrl] = useState<string | null>(null);
 
   // Grabación de Nota de Voz / Dictado
@@ -477,10 +480,20 @@ export default function JanetCeoPage() {
           setRecordingSeconds((prev) => prev + 1);
         }, 1000);
       } else {
+        setIsMicPermissionModalOpen(true);
         toast({
           variant: 'destructive',
-          title: 'Micrófono no disponible',
-          description: 'Verifica el permiso del micrófono en tu navegador.',
+          title: 'Permiso de Micrófono',
+          description: 'Toca aquí para ver los pasos de cómo activarlo en tu dispositivo.',
+          action: (
+            <ToastAction
+              altText="Ver cómo activar"
+              onClick={() => setIsMicPermissionModalOpen(true)}
+              className="border-white/30 text-white hover:bg-white/20 font-semibold"
+            >
+              ¿Dónde activar?
+            </ToastAction>
+          ),
         });
       }
     }
@@ -1738,6 +1751,14 @@ export default function JanetCeoPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL DE AYUDA Y PASO A PASO PARA ACTIVAR MICRÓFONO */}
+      <MicrophonePermissionModal
+        isOpen={isMicPermissionModalOpen}
+        onOpenChange={setIsMicPermissionModalOpen}
+        onPermissionGranted={() => startVoiceRecording()}
+        assistantName="Janet CEO"
+      />
     </div>
   );
 }

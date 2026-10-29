@@ -169,6 +169,7 @@ export async function getCeoSessionMessages(idToken: string, sessionId: string) 
 /**
  * Procesa un mensaje enviado por el Administrador General a Janet CEO.
  * Ejecuta el ciclo de razonamiento profundo con Gemini 2.5 Pro + los 5 Subagentes.
+ * Soporta notas de voz (dictado/audio) e imágenes/documentos adjuntos.
  */
 export async function processCeoAgentMessage({
   idToken,
@@ -177,6 +178,9 @@ export async function processCeoAgentMessage({
   modelChoice = 'pro',
   attachmentDataUrl,
   attachmentName,
+  audioDataUrl,
+  audioMimeType,
+  audioDuration,
 }: {
   idToken: string;
   sessionId?: string;
@@ -184,15 +188,60 @@ export async function processCeoAgentMessage({
   modelChoice?: 'pro' | 'flash';
   attachmentDataUrl?: string;
   attachmentName?: string;
+  audioDataUrl?: string;
+  audioMimeType?: string;
+  audioDuration?: number;
 }) {
   const adminUser = await verifyGeneralAdminAccess(idToken);
   const db = getDb();
   const { friendlyToday, todayIso, localTime } = getMexicoDateInfo();
 
+  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash para máxima precisión
+  let transcribedAudioText = '';
+  if (audioDataUrl && audioDataUrl.startsWith('data:')) {
+    const match = audioDataUrl.match(/^data:([^,]+),(.+)$/);
+    if (match) {
+      const rawMime = match[1].replace(/;base64$/i, '').split(';')[0].trim().toLowerCase();
+      const normMime =
+        rawMime === 'audio/mp3'
+          ? 'audio/mpeg'
+          : rawMime === 'audio/x-m4a' || rawMime === 'audio/m4a'
+          ? 'audio/mp4'
+          : rawMime || audioMimeType || 'audio/webm';
+      const cleanAudioUrl = `data:${normMime};base64,${match[2]}`;
+      try {
+        const transRes = await ai.generate({
+          model: 'googleai/gemini-2.5-flash',
+          prompt: [
+            {
+              text: 'Escucha atentamente esta nota de voz enviada por el Administrador General (Dueño) de la barbería VATOS ALFA a su asistente ejecutiva Janet CEO. Transcribe exactamente en español lo que dice (incluyendo términos como Estado de Resultados, utilidad, comisiones, auditoría, código 1234, nombres como Beatriz/Bety, Lalo, Alfredo, Ivon, Lupita, Erika, inventario, insumos o sucursales). Devuelve ÚNICAMENTE el texto transcrito en español, sin comillas ni comentarios adicionales.',
+            },
+            {
+              media: {
+                url: cleanAudioUrl,
+                contentType: normMime,
+              },
+            },
+          ],
+        });
+        if (transRes.text && transRes.text.trim()) {
+          transcribedAudioText = transRes.text.trim();
+        }
+      } catch (errAudio: any) {
+        console.warn('Aviso transcribiendo nota de voz en Janet CEO:', errAudio?.message);
+      }
+    }
+  }
+
+  const effectiveMessage =
+    transcribedAudioText ||
+    userMessage.trim() ||
+    (attachmentDataUrl ? 'Analiza este archivo o imagen adjunta.' : 'Consulta ejecutiva');
+
   let activeSessionId = sessionId;
   if (!activeSessionId) {
     const newSessionRef = await db.collection('ceo_sesiones').add({
-      titulo: userMessage.slice(0, 65) || 'Sesión Ejecutiva con Janet CEO',
+      titulo: effectiveMessage.slice(0, 65) || 'Sesión Ejecutiva con Janet CEO',
       creado_por: adminUser.uid,
       creado_en: FieldValue.serverTimestamp(),
       actualizado_en: FieldValue.serverTimestamp(),
@@ -212,8 +261,12 @@ export async function processCeoAgentMessage({
   // Guardar el mensaje del Administrador General
   await msgsCol.add({
     rol: 'user',
-    contenido: userMessage,
+    contenido: effectiveMessage,
     adjuntoNombre: attachmentName || null,
+    adjuntoUrl: attachmentDataUrl || null,
+    esAudio: Boolean(audioDataUrl),
+    audioDuracion: audioDuration || null,
+    audioTranscripcion: transcribedAudioText || (audioDataUrl ? effectiveMessage : null),
     creado_en: FieldValue.serverTimestamp(),
   });
 
@@ -279,7 +332,7 @@ Tienes a tu cargo 5 subagentes especializados que debes invocar siempre que nece
         ? `### MEMORIA ESTRATÉGICA VIGENTE DE DIRECCIÓN:\n${memoriasTexto}\n\n`
         : '') +
       (historyText ? `### HISTORIAL RECIENTE DE ESTA SESIÓN:\n${historyText}\n\n` : '') +
-      `### SOLICITUD ACTUAL DEL ADMINISTRADOR GENERAL:\n${userMessage}`,
+      `### SOLICITUD ACTUAL DEL ADMINISTRADOR GENERAL:\n${effectiveMessage}`,
   });
 
   const tools = getCeoAgentTools();
@@ -341,6 +394,7 @@ Tienes a tu cargo 5 subagentes especializados que debes invocar siempre que nece
     reply: responseText,
     modelUsed: usedModelName,
     subagentsInvoked,
+    audioTranscription: transcribedAudioText || undefined,
   };
 }
 

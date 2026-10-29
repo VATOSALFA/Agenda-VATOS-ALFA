@@ -45,6 +45,11 @@ export interface GerenciaChatMessage {
   creado_en: string;
   herramientasUsadas?: string[];
   propuestaAccion?: GerenciaProposalCard | null;
+  adjuntoUrl?: string | null;
+  adjuntoNombre?: string | null;
+  esAudio?: boolean;
+  audioDuracion?: number | null;
+  audioTranscripcion?: string | null;
 }
 
 export async function getGerenciaDashboardSnapshot(idToken: string) {
@@ -180,6 +185,11 @@ export async function getGerenciaDashboardSnapshot(idToken: string) {
         creado_en: serializeDocDate(md.creado_en),
         herramientasUsadas: md.herramientasUsadas || [],
         propuestaAccion: md.propuestaAccion || null,
+        adjuntoUrl: md.adjuntoUrl || null,
+        adjuntoNombre: md.adjuntoNombre || null,
+        esAudio: Boolean(md.esAudio),
+        audioDuracion: md.audioDuracion || null,
+        audioTranscripcion: md.audioTranscripcion || null,
       };
     });
   }
@@ -208,19 +218,71 @@ export async function processGerenciaAgentMessage({
   idToken,
   sessionId,
   userMessage,
+  attachmentDataUrl,
+  attachmentName,
+  audioDataUrl,
+  audioMimeType,
+  audioDuration,
 }: {
   idToken: string;
   sessionId?: string;
   userMessage: string;
+  attachmentDataUrl?: string;
+  attachmentName?: string;
+  audioDataUrl?: string;
+  audioMimeType?: string;
+  audioDuration?: number;
 }) {
   const managerUser = await verifyBranchManagerAccess(idToken);
   const db = getDb();
   const { friendlyToday, todayIso, tomorrowIso, localTime } = getMexicoDateInfo();
 
+  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash
+  let transcribedAudioText = '';
+  if (audioDataUrl && audioDataUrl.startsWith('data:')) {
+    const match = audioDataUrl.match(/^data:([^,]+),(.+)$/);
+    if (match) {
+      const rawMime = match[1].replace(/;base64$/i, '').split(';')[0].trim().toLowerCase();
+      const normMime =
+        rawMime === 'audio/mp3'
+          ? 'audio/mpeg'
+          : rawMime === 'audio/x-m4a' || rawMime === 'audio/m4a'
+          ? 'audio/mp4'
+          : rawMime || audioMimeType || 'audio/webm';
+      const cleanAudioUrl = `data:${normMime};base64,${match[2]}`;
+      try {
+        const transRes = await ai.generate({
+          model: 'googleai/gemini-2.5-flash',
+          prompt: [
+            {
+              text: 'Escucha atentamente esta nota de voz enviada por la Administradora del Local (Beatriz/Bety) o Dirección de la barbería VATOS ALFA a su asistente operativa Janet Gerencia. Transcribe exactamente en español lo que dice (incluyendo nombres de barberos como Lalo, Alfredo, Bety, Ivon, Lupita, horarios, bloqueos, citas, ventas, inventario, insumos o recordatorios). Devuelve ÚNICAMENTE el texto transcrito en español, sin comillas ni comentarios adicionales.',
+            },
+            {
+              media: {
+                url: cleanAudioUrl,
+                contentType: normMime,
+              },
+            },
+          ],
+        });
+        if (transRes.text && transRes.text.trim()) {
+          transcribedAudioText = transRes.text.trim();
+        }
+      } catch (errAudio: any) {
+        console.warn('Aviso transcribiendo nota de voz en Janet Gerencia:', errAudio?.message);
+      }
+    }
+  }
+
+  const effectiveMessage =
+    transcribedAudioText ||
+    userMessage.trim() ||
+    (attachmentDataUrl ? 'Analiza esta imagen o documento adjunto de la sucursal.' : 'Consulta de sucursal');
+
   let activeSessionId = sessionId;
   if (!activeSessionId) {
     const newRef = await db.collection('gerencia_sesiones').add({
-      titulo: userMessage.slice(0, 60) || 'Operación de Sucursal',
+      titulo: effectiveMessage.slice(0, 60) || 'Operación de Sucursal',
       creado_por: managerUser.uid,
       creado_en: FieldValue.serverTimestamp(),
       actualizado_en: FieldValue.serverTimestamp(),
@@ -237,7 +299,12 @@ export async function processGerenciaAgentMessage({
 
   await msgsCol.add({
     rol: 'user',
-    contenido: userMessage,
+    contenido: effectiveMessage,
+    adjuntoNombre: attachmentName || null,
+    adjuntoUrl: attachmentDataUrl || null,
+    esAudio: Boolean(audioDataUrl),
+    audioDuracion: audioDuration || null,
+    audioTranscripcion: transcribedAudioText || (audioDataUrl ? effectiveMessage : null),
     creado_en: FieldValue.serverTimestamp(),
   });
 
@@ -278,13 +345,28 @@ Tu misión es hacerle el trabajo diario lo más rápido, fácil y ordenado posib
   const herramientasUsadas: string[] = [];
   let propuestaGenerada: GerenciaProposalCard | null = null;
 
+  const promptParts: any[] = [];
+  if (attachmentDataUrl && attachmentDataUrl.startsWith('data:')) {
+    const match = attachmentDataUrl.match(/^data:([^;]+);base64,/);
+    const contentType = match ? match[1] : 'image/jpeg';
+    promptParts.push({
+      media: {
+        url: attachmentDataUrl,
+        contentType,
+      },
+    });
+  }
+  promptParts.push({
+    text:
+      (historyText ? `### HISTORIAL RECIENTE:\n${historyText}\n\n` : '') +
+      `### SOLICITUD DE GERENCIA DE SUCURSAL:\n${effectiveMessage}`,
+  });
+
   try {
     const result = await ai.generate({
       model: 'googleai/gemini-2.5-flash',
       system: systemPrompt,
-      prompt:
-        (historyText ? `### HISTORIAL RECIENTE:\n${historyText}\n\n` : '') +
-        `### SOLICITUD DE GERENCIA DE SUCURSAL:\n${userMessage}`,
+      prompt: promptParts,
       tools,
       maxTurns: 5,
     });
@@ -332,6 +414,7 @@ Tu misión es hacerle el trabajo diario lo más rápido, fácil y ordenado posib
 
   return {
     sessionId: activeSessionId,
+    audioTranscription: transcribedAudioText || undefined,
     message: {
       id: savedMsgRef.id,
       rol: 'assistant' as const,

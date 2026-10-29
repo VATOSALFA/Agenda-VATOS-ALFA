@@ -4,6 +4,15 @@ import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { sanitizeExternalUntrustedText } from '@/lib/ai/ceo-security';
 import { getMexicoDateInfo } from '@/lib/ai/agent-utils';
+import {
+  findBarber,
+  matchesBarber,
+  getBarberScheduleForDay,
+  getDayOfWeekKey,
+  timeToMinutes,
+  minutesToTime,
+  BarberDayScheduleInfo,
+} from '@/lib/ai/barber-schedule-helper';
 
 function toDateSafe(val: any): Date | null {
   if (!val) return null;
@@ -47,7 +56,7 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
   {
     name: 'consultar_operacion_dia_sucursal',
     description:
-      'Consulta las citas/reservas, las ventas facturadas, los bloqueos/horarios especiales de barberos y los movimientos operativos de una fecha específica (por defecto hoy). Úsala cuando Beatriz pregunte por una cita, una venta cobrada por recepción, quién atendió a un cliente o cómo va el día en la sucursal.',
+      'Consulta las citas/reservas, las ventas facturadas, los horarios, descansos y bloqueos de los barberos, y los movimientos operativos de una fecha específica (por defecto hoy). Úsala SIEMPRE que pregunten si un barbero está bloqueado, si su horario está cerrado, si tiene citas, o cómo va la operación del día.',
     inputSchema: z.object({
       fecha: z
         .string()
@@ -56,7 +65,7 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
       filtroClienteOBarbero: z
         .string()
         .optional()
-        .describe('Opcional: nombre del cliente o del barbero para filtrar citas y ventas.'),
+        .describe('Opcional: nombre o apodo del barbero (ej. "Lalo", "Bety", "Lupita", "Alfredo") o nombre del cliente.'),
     }),
   },
   async ({ fecha, filtroClienteOBarbero }) => {
@@ -68,7 +77,7 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
     const startDay = new Date(`${targetDate}T00:00:00.000-06:00`);
     const endDay = new Date(`${targetDate}T23:59:59.999-06:00`);
 
-    const [profSnap, resSnap, blocksSnap, salesSnap] = await Promise.all([
+    const [profSnap, resSnap, blocksSnap, salesSnap, journeySnap, localesSnap] = await Promise.all([
       db.collection('profesionales').get(),
       db.collection('reservas').where('fecha', '==', targetDate).get(),
       db.collection('bloqueos_horario').where('fecha', '==', targetDate).get(),
@@ -77,35 +86,103 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
         .where('fecha_hora_venta', '>=', Timestamp.fromDate(startDay))
         .where('fecha_hora_venta', '<=', Timestamp.fromDate(endDay))
         .get(),
+      db.collection('jornadas_especiales').where('fecha', '==', targetDate).get(),
+      db.collection('locales').limit(5).get(),
     ]);
 
-    const profMap = new Map<string, { id: string; nombre: string; localId: string }>();
+    const activeProfessionals: any[] = [];
+    const profMap = new Map<string, { id: string; nombre: string; publicName: string; localId: string; raw: any }>();
+
     profSnap.forEach((d) => {
       const p = d.data();
       if (!p.deleted) {
+        const item = {
+          id: d.id,
+          name: p.name || '',
+          publicName: p.publicName || p.name || 'Barbero',
+          displayName: p.publicName || p.name || 'Barbero',
+          localId: p.local_id || '',
+          raw: { id: d.id, ...p },
+        };
         profMap.set(d.id, {
           id: d.id,
-          nombre: p.name || p.publicName || 'Profesional',
-          localId: p.local_id || '',
+          nombre: item.displayName,
+          publicName: item.publicName,
+          localId: item.localId,
+          raw: item.raw,
         });
+        if (p.active !== false) {
+          activeProfessionals.push(item.raw);
+        }
       }
     });
+
+    // Check if query targets a specific barber
+    const targetedBarber = filterNorm ? findBarber(filterNorm, activeProfessionals) : null;
+
+    // Build comprehensive schedule status for barbers
+    const barbersToAnalyze = targetedBarber
+      ? [targetedBarber]
+      : activeProfessionals.filter((p) => !filterNorm || matchesBarber(p, filterNorm));
+
+    const defaultLocalId = activeProfessionals[0]?.local_id || localesSnap.docs[0]?.id || '';
+
+    const horariosYDisponibilidadBarberos: any[] = [];
+    for (const b of barbersToAnalyze) {
+      const s = await getBarberScheduleForDay({
+        db,
+        barber: b,
+        dateStr: targetDate,
+        localId: b.local_id || defaultLocalId,
+      });
+
+      horariosYDisponibilidadBarberos.push({
+        barbero: s.displayName,
+        barberoId: s.barberId,
+        nombreReal: s.name,
+        diaSemana: s.diaSemana,
+        laboraHoy: s.isWorkingDay,
+        jornadaLaboral: s.workingHours ? `${s.workingHours.start} - ${s.workingHours.end}` : 'Día libre (no labora)',
+        horariosNoDisponibles: [
+          s.nonWorkBefore ? `Antes de ${s.nonWorkBefore.end}` : null,
+          s.nonWorkAfter ? `Después de ${s.nonWorkAfter.start}` : null,
+        ].filter(Boolean),
+        descansosProgramados: s.scheduleBreaks.map((br) => `${br.start} - ${br.end}`),
+        bloqueosRegistradosEnAgenda: s.existingBlocks.map((blk) => ({
+          id: blk.id,
+          horario: `${blk.hora_inicio} - ${blk.hora_fin}`,
+          motivo: blk.motivo,
+        })),
+        horariosEspecialesHabilitados: s.specialAvailableHours.map((sp) => `${sp.hora_inicio} - ${sp.hora_fin}`),
+        citasActivasDelBarbero: s.activeReservations.map((r) => ({
+          reservaId: r.id,
+          cliente: r.cliente,
+          horario: `${r.hora_inicio} - ${r.hora_fin}`,
+          servicio: r.servicio,
+          estado: r.estado,
+        })),
+        estaTotalmenteBloqueadoOCerrado: s.isEntireDayCovered,
+        resumenEstadoAgenda: s.statusDescription,
+      });
+    }
 
     const reservasDelDia: any[] = [];
     resSnap.forEach((doc) => {
       const r = doc.data();
-      const barberoNombre = profMap.get(r.barbero_id)?.nombre || r.professionalNames || 'Barbero';
+      const profInfo = profMap.get(r.barbero_id);
+      const barberoNombre = profInfo?.nombre || r.professionalNames || 'Barbero';
       const clienteNombre = sanitizeExternalUntrustedText(
         r.customer?.nombre || r.cliente_nombre || 'Cliente',
         70
       );
-      if (
-        filterNorm &&
-        !clienteNombre.toLowerCase().includes(filterNorm) &&
-        !barberoNombre.toLowerCase().includes(filterNorm)
-      ) {
-        return;
-      }
+
+      const matchesFilter =
+        !filterNorm ||
+        clienteNombre.toLowerCase().includes(filterNorm) ||
+        barberoNombre.toLowerCase().includes(filterNorm) ||
+        (profInfo?.raw && matchesBarber(profInfo.raw, filterNorm));
+
+      if (!matchesFilter) return;
 
       reservasDelDia.push({
         reservaId: doc.id,
@@ -128,8 +205,16 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
     const bloqueosYExcepciones: any[] = [];
     blocksSnap.forEach((doc) => {
       const b = doc.data();
-      const barberoNombre = profMap.get(b.barbero_id)?.nombre || 'Barbero';
-      if (filterNorm && !barberoNombre.toLowerCase().includes(filterNorm)) return;
+      const profInfo = profMap.get(b.barbero_id);
+      const barberoNombre = profInfo?.nombre || 'Barbero';
+
+      const matchesFilter =
+        !filterNorm ||
+        barberoNombre.toLowerCase().includes(filterNorm) ||
+        (profInfo?.raw && matchesBarber(profInfo.raw, filterNorm));
+
+      if (!matchesFilter) return;
+
       bloqueosYExcepciones.push({
         bloqueoId: doc.id,
         barbero: barberoNombre,
@@ -153,18 +238,17 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
         70
       );
       const items = Array.isArray(v.items) ? v.items : [];
-      const barberoPrincipal =
-        profMap.get(items[0]?.barbero_id || v.barbero_id)?.nombre ||
-        v.professionalNames ||
-        'General';
+      const primaryBarberId = items[0]?.barbero_id || v.barbero_id;
+      const profInfo = profMap.get(primaryBarberId);
+      const barberoPrincipal = profInfo?.nombre || v.professionalNames || 'General';
 
-      if (
-        filterNorm &&
-        !clienteNombre.toLowerCase().includes(filterNorm) &&
-        !barberoPrincipal.toLowerCase().includes(filterNorm)
-      ) {
-        return;
-      }
+      const matchesFilter =
+        !filterNorm ||
+        clienteNombre.toLowerCase().includes(filterNorm) ||
+        barberoPrincipal.toLowerCase().includes(filterNorm) ||
+        (profInfo?.raw && matchesBarber(profInfo.raw, filterNorm));
+
+      if (!matchesFilter) return;
 
       const monto = round2(Number(v.monto_pagado_real ?? v.total ?? 0));
       const metodo = String(v.metodo_pago || 'efectivo').toLowerCase();
@@ -202,8 +286,9 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
         cobradoTransferencia: round2(totalTransferenciaDia),
         totalCobradoDia: round2(totalEfectivoDia + totalTarjetaDia + totalTransferenciaDia),
       },
-      citas: reservasDelDia.slice(0, 40),
+      horariosYDisponibilidadBarberos,
       bloqueosYHorariosEspeciales: bloqueosYExcepciones,
+      citas: reservasDelDia.slice(0, 40),
       ventasFacturadas: ventasDelDia.slice(0, 40),
     };
   }
@@ -216,7 +301,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
   {
     name: 'gestionar_horario_barbero_sucursal',
     description:
-      'Permite a Beatriz (Administradora Local) cerrar/bloquear el horario de un barbero cuando pide permiso, habilitarle un horario especial fuera de su jornada habitual, o eliminar un bloqueo existente en la agenda.',
+      'Gestiona bloqueos y horarios especiales en la agenda de los barberos. Respeta las reglas de la agenda: no encima bloques duplicados sobre horarios que ya están bloqueados o descansando, respeta las horas no laborales, y valida citas antes de bloquear.',
     inputSchema: z.object({
       accion: z
         .enum(['bloquear', 'habilitar_especial', 'desbloquear'])
@@ -225,8 +310,14 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
         .string()
         .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Ivon", "Lupita", "Beatriz").'),
       fecha: z.string().describe('Fecha en formato YYYY-MM-DD.'),
-      horaInicio: z.string().describe('Hora de inicio en formato 24h HH:mm (ej. "10:00").'),
-      horaFin: z.string().describe('Hora de fin en formato 24h HH:mm (ej. "14:00" o "20:30").'),
+      horaInicio: z
+        .string()
+        .optional()
+        .describe('Hora de inicio en formato 24h HH:mm (ej. "15:00"). Si se omite al bloquear todo el día, se usa el inicio de su jornada.'),
+      horaFin: z
+        .string()
+        .optional()
+        .describe('Hora de fin en formato 24h HH:mm (ej. "20:00"). Si se omite al bloquear todo el día, se usa el fin de su jornada.'),
       motivo: z
         .string()
         .describe('Motivo claro del bloqueo o del horario especial (ej. "Permiso personal autorizado por Bety").'),
@@ -235,57 +326,98 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
   async ({ accion, nombreBarbero, fecha, horaInicio, horaFin, motivo }) => {
     const db = getDb();
     const profSnap = await db.collection('profesionales').get();
-
-    const aliases: Record<string, string[]> = {
-      eduardo: ['lalo', 'eduardo'],
-      beatriz: ['bety', 'betty', 'beatriz'],
-      guadalupe: ['lupita', 'guadalupe'],
-      ivon: ['ivon', 'ivonne'],
-      alfredo: ['alfredo', 'fredy'],
-    };
-
-    const searchNorm = nombreBarbero.toLowerCase().trim();
-    let matchedProf: { id: string; name: string; localId: string } | null = null;
+    const activeProfessionals: any[] = [];
 
     profSnap.forEach((doc) => {
       const p = doc.data();
-      if (p.deleted || p.active === false) return;
-      const fullName = String(p.name || p.publicName || '').toLowerCase();
-      if (fullName.includes(searchNorm) || searchNorm.includes(fullName)) {
-        matchedProf = { id: doc.id, name: p.name || p.publicName, localId: p.local_id || '' };
-        return;
-      }
-      for (const [, list] of Object.entries(aliases)) {
-        if (list.some((a) => searchNorm.includes(a)) && list.some((a) => fullName.includes(a))) {
-          matchedProf = { id: doc.id, name: p.name || p.publicName, localId: p.local_id || '' };
-          return;
-        }
+      if (!p.deleted && p.active !== false) {
+        activeProfessionals.push({ id: doc.id, ...p });
       }
     });
 
-    if (!matchedProf) {
+    const prof = findBarber(nombreBarbero, activeProfessionals);
+
+    if (!prof) {
       return {
         ok: false,
-        mensaje: `No encontré un profesional activo que coincida con "${nombreBarbero}". Verifica el nombre.`,
+        mensaje: `No encontré un barbero activo que coincida con "${nombreBarbero}". Verifica el nombre (ej. Lalo, Alfredo, Ivon, Lupita, Bety).`,
       };
     }
 
-    const prof = matchedProf as { id: string; name: string; localId: string };
-    let defaultLocalId = prof.localId;
+    let defaultLocalId = prof.local_id || prof.localId || '';
     if (!defaultLocalId) {
       const localesSnap = await db.collection('locales').limit(1).get();
       if (!localesSnap.empty) defaultLocalId = localesSnap.docs[0].id;
     }
 
+    const barberSchedule = await getBarberScheduleForDay({
+      db,
+      barber: prof,
+      dateStr: fecha,
+      localId: defaultLocalId,
+    });
+
+    const displayName = barberSchedule.displayName;
+
     if (accion === 'bloquear') {
-      if (horaFin <= horaInicio) {
+      // 1. Validar si el barbero labora ese día
+      if (!barberSchedule.isWorkingDay) {
         return {
           ok: false,
-          mensaje: `La hora de fin (${horaFin}) debe ser posterior a la hora de inicio (${horaInicio}).`,
+          yaCerrado: true,
+          mensaje: `${displayName} no labora los ${barberSchedule.diaSemana}s. En la agenda ya figura automáticamente como "Día libre" / "No disponible" todo el día. No es necesario ni posible agregar un bloqueo adicional.`,
         };
       }
 
-      // Revisar si el barbero ya tiene citas activas que choquen con ese horario
+      // 2. Determinar horario a bloquear acotado a su jornada laboral real
+      const shiftStart = barberSchedule.workingHours?.start || '10:00';
+      const shiftEnd = barberSchedule.workingHours?.end || '21:00';
+
+      let effectiveStart = (horaInicio && horaInicio.trim()) || shiftStart;
+      let effectiveEnd = (horaFin && horaFin.trim()) || shiftEnd;
+
+      // Si se envió un rango genérico como 09:00 a 21:00, ajustarlo a la jornada real del barbero
+      if (timeToMinutes(effectiveStart) < timeToMinutes(shiftStart)) {
+        effectiveStart = shiftStart;
+      }
+      if (timeToMinutes(effectiveEnd) > timeToMinutes(shiftEnd)) {
+        effectiveEnd = shiftEnd;
+      }
+
+      if (effectiveEnd <= effectiveStart) {
+        return {
+          ok: false,
+          mensaje: `La hora de fin (${effectiveEnd}) debe ser posterior a la hora de inicio (${effectiveStart}).`,
+        };
+      }
+
+      // 3. Validar si su jornada ya está 100% bloqueada/cubierta en la agenda
+      if (barberSchedule.isEntireShiftBlocked) {
+        const descBloqueos = barberSchedule.existingBlocks
+          .map((b) => `${b.hora_inicio}-${b.hora_fin} ("${b.motivo}")`)
+          .join(', ');
+        return {
+          ok: false,
+          yaBloqueado: true,
+          mensaje: `El horario de ${displayName} para el ${fecha} ya está totalmente CERRADO/BLOQUEADO en la agenda (${descBloqueos || 'descanso registrado'}). Fuera de su turno (${shiftStart} a ${shiftEnd}) ya figura como "No disponible". Para no encimar bloques ni duplicar franjas en la agenda, no se agregó otro bloqueo.`,
+        };
+      }
+
+      // 4. Validar traslape con bloqueos existentes en ese rango exacto
+      const bloqSolapados = barberSchedule.existingBlocks.filter((b) => {
+        return effectiveStart < b.hora_fin && effectiveEnd > b.hora_inicio;
+      });
+
+      if (bloqSolapados.length > 0) {
+        const solapado = bloqSolapados[0];
+        return {
+          ok: false,
+          empalmeBloqueo: true,
+          mensaje: `No se puede bloquear de ${effectiveStart} a ${effectiveEnd} porque se empalma con un bloqueo existente de ${displayName} de ${solapado.hora_inicio} a ${solapado.hora_fin} (motivo: "${solapado.motivo}"). En la agenda de VATOS ALFA está prohibido encimar bloques. Si deseas reemplazarlo, primero desbloquea el horario anterior.`,
+        };
+      }
+
+      // 5. Validar conflicto con citas activas de clientes
       const resSnap = await db.collection('reservas').where('fecha', '==', fecha).get();
       const conflictos: any[] = [];
       resSnap.forEach((doc) => {
@@ -296,7 +428,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
           (Array.isArray(r.items) && r.items.some((item: any) => item?.barbero_id === prof.id));
         if (!isForBarber) return;
 
-        if (horaInicio < r.hora_fin && horaFin > r.hora_inicio) {
+        if (effectiveStart < r.hora_fin && effectiveEnd > r.hora_inicio) {
           conflictos.push({
             reservaId: doc.id,
             cliente: r.customer?.nombre || r.cliente_nombre || 'Cliente',
@@ -311,23 +443,25 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
           ok: false,
           tieneConflictos: true,
           conflictos,
-          mensaje: `No se puede bloquear directamente porque ${prof.name} ya tiene ${conflictos.length} cita(s) activa(s) en ese horario (${conflictos.map((c) => `${c.cliente} de ${c.horario}`).join(', ')}). Primero debemos reagendar o cancelar esa(s) cita(s).`,
+          mensaje: `No se puede bloquear directamente porque ${displayName} ya tiene ${conflictos.length} cita(s) activa(s) en ese horario (${conflictos.map((c) => `${c.cliente} de ${c.horario}`).join(', ')}). Primero debemos reagendar o cancelar esa(s) cita(s).`,
         };
       }
 
+      // 6. Crear bloqueo limpio en bloqueos_horario
+      const cleanMotivo = motivo.trim().slice(0, 50);
       const blockRef = await db.collection('bloqueos_horario').add({
         barbero_id: prof.id,
-        motivo: motivo.slice(0, 50),
+        motivo: cleanMotivo,
         fecha,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
+        hora_inicio: effectiveStart,
+        hora_fin: effectiveEnd,
         creado_en: Timestamp.now(),
         local_id: defaultLocalId,
       });
 
       await db.collection('audit_logs').add({
         action: 'Bloquear Horario (Janet Gerencia)',
-        details: `Horario bloqueado para ${prof.name} el ${fecha} de ${horaInicio} a ${horaFin}. Motivo: ${motivo}`,
+        details: `Horario bloqueado para ${displayName} el ${fecha} de ${effectiveStart} a ${effectiveEnd}. Motivo: ${cleanMotivo}`,
         userId: 'janet_gerencia',
         userName: 'Janet Gerencia (Asistente de Sucursal)',
         userRole: 'Administrador local',
@@ -340,15 +474,17 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       return {
         ok: true,
         bloqueoId: blockRef.id,
-        mensaje: `Listo: quedó bloqueado el horario de **${prof.name}** el día **${fecha}** de **${horaInicio} a ${horaFin}** con motivo "${motivo}". Ya se refleja en la Agenda.`,
+        mensaje: `Listo Bety: quedó bloqueado el horario de **${displayName}** el día **${fecha}** de **${effectiveStart} a ${effectiveEnd}** con motivo "${cleanMotivo}". Ya se refleja limpiamente en la agenda.`,
       };
     }
 
     if (accion === 'habilitar_especial') {
-      if (horaFin <= horaInicio) {
+      const start = horaInicio || '10:00';
+      const end = horaFin || '21:00';
+      if (end <= start) {
         return {
           ok: false,
-          mensaje: `La hora de fin (${horaFin}) debe ser posterior a la hora de inicio (${horaInicio}).`,
+          mensaje: `La hora de fin (${end}) debe ser posterior a la hora de inicio (${start}).`,
         };
       }
 
@@ -356,8 +492,8 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
         barbero_id: prof.id,
         local_id: defaultLocalId,
         fecha,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
+        hora_inicio: start,
+        hora_fin: end,
         motivo: motivo || 'Horario Habilitado',
         type: 'available',
         created_at: new Date(),
@@ -365,7 +501,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
 
       await db.collection('audit_logs').add({
         action: 'Habilitar Horario Especial (Janet Gerencia)',
-        details: `Horario especial habilitado para ${prof.name} el ${fecha} de ${horaInicio} a ${horaFin}. Motivo: ${motivo}`,
+        details: `Horario especial habilitado para ${displayName} el ${fecha} de ${start} a ${end}. Motivo: ${motivo}`,
         userId: 'janet_gerencia',
         userName: 'Janet Gerencia (Asistente de Sucursal)',
         userRole: 'Administrador local',
@@ -378,7 +514,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       return {
         ok: true,
         bloqueoId: enableRef.id,
-        mensaje: `Listo: se habilitó el horario especial para **${prof.name}** el día **${fecha}** de **${horaInicio} a ${horaFin}**. Ya puede recibir citas en ese rango.`,
+        mensaje: `Listo Bety: se habilitó el horario especial para **${displayName}** el día **${fecha}** de **${start} a ${end}**. Ya puede recibir citas en ese rango.`,
       };
     }
 
@@ -389,26 +525,31 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       .where('fecha', '==', fecha)
       .get();
 
+    const checkStart = horaInicio || '00:00';
+    const checkEnd = horaFin || '23:59';
+
     const toDelete = blocksSnap.docs.filter((d) => {
       const b = d.data();
       if (b.type === 'available') return false;
-      return b.hora_inicio < horaFin && b.hora_fin > horaInicio;
+      return b.hora_inicio < checkEnd && b.hora_fin > checkStart;
     });
 
     if (toDelete.length === 0) {
       return {
         ok: false,
-        mensaje: `No encontré bloqueos activos para ${prof.name} el ${fecha} entre ${horaInicio} y ${horaFin}.`,
+        mensaje: `No encontré bloqueos de horario activos para ${displayName} el ${fecha} en ese rango.`,
       };
     }
 
+    const motivosEliminados: string[] = [];
     for (const d of toDelete) {
+      motivosEliminados.push(`${d.data().hora_inicio}-${d.data().hora_fin} ("${d.data().motivo}")`);
       await d.ref.delete();
     }
 
     await db.collection('audit_logs').add({
       action: 'Desbloquear Horario (Janet Gerencia)',
-      details: `Se eliminaron ${toDelete.length} bloqueo(s) de horario de ${prof.name} el ${fecha} (${horaInicio} - ${horaFin}). Motivo: ${motivo}`,
+      details: `Se eliminaron ${toDelete.length} bloqueo(s) de ${displayName} el ${fecha}: ${motivosEliminados.join(', ')}. Motivo: ${motivo}`,
       userId: 'janet_gerencia',
       userName: 'Janet Gerencia (Asistente de Sucursal)',
       userRole: 'Administrador local',
@@ -420,7 +561,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
     return {
       ok: true,
       eliminados: toDelete.length,
-      mensaje: `Se eliminaron ${toDelete.length} bloqueo(s) de horario de **${prof.name}** para el día **${fecha}**. Su agenda vuelve a estar disponible.`,
+      mensaje: `Listo Bety: se eliminaron ${toDelete.length} bloqueo(s) de **${displayName}** para el día **${fecha}** (${motivosEliminados.join(', ')}). Su horario vuelve a estar disponible en la agenda.`,
     };
   }
 );

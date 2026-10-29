@@ -78,6 +78,87 @@ export function JanetFloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Posición arrastrable del botón circular (para no estorbar en ninguna sección)
+  const [btnPos, setBtnPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    hasMoved: boolean;
+  } | null>(null);
+
+  // Inicializar posición recordando última ubicación o calculando esquina inferior derecha
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem('janet_floating_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          const x = Math.min(Math.max(12, parsed.x), window.innerWidth - 76);
+          const y = Math.min(Math.max(12, parsed.y), window.innerHeight - 76);
+          setBtnPos({ x, y });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Posición inicial cómoda: a la derecha, por encima de avisos inferiores
+    const defaultX = Math.max(12, window.innerWidth - 80);
+    const defaultY = Math.max(12, window.innerHeight - 150);
+    setBtnPos({ x: defaultX, y: defaultY });
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const curX = btnPos?.x ?? (window.innerWidth - 80);
+    const curY = btnPos?.y ?? (window.innerHeight - 150);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: curX,
+      origY: curY,
+      hasMoved: false,
+    };
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    if (Math.hypot(dx, dy) > 5) {
+      dragRef.current.hasMoved = true;
+    }
+    if (dragRef.current.hasMoved) {
+      const newX = Math.min(Math.max(12, dragRef.current.origX + dx), window.innerWidth - 72);
+      const newY = Math.min(Math.max(12, dragRef.current.origY + dy), window.innerHeight - 72);
+      setBtnPos({ x: newX, y: newY });
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const wasMoved = dragRef.current.hasMoved;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (_) {}
+
+    if (btnPos && wasMoved) {
+      try {
+        localStorage.setItem('janet_floating_pos', JSON.stringify(btnPos));
+      } catch (_) {}
+    }
+    dragRef.current = null;
+
+    if (!wasMoved) {
+      setIsOpen(true);
+    }
+  };
+
   // El Administrador General puede usar Janet CEO por defecto o cambiar a "Modo Gerencia (Bety)" para supervisar
   const [activeAgentMode, setActiveAgentMode] = useState<'ceo' | 'gerencia'>('gerencia');
   const [activeTab, setActiveTab] = useState<'chat' | 'recordatorios'>('chat');
@@ -482,33 +563,49 @@ export function JanetFloatingAssistant() {
 
   return (
     <>
-      {/* BOTÓN FLOTANTE DE JANET (SIEMPRE DISPONIBLE EN LA SESIÓN DE BETY Y DEL ADMIN GENERAL) */}
-      {!isOpen && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+      {/* BOTÓN FLOTANTE CIRCULAR ARRASTRABLE DE JANET (COMO EN LA APP MÓVIL) */}
+      {!isOpen && btnPos && (
+        <div
+          style={{
+            left: `${btnPos.x}px`,
+            top: `${btnPos.y}px`,
+            touchAction: 'none',
+          }}
+          className="fixed z-50 select-none animate-in fade-in zoom-in-75 duration-300"
+        >
           <button
             type="button"
-            onClick={() => setIsOpen(true)}
-            className="btn-vatos-alfa rounded-2xl px-4 py-2.5 shadow-[0_10px_30px_rgba(32,42,73,0.55)] border border-[#C5A880]/50 flex items-center gap-2.5 text-white hover:scale-[1.02] transition-transform cursor-pointer"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className="group relative w-14 h-14 sm:w-16 sm:h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-[#12192d] via-blue-500 to-[#C5A880] shadow-[0_10px_30px_rgba(0,0,0,0.55)] hover:shadow-[0_12px_35px_rgba(59,130,246,0.65)] hover:scale-105 active:scale-95 transition-all cursor-grab active:cursor-grabbing flex items-center justify-center"
             title={
               isGeneralOwner
-                ? 'Abrir Asistente Flotante Janet CEO / Gerencia'
-                : 'Abrir Asistente Janet Gerencia'
+                ? 'Janet CEO · Arrastra para mover o toca para abrir'
+                : 'Janet Gerencia · Arrastra para mover o toca para abrir'
             }
           >
-            <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
-            <div className="text-left">
-              <div className="text-xs font-bold tracking-wide leading-none flex items-center gap-1.5">
-                <span>{isGeneralOwner ? 'Janet CEO' : 'Janet Gerencia'}</span>
-                {pendingBadgeCount > 0 && (
-                  <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-semibold rounded-full bg-[#202A49] text-[#C5A880] border border-[#C5A880]/60 font-sans">
-                    {pendingBadgeCount}
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-slate-300 leading-tight mt-0.5 hidden sm:block">
-                {isGeneralOwner ? 'Dirección y Supervisión' : 'Asistente de Sucursal'}
-              </p>
+            {/* Foto de perfil de Janet circular idéntica a la aplicación */}
+            <div className="w-full h-full rounded-full overflow-hidden bg-slate-950 border-2 border-white/20 flex items-center justify-center relative">
+              <img
+                src="/janet-avatar.png"
+                alt="Janet"
+                className="w-full h-full object-cover select-none pointer-events-none"
+                draggable={false}
+              />
             </div>
+
+            {/* Insignia de rol discreta: CEO o GER */}
+            <div className="absolute -bottom-1 -left-1 px-1.5 py-0.5 rounded-full bg-[#10172b] border border-[#C5A880]/70 text-[#C5A880] text-[9px] font-extrabold tracking-wider shadow-sm select-none pointer-events-none font-sans">
+              {isGeneralOwner ? 'CEO' : 'GER'}
+            </div>
+
+            {/* Contador de avisos / recordatorios pendientes */}
+            {pendingBadgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-blue-600 border-2 border-slate-900 text-white text-[10px] font-extrabold flex items-center justify-center shadow-md animate-pulse font-sans select-none pointer-events-none">
+                {pendingBadgeCount}
+              </span>
+            )}
           </button>
         </div>
       )}
@@ -529,7 +626,11 @@ export function JanetFloatingAssistant() {
 
             <div className="relative z-10 flex items-center justify-between w-full gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
+                <img
+                  src="/janet-avatar.png"
+                  alt="Janet"
+                  className="w-8 h-8 rounded-full object-cover ring-2 ring-[#C5A880] shrink-0 select-none shadow-md"
+                />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <h3 className="text-xs sm:text-sm font-bold text-white truncate">

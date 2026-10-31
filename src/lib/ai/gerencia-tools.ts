@@ -354,49 +354,132 @@ async function resolveServiceForGerencia(
 
 async function resolveOrCreateClientForGerencia(
   db: any,
-  nombreCliente: string,
-  telefonoCliente?: string
-): Promise<{ id: string; nombre: string; telefono: string; correo: string }> {
+  nombreCliente?: string,
+  telefonoCliente?: string,
+  numeroCliente?: string
+): Promise<{
+  id: string;
+  nombre: string;
+  telefono: string;
+  correo: string;
+  numeroCliente?: string;
+  fueEncontrado: boolean;
+}> {
   const cleanPhone = (telefonoCliente || '').replace(/\D/g, '');
+  const rawQuery = (nombreCliente || '').trim();
+  const qNumClean = (numeroCliente || rawQuery).replace(/^cliente\s*#?|^#/, '').trim();
+
   let resolvedId = '';
-  let resolvedName = nombreCliente.trim();
+  let resolvedName = rawQuery;
   let resolvedPhone = cleanPhone;
   let resolvedEmail = '';
+  let resolvedNum = '';
+  let fueEncontrado = false;
 
-  // 1. Buscar por teléfono si tiene 7 o más dígitos
+  // 1. Buscar directamente por teléfono si tiene al menos 7 dígitos (probando variantes 10 dígitos, con 52, con +52)
   if (cleanPhone && cleanPhone.length >= 7) {
-    const phoneSnap = await db.collection('clientes').where('telefono', '==', cleanPhone).limit(1).get();
-    if (!phoneSnap.empty) {
-      const cd = phoneSnap.docs[0].data();
-      resolvedId = phoneSnap.docs[0].id;
-      resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim() || resolvedName;
-      resolvedPhone = cd.telefono || cleanPhone;
-      resolvedEmail = cd.correo || cd.email || '';
-    }
-  }
-
-  // 2. Si no se encontró por teléfono, buscar por nombre
-  if (!resolvedId && resolvedName) {
-    const nameNorm = normalizeName(resolvedName);
-    const cliSnap = await db.collection('clientes').limit(80).get();
-    for (const d of cliSnap.docs) {
-      const cd = d.data();
-      const fullName = normalizeName(`${cd.nombre || ''} ${cd.apellido || ''}`);
-      if (fullName === nameNorm || (fullName && fullName.includes(nameNorm)) || (nameNorm && nameNorm.includes(fullName))) {
-        resolvedId = d.id;
-        resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim();
-        resolvedPhone = cd.telefono || resolvedPhone || '';
+    const last10 = cleanPhone.slice(-10);
+    const variants = [cleanPhone, last10, `52${last10}`, `+52${last10}`, `521${last10}`];
+    for (const v of variants) {
+      const pSnap = await db.collection('clientes').where('telefono', '==', v).limit(1).get();
+      if (!pSnap.empty) {
+        const cd = pSnap.docs[0].data();
+        resolvedId = pSnap.docs[0].id;
+        resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim() || resolvedName;
+        resolvedPhone = cd.telefono || cleanPhone;
         resolvedEmail = cd.correo || cd.email || '';
+        resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
+        fueEncontrado = true;
         break;
       }
     }
   }
 
-  // 3. Si no existe, crear registro en clientes
+  // 2. Si no se encontró y hay número de cliente (ej. 311)
+  if (!resolvedId && qNumClean && /^\d+$/.test(qNumClean)) {
+    const numSnap = await db.collection('clientes').where('numero_cliente', '==', qNumClean).limit(1).get();
+    if (!numSnap.empty) {
+      const cd = numSnap.docs[0].data();
+      resolvedId = numSnap.docs[0].id;
+      resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim() || resolvedName;
+      resolvedPhone = cd.telefono || resolvedPhone || '';
+      resolvedEmail = cd.correo || cd.email || '';
+      resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
+      fueEncontrado = true;
+    }
+  }
+
+  // 3. Si no se encontró por índice directo, escanear la base de clientes (búsqueda inteligente)
+  if (!resolvedId && (cleanPhone.length >= 7 || rawQuery || qNumClean)) {
+    const qNorm = normalizeName(rawQuery);
+    const snap = await db.collection('clientes').get();
+    let bestDoc: any = null;
+    let highestScore = 0;
+
+    snap.forEach((d: any) => {
+      const cd = d.data();
+      if (cd.activo === false) return;
+
+      const cFullName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim();
+      const cFullNameNorm = normalizeName(cFullName);
+      const cDigits = String(cd.telefono || '').replace(/\D/g, '');
+      const cNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '').trim();
+
+      let score = 0;
+
+      // Coincidencia por teléfono
+      if (cleanPhone.length >= 7 && cDigits.length >= 7) {
+        if (cDigits === cleanPhone || cDigits.slice(-10) === cleanPhone.slice(-10)) score += 100;
+        else if (cDigits.endsWith(cleanPhone) || cleanPhone.endsWith(cDigits)) score += 90;
+        else if (cDigits.includes(cleanPhone) || cleanPhone.includes(cDigits)) score += 70;
+      }
+
+      // Coincidencia por número de cliente
+      if (qNumClean && cNum === qNumClean) {
+        score += 95;
+      }
+
+      // Coincidencia por nombre completo o tokens
+      if (qNorm && cFullNameNorm) {
+        if (cFullNameNorm === qNorm) score += 100;
+        else if (cFullNameNorm.includes(qNorm)) score += 80;
+        else {
+          const tokens = qNorm.split(/\s+/).filter((t: string) => t.length > 1);
+          if (tokens.length > 0 && tokens.every((t: string) => cFullNameNorm.includes(t))) {
+            score += 75;
+          }
+        }
+      }
+
+      if (score > highestScore && score >= 70) {
+        highestScore = score;
+        bestDoc = { id: d.id, ...cd, fullName: cFullName };
+      }
+    });
+
+    if (bestDoc) {
+      resolvedId = bestDoc.id;
+      resolvedName = bestDoc.fullName || resolvedName;
+      resolvedPhone = bestDoc.telefono || resolvedPhone || '';
+      resolvedEmail = bestDoc.correo || bestDoc.email || '';
+      resolvedNum = String(bestDoc.numero_cliente ?? bestDoc.numeroCliente ?? '');
+      fueEncontrado = true;
+    }
+  }
+
+  // 4. Si después de buscar no existe ningún registro previo, crear nuevo cliente
   if (!resolvedId) {
-    const nameParts = resolvedName.split(/\s+/);
-    const firstName = nameParts[0] || 'Cliente';
-    const lastName = nameParts.slice(1).join(' ') || '';
+    let firstName = 'Cliente';
+    let lastName = '';
+    if (resolvedName) {
+      const parts = resolvedName.split(/\s+/);
+      firstName = parts[0] || 'Cliente';
+      lastName = parts.slice(1).join(' ') || '';
+    } else if (cleanPhone) {
+      firstName = 'Cliente';
+      lastName = `Tel ${cleanPhone.slice(-4)}`;
+    }
+
     const newDoc = await db.collection('clientes').add({
       nombre: firstName,
       apellido: lastName,
@@ -408,6 +491,9 @@ async function resolveOrCreateClientForGerencia(
       numero_cliente: String(Date.now()).slice(-4),
     });
     resolvedId = newDoc.id;
+    resolvedName = `${firstName} ${lastName}`.trim();
+    resolvedNum = String(Date.now()).slice(-4);
+    fueEncontrado = false;
   }
 
   return {
@@ -415,35 +501,193 @@ async function resolveOrCreateClientForGerencia(
     nombre: resolvedName,
     telefono: resolvedPhone,
     correo: resolvedEmail,
+    numeroCliente: resolvedNum,
+    fueEncontrado,
   };
 }
 
 // ============================================================================
-// 2. AGENDAR CITA EN LA AGENDA (FACULTAD COMPLETA DE ADMINISTRADORA LOCAL)
+// 2. BUSCAR CLIENTES EN LA BASE DE DATOS (POR CELULAR, NOMBRE, # CLIENTE, EMAIL)
+// ============================================================================
+export const buscarClienteSucursalTool = ai.defineTool(
+  {
+    name: 'buscar_cliente_sucursal',
+    description:
+      'Busca clientes en la base de datos oficial de VATOS ALFA por cualquier criterio: número de celular o teléfono (10 dígitos o parcial), nombre o apellido (búsqueda difusa/aproximada sin acentos), número de cliente (ej. 311, #45), correo electrónico o ID. Devuelve el perfil completo del cliente (nombre, teléfono, correo, número de cliente, nivel Pase Alfa Club, AlfaCoins, cortes acumulados, citas asistidas y notas) para agendar citas, verificar información o resolver dudas de la administración.',
+    inputSchema: z.object({
+      termino: z
+        .string()
+        .describe(
+          'Término de búsqueda: puede ser número de teléfono/celular (ej. "4428259334"), nombre o apellido del cliente (ej. "Rigoberto", "Leon", "Carlos"), número de cliente (ej. "311", "#45"), o correo electrónico.'
+        ),
+      limite: z
+        .number()
+        .optional()
+        .describe('Cantidad máxima de resultados a devolver (por defecto 10).'),
+    }),
+  },
+  async ({ termino, limite = 10 }) => {
+    const db = getDb();
+    const query = termino.trim();
+    if (!query) {
+      return {
+        encontrados: 0,
+        mensaje: 'Por favor proporciona un nombre, número de celular o número de cliente para buscar.',
+        clientes: [],
+      };
+    }
+
+    const qNorm = normalizeName(query);
+    const qDigits = query.replace(/\D/g, '');
+    const qNumClean = qNorm.replace(/^cliente\s*#?|^#/, '').trim();
+
+    const snap = await db.collection('clientes').get();
+    const results: any[] = [];
+
+    snap.forEach((d) => {
+      const c = d.data();
+      if (c.activo === false) return;
+
+      const fullName = `${c.nombre || ''} ${c.apellido || ''}`.trim();
+      const fullNameNorm = normalizeName(fullName);
+      const clientDigits = String(c.telefono || '').replace(/\D/g, '');
+      const clientNum = String(c.numero_cliente ?? c.numeroCliente ?? '').trim();
+      const emailNorm = normalizeName(c.correo || c.email || '');
+
+      let match = false;
+      let score = 0;
+
+      // 1. Coincidencia por teléfono / celular
+      if (qDigits.length >= 4 && clientDigits.length >= 4) {
+        if (clientDigits === qDigits || (qDigits.length >= 10 && clientDigits.slice(-10) === qDigits.slice(-10))) {
+          match = true;
+          score += 100;
+        } else if (clientDigits.endsWith(qDigits) || qDigits.endsWith(clientDigits)) {
+          match = true;
+          score += 90;
+        } else if (clientDigits.includes(qDigits) || qDigits.includes(clientDigits)) {
+          match = true;
+          score += 70;
+        }
+      }
+
+      // 2. Coincidencia por número de cliente
+      if (clientNum) {
+        if (clientNum === qNumClean || (qDigits && clientNum === qDigits)) {
+          match = true;
+          score += 95;
+        }
+      }
+
+      // 3. Coincidencia por correo
+      if (emailNorm && (emailNorm === qNorm || emailNorm.includes(qNorm))) {
+        match = true;
+        score += 85;
+      }
+
+      // 4. Coincidencia por nombre completo o palabras individuales
+      if (fullNameNorm) {
+        if (fullNameNorm === qNorm) {
+          match = true;
+          score += 100;
+        } else if (fullNameNorm.includes(qNorm)) {
+          match = true;
+          score += 80;
+        } else {
+          const tokens = qNorm.split(/\s+/).filter((t) => t.length > 1);
+          if (tokens.length > 0 && tokens.every((t) => fullNameNorm.includes(t))) {
+            match = true;
+            score += 75;
+          }
+        }
+      }
+
+      // 5. Coincidencia por ID de documento
+      if (d.id === query) {
+        match = true;
+        score += 100;
+      }
+
+      if (match) {
+        const stamps = Number(c.cortes_acumulados ?? c.cortesAcumulados ?? 0);
+        const nivel =
+          c.nivel ||
+          (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member');
+        results.push({
+          id: d.id,
+          nombre: c.nombre || '',
+          apellido: c.apellido || '',
+          nombreCompleto: fullName || 'Cliente',
+          telefono: c.telefono || 'Sin registrar',
+          correo: c.correo || c.email || 'Sin registrar',
+          numeroCliente: clientNum || 'N/A',
+          nivel,
+          alfaCoins: Number(c.alfaCoins ?? c.alfa_coins ?? 0),
+          cortesAcumulados: stamps,
+          citasAsistidas: Number(c.citas_asistidas ?? stamps),
+          notas: c.notas || '',
+          score,
+        });
+      }
+    });
+
+    results.sort((a, b) => b.score - a.score);
+    const topResults = results.slice(0, Math.min(limite, 20));
+
+    if (topResults.length === 0) {
+      return {
+        encontrados: 0,
+        mensaje: `No se encontró ningún cliente registrado con el término "${query}".`,
+        clientes: [],
+      };
+    }
+
+    return {
+      encontrados: topResults.length,
+      mensaje:
+        topResults.length === 1
+          ? `Se encontró al cliente: **${topResults[0].nombreCompleto}** (Cliente #${topResults[0].numeroCliente}, Celular: ${topResults[0].telefono}). Nivel: ${topResults[0].nivel}, Cortes: ${topResults[0].cortesAcumulados}.`
+          : `Se encontraron ${topResults.length} clientes coincidentes. El más relevante es **${topResults[0].nombreCompleto}** (Cliente #${topResults[0].numeroCliente}, Celular: ${topResults[0].telefono}).`,
+      clientes: topResults,
+    };
+  }
+);
+
+// ============================================================================
+// 3. AGENDAR CITA EN LA AGENDA (FACULTAD COMPLETA DE ADMINISTRADORA LOCAL)
 // ============================================================================
 export const agendarCitaSucursalTool = ai.defineTool(
   {
     name: 'agendar_cita_sucursal',
     description:
-      'Agenda o crea una cita directamente en la cuadrícula de la agenda de VATOS ALFA a solicitud de Beatriz (Administradora del Local). Valida la disponibilidad del barbero, asocia cliente y servicio, y registra la reserva en tiempo real.',
+      'Agenda o crea una cita directamente en la cuadrícula de la agenda de VATOS ALFA a solicitud de la Administración (Beatriz o Administrador General). Valida la disponibilidad del barbero, asocia o busca automáticamente al cliente por nombre, celular o número de cliente, asocia el servicio y registra la reserva en tiempo real.',
     inputSchema: z.object({
       nombreCliente: z
         .string()
-        .describe('Nombre del cliente (ej. "Carlos Morales", "Pedro Gómez", "Juan").'),
+        .optional()
+        .describe(
+          'Nombre del cliente si se conoce. Si se omite, el sistema lo buscará automáticamente por telefonoCliente o numeroCliente en la base de datos.'
+        ),
       telefonoCliente: z
         .string()
         .optional()
-        .describe('Teléfono de contacto del cliente a 10 dígitos (opcional).'),
+        .describe(
+          'Teléfono o celular de contacto del cliente a 10 dígitos (ej. "4428259334"). Si se proporciona sin nombre, el sistema busca automáticamente al cliente en la base de datos.'
+        ),
+      numeroCliente: z
+        .string()
+        .optional()
+        .describe('Número de cliente en la base de datos (ej. "311").'),
       barberoNombre: z
         .string()
-        .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Ivon", "Lupita", "Beatriz").'),
+        .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Fredy", "Ivon", "Lupita", "Beatriz").'),
       fecha: z
         .string()
         .optional()
         .describe('Fecha de la cita en formato YYYY-MM-DD. Si se omite, se usa el día de hoy en Querétaro.'),
       hora: z
         .string()
-        .describe('Hora de inicio de la cita (ej. "16:00", "4:00 PM", "11:30").'),
+        .describe('Hora de inicio de la cita (ej. "13:00", "1:00 PM", "16:00", "4:00 PM", "11:30").'),
       servicioNombre: z
         .string()
         .optional()
@@ -455,12 +699,13 @@ export const agendarCitaSucursalTool = ai.defineTool(
       forzarSobrecupo: z
         .boolean()
         .optional()
-        .describe('Si es true, permite agendar sobrecupo o fuera de turno si Beatriz lo autoriza explícitamente.'),
+        .describe('Si es true, permite agendar sobrecupo o fuera de turno si la administración lo autoriza explícitamente.'),
     }),
   },
   async ({
     nombreCliente,
     telefonoCliente,
+    numeroCliente,
     barberoNombre,
     fecha,
     hora,
@@ -567,7 +812,12 @@ export const agendarCitaSucursalTool = ai.defineTool(
     }
 
     // 4. Resolver o registrar cliente
-    const client = await resolveOrCreateClientForGerencia(db, nombreCliente, telefonoCliente);
+    const client = await resolveOrCreateClientForGerencia(
+      db,
+      nombreCliente,
+      telefonoCliente,
+      numeroCliente
+    );
 
     // 5. Crear la reserva en la base de datos oficial
     const newResRef = await db.collection('reservas').add({
@@ -650,13 +900,15 @@ export const agendarCitaSucursalTool = ai.defineTool(
       reservaId: newResRef.id,
       cliente: client.nombre,
       telefono: client.telefono,
+      numeroCliente: client.numeroCliente,
+      clienteIdentificadoPreviamente: client.fueEncontrado,
       barbero: barberDisplayName,
       fecha: targetDate,
       horario: `${horaInicio} a ${horaFin}`,
       duracionMinutos: service.duration,
       servicio: service.name,
       precio: service.price,
-      mensaje: `¡Listo Bety! La cita quedó agendada con éxito en la agenda:\n\n• **Cliente:** ${client.nombre}${client.telefono ? ` (${client.telefono})` : ''}\n• **Barbero:** ${barberDisplayName}\n• **Fecha:** ${targetDate}\n• **Horario:** ${horaInicio} a ${horaFin} (${service.duration} min)\n• **Servicio:** ${service.name}\n• **Total a liquidar en caja:** $${service.price.toFixed(2)} MXN\n\nYa aparece visible en la cuadrícula de la agenda para todo el equipo.`,
+      mensaje: `¡Listo! La cita quedó agendada con éxito en la agenda:\n\n• **Cliente:** ${client.nombre}${client.numeroCliente ? ` (Cliente #${client.numeroCliente})` : ''}${client.telefono ? ` - Celular: ${client.telefono}` : ''}\n• **Barbero:** ${barberDisplayName}\n• **Fecha:** ${targetDate}\n• **Horario:** ${horaInicio} a ${horaFin} (${service.duration} min)\n• **Servicio:** ${service.name}\n• **Total a liquidar en caja:** $${service.price.toFixed(2)} MXN\n\nYa aparece visible en la cuadrícula de la agenda para todo el equipo.`,
     };
   }
 );
@@ -729,7 +981,15 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       const data = doc.data();
       if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
       const clientName = normalizeName(data.cliente_nombre || data.customer?.nombre || '');
-      if (clientName === queryNorm || clientName.includes(queryNorm) || queryNorm.includes(clientName)) {
+      const clientPhoneDigits = String(data.cliente_telefono || data.customer?.telefono || '').replace(/\D/g, '');
+      const queryDigits = nombreClienteOId.replace(/\D/g, '');
+
+      if (
+        clientName === queryNorm ||
+        clientName.includes(queryNorm) ||
+        queryNorm.includes(clientName) ||
+        (queryDigits.length >= 7 && (clientPhoneDigits === queryDigits || clientPhoneDigits.endsWith(queryDigits)))
+      ) {
         matchedDoc = doc;
       }
     });
@@ -1527,6 +1787,7 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
 export function getGerenciaAgentTools() {
   return [
     consultarOperacionDiaSucursalTool,
+    buscarClienteSucursalTool,
     consultarDisponibilidadBarberosSucursalTool,
     agendarCitaSucursalTool,
     reagendarCitaSucursalTool,

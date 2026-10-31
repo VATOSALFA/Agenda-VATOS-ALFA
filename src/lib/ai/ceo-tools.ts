@@ -6,6 +6,7 @@ import { getDb } from '@/lib/firebase-server';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { sanitizeExternalUntrustedText } from './ceo-security';
 import {
+  buscarClienteSucursalTool,
   consultarOperacionDiaSucursalTool,
   consultarDisponibilidadBarberosSucursalTool,
   agendarCitaSucursalTool,
@@ -1160,6 +1161,7 @@ export function getCeoAgentTools() {
     enviarConsignaAGerenciaSucursalTool,
 
     // Herramientas Operativas y de Agenda de Sucursal (Privilegios de Administrador General)
+    buscarClienteSucursalTool,
     agendarCitaSucursalTool,
     reagendarCitaSucursalTool,
     consultarDisponibilidadBarberosSucursalTool,

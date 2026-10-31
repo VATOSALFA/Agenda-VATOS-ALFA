@@ -69,7 +69,7 @@ export async function getGerenciaDashboardSnapshot(idToken: string) {
       .get(),
     db.collection('productos').get(),
     db.collection('gerencia_recordatorios').limit(40).get(),
-    db.collection('gerencia_sesiones').limit(15).get(),
+    db.collection('gerencia_sesiones').orderBy('actualizado_en', 'desc').limit(25).get(),
   ]);
 
   let citasActivasHoy = 0;

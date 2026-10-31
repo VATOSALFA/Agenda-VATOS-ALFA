@@ -1248,83 +1248,89 @@ export default function JanetCeoPage() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-end gap-1.5">
-                  {/* 1. Emojis estilo WhatsApp */}
-                  <WhatsAppEmojiPicker
-                    disabled={isSending}
-                    onSelectEmoji={(emoji) => setInputMessage((prev) => `${prev}${emoji}`)}
-                  />
+                <div className="flex flex-col gap-2">
+                  {/* Fila 1: Campo de texto al 100% de ancho que crece hacia arriba */}
+                  <div className="w-full relative">
+                    <Textarea
+                      ref={chatTextareaRef}
+                      value={inputMessage}
+                      onChange={(e) => {
+                        setInputMessage(e.target.value);
+                        const el = e.target;
+                        el.style.height = 'auto';
+                        const nextH = Math.min(Math.max(40, el.scrollHeight), 140);
+                        el.style.height = `${nextH}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === 'Enter' &&
+                          !e.shiftKey &&
+                          chatPreferences.enterToSend
+                        ) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      placeholder="Escribe o usa el micrófono para hablar con Janet CEO..."
+                      className="w-full min-h-[40px] max-h-[140px] py-2.5 px-3.5 text-xs sm:text-sm rounded-xl resize-none overflow-y-auto leading-relaxed bg-muted/30 border border-border/70 focus:border-blue-500"
+                      rows={1}
+                    />
+                  </div>
 
-                  {/* 2. Adjuntar Archivo o Imagen */}
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isSending}
-                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors"
-                    title="Adjuntar imagen, captura o estado de cuenta PDF"
-                  >
-                    <Paperclip className="h-4 w-4" />
-                  </button>
+                  {/* Fila 2: Barra inferior de herramientas a la izquierda y botón Enviar a la derecha */}
+                  <div className="flex items-center justify-between w-full pt-0.5">
+                    <div className="flex items-center gap-1">
+                      {/* 1. Emojis estilo WhatsApp */}
+                      <WhatsAppEmojiPicker
+                        disabled={isSending}
+                        onSelectEmoji={(emoji) => setInputMessage((prev) => `${prev}${emoji}`)}
+                      />
 
-                  {/* 3. Cámara en Vivo */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCameraModalOpen(true)}
-                    disabled={isSending}
-                    className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors"
-                    title="Tomar foto con la cámara"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </button>
+                      {/* 2. Adjuntar Archivo o Imagen */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isSending}
+                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors"
+                        title="Adjuntar imagen, captura o estado de cuenta PDF"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                      </button>
 
-                  {/* Campo de texto que crece hacia arriba */}
-                  <Textarea
-                    ref={chatTextareaRef}
-                    value={inputMessage}
-                    onChange={(e) => {
-                      setInputMessage(e.target.value);
-                      const el = e.target;
-                      el.style.height = 'auto';
-                      const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
-                      el.style.height = `${nextH}px`;
-                    }}
-                    onKeyDown={(e) => {
-                      if (
-                        e.key === 'Enter' &&
-                        !e.shiftKey &&
-                        chatPreferences.enterToSend
-                      ) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    placeholder="Escribe o usa el micrófono para hablar con Janet CEO..."
-                    className="min-h-[38px] max-h-[140px] py-2 text-xs sm:text-sm rounded-xl resize-none flex-1 overflow-y-auto leading-relaxed"
-                    rows={1}
-                  />
+                      {/* 3. Cámara en Vivo */}
+                      <button
+                        type="button"
+                        onClick={() => setIsCameraModalOpen(true)}
+                        disabled={isSending}
+                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors"
+                        title="Tomar foto con la cámara"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </button>
 
-                  {/* 4. Micrófono de Dictado / Nota de Voz o Botón Enviar */}
-                  {inputMessage.trim() || attachmentDataUrl ? (
+                      {/* 4. Micrófono de Dictado / Nota de Voz */}
+                      <button
+                        type="button"
+                        disabled={isSending}
+                        onClick={startVoiceRecording}
+                        className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                        title="Grabar nota de voz o dictar mensaje"
+                      >
+                        <Mic className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Botón Enviar */}
                     <Button
                       variant="alfa"
-                      disabled={isSending}
+                      disabled={isSending || (!inputMessage.trim() && !attachmentDataUrl)}
                       onClick={() => handleSendMessage()}
-                      className="h-9 px-3.5 rounded-xl text-xs font-bold shrink-0"
+                      className="h-8 px-3.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1.5"
                     >
-                      <Send className="h-3.5 w-3.5 mr-1 text-slate-200" />
-                      Enviar
+                      <span>Enviar</span>
+                      <Send className="h-3.5 w-3.5 text-slate-200" />
                     </Button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isSending}
-                      onClick={startVoiceRecording}
-                      className="btn-vatos-alfa h-9 w-9 rounded-full flex items-center justify-center shrink-0 text-white shadow-md cursor-pointer"
-                      title="Grabar nota de voz o dictar mensaje"
-                    >
-                      <Mic className="h-4 w-4 text-white" />
-                    </button>
-                  )}
+                  </div>
                 </div>
               )}
             </div>

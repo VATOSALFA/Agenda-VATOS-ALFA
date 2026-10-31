@@ -84,6 +84,10 @@ import {
 // ============================================================================
 const JANET_EXEC_PREFS_KEY = 'vatos_alfa_janet_exec_chat_prefs_v1';
 const JANET_RECENT_EMOJIS_KEY = 'vatos_alfa_janet_exec_recent_emojis_v1';
+const JANET_CEO_ACTIVE_SESSION_KEY = 'vatos_alfa_janet_ceo_active_session_v1';
+const JANET_CEO_MESSAGES_KEY = 'vatos_alfa_janet_ceo_messages_v1';
+const JANET_GERENCIA_ACTIVE_SESSION_KEY = 'vatos_alfa_janet_gerencia_active_session_v1';
+const JANET_GERENCIA_MESSAGES_KEY = 'vatos_alfa_janet_gerencia_messages_v1';
 
 type ExecBubbleThemeId =
   | 'navy_alfa'
@@ -110,7 +114,7 @@ const DEFAULT_EXEC_CHAT_PREFS: ExecChatPrefs = {
   notificationTone: 'cristal',
   soundAndVibration: true,
   showAudioTranscription: true,
-  enterToSend: true,
+  enterToSend: false, // Por defecto, Enter permite salto de línea libre
 };
 
 const EXEC_BUBBLE_THEMES: {
@@ -345,11 +349,26 @@ export function JanetFloatingAssistant() {
   const liveTranscriptRef = useRef<string>('');
   const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
 
-  // Estado de Janet Gerencia
+  // Estado de Janet Gerencia (inicializado con persistencia local para no perder conversaciones)
   const [gerenciaLoading, setGerenciaLoading] = useState(false);
   const [gerenciaSending, setGerenciaSending] = useState(false);
-  const [gerenciaSessionId, setGerenciaSessionId] = useState('');
-  const [gerenciaMessages, setGerenciaMessages] = useState<GerenciaChatMessage[]>([]);
+  const [gerenciaSessionId, setGerenciaSessionId] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return localStorage.getItem(JANET_GERENCIA_ACTIVE_SESSION_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [gerenciaMessages, setGerenciaMessages] = useState<GerenciaChatMessage[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(JANET_GERENCIA_MESSAGES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [gerenciaReminders, setGerenciaReminders] = useState<GerenciaReminderItem[]>([]);
   const [gerenciaStockAlerts, setGerenciaStockAlerts] = useState<
     Array<{ id: string; nombre: string; stock: number; min: number }>
@@ -363,11 +382,26 @@ export function JanetFloatingAssistant() {
     recordatoriosPendientesCount: 0,
   });
 
-  // Estado de Janet CEO
+  // Estado de Janet CEO (inicializado con persistencia local para no perder conversaciones)
   const [ceoLoading, setCeoLoading] = useState(false);
   const [ceoSending, setCeoSending] = useState(false);
-  const [ceoSessionId, setCeoSessionId] = useState('');
-  const [ceoMessages, setCeoMessages] = useState<FloatingCeoMessage[]>([]);
+  const [ceoSessionId, setCeoSessionId] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return localStorage.getItem(JANET_CEO_ACTIVE_SESSION_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [ceoMessages, setCeoMessages] = useState<FloatingCeoMessage[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const saved = localStorage.getItem(JANET_CEO_MESSAGES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Inputs y autorización
   const [inputPrompt, setInputPrompt] = useState('');
@@ -415,6 +449,39 @@ export function JanetFloatingAssistant() {
       } catch (_) {}
     }
   };
+
+  // Guardar en localStorage de inmediato para evitar que al cerrar se pierda la conversación
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (ceoSessionId) localStorage.setItem(JANET_CEO_ACTIVE_SESSION_KEY, ceoSessionId);
+    } catch (_) {}
+  }, [ceoSessionId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (ceoMessages.length > 0) {
+        localStorage.setItem(JANET_CEO_MESSAGES_KEY, JSON.stringify(ceoMessages));
+      }
+    } catch (_) {}
+  }, [ceoMessages]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (gerenciaSessionId) localStorage.setItem(JANET_GERENCIA_ACTIVE_SESSION_KEY, gerenciaSessionId);
+    } catch (_) {}
+  }, [gerenciaSessionId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (gerenciaMessages.length > 0) {
+        localStorage.setItem(JANET_GERENCIA_MESSAGES_KEY, JSON.stringify(gerenciaMessages));
+      }
+    } catch (_) {}
+  }, [gerenciaMessages]);
 
   const activeBubbleTheme =
     EXEC_BUBBLE_THEMES.find((t) => t.id === chatPrefs.bubbleTheme) || EXEC_BUBBLE_THEMES[0];
@@ -520,8 +587,20 @@ export function JanetFloatingAssistant() {
       setGerenciaKpis(snap.kpisDia);
       setGerenciaReminders(snap.recordatorios || []);
       setGerenciaStockAlerts(snap.alertasStock || []);
-      setGerenciaSessionId(snap.sesionActivaId || '');
-      setGerenciaMessages(snap.mensajesRecientes || []);
+
+      const savedSessionId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem(JANET_GERENCIA_ACTIVE_SESSION_KEY)
+          : null;
+      const targetSessionId = savedSessionId || snap.sesionActivaId || '';
+      if (targetSessionId) {
+        setGerenciaSessionId(targetSessionId);
+      }
+      if (snap.mensajesRecientes && snap.mensajesRecientes.length > 0) {
+        setGerenciaMessages((prev) =>
+          prev && prev.length > snap.mensajesRecientes.length ? prev : snap.mensajesRecientes
+        );
+      }
     } catch (err: any) {
       console.error('Error cargando Janet Gerencia:', err);
     } finally {
@@ -535,11 +614,21 @@ export function JanetFloatingAssistant() {
       setCeoLoading(true);
       const token = await getFreshToken();
       const snap = await getCeoExecutiveDashboardSnapshot(token);
-      const latestSessionId = snap.sesiones?.[0]?.id || '';
-      setCeoSessionId(latestSessionId);
-      if (latestSessionId) {
-        const msgsRes = await getCeoSessionMessages(token, latestSessionId);
-        setCeoMessages((msgsRes.messages || []) as FloatingCeoMessage[]);
+      const savedSessionId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem(JANET_CEO_ACTIVE_SESSION_KEY)
+          : null;
+      const targetSessionId = savedSessionId || snap.sesiones?.[0]?.id || '';
+      if (targetSessionId) {
+        setCeoSessionId(targetSessionId);
+        const msgsRes = await getCeoSessionMessages(token, targetSessionId);
+        if (msgsRes.messages && msgsRes.messages.length > 0) {
+          setCeoMessages((prev) =>
+            prev && prev.length > (msgsRes.messages?.length || 0)
+              ? prev
+              : ((msgsRes.messages || []) as FloatingCeoMessage[])
+          );
+        }
       }
     } catch (err: any) {
       console.error('Error cargando Janet CEO flotante:', err);
@@ -974,6 +1063,12 @@ export function JanetFloatingAssistant() {
     if (activeAgentMode === 'ceo' && isGeneralOwner) {
       setCeoSessionId('');
       setCeoMessages([]);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(JANET_CEO_ACTIVE_SESSION_KEY);
+          localStorage.removeItem(JANET_CEO_MESSAGES_KEY);
+        } catch (_) {}
+      }
       toast({
         title: 'Nueva conversación con Janet CEO',
         description: 'Sesión ejecutiva reiniciada y lista.',
@@ -981,6 +1076,12 @@ export function JanetFloatingAssistant() {
     } else {
       setGerenciaSessionId('');
       setGerenciaMessages([]);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem(JANET_GERENCIA_ACTIVE_SESSION_KEY);
+          localStorage.removeItem(JANET_GERENCIA_MESSAGES_KEY);
+        } catch (_) {}
+      }
       toast({
         title: 'Nueva conversación con Janet Gerencia',
         description: 'Sesión operativa reiniciada y lista.',
@@ -2469,115 +2570,124 @@ export function JanetFloatingAssistant() {
                     </button>
                   </div>
                 ) : (
-                  /* MODO NORMAL CON LAS 4 HERRAMIENTAS DEL CHAT */
-                  <div className="flex items-end gap-1">
-                    {/* 1. Selector de Emojis Estilo WhatsApp */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAttachModalOpen(false);
-                        setIsEmojiModalOpen((prev) => !prev);
-                      }}
-                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5"
-                      title="Emojis"
-                    >
-                      <Smile className="h-4 w-4" />
-                    </button>
-
-                    {/* 2. Clip Adjuntar Archivos / Galería */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEmojiModalOpen(false);
-                        setIsAttachModalOpen((prev) => !prev);
-                      }}
-                      className={cn(
-                        'h-9 w-9 rounded-lg hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5',
-                        pendingAttachment ? 'text-blue-400' : 'text-slate-400 hover:text-foreground'
-                      )}
-                      title="Compartir fotos o documentos desde tu dispositivo"
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </button>
-
-                    {/* 3. Cámara en Vivo */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEmojiModalOpen(false);
-                        setIsAttachModalOpen(false);
-                        setIsCameraModalOpen(true);
-                      }}
-                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5"
-                      title="Abrir cámara para tomar foto"
-                    >
-                      <Camera className="h-4 w-4" />
-                    </button>
-
-                    {/* Campo de Texto Principal que Crece hacia Arriba */}
-                    <textarea
-                      ref={inputRef}
-                      value={inputPrompt}
-                      onChange={(e) => {
-                        setInputPrompt(e.target.value);
-                        const el = e.target;
-                        el.style.height = 'auto';
-                        const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
-                        el.style.height = `${nextH}px`;
-                      }}
-                      onPaste={handlePasteClipboard}
-                      rows={1}
-                      style={{
-                        fontSize: `${activeFontPx}px`,
-                        lineHeight: `${Math.round(activeFontPx * 1.35)}px`,
-                      }}
-                      placeholder={
-                        pendingAttachment
-                          ? `Pregúntale a ${assistantDisplayName} sobre este adjunto...`
-                          : `Escribe o dicta para ${assistantDisplayName}...`
-                      }
-                      className="flex-1 min-h-[38px] max-h-[140px] py-2 px-3.5 rounded-2xl bg-muted/30 border border-border/70 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 transition-[border-color,background-color] resize-none min-w-0 overflow-y-auto leading-relaxed"
-                      onKeyDown={(e) => {
-                        if (chatPrefs.enterToSend && e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          handleSend();
+                  /* MODO NORMAL DE 2 FILAS:
+                     Fila 1 (Superior): Campo de texto al 100% de ancho (w-full) que crece hacia arriba con soporte de salto de línea
+                     Fila 2 (Inferior): Herramientas (Emojis, Adjuntar, Cámara, Micrófono) a la izquierda y Botón Enviar a la derecha */
+                  <div className="flex flex-col gap-2">
+                    {/* Fila 1: Campo de Texto Principal al 100% de ancho */}
+                    <div className="w-full relative">
+                      <textarea
+                        ref={inputRef}
+                        value={inputPrompt}
+                        onChange={(e) => {
+                          setInputPrompt(e.target.value);
+                          const el = e.target;
+                          el.style.height = 'auto';
+                          const nextH = Math.min(Math.max(40, el.scrollHeight), 140);
+                          el.style.height = `${nextH}px`;
+                        }}
+                        onPaste={handlePasteClipboard}
+                        rows={1}
+                        style={{
+                          fontSize: `${activeFontPx}px`,
+                          lineHeight: `${Math.round(activeFontPx * 1.35)}px`,
+                        }}
+                        placeholder={
+                          pendingAttachment
+                            ? `Pregúntale a ${assistantDisplayName} sobre este adjunto...`
+                            : `Escribe o dicta para ${assistantDisplayName}...`
                         }
-                      }}
-                    />
+                        className="w-full min-h-[40px] max-h-[140px] py-2.5 px-3.5 rounded-xl bg-muted/30 border border-border/70 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 transition-[border-color,background-color] resize-none overflow-y-auto leading-relaxed"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            if (chatPrefs.enterToSend && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSend();
+                            }
+                            // Si enterToSend es false (por defecto) o Shift está presionado, inserta salto de línea de forma natural
+                          }
+                        }}
+                      />
+                    </div>
 
-                    {/* 4. Micrófono (Dictado / Nota de Voz) y Enviar */}
-                    {inputPrompt.trim().length > 0 || pendingAttachment ? (
-                      <div className="flex items-center gap-1 shrink-0 mb-0.5">
+                    {/* Fila 2: Botones de herramientas en la línea inferior y botón Enviar */}
+                    <div className="flex items-center justify-between w-full pt-0.5">
+                      {/* Herramientas a la izquierda: Emojis, Clip Adjuntar, Cámara, Micrófono */}
+                      <div className="flex items-center gap-1">
+                        {/* 1. Selector de Emojis */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAttachModalOpen(false);
+                            setIsEmojiModalOpen((prev) => !prev);
+                          }}
+                          className={cn(
+                            'h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors cursor-pointer',
+                            isEmojiModalOpen
+                              ? 'text-blue-400 bg-muted/40'
+                              : 'text-slate-400 hover:text-foreground hover:bg-muted/40'
+                          )}
+                          title="Emojis"
+                        >
+                          <Smile className="h-4 w-4" />
+                        </button>
+
+                        {/* 2. Clip Adjuntar Archivos / Galería */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEmojiModalOpen(false);
+                            setIsAttachModalOpen((prev) => !prev);
+                          }}
+                          className={cn(
+                            'h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors cursor-pointer',
+                            pendingAttachment || isAttachModalOpen
+                              ? 'text-blue-400 bg-muted/40'
+                              : 'text-slate-400 hover:text-foreground hover:bg-muted/40'
+                          )}
+                          title="Compartir fotos o documentos"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </button>
+
+                        {/* 3. Cámara en Vivo */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEmojiModalOpen(false);
+                            setIsAttachModalOpen(false);
+                            setIsCameraModalOpen(true);
+                          }}
+                          className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                          title="Abrir cámara para tomar foto"
+                        >
+                          <Camera className="h-4 w-4" />
+                        </button>
+
+                        {/* 4. Micrófono / Dictado de Voz */}
                         <button
                           type="button"
                           onClick={handleStartVoiceRecording}
                           disabled={isCurrentlySending}
-                          className="h-9 w-9 rounded-full text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center transition-colors cursor-pointer"
-                          title="Dictar por voz"
+                          className="h-8 w-8 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="Dictar o grabar nota de voz a Janet"
                         >
                           <Mic className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSend()}
-                          disabled={isCurrentlySending}
-                          className="w-9 h-9 rounded-full bg-[#202A49] hover:bg-[#18223c] border border-blue-500/50 text-white flex items-center justify-center shadow-xs transition-colors shrink-0 cursor-pointer"
-                          title="Enviar mensaje"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
                       </div>
-                    ) : (
+
+                      {/* Botón Enviar a la derecha */}
                       <button
                         type="button"
-                        onClick={handleStartVoiceRecording}
-                        disabled={isCurrentlySending}
-                        className="w-9 h-9 rounded-full bg-[#202A49] hover:bg-[#18223c] border border-blue-500/50 text-white flex items-center justify-center shadow-xs transition-colors shrink-0 cursor-pointer mb-0.5"
-                        title="Toca para dictar o grabar nota de voz a Janet"
+                        onClick={() => handleSend()}
+                        disabled={isCurrentlySending || (!inputPrompt.trim() && !pendingAttachment)}
+                        className="h-8 px-3 rounded-lg bg-[#202A49] hover:bg-[#18223c] border border-blue-500/50 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Enviar mensaje"
                       >
-                        <Mic className="h-4 w-4" />
+                        <span>Enviar</span>
+                        <Send className="h-3.5 w-3.5 text-blue-400" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3063,7 +3173,7 @@ export function JanetFloatingAssistant() {
                     </div>
                   </div>
 
-                  {/* 4. Transcripción de Notas de Voz y Restaurar */}
+                  {/* 4. Transcripción de Notas de Voz, Salto de Línea y Restaurar */}
                   <div className="space-y-2 pb-2">
                     <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
                       <span className="text-xs text-slate-200 font-medium">
@@ -3073,6 +3183,23 @@ export function JanetFloatingAssistant() {
                         checked={chatPrefs.showAudioTranscription}
                         onCheckedChange={(val) =>
                           updateChatPrefs({ ...chatPrefs, showAudioTranscription: val })
+                        }
+                      />
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-xs text-slate-200 font-medium block">
+                          Enviar con tecla Enter (Desktop)
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">
+                          Desactivado por defecto para permitir saltos de línea al escribir.
+                        </span>
+                      </div>
+                      <Switch
+                        checked={Boolean(chatPrefs.enterToSend)}
+                        onCheckedChange={(val) =>
+                          updateChatPrefs({ ...chatPrefs, enterToSend: val })
                         }
                       />
                     </div>

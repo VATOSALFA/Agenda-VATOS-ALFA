@@ -78,7 +78,7 @@ export async function getCeoExecutiveDashboardSnapshot(idToken: string) {
     db.collection('productos').get(),
     db.collection('ceo_memoria').limit(20).get(),
     db.collection('ceo_propuestas').limit(20).get(),
-    db.collection('ceo_sesiones').limit(15).get(),
+    db.collection('ceo_sesiones').orderBy('actualizado_en', 'desc').limit(25).get(),
     db.collection('ceo_config').doc('security').get(),
   ]);
 

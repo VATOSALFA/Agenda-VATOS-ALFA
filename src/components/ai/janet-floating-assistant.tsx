@@ -271,6 +271,14 @@ interface FloatingCeoMessage {
   } | null;
 }
 
+interface FloatingButtonPos {
+  x: number;
+  y: number;
+  isCustom: boolean;
+  fromRight?: number;
+  fromBottom?: number;
+}
+
 export function JanetFloatingAssistant() {
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
@@ -286,8 +294,8 @@ export function JanetFloatingAssistant() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Posición arrastrable del botón circular con persistencia en localStorage
-  const [btnPos, setBtnPos] = useState<{ x: number; y: number } | null>(null);
+  // Posición arrastrable del botón circular con persistencia en localStorage y adaptación a resize
+  const [btnPos, setBtnPos] = useState<FloatingButtonPos | null>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -501,36 +509,103 @@ export function JanetFloatingAssistant() {
     adjustTextareaHeight();
   }, [inputPrompt, activeFontPx, adjustTextareaHeight]);
 
-  // Inicializar posición arrastrable
+  // Inicializar posición arrastrable y adaptación al tamaño de pantalla
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
       const saved = localStorage.getItem('janet_floating_pos');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
-          const x = Math.min(Math.max(12, parsed.x), window.innerWidth - 76);
-          const y = Math.min(Math.max(12, parsed.y), window.innerHeight - 76);
-          setBtnPos({ x, y });
+        if (parsed?.isCustom && typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          const btnSize = window.innerWidth >= 640 ? 64 : 56;
+          const maxX = Math.max(12, window.innerWidth - btnSize - 16);
+          const maxY = Math.max(12, window.innerHeight - btnSize - 16);
+          const x = Math.min(Math.max(12, parsed.x), maxX);
+          const y = Math.min(Math.max(12, parsed.y), maxY);
+          const fromRight = window.innerWidth - (x + btnSize);
+          const fromBottom = window.innerHeight - (y + btnSize);
+
+          // Si la posición guardada está muy cerca de la esquina por defecto, regresar al anclaje natural
+          if (fromRight < 40 && fromBottom < 130) {
+            setBtnPos({ x: 0, y: 0, isCustom: false });
+            return;
+          }
+
+          setBtnPos({
+            x,
+            y,
+            isCustom: true,
+            fromRight,
+            fromBottom,
+          });
           return;
         }
       }
     } catch (_) {}
 
-    const defaultX = Math.max(12, window.innerWidth - 78);
-    const defaultY = Math.max(12, window.innerHeight - 155);
-    setBtnPos({ x: defaultX, y: defaultY });
+    // Posición por defecto: Anclada a la esquina inferior derecha por CSS (isCustom: false)
+    setBtnPos({ x: 0, y: 0, isCustom: false });
+  }, []);
+
+  // Adaptación reactiva en tiempo real al redimensionar la ventana, zoom o rotación de pantalla
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleResize = () => {
+      setBtnPos((prev) => {
+        if (!prev) return null;
+        // Si no tiene posición manual personalizada, CSS right/bottom se ajusta solo en automático
+        if (!prev.isCustom) return prev;
+
+        const btnSize = window.innerWidth >= 640 ? 64 : 56;
+        const maxX = Math.max(12, window.innerWidth - btnSize - 16);
+        const maxY = Math.max(12, window.innerHeight - btnSize - 16);
+
+        let newX = prev.x;
+        let newY = prev.y;
+
+        // Si estaba arrastrada en la mitad derecha, respetar su distancia al borde derecho
+        if (prev.fromRight !== undefined && prev.x > window.innerWidth / 2) {
+          newX = window.innerWidth - prev.fromRight - btnSize;
+        }
+
+        // Si estaba arrastrada en la mitad inferior, respetar su distancia al borde inferior
+        if (prev.fromBottom !== undefined && prev.y > window.innerHeight / 2) {
+          newY = window.innerHeight - prev.fromBottom - btnSize;
+        }
+
+        newX = Math.min(Math.max(12, newX), maxX);
+        newY = Math.min(Math.max(12, newY), maxY);
+
+        return {
+          ...prev,
+          x: newX,
+          y: newY,
+          fromRight: window.innerWidth - (newX + btnSize),
+          fromBottom: window.innerHeight - (newY + btnSize),
+        };
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    const curX = btnPos?.x ?? window.innerWidth - 78;
-    const curY = btnPos?.y ?? window.innerHeight - 155;
+    const btnElem = (e.currentTarget as HTMLElement).closest('.janet-floating-container') as HTMLElement | null;
+    const rect = btnElem
+      ? btnElem.getBoundingClientRect()
+      : (e.currentTarget as HTMLElement).getBoundingClientRect();
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      origX: curX,
-      origY: curY,
+      origX: rect.left,
+      origY: rect.top,
       hasMoved: false,
     };
     try {
@@ -546,9 +621,18 @@ export function JanetFloatingAssistant() {
       dragRef.current.hasMoved = true;
     }
     if (dragRef.current.hasMoved) {
-      const newX = Math.min(Math.max(12, dragRef.current.origX + dx), window.innerWidth - 72);
-      const newY = Math.min(Math.max(12, dragRef.current.origY + dy), window.innerHeight - 72);
-      setBtnPos({ x: newX, y: newY });
+      const btnSize = window.innerWidth >= 640 ? 64 : 56;
+      const maxX = Math.max(12, window.innerWidth - btnSize - 16);
+      const maxY = Math.max(12, window.innerHeight - btnSize - 16);
+      const newX = Math.min(Math.max(12, dragRef.current.origX + dx), maxX);
+      const newY = Math.min(Math.max(12, dragRef.current.origY + dy), maxY);
+      setBtnPos({
+        x: newX,
+        y: newY,
+        isCustom: true,
+        fromRight: window.innerWidth - (newX + btnSize),
+        fromBottom: window.innerHeight - (newY + btnSize),
+      });
     }
   };
 
@@ -559,10 +643,31 @@ export function JanetFloatingAssistant() {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch (_) {}
 
-    if (btnPos && wasMoved) {
-      try {
-        localStorage.setItem('janet_floating_pos', JSON.stringify(btnPos));
-      } catch (_) {}
+    if (wasMoved && btnPos) {
+      const btnSize = window.innerWidth >= 640 ? 64 : 56;
+      const fromRight = window.innerWidth - (btnPos.x + btnSize);
+      const fromBottom = window.innerHeight - (btnPos.y + btnSize);
+
+      // Si se soltó cerca del área por defecto (inferior derecha), volver al anclaje natural CSS
+      if (fromRight < 40 && fromBottom < 130) {
+        setBtnPos({ x: 0, y: 0, isCustom: false });
+        try {
+          localStorage.removeItem('janet_floating_pos');
+        } catch (_) {}
+      } else {
+        try {
+          localStorage.setItem(
+            'janet_floating_pos',
+            JSON.stringify({
+              x: btnPos.x,
+              y: btnPos.y,
+              isCustom: true,
+              fromRight,
+              fromBottom,
+            })
+          );
+        } catch (_) {}
+      }
     }
     dragRef.current = null;
 
@@ -1662,12 +1767,20 @@ export function JanetFloatingAssistant() {
           ========================================================================= */}
       {!isOpen && btnPos && (
         <div
-          style={{
-            left: `${btnPos.x}px`,
-            top: `${btnPos.y}px`,
-            touchAction: 'none',
-          }}
-          className="fixed z-50 select-none animate-in fade-in zoom-in-90 duration-300"
+          style={
+            btnPos.isCustom
+              ? {
+                  left: `${btnPos.x}px`,
+                  top: `${btnPos.y}px`,
+                  touchAction: 'none',
+                }
+              : {
+                  right: '18px',
+                  bottom: '90px',
+                  touchAction: 'none',
+                }
+          }
+          className="janet-floating-container fixed z-50 select-none animate-in fade-in zoom-in-90 duration-300"
         >
           {/* Aura azul eléctrica sutil de respiración */}
           <div className="absolute inset-[-6px] rounded-full bg-blue-600/25 blur-sm animate-pulse pointer-events-none" />

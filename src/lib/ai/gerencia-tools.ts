@@ -11,6 +11,9 @@ import {
   getDayOfWeekKey,
   timeToMinutes,
   minutesToTime,
+  parseTimeToHHmm,
+  calculateBarberFreeSlots,
+  normalizeName,
   BarberDayScheduleInfo,
 } from '@/lib/ai/barber-schedule-helper';
 
@@ -295,7 +298,641 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
 );
 
 // ============================================================================
-// 2. GESTIONAR HORARIO DE BARBERO (BLOQUEAR / HABILITAR ESPECIAL / DESBLOQUEAR)
+// HELPERS PARA AGENDAR Y CLIENTES EN GERENCIA
+// ============================================================================
+async function resolveServiceForGerencia(
+  db: any,
+  query?: string
+): Promise<{ id: string; name: string; price: number; duration: number }> {
+  const servSnap = await db.collection('servicios').where('active', '==', true).get();
+  const allServices: any[] = [];
+  servSnap.forEach((d: any) => allServices.push({ id: d.id, ...d.data() }));
+
+  const q = normalizeName(query || 'corte');
+
+  // 1. Coincidencia exacta de nombre
+  let matched = allServices.find((s) => normalizeName(s.name) === q);
+
+  // 2. Coincidencia por palabras clave
+  if (!matched) {
+    if (q.includes('corte') && (q.includes('barba') || q.includes('combo') || q.includes('completo'))) {
+      matched =
+        allServices.find((s) => s.name?.includes('Caballero alfa')) ||
+        allServices.find((s) => s.name === 'Corte de cabello');
+    } else if (q.includes('barba') || q.includes('afeitado')) {
+      matched =
+        allServices.find((s) => s.name?.includes('Arreglo de barba expres')) ||
+        allServices.find((s) => s.name?.toLowerCase().includes('barba'));
+    } else if (q.includes('corte')) {
+      matched =
+        allServices.find((s) => s.name === 'Corte de cabello') ||
+        allServices.find((s) => s.name?.toLowerCase().includes('corte'));
+    } else if (q.includes('greca')) {
+      matched = allServices.find((s) => s.name?.toLowerCase().includes('greca'));
+    } else if (q.includes('ceja')) {
+      matched = allServices.find((s) => s.name?.toLowerCase().includes('ceja'));
+    } else if (q.includes('facial')) {
+      matched = allServices.find((s) => s.name?.toLowerCase().includes('facial'));
+    } else if (q.includes('decolor')) {
+      matched = allServices.find((s) => s.name?.toLowerCase().includes('decolor'));
+    } else if (q.includes('rizado')) {
+      matched = allServices.find((s) => s.name?.toLowerCase().includes('rizado'));
+    }
+  }
+
+  if (!matched) {
+    matched = allServices.find((s) => s.name === 'Corte de cabello') || allServices[0];
+  }
+
+  return {
+    id: matched?.id || 's56EgUXPyLpZbjCf2Ung',
+    name: matched?.name || 'Corte de cabello',
+    price: Number(matched?.price ?? 140),
+    duration: Number(matched?.duration ?? 40),
+  };
+}
+
+async function resolveOrCreateClientForGerencia(
+  db: any,
+  nombreCliente: string,
+  telefonoCliente?: string
+): Promise<{ id: string; nombre: string; telefono: string; correo: string }> {
+  const cleanPhone = (telefonoCliente || '').replace(/\D/g, '');
+  let resolvedId = '';
+  let resolvedName = nombreCliente.trim();
+  let resolvedPhone = cleanPhone;
+  let resolvedEmail = '';
+
+  // 1. Buscar por teléfono si tiene 7 o más dígitos
+  if (cleanPhone && cleanPhone.length >= 7) {
+    const phoneSnap = await db.collection('clientes').where('telefono', '==', cleanPhone).limit(1).get();
+    if (!phoneSnap.empty) {
+      const cd = phoneSnap.docs[0].data();
+      resolvedId = phoneSnap.docs[0].id;
+      resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim() || resolvedName;
+      resolvedPhone = cd.telefono || cleanPhone;
+      resolvedEmail = cd.correo || cd.email || '';
+    }
+  }
+
+  // 2. Si no se encontró por teléfono, buscar por nombre
+  if (!resolvedId && resolvedName) {
+    const nameNorm = normalizeName(resolvedName);
+    const cliSnap = await db.collection('clientes').limit(80).get();
+    for (const d of cliSnap.docs) {
+      const cd = d.data();
+      const fullName = normalizeName(`${cd.nombre || ''} ${cd.apellido || ''}`);
+      if (fullName === nameNorm || (fullName && fullName.includes(nameNorm)) || (nameNorm && nameNorm.includes(fullName))) {
+        resolvedId = d.id;
+        resolvedName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim();
+        resolvedPhone = cd.telefono || resolvedPhone || '';
+        resolvedEmail = cd.correo || cd.email || '';
+        break;
+      }
+    }
+  }
+
+  // 3. Si no existe, crear registro en clientes
+  if (!resolvedId) {
+    const nameParts = resolvedName.split(/\s+/);
+    const firstName = nameParts[0] || 'Cliente';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    const newDoc = await db.collection('clientes').add({
+      nombre: firstName,
+      apellido: lastName,
+      telefono: resolvedPhone || '',
+      correo: resolvedEmail || '',
+      origen: 'agenda_janet',
+      creado_en: Timestamp.now(),
+      activo: true,
+      numero_cliente: String(Date.now()).slice(-4),
+    });
+    resolvedId = newDoc.id;
+  }
+
+  return {
+    id: resolvedId,
+    nombre: resolvedName,
+    telefono: resolvedPhone,
+    correo: resolvedEmail,
+  };
+}
+
+// ============================================================================
+// 2. AGENDAR CITA EN LA AGENDA (FACULTAD COMPLETA DE ADMINISTRADORA LOCAL)
+// ============================================================================
+export const agendarCitaSucursalTool = ai.defineTool(
+  {
+    name: 'agendar_cita_sucursal',
+    description:
+      'Agenda o crea una cita directamente en la cuadrícula de la agenda de VATOS ALFA a solicitud de Beatriz (Administradora del Local). Valida la disponibilidad del barbero, asocia cliente y servicio, y registra la reserva en tiempo real.',
+    inputSchema: z.object({
+      nombreCliente: z
+        .string()
+        .describe('Nombre del cliente (ej. "Carlos Morales", "Pedro Gómez", "Juan").'),
+      telefonoCliente: z
+        .string()
+        .optional()
+        .describe('Teléfono de contacto del cliente a 10 dígitos (opcional).'),
+      barberoNombre: z
+        .string()
+        .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Ivon", "Lupita", "Beatriz").'),
+      fecha: z
+        .string()
+        .optional()
+        .describe('Fecha de la cita en formato YYYY-MM-DD. Si se omite, se usa el día de hoy en Querétaro.'),
+      hora: z
+        .string()
+        .describe('Hora de inicio de la cita (ej. "16:00", "4:00 PM", "11:30").'),
+      servicioNombre: z
+        .string()
+        .optional()
+        .describe('Nombre del servicio (ej. "Corte de cabello", "Arreglo de barba", "Corte y barba", "1 El Caballero alfa", etc.). Por defecto "Corte de cabello" ($140.00 MXN, 40 min).'),
+      notas: z
+        .string()
+        .optional()
+        .describe('Notas adicionales de la cita (ej. "Puntual", "Cliente de Bety", etc.).'),
+      forzarSobrecupo: z
+        .boolean()
+        .optional()
+        .describe('Si es true, permite agendar sobrecupo o fuera de turno si Beatriz lo autoriza explícitamente.'),
+    }),
+  },
+  async ({
+    nombreCliente,
+    telefonoCliente,
+    barberoNombre,
+    fecha,
+    hora,
+    servicioNombre,
+    notas,
+    forzarSobrecupo,
+  }) => {
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const targetDate = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
+
+    const parsedHour = parseTimeToHHmm(hora);
+    if (!parsedHour) {
+      return {
+        ok: false,
+        mensaje: `La hora "${hora}" no tiene un formato reconocido. Por favor indícame la hora como "16:00" o "4:00 PM".`,
+      };
+    }
+    const horaInicio = parsedHour;
+
+    // 1. Resolver barbero
+    const profSnap = await db.collection('profesionales').get();
+    const activeProfessionals: any[] = [];
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.deleted && p.active !== false) {
+        activeProfessionals.push({ id: doc.id, ...p });
+      }
+    });
+
+    const prof = findBarber(barberoNombre, activeProfessionals);
+    if (!prof) {
+      return {
+        ok: false,
+        mensaje: `No encontré un barbero activo que coincida con "${barberoNombre}". Los barberos de la sucursal son: ${activeProfessionals.map((p) => p.publicName || p.name).join(', ')}.`,
+      };
+    }
+    const barberDisplayName = prof.publicName || prof.name || 'Barbero';
+    const defaultLocalId = prof.local_id || prof.localId || 'rkbEgvwP67JliXQ1Qeyj';
+
+    // 2. Resolver servicio y duración
+    const service = await resolveServiceForGerencia(db, servicioNombre);
+    const startMins = timeToMinutes(horaInicio);
+    const endMins = startMins + service.duration;
+    const horaFin = minutesToTime(endMins);
+
+    // 3. Validar disponibilidad del barbero en la agenda
+    const barberSchedule = await getBarberScheduleForDay({
+      db,
+      barber: prof,
+      dateStr: targetDate,
+      localId: defaultLocalId,
+    });
+
+    if (!forzarSobrecupo) {
+      // Validar si labora ese día
+      if (!barberSchedule.isWorkingDay) {
+        return {
+          ok: false,
+          diaNoLaboral: true,
+          mensaje: `**${barberDisplayName}** no labora los ${barberSchedule.diaSemana}s (figura como "Día libre" en la agenda). ¿Deseas agendarlo con otro barbero disponible hoy o que le habilite un horario especial?`,
+        };
+      }
+
+      // Validar si la hora cae dentro de su turno habitual o horario especial
+      const shiftStartM = timeToMinutes(barberSchedule.workingHours?.start || '10:00');
+      const shiftEndM = timeToMinutes(barberSchedule.workingHours?.end || '21:00');
+
+      const hasSpecialOpening = barberSchedule.specialAvailableHours.some(
+        (sp) => timeToMinutes(sp.hora_inicio) <= startMins && timeToMinutes(sp.hora_fin) >= endMins
+      );
+
+      if (!hasSpecialOpening && (startMins < shiftStartM || endMins > shiftEndM)) {
+        return {
+          ok: false,
+          fueraDeTurno: true,
+          mensaje: `El horario solicitado (${horaInicio} a ${horaFin}) queda fuera del turno laboral de **${barberDisplayName}** (su horario hoy es de ${barberSchedule.workingHours?.start} a ${barberSchedule.workingHours?.end}). Si deseas agendarlo fuera de turno, pídemelo explícitamente indicando forzar cita o habilitar horario especial.`,
+        };
+      }
+
+      // Validar conflicto con descansos o bloqueos registrados
+      const bloqConflict = barberSchedule.existingBlocks.find(
+        (blk) => blk.type !== 'available' && horaInicio < blk.hora_fin && horaFin > blk.hora_inicio
+      );
+      if (bloqConflict) {
+        return {
+          ok: false,
+          conflictoBloqueo: true,
+          mensaje: `No se puede agendar a las ${horaInicio} porque **${barberDisplayName}** tiene un bloqueo registrado en la agenda de **${bloqConflict.hora_inicio} a ${bloqConflict.hora_fin}** (motivo: "${bloqConflict.motivo}").`,
+        };
+      }
+
+      // Validar conflicto con citas activas
+      const resConflict = barberSchedule.activeReservations.find(
+        (r) => horaInicio < r.hora_fin && horaFin > r.hora_inicio
+      );
+      if (resConflict) {
+        return {
+          ok: false,
+          conflictoCita: true,
+          mensaje: `A esa hora (${horaInicio} a ${horaFin}) **${barberDisplayName}** ya tiene una cita agendada con **${resConflict.cliente}** de **${resConflict.hora_inicio} a ${resConflict.hora_fin}** (${resConflict.servicio}). ¿Deseas buscar el horario libre más cercano o agendar con otro barbero?`,
+        };
+      }
+    }
+
+    // 4. Resolver o registrar cliente
+    const client = await resolveOrCreateClientForGerencia(db, nombreCliente, telefonoCliente);
+
+    // 5. Crear la reserva en la base de datos oficial
+    const newResRef = await db.collection('reservas').add({
+      cliente_id: client.id,
+      cliente_nombre: client.nombre,
+      cliente_telefono: client.telefono,
+      cliente_email: client.correo,
+      customer: {
+        id: client.id,
+        nombre: client.nombre,
+        telefono: client.telefono,
+        correo: client.correo,
+      },
+      barbero_id: prof.id,
+      professionalNames: barberDisplayName,
+      fecha: targetDate,
+      hora_inicio: horaInicio,
+      hora_fin: horaFin,
+      duracion: service.duration,
+      servicio: service.name,
+      servicios: [service.id],
+      items: [
+        {
+          id: service.id,
+          nombre: service.name,
+          servicio: service.name,
+          tipo: 'servicio',
+          barbero_id: prof.id,
+          precio: service.price,
+          duracion: service.duration,
+          cantidad: 1,
+          professional_lock: true,
+          hora_inicio: horaInicio,
+          hora_fin: horaFin,
+        },
+      ],
+      precio: service.price,
+      total: service.price,
+      saldo_pendiente: service.price,
+      monto_pagado: 0,
+      monto_pagado_real: 0,
+      anticipo_pagado: 0,
+      anticipoPagado: 0,
+      anticipo_esperado: 0,
+      requiere_anticipo: false,
+      estado: 'Reservado',
+      pago_estado: 'Pendiente',
+      local_id: defaultLocalId,
+      canal_reserva: 'agenda',
+      creada_por: 'Janet Gerencia (Beatriz)',
+      creado_en: Timestamp.now(),
+      notas: notas || '',
+      nota_interna: 'Agendada por Janet Gerencia a petición de Beatriz',
+      professional_lock: true,
+      isSandbox: false,
+      whatsappReminderNotNeeded: false,
+      whatsappReminderSent: false,
+      notifications: {
+        whatsapp_notification: true,
+        whatsapp_reminder: true,
+        email_notification: Boolean(client.correo),
+      },
+    });
+
+    // 6. Auditoría institucional
+    await db.collection('audit_logs').add({
+      action: 'Crear Cita (Janet Gerencia)',
+      details: `Cita agendada para ${client.nombre} con ${barberDisplayName} el ${targetDate} de ${horaInicio} a ${horaFin} (${service.name} - $${service.price.toFixed(2)})`,
+      userId: 'janet_gerencia',
+      userName: 'Janet Gerencia (Asistente de Sucursal)',
+      userRole: 'Administrador local',
+      severity: 'info',
+      entityId: newResRef.id,
+      localId: defaultLocalId,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      reservaId: newResRef.id,
+      cliente: client.nombre,
+      telefono: client.telefono,
+      barbero: barberDisplayName,
+      fecha: targetDate,
+      horario: `${horaInicio} a ${horaFin}`,
+      duracionMinutos: service.duration,
+      servicio: service.name,
+      precio: service.price,
+      mensaje: `¡Listo Bety! La cita quedó agendada con éxito en la agenda:\n\n• **Cliente:** ${client.nombre}${client.telefono ? ` (${client.telefono})` : ''}\n• **Barbero:** ${barberDisplayName}\n• **Fecha:** ${targetDate}\n• **Horario:** ${horaInicio} a ${horaFin} (${service.duration} min)\n• **Servicio:** ${service.name}\n• **Total a liquidar en caja:** $${service.price.toFixed(2)} MXN\n\nYa aparece visible en la cuadrícula de la agenda para todo el equipo.`,
+    };
+  }
+);
+
+// ============================================================================
+// 3. REAGENDAR O MOVER CITA EN LA AGENDA
+// ============================================================================
+export const reagendarCitaSucursalTool = ai.defineTool(
+  {
+    name: 'reagendar_cita_sucursal',
+    description:
+      'Permite a Beatriz (Administradora Local) mover o cambiar la fecha, hora o barbero de una cita existente en la agenda cuando un cliente o recepción lo solicita.',
+    inputSchema: z.object({
+      nombreClienteOId: z
+        .string()
+        .describe('Nombre del cliente o ID exacto de la cita a reagendar.'),
+      fechaActual: z
+        .string()
+        .optional()
+        .describe('Fecha actual de la cita (por defecto hoy en Querétaro).'),
+      nuevaFecha: z
+        .string()
+        .describe('Nueva fecha para la cita en formato YYYY-MM-DD.'),
+      nuevaHora: z
+        .string()
+        .describe('Nueva hora de inicio para la cita (ej. "17:00", "5:00 PM").'),
+      nuevoBarberoNombre: z
+        .string()
+        .optional()
+        .describe('Opcional: nombre o apodo del barbero si también se desea cambiar de barbero.'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Motivo del cambio de horario o día.'),
+    }),
+  },
+  async ({
+    nombreClienteOId,
+    fechaActual,
+    nuevaFecha,
+    nuevaHora,
+    nuevoBarberoNombre,
+    motivo,
+  }) => {
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const targetDateCurrent = (fechaActual && /^\d{4}-\d{2}-\d{2}$/.test(fechaActual.trim()))
+      ? fechaActual.trim()
+      : todayIso;
+
+    const parsedHour = parseTimeToHHmm(nuevaHora);
+    if (!parsedHour) {
+      return {
+        ok: false,
+        mensaje: `La nueva hora "${nuevaHora}" no tiene un formato válido (ej. "17:00" o "5:00 PM").`,
+      };
+    }
+
+    // 1. Buscar la cita existente
+    const resSnap = await db.collection('reservas').where('fecha', '==', targetDateCurrent).get();
+    const queryNorm = normalizeName(nombreClienteOId);
+    let matchedDoc: any = null;
+
+    resSnap.forEach((doc) => {
+      if (matchedDoc) return;
+      if (doc.id === nombreClienteOId.trim()) {
+        matchedDoc = doc;
+        return;
+      }
+      const data = doc.data();
+      if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
+      const clientName = normalizeName(data.cliente_nombre || data.customer?.nombre || '');
+      if (clientName === queryNorm || clientName.includes(queryNorm) || queryNorm.includes(clientName)) {
+        matchedDoc = doc;
+      }
+    });
+
+    if (!matchedDoc) {
+      return {
+        ok: false,
+        mensaje: `No encontré una cita activa para "${nombreClienteOId}" en la fecha ${targetDateCurrent}. Verifica el nombre del cliente o la fecha.`,
+      };
+    }
+
+    const resData = matchedDoc.data();
+    const profSnap = await db.collection('profesionales').get();
+    const activeProfessionals: any[] = [];
+    profSnap.forEach((d) => {
+      const p = d.data();
+      if (!p.deleted && p.active !== false) activeProfessionals.push({ id: d.id, ...p });
+    });
+
+    // 2. Determinar barbero (nuevo o actual)
+    let targetProf = activeProfessionals.find((p) => p.id === resData.barbero_id);
+    if (nuevoBarberoNombre && nuevoBarberoNombre.trim()) {
+      const found = findBarber(nuevoBarberoNombre, activeProfessionals);
+      if (found) targetProf = found;
+    }
+
+    if (!targetProf) {
+      return {
+        ok: false,
+        mensaje: 'No pude determinar el profesional asignado para reagendar la cita.',
+      };
+    }
+
+    const barberDisplayName = targetProf.publicName || targetProf.name || 'Barbero';
+    const durationMins = Number(resData.duracion || 40);
+    const startMins = timeToMinutes(parsedHour);
+    const endMins = startMins + durationMins;
+    const nuevaHoraFin = minutesToTime(endMins);
+
+    // 3. Validar disponibilidad del barbero en la nueva fecha y hora
+    const barberSchedule = await getBarberScheduleForDay({
+      db,
+      barber: targetProf,
+      dateStr: nuevaFecha,
+      localId: targetProf.local_id || 'rkbEgvwP67JliXQ1Qeyj',
+    });
+
+    if (!barberSchedule.isWorkingDay) {
+      return {
+        ok: false,
+        mensaje: `**${barberDisplayName}** no labora los ${barberSchedule.diaSemana}s (figura como día libre en la agenda). No se puede mover a esa fecha con ese barbero.`,
+      };
+    }
+
+    const bloqConflict = barberSchedule.existingBlocks.find(
+      (blk) => blk.type !== 'available' && parsedHour < blk.hora_fin && nuevaHoraFin > blk.hora_inicio
+    );
+    if (bloqConflict) {
+      return {
+        ok: false,
+        mensaje: `No se puede mover a las ${parsedHour} porque **${barberDisplayName}** tiene un bloqueo registrado de **${bloqConflict.hora_inicio} a ${bloqConflict.hora_fin}** (motivo: "${bloqConflict.motivo}").`,
+      };
+    }
+
+    const resConflict = barberSchedule.activeReservations.find(
+      (r) => r.id !== matchedDoc.id && parsedHour < r.hora_fin && nuevaHoraFin > r.hora_inicio
+    );
+    if (resConflict) {
+      return {
+        ok: false,
+        mensaje: `A esa hora (${parsedHour} a ${nuevaHoraFin}) **${barberDisplayName}** ya tiene agendado a **${resConflict.cliente}** de **${resConflict.hora_inicio} a ${resConflict.hora_fin}**.`,
+      };
+    }
+
+    // 4. Actualizar la reserva
+    const updatedItems = (Array.isArray(resData.items) ? resData.items : []).map((item: any) => ({
+      ...item,
+      barbero_id: targetProf.id,
+      hora_inicio: parsedHour,
+      hora_fin: nuevaHoraFin,
+    }));
+
+    await matchedDoc.ref.update({
+      fecha: nuevaFecha,
+      hora_inicio: parsedHour,
+      hora_fin: nuevaHoraFin,
+      barbero_id: targetProf.id,
+      professionalNames: barberDisplayName,
+      items: updatedItems.length > 0 ? updatedItems : resData.items,
+      reagendada_en: Timestamp.now(),
+      reagendada_por: 'Janet Gerencia (Beatriz)',
+      motivo_reagendacion: motivo || 'Solicitado por Beatriz',
+    });
+
+    // 5. Auditoría
+    await db.collection('audit_logs').add({
+      action: 'Reagendar Cita (Janet Gerencia)',
+      details: `Cita de ${resData.cliente_nombre} movida al ${nuevaFecha} a las ${parsedHour} con ${barberDisplayName}. Motivo: ${motivo || 'Recepción'}`,
+      userId: 'janet_gerencia',
+      userName: 'Janet Gerencia (Asistente de Sucursal)',
+      userRole: 'Administrador local',
+      severity: 'info',
+      entityId: matchedDoc.id,
+      localId: targetProf.local_id || 'rkbEgvwP67JliXQ1Qeyj',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      reservaId: matchedDoc.id,
+      cliente: resData.cliente_nombre,
+      nuevaFecha,
+      nuevoHorario: `${parsedHour} a ${nuevaHoraFin}`,
+      barbero: barberDisplayName,
+      mensaje: `¡Listo Bety! La cita de **${resData.cliente_nombre}** ha sido reagendada con éxito:\n\n• **Nueva Fecha:** ${nuevaFecha}\n• **Nuevo Horario:** ${parsedHour} a ${nuevaHoraFin}\n• **Barbero:** ${barberDisplayName}\n\nYa quedó actualizada en la agenda.`,
+    };
+  }
+);
+
+// ============================================================================
+// 4. CONSULTAR DISPONIBILIDAD Y ESPACIOS LIBRES DE BARBEROS
+// ============================================================================
+export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
+  {
+    name: 'consultar_disponibilidad_barberos_sucursal',
+    description:
+      'Consulta los espacios libres y horarios disponibles para agendar citas de cualquier barbero o de todo el equipo en una fecha específica. Úsala cuando Beatriz pregunte qué horas tiene libres un barbero o quién puede atender una cita.',
+    inputSchema: z.object({
+      fecha: z
+        .string()
+        .optional()
+        .describe('Fecha a consultar en formato YYYY-MM-DD. Si se omite, se usa el día de hoy en Querétaro.'),
+      barberoNombre: z
+        .string()
+        .optional()
+        .describe('Opcional: nombre o apodo del barbero (ej. "Lalo", "Alfredo", "Ivon", "Lupita", "Beatriz"). Si se omite, analiza a todos.'),
+      duracionMinutos: z
+        .number()
+        .optional()
+        .describe('Duración del servicio en minutos (por defecto 40 minutos para un corte estándar).'),
+    }),
+  },
+  async ({ fecha, barberoNombre, duracionMinutos = 40 }) => {
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const targetDate = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
+
+    const profSnap = await db.collection('profesionales').get();
+    const activeProfessionals: any[] = [];
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.deleted && p.active !== false) {
+        activeProfessionals.push({ id: doc.id, ...p });
+      }
+    });
+
+    let targetBarbers = activeProfessionals;
+    if (barberoNombre && barberoNombre.trim()) {
+      const match = findBarber(barberoNombre, activeProfessionals);
+      if (match) {
+        targetBarbers = [match];
+      }
+    }
+
+    const defaultLocalId = activeProfessionals[0]?.local_id || 'rkbEgvwP67JliXQ1Qeyj';
+    const disponibilidad: any[] = [];
+
+    for (const barber of targetBarbers) {
+      const schedule = await getBarberScheduleForDay({
+        db,
+        barber,
+        dateStr: targetDate,
+        localId: barber.local_id || defaultLocalId,
+      });
+
+      const freeSlots = calculateBarberFreeSlots(schedule, duracionMinutos);
+
+      disponibilidad.push({
+        barbero: schedule.displayName,
+        barberoId: schedule.barberId,
+        diaSemana: schedule.diaSemana,
+        laboraHoy: schedule.isWorkingDay,
+        jornada: schedule.workingHours ? `${schedule.workingHours.start} - ${schedule.workingHours.end}` : 'Día libre',
+        horariosLibresDisponibles: freeSlots,
+        totalEspaciosLibres: freeSlots.length,
+        resumen: schedule.isWorkingDay
+          ? freeSlots.length > 0
+            ? `${schedule.displayName} tiene ${freeSlots.length} horario(s) disponible(s) entre ${freeSlots[0]} y ${freeSlots[freeSlots.length - 1]}.`
+            : `${schedule.displayName} tiene su jornada completa ocupada o bloqueada hoy.`
+          : `${schedule.displayName} no labora los ${schedule.diaSemana}s (día libre).`,
+      });
+    }
+
+    return {
+      fecha: targetDate,
+      duracionServicioConsultada: `${duracionMinutos} minutos`,
+      disponibilidad,
+    };
+  }
+);
+
+// ============================================================================
+// 5. GESTIONAR HORARIO DE BARBERO (BLOQUEAR / HABILITAR ESPECIAL / DESBLOQUEAR)
 // ============================================================================
 export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
   {
@@ -890,6 +1527,9 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
 export function getGerenciaAgentTools() {
   return [
     consultarOperacionDiaSucursalTool,
+    consultarDisponibilidadBarberosSucursalTool,
+    agendarCitaSucursalTool,
+    reagendarCitaSucursalTool,
     gestionarHorarioBarberoSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,

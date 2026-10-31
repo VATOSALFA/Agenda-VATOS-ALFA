@@ -330,7 +330,7 @@ export function JanetFloatingAssistant() {
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Grabación de Nota de Voz y Dictado en Vivo
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
@@ -420,6 +420,19 @@ export function JanetFloatingAssistant() {
     EXEC_BUBBLE_THEMES.find((t) => t.id === chatPrefs.bubbleTheme) || EXEC_BUBBLE_THEMES[0];
   const activeFontPx =
     (EXEC_FONT_SIZES.find((f) => f.id === chatPrefs.fontSize) || EXEC_FONT_SIZES[1]).px;
+
+  // Auto-ajuste de altura para que la caja crezca hacia arriba conforme escribe el usuario
+  const adjustTextareaHeight = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
+    el.style.height = `${nextH}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputPrompt, activeFontPx, adjustTextareaHeight]);
 
   // Inicializar posición arrastrable
   useEffect(() => {
@@ -710,6 +723,10 @@ export function JanetFloatingAssistant() {
         localStorage.setItem(JANET_RECENT_EMOJIS_KEY, JSON.stringify(updated));
       } catch (_) {}
     }
+    setTimeout(() => {
+      adjustTextareaHeight();
+      inputRef.current?.focus();
+    }, 10);
   };
 
   // =========================================================================
@@ -847,7 +864,10 @@ export function JanetFloatingAssistant() {
     handleCancelVoiceRecording();
     if (dictated) {
       setInputPrompt((prev) => (prev ? `${prev} ${dictated}` : dictated));
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => {
+        adjustTextareaHeight();
+        inputRef.current?.focus();
+      }, 50);
     } else {
       toast({
         title: 'Usa el botón Enviar',
@@ -991,6 +1011,9 @@ export function JanetFloatingAssistant() {
 
     if (overrideText === undefined) {
       setInputPrompt('');
+      if (inputRef.current) {
+        inputRef.current.style.height = '38px';
+      }
     }
     if (currentAttach) {
       setPendingAttachment(null);
@@ -1042,7 +1065,7 @@ export function JanetFloatingAssistant() {
                 }
               : m
           );
-          return [
+            return [
             ...updated,
             {
               id: res.messageId,
@@ -1050,6 +1073,7 @@ export function JanetFloatingAssistant() {
               contenido: res.reply,
               creado_en: new Date().toISOString(),
               subagentes: res.subagentsInvoked,
+              propuestaAccion: res.propuestaAccion || null,
             },
           ];
         });
@@ -1776,6 +1800,29 @@ export function JanetFloatingAssistant() {
                     {activeAgentMode === 'ceo' && isGeneralOwner ? (
                       <>
                         <DropdownMenuItem
+                          onClick={() => {
+                            setActiveTab('chat');
+                            setInputPrompt(
+                              'Agenda una cita para [Nombre del cliente] hoy a las [16:00] con [Nombre del barbero] para Corte de cabello'
+                            );
+                          }}
+                          className="rounded-lg text-xs cursor-pointer focus:bg-blue-500/20"
+                        >
+                          <CalendarCheck className="mr-2 h-3.5 w-3.5 text-[#C5A880]" />
+                          <span>Agendar Cita en la Agenda</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleSend(
+                              '¿Qué horarios libres y espacios disponibles tienen los barberos el día de hoy?'
+                            )
+                          }
+                          className="rounded-lg text-xs cursor-pointer focus:bg-blue-500/20"
+                        >
+                          <Clock className="mr-2 h-3.5 w-3.5 text-blue-400" />
+                          <span>Consultar Horarios Libres</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() =>
                             handleSend(
                               'Dame el Estado de Resultados (P&L) de este mes hasta hoy con mi utilidad neta real y el reparto de gerencia.'
@@ -1811,6 +1858,29 @@ export function JanetFloatingAssistant() {
                       </>
                     ) : (
                       <>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setActiveTab('chat');
+                            setInputPrompt(
+                              'Agenda una cita para [Nombre del cliente] hoy a las [16:00] con [Nombre del barbero] para Corte de cabello'
+                            );
+                          }}
+                          className="rounded-lg text-xs cursor-pointer focus:bg-blue-500/20"
+                        >
+                          <CalendarCheck className="mr-2 h-3.5 w-3.5 text-[#C5A880]" />
+                          <span>Agendar Cita en la Agenda</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleSend(
+                              '¿Qué horarios libres y espacios disponibles tienen los barberos el día de hoy?'
+                            )
+                          }
+                          className="rounded-lg text-xs cursor-pointer focus:bg-blue-500/20"
+                        >
+                          <Clock className="mr-2 h-3.5 w-3.5 text-blue-400" />
+                          <span>Consultar Horarios Libres</span>
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
                             handleSend(
@@ -2078,7 +2148,7 @@ export function JanetFloatingAssistant() {
                           <span>Hola, soy Janet CEO</span>
                         </p>
                         <p className="text-muted-foreground">
-                          Estoy lista para darte el Estado de Resultados en vivo, auditar movimientos de recepción, analizar fotos o estados de cuenta, o escuchar tus notas de voz.
+                          Estoy lista para darte el Estado de Resultados en vivo, auditar movimientos de recepción, agendar o mover citas en la agenda, revisar disponibilidad o escuchar tus notas de voz.
                         </p>
                       </div>
                     </div>
@@ -2172,7 +2242,7 @@ export function JanetFloatingAssistant() {
                         <span>Hola Bety, soy Janet Gerencia</span>
                       </p>
                       <p className="text-muted-foreground">
-                        Puedes escribirme o dictarme por nota de voz para cerrar o abrir horarios de barberos, consultar o cancelar citas y ventas, o revisar inventario e insumos.
+                        Puedes escribirme o dictarme por nota de voz para agendar o reagendar citas, consultar disponibilidad de barberos, gestionar horarios y descansos, o revisar inventario y ventas.
                       </p>
                     </div>
                   </div>
@@ -2400,7 +2470,7 @@ export function JanetFloatingAssistant() {
                   </div>
                 ) : (
                   /* MODO NORMAL CON LAS 4 HERRAMIENTAS DEL CHAT */
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-end gap-1">
                     {/* 1. Selector de Emojis Estilo WhatsApp */}
                     <button
                       type="button"
@@ -2408,7 +2478,7 @@ export function JanetFloatingAssistant() {
                         setIsAttachModalOpen(false);
                         setIsEmojiModalOpen((prev) => !prev);
                       }}
-                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5"
                       title="Emojis"
                     >
                       <Smile className="h-4 w-4" />
@@ -2422,7 +2492,7 @@ export function JanetFloatingAssistant() {
                         setIsAttachModalOpen((prev) => !prev);
                       }}
                       className={cn(
-                        'h-9 w-9 rounded-lg hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer',
+                        'h-9 w-9 rounded-lg hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5',
                         pendingAttachment ? 'text-blue-400' : 'text-slate-400 hover:text-foreground'
                       )}
                       title="Compartir fotos o documentos desde tu dispositivo"
@@ -2438,26 +2508,35 @@ export function JanetFloatingAssistant() {
                         setIsAttachModalOpen(false);
                         setIsCameraModalOpen(true);
                       }}
-                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                      className="h-9 w-9 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center shrink-0 transition-colors cursor-pointer mb-0.5"
                       title="Abrir cámara para tomar foto"
                     >
                       <Camera className="h-4 w-4" />
                     </button>
 
-                    {/* Campo de Texto Principal */}
-                    <input
+                    {/* Campo de Texto Principal que Crece hacia Arriba */}
+                    <textarea
                       ref={inputRef}
-                      type="text"
                       value={inputPrompt}
-                      onChange={(e) => setInputPrompt(e.target.value)}
+                      onChange={(e) => {
+                        setInputPrompt(e.target.value);
+                        const el = e.target;
+                        el.style.height = 'auto';
+                        const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
+                        el.style.height = `${nextH}px`;
+                      }}
                       onPaste={handlePasteClipboard}
-                      style={{ fontSize: `${activeFontPx}px` }}
+                      rows={1}
+                      style={{
+                        fontSize: `${activeFontPx}px`,
+                        lineHeight: `${Math.round(activeFontPx * 1.35)}px`,
+                      }}
                       placeholder={
                         pendingAttachment
                           ? `Pregúntale a ${assistantDisplayName} sobre este adjunto...`
                           : `Escribe o dicta para ${assistantDisplayName}...`
                       }
-                      className="flex-1 h-9 rounded-full bg-muted/30 border border-border/70 px-3.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 transition-colors min-w-0"
+                      className="flex-1 min-h-[38px] max-h-[140px] py-2 px-3.5 rounded-2xl bg-muted/30 border border-border/70 text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-blue-500 transition-[border-color,background-color] resize-none min-w-0 overflow-y-auto leading-relaxed"
                       onKeyDown={(e) => {
                         if (chatPrefs.enterToSend && e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
@@ -2468,7 +2547,7 @@ export function JanetFloatingAssistant() {
 
                     {/* 4. Micrófono (Dictado / Nota de Voz) y Enviar */}
                     {inputPrompt.trim().length > 0 || pendingAttachment ? (
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0 mb-0.5">
                         <button
                           type="button"
                           onClick={handleStartVoiceRecording}
@@ -2493,7 +2572,7 @@ export function JanetFloatingAssistant() {
                         type="button"
                         onClick={handleStartVoiceRecording}
                         disabled={isCurrentlySending}
-                        className="w-9 h-9 rounded-full bg-[#202A49] hover:bg-[#18223c] border border-blue-500/50 text-white flex items-center justify-center shadow-xs transition-colors shrink-0 cursor-pointer"
+                        className="w-9 h-9 rounded-full bg-[#202A49] hover:bg-[#18223c] border border-blue-500/50 text-white flex items-center justify-center shadow-xs transition-colors shrink-0 cursor-pointer mb-0.5"
                         title="Toca para dictar o grabar nota de voz a Janet"
                       >
                         <Mic className="h-4 w-4" />

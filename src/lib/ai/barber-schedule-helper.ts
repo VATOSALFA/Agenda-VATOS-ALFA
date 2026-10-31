@@ -135,6 +135,31 @@ export function minutesToTime(mins: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+export function parseTimeToHHmm(str: string): string | null {
+  if (!str) return null;
+  const s = str.trim().toLowerCase();
+  const m24 = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m24) {
+    const h = parseInt(m24[1], 10);
+    const m = parseInt(m24[2], 10);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+  const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const m = m12[2] ? parseInt(m12[2], 10) : 0;
+    const modifier = (m12[3] || '').replace(/\./g, '');
+    if (modifier === 'pm' && h < 12) h += 12;
+    if (modifier === 'am' && h === 12) h = 0;
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+  return null;
+}
+
 export async function getBarberScheduleForDay({
   db,
   barber,
@@ -400,4 +425,60 @@ export async function getBarberScheduleForDay({
     isEntireShiftBlocked,
     statusDescription,
   };
+}
+
+export function calculateBarberFreeSlots(
+  schedule: BarberDayScheduleInfo,
+  durationMinutes = 40
+): string[] {
+  if (!schedule.isWorkingDay || !schedule.workingHours) {
+    return [];
+  }
+
+  const shiftStartM = timeToMinutes(schedule.workingHours.start);
+  const shiftEndM = timeToMinutes(schedule.workingHours.end);
+
+  // Busy intervals
+  const busyIntervals: Array<{ startM: number; endM: number }> = [];
+
+  for (const brk of schedule.scheduleBreaks) {
+    busyIntervals.push({
+      startM: timeToMinutes(brk.start),
+      endM: timeToMinutes(brk.end),
+    });
+  }
+
+  for (const blk of schedule.existingBlocks) {
+    if (blk.type === 'available') continue;
+    busyIntervals.push({
+      startM: timeToMinutes(blk.hora_inicio),
+      endM: timeToMinutes(blk.hora_fin),
+    });
+  }
+
+  for (const res of schedule.activeReservations) {
+    if (res.estado === 'Cancelado' || res.estado === 'No asiste') continue;
+    busyIntervals.push({
+      startM: timeToMinutes(res.hora_inicio),
+      endM: timeToMinutes(res.hora_fin),
+    });
+  }
+
+  const availableSlots: string[] = [];
+
+  // Check every 15 minutes within shift
+  for (let m = shiftStartM; m + durationMinutes <= shiftEndM; m += 15) {
+    const slotStart = m;
+    const slotEnd = m + durationMinutes;
+
+    const collides = busyIntervals.some(
+      (b) => slotStart < b.endM && slotEnd > b.startM
+    );
+
+    if (!collides) {
+      availableSlots.push(minutesToTime(slotStart));
+    }
+  }
+
+  return availableSlots;
 }

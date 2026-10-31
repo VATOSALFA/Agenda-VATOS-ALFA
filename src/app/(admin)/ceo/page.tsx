@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
@@ -150,9 +150,23 @@ export default function JanetCeoPage() {
   const [attachmentName, setAttachmentName] = useState<string | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const chatTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Preferencias visuales y herramientas de Chat (idénticas al chat con Janet)
   const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(DEFAULT_CHAT_PREFERENCES);
+
+  // Auto-ajuste de altura para que la caja crezca hacia arriba conforme escribe el usuario
+  const adjustCeoTextareaHeight = useCallback(() => {
+    const el = chatTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
+    el.style.height = `${nextH}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustCeoTextareaHeight();
+  }, [inputMessage, chatPreferences.fontSize, adjustCeoTextareaHeight]);
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState<boolean>(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState<boolean>(false);
@@ -340,7 +354,12 @@ export default function JanetCeoPage() {
     const currentAttachment = attachmentDataUrl;
     const currentAttachmentName = attachmentName;
 
-    if (!customText && !hasVoice) setInputMessage('');
+    if (!customText && !hasVoice) {
+      setInputMessage('');
+      if (chatTextareaRef.current) {
+        chatTextareaRef.current.style.height = '38px';
+      }
+    }
     if (!hasVoice) {
       setAttachmentDataUrl(undefined);
       setAttachmentName(undefined);
@@ -1258,10 +1277,17 @@ export default function JanetCeoPage() {
                     <Camera className="h-4 w-4" />
                   </button>
 
-                  {/* Campo de texto */}
+                  {/* Campo de texto que crece hacia arriba */}
                   <Textarea
+                    ref={chatTextareaRef}
                     value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
+                    onChange={(e) => {
+                      setInputMessage(e.target.value);
+                      const el = e.target;
+                      el.style.height = 'auto';
+                      const nextH = Math.min(Math.max(38, el.scrollHeight), 140);
+                      el.style.height = `${nextH}px`;
+                    }}
                     onKeyDown={(e) => {
                       if (
                         e.key === 'Enter' &&
@@ -1273,7 +1299,7 @@ export default function JanetCeoPage() {
                       }
                     }}
                     placeholder="Escribe o usa el micrófono para hablar con Janet CEO..."
-                    className="min-h-[38px] max-h-[110px] py-2 text-xs sm:text-sm rounded-xl resize-none flex-1"
+                    className="min-h-[38px] max-h-[140px] py-2 text-xs sm:text-sm rounded-xl resize-none flex-1 overflow-y-auto leading-relaxed"
                     rows={1}
                   />
 

@@ -5,6 +5,15 @@ import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { sanitizeExternalUntrustedText } from './ceo-security';
+import {
+  consultarOperacionDiaSucursalTool,
+  consultarDisponibilidadBarberosSucursalTool,
+  agendarCitaSucursalTool,
+  reagendarCitaSucursalTool,
+  gestionarHorarioBarberoSucursalTool,
+  proponerCancelacionOEliminacionSucursalTool,
+  consultarYGestionarInventarioInsumosTool,
+} from './gerencia-tools';
 
 const MONTH_NAMES_ES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -1030,11 +1039,17 @@ export const proponerAccionEjecutivaCeoTool = ai.defineTool(
         .describe('Por qué conviene ejecutar esta acción y qué impacto financiero/operativo tendrá.'),
       resumenAntes: z.string().describe('Estado actual antes del cambio (ej. "Utilidad Gerencia: 20%").'),
       resumenDespues: z.string().describe('Estado nuevo tras aplicar el cambio (ej. "Utilidad Gerencia: 26%").'),
-      parametrosEjecucion: z
-        .record(z.any())
-        .describe(
-          'Objeto JSON con los datos técnicos para ejecutar la acción: para actualizar_precio_servicio usar { servicioId, servicioNombre, nuevoPrecio }; para ajustar_utilidad_gerencia usar { nuevoPorcentaje }; para crear_promocion usar { nombre, descripcion, tipoDescuento, valorDescuento, codigo }; para publicar_aviso_app usar { titulo, mensaje }.'
-        ),
+      servicioId: z.string().optional().describe('ID del servicio para actualizar precio.'),
+      servicioNombre: z.string().optional().describe('Nombre del servicio.'),
+      nuevoPrecio: z.number().optional().describe('Nuevo precio en MXN.'),
+      nuevoPorcentaje: z.number().optional().describe('Nuevo porcentaje de utilidad para gerencia.'),
+      promocionNombre: z.string().optional().describe('Nombre de la promoción.'),
+      promocionDescripcion: z.string().optional().describe('Descripción de la promoción.'),
+      promocionTipo: z.string().optional().describe('percentage o fixed.'),
+      promocionValor: z.number().optional().describe('Valor del descuento.'),
+      promocionCodigo: z.string().optional().describe('Código de cupón.'),
+      avisoTitulo: z.string().optional().describe('Título del aviso para la App Móvil.'),
+      avisoMensaje: z.string().optional().describe('Mensaje del aviso para la App Móvil.'),
     }),
   },
   async ({
@@ -1043,9 +1058,32 @@ export const proponerAccionEjecutivaCeoTool = ai.defineTool(
     justificacionEstrategica,
     resumenAntes,
     resumenDespues,
-    parametrosEjecucion,
+    servicioId,
+    servicioNombre,
+    nuevoPrecio,
+    nuevoPorcentaje,
+    promocionNombre,
+    promocionDescripcion,
+    promocionTipo,
+    promocionValor,
+    promocionCodigo,
+    avisoTitulo,
+    avisoMensaje,
   }) => {
     const db = getDb();
+    const parametrosEjecucion: Record<string, any> = {};
+    if (servicioId) parametrosEjecucion.servicioId = servicioId;
+    if (servicioNombre) parametrosEjecucion.servicioNombre = servicioNombre;
+    if (nuevoPrecio !== undefined) parametrosEjecucion.nuevoPrecio = nuevoPrecio;
+    if (nuevoPorcentaje !== undefined) parametrosEjecucion.nuevoPorcentaje = nuevoPorcentaje;
+    if (promocionNombre) parametrosEjecucion.nombre = promocionNombre;
+    if (promocionDescripcion) parametrosEjecucion.descripcion = promocionDescripcion;
+    if (promocionTipo) parametrosEjecucion.tipoDescuento = promocionTipo;
+    if (promocionValor !== undefined) parametrosEjecucion.valorDescuento = promocionValor;
+    if (promocionCodigo) parametrosEjecucion.codigo = promocionCodigo;
+    if (avisoTitulo) parametrosEjecucion.titulo = avisoTitulo;
+    if (avisoMensaje) parametrosEjecucion.mensaje = avisoMensaje;
+
     const docRef = await db.collection('ceo_propuestas').add({
       tipoAccion,
       tituloPropuesta,
@@ -1110,6 +1148,7 @@ export const enviarConsignaAGerenciaSucursalTool = ai.defineTool(
 
 export function getCeoAgentTools() {
   return [
+    // Subagentes Estratégicos y Financieros CEO
     subagenteCfoEstadoResultadosTool,
     subagenteCfoSimuladorFinancieroTool,
     subagenteAuditorForenseAntiroboTool,
@@ -1119,5 +1158,14 @@ export function getCeoAgentTools() {
     guardarMemoriaEstrategicaCeoTool,
     proponerAccionEjecutivaCeoTool,
     enviarConsignaAGerenciaSucursalTool,
+
+    // Herramientas Operativas y de Agenda de Sucursal (Privilegios de Administrador General)
+    agendarCitaSucursalTool,
+    reagendarCitaSucursalTool,
+    consultarDisponibilidadBarberosSucursalTool,
+    consultarOperacionDiaSucursalTool,
+    gestionarHorarioBarberoSucursalTool,
+    proponerCancelacionOEliminacionSucursalTool,
+    consultarYGestionarInventarioInsumosTool,
   ];
 }

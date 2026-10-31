@@ -13,6 +13,7 @@ import {
   getCeoAgentTools,
   computeFinancialStatementForRange,
 } from '@/lib/ai/ceo-tools';
+import { janetCallerStorage } from '@/lib/ai/gerencia-tools';
 
 const MONTH_NAMES_ES = [
   'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
@@ -193,8 +194,17 @@ export async function processCeoAgentMessage({
   audioDuration?: number;
 }) {
   const adminUser = await verifyGeneralAdminAccess(idToken);
-  const db = getDb();
-  const { friendlyToday, todayIso, localTime } = getMexicoDateInfo();
+
+  return await janetCallerStorage.run(
+    {
+      operatorName: adminUser.name || 'Alejandro Pacheco',
+      operatorRole: 'Administrador general',
+      operatorId: adminUser.uid,
+      assistantName: 'Janet CEO',
+    },
+    async () => {
+      const db = getDb();
+      const { friendlyToday, todayIso, localTime } = getMexicoDateInfo();
 
   // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash para máxima precisión
   let transcribedAudioText = '';
@@ -438,16 +448,17 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
     creado_en: FieldValue.serverTimestamp(),
   });
 
-  return {
-    success: true,
-    sessionId: activeSessionId,
-    messageId: savedMsgRef.id,
-    reply: responseText,
-    modelUsed: usedModelName,
-    subagentsInvoked,
-    propuestaAccion: propuestaGenerada,
-    audioTranscription: transcribedAudioText || undefined,
-  };
+    return {
+      success: true,
+      sessionId: activeSessionId,
+      messageId: savedMsgRef.id,
+      reply: responseText,
+      modelUsed: usedModelName,
+      subagentsInvoked,
+      propuestaAccion: propuestaGenerada,
+      audioTranscription: transcribedAudioText || undefined,
+    };
+  });
 }
 
 /**

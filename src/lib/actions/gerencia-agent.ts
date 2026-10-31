@@ -4,7 +4,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { verifyBranchManagerAccess } from '@/lib/ai/ceo-security';
-import { getGerenciaAgentTools } from '@/lib/ai/gerencia-tools';
+import { getGerenciaAgentTools, janetCallerStorage } from '@/lib/ai/gerencia-tools';
 import { getMexicoDateInfo } from '@/lib/ai/agent-utils';
 
 function serializeDocDate(val: any): string {
@@ -234,8 +234,18 @@ export async function processGerenciaAgentMessage({
   audioDuration?: number;
 }) {
   const managerUser = await verifyBranchManagerAccess(idToken);
-  const db = getDb();
-  const { friendlyToday, todayIso, tomorrowIso, localTime } = getMexicoDateInfo();
+  const assistantName = managerUser.role === 'Administrador general' ? 'Janet CEO' : 'Janet Gerencia';
+
+  return await janetCallerStorage.run(
+    {
+      operatorName: managerUser.name || 'Beatriz Elizarraga Casas',
+      operatorRole: managerUser.role || 'Administrador local',
+      operatorId: managerUser.uid,
+      assistantName,
+    },
+    async () => {
+      const db = getDb();
+      const { friendlyToday, todayIso, tomorrowIso, localTime } = getMexicoDateInfo();
 
   // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash
   let transcribedAudioText = '';
@@ -452,18 +462,19 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
     creado_en: FieldValue.serverTimestamp(),
   });
 
-  return {
-    sessionId: activeSessionId,
-    audioTranscription: transcribedAudioText || undefined,
-    message: {
-      id: savedMsgRef.id,
-      rol: 'assistant' as const,
-      contenido: responseText,
-      creado_en: new Date().toISOString(),
-      herramientasUsadas,
-      propuestaAccion: propuestaGenerada,
-    },
-  };
+    return {
+      sessionId: activeSessionId,
+      audioTranscription: transcribedAudioText || undefined,
+      message: {
+        id: savedMsgRef.id,
+        rol: 'assistant' as const,
+        contenido: responseText,
+        creado_en: new Date().toISOString(),
+        herramientasUsadas,
+        propuestaAccion: propuestaGenerada,
+      },
+    };
+  });
 }
 
 export async function executeApprovedGerenciaAction({

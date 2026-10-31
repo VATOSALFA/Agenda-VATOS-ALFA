@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
@@ -16,6 +17,51 @@ import {
   normalizeName,
   BarberDayScheduleInfo,
 } from '@/lib/ai/barber-schedule-helper';
+
+export interface JanetCallerContext {
+  operatorName: string;
+  operatorRole: string;
+  operatorId: string;
+  assistantName: string;
+}
+
+export const janetCallerStorage = new AsyncLocalStorage<JanetCallerContext>();
+
+export function getCallerInfo(quienSolicita?: string) {
+  const store = janetCallerStorage.getStore();
+  let rawName = quienSolicita?.trim() || store?.operatorName || 'Alejandro Pacheco';
+  rawName = rawName.replace(/\s+/g, ' ').trim();
+  const lower = rawName.toLowerCase();
+  const operatorName =
+    lower.includes('alejandro') || lower.includes('alex') || lower.includes('dueño')
+      ? 'Alejandro Pacheco'
+      : lower.includes('beatriz') || lower.includes('bety')
+      ? 'Beatriz'
+      : rawName;
+
+  const assistantName =
+    store?.assistantName ||
+    (store?.operatorRole === 'Administrador general' || operatorName.includes('Alejandro')
+      ? 'Janet CEO'
+      : 'Janet Gerencia');
+  const creatorDisplay = `${assistantName} (${operatorName})`;
+  const auditUserId =
+    store?.operatorId ||
+    (operatorName.includes('Alejandro')
+      ? 'JxK6BLZPOBcBpjnuVZPsgmIHbZ12'
+      : 'hNeyJQv56jfJgXnGbzqeDo9L4u73');
+  const auditUserRole =
+    store?.operatorRole ||
+    (operatorName.includes('Alejandro') ? 'Administrador general' : 'Administrador local');
+
+  return {
+    operatorName,
+    assistantName,
+    creatorDisplay,
+    auditUserId,
+    auditUserRole,
+  };
+}
 
 function toDateSafe(val: any): Date | null {
   if (!val) return null;
@@ -678,6 +724,12 @@ export const agendarCitaSucursalTool = ai.defineTool(
         .string()
         .optional()
         .describe('Número de cliente en la base de datos (ej. "311").'),
+      quienSolicita: z
+        .string()
+        .optional()
+        .describe(
+          'Nombre de quien solicita agendar la cita (ej. "Alejandro Pacheco", "Beatriz"). Si se omite, se usa el operador autenticado en la sesión.'
+        ),
       barberoNombre: z
         .string()
         .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Fredy", "Ivon", "Lupita", "Beatriz").'),
@@ -706,6 +758,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
     nombreCliente,
     telefonoCliente,
     numeroCliente,
+    quienSolicita,
     barberoNombre,
     fecha,
     hora,
@@ -713,6 +766,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
     notas,
     forzarSobrecupo,
   }) => {
+    const caller = getCallerInfo(quienSolicita);
     const db = getDb();
     const { todayIso } = getMexicoDateInfo();
     const targetDate = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
@@ -867,10 +921,10 @@ export const agendarCitaSucursalTool = ai.defineTool(
       pago_estado: 'Pendiente',
       local_id: defaultLocalId,
       canal_reserva: 'agenda',
-      creada_por: 'Janet Gerencia (Beatriz)',
+      creada_por: caller.creatorDisplay,
       creado_en: Timestamp.now(),
       notas: notas || '',
-      nota_interna: 'Agendada por Janet Gerencia a petición de Beatriz',
+      nota_interna: `Agendada por ${caller.assistantName} a petición de ${caller.operatorName}`,
       professional_lock: true,
       isSandbox: false,
       whatsappReminderNotNeeded: false,
@@ -884,11 +938,11 @@ export const agendarCitaSucursalTool = ai.defineTool(
 
     // 6. Auditoría institucional
     await db.collection('audit_logs').add({
-      action: 'Crear Cita (Janet Gerencia)',
+      action: `Crear Cita (${caller.assistantName})`,
       details: `Cita agendada para ${client.nombre} con ${barberDisplayName} el ${targetDate} de ${horaInicio} a ${horaFin} (${service.name} - $${service.price.toFixed(2)})`,
-      userId: 'janet_gerencia',
-      userName: 'Janet Gerencia (Asistente de Sucursal)',
-      userRole: 'Administrador local',
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
       severity: 'info',
       entityId: newResRef.id,
       localId: defaultLocalId,
@@ -943,6 +997,12 @@ export const reagendarCitaSucursalTool = ai.defineTool(
         .string()
         .optional()
         .describe('Motivo del cambio de horario o día.'),
+      quienSolicita: z
+        .string()
+        .optional()
+        .describe(
+          'Nombre de quien solicita mover o reagendar la cita (ej. "Alejandro Pacheco", "Beatriz"). Si se omite, se usa el operador autenticado en la sesión.'
+        ),
     }),
   },
   async ({
@@ -952,7 +1012,9 @@ export const reagendarCitaSucursalTool = ai.defineTool(
     nuevaHora,
     nuevoBarberoNombre,
     motivo,
+    quienSolicita,
   }) => {
+    const caller = getCallerInfo(quienSolicita);
     const db = getDb();
     const { todayIso } = getMexicoDateInfo();
     const targetDateCurrent = (fechaActual && /^\d{4}-\d{2}-\d{2}$/.test(fechaActual.trim()))
@@ -1080,22 +1142,24 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       professionalNames: barberDisplayName,
       items: updatedItems.length > 0 ? updatedItems : resData.items,
       reagendada_en: Timestamp.now(),
-      reagendada_por: 'Janet Gerencia (Beatriz)',
-      motivo_reagendacion: motivo || 'Solicitado por Beatriz',
+      reagendada_por: caller.creatorDisplay,
+      motivo_reagendacion: motivo || `Solicitado por ${caller.operatorName}`,
     });
 
     // 5. Auditoría
     await db.collection('audit_logs').add({
-      action: 'Reagendar Cita (Janet Gerencia)',
+      action: `Reagendar Cita (${caller.assistantName})`,
       details: `Cita de ${resData.cliente_nombre} movida al ${nuevaFecha} a las ${parsedHour} con ${barberDisplayName}. Motivo: ${motivo || 'Recepción'}`,
-      userId: 'janet_gerencia',
-      userName: 'Janet Gerencia (Asistente de Sucursal)',
-      userRole: 'Administrador local',
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
       severity: 'info',
       entityId: matchedDoc.id,
       localId: targetProf.local_id || 'rkbEgvwP67JliXQ1Qeyj',
       timestamp: FieldValue.serverTimestamp(),
     });
+
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
 
     return {
       ok: true,
@@ -1104,7 +1168,7 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       nuevaFecha,
       nuevoHorario: `${parsedHour} a ${nuevaHoraFin}`,
       barbero: barberDisplayName,
-      mensaje: `¡Listo Bety! La cita de **${resData.cliente_nombre}** ha sido reagendada con éxito:\n\n• **Nueva Fecha:** ${nuevaFecha}\n• **Nuevo Horario:** ${parsedHour} a ${nuevaHoraFin}\n• **Barbero:** ${barberDisplayName}\n\nYa quedó actualizada en la agenda.`,
+      mensaje: `¡Listo ${saludoOperador}! La cita de **${resData.cliente_nombre}** ha sido reagendada con éxito:\n\n• **Nueva Fecha:** ${nuevaFecha}\n• **Nuevo Horario:** ${parsedHour} a ${nuevaHoraFin}\n• **Barbero:** ${barberDisplayName}\n\nYa quedó actualizada en la agenda.`,
     };
   }
 );
@@ -1221,6 +1285,8 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
     }),
   },
   async ({ accion, nombreBarbero, fecha, horaInicio, horaFin, motivo }) => {
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
     const db = getDb();
     const profSnap = await db.collection('profesionales').get();
     const activeProfessionals: any[] = [];
@@ -1357,11 +1423,11 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       });
 
       await db.collection('audit_logs').add({
-        action: 'Bloquear Horario (Janet Gerencia)',
+        action: `Bloquear Horario (${caller.assistantName})`,
         details: `Horario bloqueado para ${displayName} el ${fecha} de ${effectiveStart} a ${effectiveEnd}. Motivo: ${cleanMotivo}`,
-        userId: 'janet_gerencia',
-        userName: 'Janet Gerencia (Asistente de Sucursal)',
-        userRole: 'Administrador local',
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
         severity: 'info',
         entityId: blockRef.id,
         localId: defaultLocalId,
@@ -1371,7 +1437,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       return {
         ok: true,
         bloqueoId: blockRef.id,
-        mensaje: `Listo Bety: quedó bloqueado el horario de **${displayName}** el día **${fecha}** de **${effectiveStart} a ${effectiveEnd}** con motivo "${cleanMotivo}". Ya se refleja limpiamente en la agenda.`,
+        mensaje: `Listo ${saludoOperador}: quedó bloqueado el horario de **${displayName}** el día **${fecha}** de **${effectiveStart} a ${effectiveEnd}** con motivo "${cleanMotivo}". Ya se refleja limpiamente en la agenda.`,
       };
     }
 
@@ -1397,11 +1463,11 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       });
 
       await db.collection('audit_logs').add({
-        action: 'Habilitar Horario Especial (Janet Gerencia)',
+        action: `Habilitar Horario Especial (${caller.assistantName})`,
         details: `Horario especial habilitado para ${displayName} el ${fecha} de ${start} a ${end}. Motivo: ${motivo}`,
-        userId: 'janet_gerencia',
-        userName: 'Janet Gerencia (Asistente de Sucursal)',
-        userRole: 'Administrador local',
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
         severity: 'info',
         entityId: enableRef.id,
         localId: defaultLocalId,
@@ -1411,7 +1477,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       return {
         ok: true,
         bloqueoId: enableRef.id,
-        mensaje: `Listo Bety: se habilitó el horario especial para **${displayName}** el día **${fecha}** de **${start} a ${end}**. Ya puede recibir citas en ese rango.`,
+        mensaje: `Listo ${saludoOperador}: se habilitó el horario especial para **${displayName}** el día **${fecha}** de **${start} a ${end}**. Ya puede recibir citas en ese rango.`,
       };
     }
 
@@ -1445,11 +1511,11 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
     }
 
     await db.collection('audit_logs').add({
-      action: 'Desbloquear Horario (Janet Gerencia)',
+      action: `Desbloquear Horario (${caller.assistantName})`,
       details: `Se eliminaron ${toDelete.length} bloqueo(s) de ${displayName} el ${fecha}: ${motivosEliminados.join(', ')}. Motivo: ${motivo}`,
-      userId: 'janet_gerencia',
-      userName: 'Janet Gerencia (Asistente de Sucursal)',
-      userRole: 'Administrador local',
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
       severity: 'info',
       localId: defaultLocalId,
       timestamp: FieldValue.serverTimestamp(),
@@ -1458,7 +1524,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
     return {
       ok: true,
       eliminados: toDelete.length,
-      mensaje: `Listo Bety: se eliminaron ${toDelete.length} bloqueo(s) de **${displayName}** para el día **${fecha}** (${motivosEliminados.join(', ')}). Su horario vuelve a estar disponible en la agenda.`,
+      mensaje: `Listo ${saludoOperador}: se eliminaron ${toDelete.length} bloqueo(s) de **${displayName}** para el día **${fecha}** (${motivosEliminados.join(', ')}). Su horario vuelve a estar disponible en la agenda.`,
     };
   }
 );
@@ -1574,7 +1640,7 @@ export const proponerCancelacionOEliminacionSucursalTool = ai.defineTool(
         resumenAntes: `Estado actual: ${rData.estado || 'Reservado'} · ${servicio}`,
         resumenDespues: `Estado nuevo: Cancelado`,
         estado: 'pendiente_aprobacion',
-        mensaje: 'Se generó la tarjeta de confirmación en pantalla para que Beatriz autorice la cancelación con 1 clic.',
+        mensaje: 'Se generó la tarjeta de confirmación en pantalla para autorizar la cancelación con 1 clic.',
       };
     }
 
@@ -1655,7 +1721,7 @@ export const proponerCancelacionOEliminacionSucursalTool = ai.defineTool(
       resumenDespues: `Eliminada de caja y registrada con motivo en Auditoría`,
       estado: 'pendiente_aprobacion',
       mensaje:
-        'Se generó la tarjeta de confirmación en pantalla para que Beatriz ingrese su código de autorización y elimine la venta dejando el motivo registrado.',
+        'Se generó la tarjeta de confirmación en pantalla para autorizar la eliminación de la venta dejando el motivo registrado.',
     };
   }
 );
@@ -1667,7 +1733,7 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
   {
     name: 'consultar_y_gestionar_inventario_insumos',
     description:
-      'Revisa el stock actual de productos para detectar faltantes, muestra los recordatorios pendientes de Beatriz (conteo físico de inventario, compra de insumos como navajas, papel cuello, toallas, limpieza o consignas de Dirección) y permite crear o completar recordatorios.',
+      'Revisa el stock actual de productos para detectar faltantes, muestra los recordatorios pendientes (conteo físico de inventario, compra de insumos como navajas, papel cuello, toallas, limpieza o consignas de Dirección) y permite crear o completar recordatorios.',
     inputSchema: z.object({
       accion: z
         .enum(['consultar', 'crear_recordatorio', 'completar_recordatorio'])
@@ -1697,6 +1763,7 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
     detalleRecordatorio,
     recordatorioIdACompletar,
   }) => {
+    const caller = getCallerInfo();
     const db = getDb();
 
     if (accion === 'crear_recordatorio' && tituloRecordatorio) {
@@ -1705,7 +1772,7 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
         prioridad: 'normal',
         titulo: tituloRecordatorio.trim(),
         detalle: (detalleRecordatorio || 'Recordatorio operativo de sucursal').trim(),
-        origen: 'Janet Gerencia (Beatriz)',
+        origen: caller.creatorDisplay,
         completado: false,
         creado_en: FieldValue.serverTimestamp(),
       });

@@ -17,8 +17,8 @@ interface Alfa3DCarouselProps {
   className?: string;
 }
 
-const FACE_COUNT = 10;
-const STEP_ANGLE = 360 / FACE_COUNT; // 36 degrees
+const STEP_ANGLE = 36; // 36 degrees (10 cylinder faces)
+const SLOTS = [-4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 const DEG_TO_RAD = Math.PI / 180;
 const AUTOPLAY_INTERVAL_MS = 3400;
 const RESUME_DELAY_MS = 4500;
@@ -29,12 +29,6 @@ export function Alfa3DCarousel({
   onBookStyle,
   className,
 }: Alfa3DCarouselProps) {
-  // Populate 10 faces from available styles
-  const cylinderCards = useMemo(() => {
-    if (!stylesList || stylesList.length === 0) return [];
-    return Array.from({ length: FACE_COUNT }, (_, i) => stylesList[i % stylesList.length]);
-  }, [stylesList]);
-
   const [rotation, setRotation] = useState(0);
   const rotationRef = useRef(0);
   const animFrameRef = useRef<number | null>(null);
@@ -89,17 +83,14 @@ export function Alfa3DCarousel({
   // Modal detail state
   const [selectedStyleForModal, setSelectedStyleForModal] = useState<LookbookStyle | null>(null);
 
-  // Active center index
-  const activeFaceIndex = useMemo(() => {
-    const normalized = ((-rotationRef.current % 360) + 360) % 360;
-    return Math.round(normalized / STEP_ANGLE) % FACE_COUNT;
-  }, [rotation]);
-
   const totalPhotos = stylesList?.length || 0;
-  const activeStyle = cylinderCards[activeFaceIndex] || stylesList[0];
-  const activeStyleIndex = stylesList.findIndex((s) => s.id === activeStyle?.id);
-  const currentDisplayIndex =
-    activeStyleIndex >= 0 ? activeStyleIndex + 1 : (activeFaceIndex % (totalPhotos || 1)) + 1;
+  const centerOffset = -rotation / STEP_ANGLE;
+  const currentCenterIndex = Math.round(centerOffset);
+  const activeStyleIndex =
+    totalPhotos > 0 ? ((currentCenterIndex % totalPhotos) + totalPhotos) % totalPhotos : 0;
+  const currentDisplayIndex = activeStyleIndex + 1;
+  const activeStyle = stylesList?.[activeStyleIndex] || stylesList?.[0];
+  const activeFaceIndex = ((currentCenterIndex % 10) + 10) % 10;
 
   const stopAnimation = useCallback(() => {
     if (animFrameRef.current !== null) {
@@ -227,32 +218,19 @@ export function Alfa3DCarousel({
     });
   };
 
-  const handleCardClick = (index: number) => {
+  const handleCardClick = (cardData: { styleItem: LookbookStyle; isFront: boolean; angleDeg: number }) => {
     if (dragMoved.current) return;
-    // Calculate if this card is currently front-most
-    const cardAngle = (index * STEP_ANGLE + rotationRef.current) % 360;
-    const normalized = (cardAngle + 360) % 360;
-    const isFront = normalized < 18 || normalized > 342;
-
-    if (isFront) {
+    if (cardData.isFront) {
       // Center card clicked -> open details
-      const style = cylinderCards[index];
-      if (style) {
-        setSelectedStyleForModal(style);
-        onSelectStyle?.(style);
-      }
+      setSelectedStyleForModal(cardData.styleItem);
+      onSelectStyle?.(cardData.styleItem);
     } else {
       // Rotate card to front
       isInteracting.current = true;
       pauseAutoPlay();
-      const current = rotationRef.current;
-      const targetAngle = -index * STEP_ANGLE;
-      // Find shortest rotation
-      let diff = (targetAngle - current) % 360;
-      if (diff > 180) diff -= 360;
-      if (diff < -180) diff += 360;
-
-      animateToAngle(current + diff, 340, () => {
+      const stepDiff = Math.round(cardData.angleDeg / STEP_ANGLE);
+      const targetAngle = rotationRef.current - stepDiff * STEP_ANGLE;
+      animateToAngle(targetAngle, 340, () => {
         scheduleResume();
       });
     }
@@ -369,10 +347,15 @@ export function Alfa3DCarousel({
               perspectiveOrigin: '50% 50%',
             }}
           >
-            {cylinderCards.map((styleItem, index) => {
-              const faceAngle = index * STEP_ANGLE;
-              const totalAngle = (rotation + faceAngle) % 360;
-              const rad = totalAngle * DEG_TO_RAD;
+            {SLOTS.map((offset) => {
+              if (totalPhotos === 0) return null;
+              const rawIdx = (currentCenterIndex + offset) % totalPhotos;
+              const itemIndex = (rawIdx + totalPhotos) % totalPhotos;
+              const styleItem = stylesList[itemIndex];
+              if (!styleItem) return null;
+
+              const angleDeg = (currentCenterIndex + offset - centerOffset) * STEP_ANGLE;
+              const rad = angleDeg * DEG_TO_RAD;
 
               // Sin/Cos cylinder position
               const sinVal = Math.sin(rad);
@@ -383,12 +366,14 @@ export function Alfa3DCarousel({
               const scale = 0.72 + 0.28 * depth;
               const opacity = 0.45 + 0.55 * depth;
               const zIndex = Math.round(depth * 30);
-              const isFront = depth > 0.94;
+              const isFront = Math.abs(angleDeg) < STEP_ANGLE / 2;
+
+              const cardData = { styleItem, isFront, angleDeg };
 
               return (
                 <div
-                  key={`lookbook_${styleItem.id}_${index}`}
-                  onClick={() => handleCardClick(index)}
+                  key={`slot_${offset}`}
+                  onClick={() => handleCardClick(cardData)}
                   className="absolute cursor-pointer transition-transform duration-75 select-none"
                   style={{
                     width: `${stageDimensions.cardSize}px`,
@@ -408,7 +393,7 @@ export function Alfa3DCarousel({
                   >
                     <Image
                       src={styleItem.imagenUrl}
-                      alt={styleItem.titulo}
+                      alt={styleItem.titulo || 'Corte Alfa'}
                       fill
                       quality={85}
                       sizes="(max-width: 640px) 160px, (max-width: 1024px) 200px, (max-width: 1440px) 260px, 320px"

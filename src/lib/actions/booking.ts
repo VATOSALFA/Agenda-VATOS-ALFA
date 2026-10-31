@@ -1651,7 +1651,12 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
             from: fromEmail,
             to: clientEmail,
             subject: subject,
-            html: html
+            html: html,
+            headers: {
+                'X-Priority': '1',
+                'Importance': 'high',
+                'Priority': 'urgent',
+            },
         });
         
         // --- TRACK EMAIL STATUS ---
@@ -1786,7 +1791,12 @@ async function sendBookingConfirmation(reservation: any, db: any, clientEmail: s
             to: professional.email,
             bcc: resolvedBcc.length > 0 ? resolvedBcc : undefined,
             subject: subject,
-            html: html
+            html: html,
+            headers: {
+                'X-Priority': '1',
+                'Importance': 'high',
+                'Priority': 'urgent',
+            },
         });
         console.log(`[Email] Professional confirmation sent to ${professional.email}${resolvedBcc.length > 0 ? ` (BCC: ${resolvedBcc.join(', ')})` : ''}`);
 
@@ -2030,7 +2040,12 @@ export async function sendBookingCancellation(params: SendBookingCancellationPar
             from: fromEmail,
             to: clientEmail,
             subject: subject,
-            html: html
+            html: html,
+            headers: {
+                'X-Priority': '1',
+                'Importance': 'high',
+                'Priority': 'urgent',
+            },
         });
 
         if (resendResponse.error) {

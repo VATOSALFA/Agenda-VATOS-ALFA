@@ -1342,13 +1342,31 @@ exports.onReservationCreated = onDocumentCreated(
     const data = snap.data();
     const reservaId = event.params.reservaId;
 
-    // Filter: Only Web Publica && No Payment Required
-    if (data.origen === 'web_publica' && !data.requiere_pago_anticipado) {
-      console.log(`[Trigger] Free Reservation Created (${reservaId}). Sending Email...`);
-      // Wait a moment to ensure client data is fully propagated if created in batch
-      await new Promise(r => setTimeout(r, 2000));
-      await sendReservationConfirmationEmail(reservaId, data.cliente_id, data.local_id);
+    // Filter: Ignore Sandbox or Simulation reservations
+    if (data.isSandbox || reservaId.startsWith('SANDBOX-') || data.origen === 'simulador' || data.canal_reserva === 'chatbot_sandbox') {
+      return;
     }
+
+    // Filter: Ignore Cancelled or Pending upfront payment (deposit payments send email via Mercado Pago webhook)
+    if (data.estado === 'Cancelado' || (data.requiere_pago_anticipado && data.pago_estado === 'pending_payment')) {
+      return;
+    }
+
+    // Wait a moment to ensure client data / server actions have fully settled
+    await new Promise(r => setTimeout(r, 2500));
+
+    // Re-check reservation in Firestore to avoid duplicate email if already sent (e.g. by Next.js Server Action)
+    const freshSnap = await admin.firestore().collection('reservas').doc(reservaId).get();
+    if (!freshSnap.exists) return;
+    const freshData = freshSnap.data() || {};
+
+    if (freshData.notifications && freshData.notifications.email_confirmation_sent) {
+      console.log(`[Trigger] Reservation (${reservaId}) already had confirmation email sent. Skipping.`);
+      return;
+    }
+
+    console.log(`[Trigger] Reservation Created (${reservaId}, origen: ${freshData.origen || data.origen}). Sending Email...`);
+    await sendReservationConfirmationEmail(reservaId, freshData.cliente_id || data.cliente_id, freshData.local_id || data.local_id);
   }
 );
 
@@ -1404,7 +1422,7 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
 
       const senderEmail = 'contacto@vatosalfa.com';
       const senderName = empresaConfig.name || 'VATOS ALFA Barber Shop';
-      const recipientEmail = clientData.email || clientData.correo;
+      const recipientEmail = clientData.email || clientData.correo || resData.cliente_email || resData.customer?.correo;
 
       if (recipientEmail && recipientEmail.includes('@')) {
         const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
@@ -1522,6 +1540,12 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
           html: htmlContent,
         });
         console.log(`[Email] Mail sent to Client ${recipientEmail}`);
+
+        // Update reservation to record that email was successfully sent
+        await db.collection('reservas').doc(reservationId).update({
+          'notifications.email_confirmation_sent': true,
+          'notifications.email_confirmation_sent_at': admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(updateErr => console.error('[Email] Failed to track email confirmation status:', updateErr));
       } else {
         console.log(`[Email] Client ${clientId} invalid email. Skipping.`);
       }
@@ -1726,6 +1750,11 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
       bcc: uniqueBcc.length > 0 ? uniqueBcc : undefined,
       subject: `Nueva Cita - ${clientData.nombre || 'Cliente'}`,
       html: htmlContent,
+      headers: {
+        'X-Priority': '1',
+        'Importance': 'high',
+        'Priority': 'urgent',
+      },
     });
     console.log(`[Email-Pro] Mail sent.`);
 

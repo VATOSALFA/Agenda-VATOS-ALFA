@@ -95,7 +95,11 @@ export function Alfa3DCarousel({
     return Math.round(normalized / STEP_ANGLE) % FACE_COUNT;
   }, [rotation]);
 
+  const totalPhotos = stylesList?.length || 0;
   const activeStyle = cylinderCards[activeFaceIndex] || stylesList[0];
+  const activeStyleIndex = stylesList.findIndex((s) => s.id === activeStyle?.id);
+  const currentDisplayIndex =
+    activeStyleIndex >= 0 ? activeStyleIndex + 1 : (activeFaceIndex % (totalPhotos || 1)) + 1;
 
   const stopAnimation = useCallback(() => {
     if (animFrameRef.current !== null) {
@@ -301,6 +305,57 @@ export function Alfa3DCarousel({
           onTouchMove={(e) => onDragMove(e.touches[0].clientX)}
           onTouchEnd={onDragEnd}
         >
+          {/* Top Control Bar: Current Photo (Left), Indicator (Center), Total Photos (Right) */}
+          <div className="absolute top-2 sm:top-4 left-4 sm:left-8 right-4 sm:right-8 flex items-center justify-between pointer-events-none z-30 select-none">
+            {/* Left: Contador discreto de foto actual (ej. 1, 2, 3...) */}
+            <div className="min-w-[28px] flex items-center justify-start">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-500 tracking-wider">
+                {currentDisplayIndex}
+              </span>
+            </div>
+
+            {/* Center: Minimalist Indicator (< • >) */}
+            <div className="flex items-center justify-center gap-3 sm:gap-4 pointer-events-auto">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  rotateCarousel('left');
+                }}
+                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Foto anterior"
+              >
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+
+              <div className="flex items-center justify-center w-5 h-5">
+                <span
+                  key={`${activeFaceIndex}-${activeStyle?.id}`}
+                  className="w-2 h-2 rounded-full bg-blue-500 animate-dot-blink"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  rotateCarousel('right');
+                }}
+                className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                aria-label="Foto siguiente"
+              >
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+            </div>
+
+            {/* Right: Total de fotos en la galería */}
+            <div className="min-w-[28px] flex items-center justify-end">
+              <span className="text-[11px] sm:text-xs font-semibold text-slate-500 tracking-wider">
+                {totalPhotos}
+              </span>
+            </div>
+          </div>
+
           {/* Subtle Ambient Glow behind Center */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-[500px] h-[300px] bg-blue-600/10 rounded-full blur-[100px] -z-10" />
@@ -387,33 +442,6 @@ export function Alfa3DCarousel({
               );
             })}
           </div>
-        </div>
-
-        {/* Minimalist Indicator (< • >) identical to Staff */}
-        <div className="flex items-center justify-center gap-4 mt-3 mb-2">
-          <button
-            onClick={() => rotateCarousel('left')}
-            className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            aria-label="Anterior estilo"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          {/* Single Center Indicator Dot that blinks on style change */}
-          <div className="flex items-center justify-center w-6 h-6">
-            <span
-              key={`${activeFaceIndex}-${activeStyle?.id}`}
-              className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-dot-blink"
-            />
-          </div>
-
-          <button
-            onClick={() => rotateCarousel('right')}
-            className="p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-            aria-label="Siguiente estilo"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
         </div>
       </motion.div>
 

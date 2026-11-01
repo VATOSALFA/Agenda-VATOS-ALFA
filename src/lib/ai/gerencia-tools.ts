@@ -1729,15 +1729,234 @@ export const proponerCancelacionOEliminacionSucursalTool = ai.defineTool(
 // ============================================================================
 // 4. INVENTARIO DE PRODUCTOS, INSUMOS Y RECORDATORIOS DE GERENCIA
 // ============================================================================
+
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function findMatchingCatalogProduct(
+  searchTerm: string,
+  products: Array<{ id: string; nombre: string; stock?: number; [key: string]: any }>
+) {
+  const normSearch = normalizeSearchText(searchTerm);
+  if (!normSearch) return null;
+
+  // 1. Coincidencia exacta directa
+  const exact = products.find((p) => normalizeSearchText(p.nombre) === normSearch);
+  if (exact) return exact;
+
+  // 2. Singularización básica en español (ej. "ceras" -> "cera", "pomadas" -> "pomada", "botes" -> "bote", "shampoos" -> "shampoo")
+  const singularSearch = normSearch.replace(/s$/, '');
+
+  // 3. Coincidencia de subcadena o palabras clave
+  const matches = products.filter((p) => {
+    const normName = normalizeSearchText(p.nombre);
+    return (
+      normName.includes(normSearch) ||
+      (singularSearch.length >= 3 && normName.includes(singularSearch)) ||
+      normSearch.split(/\s+/).some((w) => w.length >= 3 && normName.includes(w))
+    );
+  });
+
+  if (matches.length === 1) return matches[0];
+
+  if (matches.length > 1) {
+    // Priorizar el producto cuyo nombre empiece con la búsqueda o contenga la raíz singular completa
+    const best =
+      matches.find((p) => {
+        const normName = normalizeSearchText(p.nombre);
+        return normName.startsWith(normSearch) || (singularSearch.length >= 3 && normName.startsWith(singularSearch));
+      }) ||
+      matches.find((p) => {
+        const normName = normalizeSearchText(p.nombre);
+        return normName.includes(normSearch) || (singularSearch.length >= 3 && normName.includes(singularSearch));
+      });
+    return best || matches[0];
+  }
+
+  return null;
+}
+
+export async function ejecutarIngresoStockInventario({
+  nombreProducto,
+  cantidad,
+  motivo,
+  productoIdExacto,
+  caller,
+  db,
+}: {
+  nombreProducto: string;
+  cantidad: number;
+  motivo?: string;
+  productoIdExacto?: string;
+  caller: ReturnType<typeof getCallerInfo>;
+  db: FirebaseFirestore.Firestore;
+}) {
+  const prodSnap = await db.collection('productos').get();
+  const productos: any[] = [];
+  prodSnap.forEach((doc) => {
+    const data = doc.data();
+    if (data.active !== false) {
+      productos.push({ id: doc.id, ...data });
+    }
+  });
+
+  let targetProduct = productoIdExacto
+    ? productos.find((p) => p.id === productoIdExacto)
+    : null;
+
+  if (!targetProduct) {
+    targetProduct = findMatchingCatalogProduct(nombreProducto, productos);
+  }
+
+  if (!targetProduct) {
+    return {
+      ok: false,
+      error: `No encontré ningún producto en el catálogo que coincida con "${nombreProducto}".`,
+      productosDisponibles: productos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        stockActual: Number(p.stock ?? 0),
+      })),
+    };
+  }
+
+  const currentStock = Number(targetProduct.stock ?? 0);
+  const unitsToAdd = Math.max(1, Math.round(Number(cantidad) || 1));
+  const newStock = currentStock + unitsToAdd;
+
+  // Actualizar stock oficial en el producto
+  await db.collection('productos').doc(targetProduct.id).update({
+    stock: newStock,
+    updated_at: FieldValue.serverTimestamp(),
+  });
+
+  // Registrar movimiento en movimientos_inventario para auditoría
+  const auditMotivo = motivo?.trim() || 'Ingreso de mercancía por Gerencia';
+  await db.collection('movimientos_inventario').add({
+    date: Timestamp.now(),
+    local_id: 'rkbEgvwP67JliXQ1Qeyj', // Suc. Sombrerete
+    product_id: targetProduct.id,
+    presentation_id: targetProduct.presentation_id || 'default',
+    from: currentStock,
+    to: newStock,
+    cause: auditMotivo,
+    staff_id: caller.auditUserId,
+    staff_name: caller.operatorName,
+    local_name: 'Suc. Sombrerete',
+    concepto: `Ingreso de mercancía por ${caller.assistantName}`,
+    comment: `${unitsToAdd} unidad(es) ingresada(s) al inventario a solicitud de ${caller.operatorName}`,
+    product_name: targetProduct.nombre,
+  });
+
+  // Si había recordatorios pendientes sobre ingresar este producto, completarlos automáticamente
+  try {
+    const recSnap = await db
+      .collection('gerencia_recordatorios')
+      .where('completado', '==', false)
+      .limit(30)
+      .get();
+
+    const normTarget = normalizeSearchText(targetProduct.nombre);
+    for (const recDoc of recSnap.docs) {
+      const recData = recDoc.data();
+      const normTitle = normalizeSearchText(recData.titulo || '');
+      if (
+        (normTarget.includes('cera') && normTitle.includes('cera')) ||
+        normTitle.includes(normTarget)
+      ) {
+        await recDoc.ref.set(
+          {
+            completado: true,
+            completado_en: FieldValue.serverTimestamp(),
+            completado_por: caller.creatorDisplay,
+          },
+          { merge: true }
+        );
+      }
+    }
+  } catch (errRec: any) {
+    console.warn('Aviso completando recordatorio de inventario:', errRec?.message);
+  }
+
+  return {
+    ok: true,
+    mensaje: `Se ingresaron exitosamente ${unitsToAdd} unidades de "${targetProduct.nombre}" al inventario oficial. El stock anterior era de ${currentStock} unidades y ahora el nuevo stock total es de ${newStock} unidades.`,
+    producto: {
+      id: targetProduct.id,
+      nombre: targetProduct.nombre,
+      stockAnterior: currentStock,
+      unidadesIngresadas: unitsToAdd,
+      nuevoStockTotal: newStock,
+    },
+  };
+}
+
+export const ingresarStockInventarioTool = ai.defineTool(
+  {
+    name: 'ingresar_stock_inventario',
+    description:
+      'Ingresa, suma o ajusta unidades de productos o insumos directamente al inventario oficial en el sistema (ej. "ingresar 14 ceras", "llegaron 10 pomadas", "agrega 5 ceras al stock"). Actualiza el stock real en Firestore y registra el movimiento de inventario para auditoría.',
+    inputSchema: z.object({
+      nombreProducto: z
+        .string()
+        .describe('Nombre o término de búsqueda del producto (ej. "cera", "cera para peinar", "shampoo", "after shave").'),
+      cantidad: z
+        .number()
+        .int()
+        .positive()
+        .describe('Cantidad positiva de unidades a ingresar o sumar al inventario (ej. 14).'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Motivo u observación del ingreso (ej. "Ingreso de mercancía por Bety", "Resurtido de proveedor").'),
+      productoIdExacto: z
+        .string()
+        .optional()
+        .describe('ID exacto del documento de producto en Firestore si ya se conoce.'),
+    }),
+  },
+  async ({ nombreProducto, cantidad, motivo, productoIdExacto }) => {
+    const caller = getCallerInfo();
+    const db = getDb();
+    return await ejecutarIngresoStockInventario({
+      nombreProducto,
+      cantidad,
+      motivo,
+      productoIdExacto,
+      caller,
+      db,
+    });
+  }
+);
+
 export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
   {
     name: 'consultar_y_gestionar_inventario_insumos',
     description:
-      'Revisa el stock actual de productos para detectar faltantes, muestra los recordatorios pendientes (conteo físico de inventario, compra de insumos como navajas, papel cuello, toallas, limpieza o consignas de Dirección) y permite crear o completar recordatorios.',
+      'Revisa el stock actual de productos para detectar faltantes, ingresa productos al stock del sistema cuando llegan unidades (ej. 14 ceras), muestra los recordatorios pendientes y permite crear o completar recordatorios.',
     inputSchema: z.object({
       accion: z
-        .enum(['consultar', 'crear_recordatorio', 'completar_recordatorio'])
+        .enum(['consultar', 'ingresar_stock', 'crear_recordatorio', 'completar_recordatorio'])
         .describe('Acción a realizar sobre el inventario y recordatorios de sucursal.'),
+      nombreProducto: z
+        .string()
+        .optional()
+        .describe('Nombre del producto o insumo al ingresar stock (ej. "cera", "cera para peinar").'),
+      cantidadStock: z
+        .number()
+        .int()
+        .positive()
+        .optional()
+        .describe('Cantidad de unidades a ingresar al stock (ej. 14).'),
+      motivoIngreso: z
+        .string()
+        .optional()
+        .describe('Motivo u observación del ingreso al inventario.'),
       categoriaRecordatorio: z
         .enum(['inventario', 'insumos', 'equipo', 'operacion_general'])
         .optional()
@@ -1758,6 +1977,9 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
   },
   async ({
     accion,
+    nombreProducto,
+    cantidadStock,
+    motivoIngreso,
     categoriaRecordatorio,
     tituloRecordatorio,
     detalleRecordatorio,
@@ -1765,6 +1987,16 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
   }) => {
     const caller = getCallerInfo();
     const db = getDb();
+
+    if (accion === 'ingresar_stock' && nombreProducto) {
+      return await ejecutarIngresoStockInventario({
+        nombreProducto,
+        cantidad: cantidadStock || 1,
+        motivo: motivoIngreso,
+        caller,
+        db,
+      });
+    }
 
     if (accion === 'crear_recordatorio' && tituloRecordatorio) {
       const ref = await db.collection('gerencia_recordatorios').add({
@@ -1861,5 +2093,6 @@ export function getGerenciaAgentTools() {
     gestionarHorarioBarberoSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
+    ingresarStockInventarioTool,
   ];
 }

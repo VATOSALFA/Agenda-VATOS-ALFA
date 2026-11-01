@@ -249,6 +249,7 @@ export async function processGerenciaAgentMessage({
 
   // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash
   let transcribedAudioText = '';
+  const isVoiceNote = Boolean(audioDataUrl);
   if (audioDataUrl && audioDataUrl.startsWith('data:')) {
     const match = audioDataUrl.match(/^data:([^,]+),(.+)$/);
     if (match) {
@@ -265,7 +266,7 @@ export async function processGerenciaAgentMessage({
           model: 'googleai/gemini-2.5-flash',
           prompt: [
             {
-              text: 'Escucha atentamente esta nota de voz enviada por la Administradora del Local (Beatriz/Bety) o Dirección de la barbería VATOS ALFA a su asistente operativa Janet Gerencia. Transcribe exactamente en español lo que dice (incluyendo nombres de barberos como Lalo, Alfredo, Bety, Ivon, Lupita, horarios, bloqueos, citas, ventas, inventario, insumos o recordatorios). Devuelve ÚNICAMENTE el texto transcrito en español, sin comillas ni comentarios adicionales.',
+              text: 'Escucha atentamente esta nota de voz enviada por la Administradora del Local (Beatriz/Bety) o Dirección de la barbería VATOS ALFA a su asistente operativa Janet Gerencia. Transcribe exactamente en español lo que dice (incluyendo nombres de barberos como Lalo, Alfredo, Bety, Ivon, Lupita, horarios, bloqueos, citas, ventas, inventario, insumos o recordatorios). Si el audio está en silencio, solo contiene estática, no hay voz audible, o el micrófono estaba apagado, responde EXACTAMENTE la palabra: SILENCIO. Devuelve ÚNICAMENTE el texto transcrito en español o la palabra SILENCIO sin comillas ni comentarios adicionales.',
             },
             {
               media: {
@@ -284,9 +285,87 @@ export async function processGerenciaAgentMessage({
     }
   }
 
+  // Comprobar si la nota de voz vino en silencio, micrófono apagado o sin audio
+  const cleanTrans = transcribedAudioText.toLowerCase().replace(/[\[\]\(\)\.\,\"\']/g, '').trim();
+  const isSilenceOrEmptyAudio =
+    isVoiceNote &&
+    (!transcribedAudioText ||
+      cleanTrans === 'silencio' ||
+      cleanTrans === 'silencio_o_sin_audio' ||
+      cleanTrans === 'audio vacio' ||
+      cleanTrans === 'sin audio' ||
+      cleanTrans === 'no se escucha' ||
+      cleanTrans === 'no se escucha nada' ||
+      cleanTrans === 'sin voz' ||
+      cleanTrans.includes('no contiene audio') ||
+      cleanTrans.includes('no contiene voz') ||
+      cleanTrans.includes('silencio'));
+
+  const trimmedUserMessage = userMessage.trim();
+
+  // GUARDA DETERMINISTA: Si la nota de voz llegó vacía/en silencio o el mensaje está completamente en blanco
+  if (
+    (isVoiceNote && isSilenceOrEmptyAudio && !trimmedUserMessage && !attachmentDataUrl) ||
+    (!isVoiceNote && !trimmedUserMessage && !attachmentDataUrl)
+  ) {
+    const politeResponse = isVoiceNote
+      ? 'No alcancé a escucharte, parece que el micrófono estaba apagado o no se grabó ningún audio. ¿Podrías verificar tu micrófono y repetirme tu mensaje, por favor?'
+      : 'El mensaje llegó vacío. Por favor escribe o dicta nuevamente lo que necesitas para que pueda ayudarte.';
+
+    let activeSessionId = sessionId;
+    if (!activeSessionId) {
+      const newRef = await db.collection('gerencia_sesiones').add({
+        titulo: isVoiceNote ? 'Nota de voz (sin audio)' : 'Mensaje vacío',
+        creado_por: managerUser.uid,
+        creado_en: FieldValue.serverTimestamp(),
+        actualizado_en: FieldValue.serverTimestamp(),
+      });
+      activeSessionId = newRef.id;
+    } else {
+      await db
+        .collection('gerencia_sesiones')
+        .doc(activeSessionId)
+        .set({ actualizado_en: FieldValue.serverTimestamp() }, { merge: true });
+    }
+
+    const msgsCol = db.collection('gerencia_sesiones').doc(activeSessionId).collection('mensajes');
+
+    await msgsCol.add({
+      rol: 'user',
+      contenido: isVoiceNote ? '🎤 Nota de voz (sin audio o micrófono apagado)' : '(Mensaje vacío)',
+      adjuntoNombre: attachmentName || null,
+      adjuntoUrl: audioDataUrl || null,
+      esAudio: isVoiceNote,
+      audioDuracion: audioDuration || null,
+      audioTranscripcion: null,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+
+    const savedReplyRef = await msgsCol.add({
+      rol: 'assistant',
+      contenido: politeResponse,
+      herramientasUsadas: [],
+      propuestaAccion: null,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      sessionId: activeSessionId,
+      audioTranscription: null,
+      message: {
+        id: savedReplyRef.id,
+        rol: 'assistant' as const,
+        contenido: politeResponse,
+        creado_en: new Date().toISOString(),
+        herramientasUsadas: [],
+        propuestaAccion: null,
+      },
+    };
+  }
+
   const effectiveMessage =
-    transcribedAudioText ||
-    userMessage.trim() ||
+    (!isSilenceOrEmptyAudio ? transcribedAudioText : '') ||
+    trimmedUserMessage ||
     (attachmentDataUrl ? 'Analiza esta imagen o documento adjunto de la sucursal.' : 'Consulta de sucursal');
 
   let activeSessionId = sessionId;
@@ -311,10 +390,10 @@ export async function processGerenciaAgentMessage({
     rol: 'user',
     contenido: effectiveMessage,
     adjuntoNombre: attachmentName || null,
-    adjuntoUrl: attachmentDataUrl || null,
+    adjuntoUrl: attachmentDataUrl || audioDataUrl || null,
     esAudio: Boolean(audioDataUrl),
     audioDuracion: audioDuration || null,
-    audioTranscripcion: transcribedAudioText || (audioDataUrl ? effectiveMessage : null),
+    audioTranscripcion: (!isSilenceOrEmptyAudio ? transcribedAudioText : null) || (audioDataUrl ? effectiveMessage : null),
     creado_en: FieldValue.serverTimestamp(),
   });
 
@@ -382,8 +461,14 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
    - Responde al instante dudas de citas del día, quién cobró una venta, métodos de pago o movimientos de recepción.
    - Si recepción o un barbero le pide a Beatriz **cancelar una cita** o **eliminar una venta facturada**, verifica que te haya dicho el **motivo**. Si no te dio el motivo, pregúntaselo amablemente (*"Con gusto Bety, ¿cuál es el motivo de la cancelación/eliminación para dejarlo anotado en bitácora?"*). En cuanto tengas el motivo, invoca \`proponer_cancelacion_o_eliminacion_sucursal\` para mostrarle la tarjeta de confirmación en pantalla.
 
-6. **INVENTARIO DE PRODUCTOS E INSUMOS (\`consultar_y_gestionar_inventario_insumos\`):**
-   - Ayúdale a revisar qué productos tienen stock bajo o agotado, recuérdale hacer conteo físico de inventario y comprar insumos (navajas, papel cuello, gel, toallas, productos de limpieza), y guarda cualquier recordatorio que te pida anotar.
+6. **INGRESO Y ACTUALIZACIÓN DIRECTA DE INVENTARIO Y STOCK (\`ingresar_stock_inventario\` y \`consultar_y_gestionar_inventario_insumos\`):**
+   - Cuando Beatriz o el usuario te pida ingresar, sumar o registrar productos o insumos en el inventario (ej. *"Quiero que ingreses 14 ceras en el inventario por favor"*, *"agrega 10 pomadas"*, *"llegaron 14 ceras"*, *"ingresa 5 after shaves"*):
+     * **TÚ TIENES ACCESO TOTAL Y PERMISOS DIRECTOS PARA MODIFICAR Y ACTUALIZAR EL STOCK EN EL SISTEMA**.
+     * **ESTRICTAMENTE PROHIBIDO responder "no tengo acceso directo para modificar las cifras de stock" o "esa acción de ingresar físicamente y actualizarlas debe realizarse de forma manual" o limitarte a crear un recordatorio.**
+     * Ejecuta INMEDIATAMENTE la herramienta \`ingresar_stock_inventario\` con el nombre del producto (ej. \`nombreProducto: "cera"\`) y la cantidad solicitada (ej. \`cantidad: 14\`).
+     * La herramienta buscará el producto en el catálogo oficial de Firestore (ej. "Cera para peinar"), sumará las unidades al stock real en el sistema, registrará el movimiento en la bitácora de auditoría de \`movimientos_inventario\` y completará automáticamente cualquier recordatorio pendiente relacionado con ese producto.
+     * Confírmale con claridad y entusiasmo a Beatriz el producto ingresado, las unidades añadidas, el stock previo y el nuevo stock total resultante en el sistema.
+   - Si te pide consultar el inventario, revisar stock bajo o recordatorios pendientes, utiliza \`consultar_y_gestionar_inventario_insumos\`.
 
 ### REGLAS DE SEGURIDAD Y FORMATO:
 - No tienes acceso al Estado de Resultados privado del dueño ni a declaraciones de impuestos. Si te preguntan por temas exclusivos del dueño, indica amablemente que esa información pertenece a Dirección General.

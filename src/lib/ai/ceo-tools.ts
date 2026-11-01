@@ -14,6 +14,7 @@ import {
   gestionarHorarioBarberoSucursalTool,
   proponerCancelacionOEliminacionSucursalTool,
   consultarYGestionarInventarioInsumosTool,
+  ingresarStockInventarioTool,
 } from './gerencia-tools';
 
 const MONTH_NAMES_ES = [
@@ -1169,5 +1170,6 @@ export function getCeoAgentTools() {
     gestionarHorarioBarberoSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
+    ingresarStockInventarioTool,
   ];
 }

@@ -35,6 +35,7 @@ import {
   Palette,
   Type,
   Play,
+  Pause,
   RotateCcw,
   RefreshCw,
   Image as ImageIcon,
@@ -356,6 +357,7 @@ export function JanetFloatingAssistant() {
   const speechRecognitionRef = useRef<any>(null);
   const liveTranscriptRef = useRef<string>('');
   const activeAudioElementRef = useRef<HTMLAudioElement | null>(null);
+  const audioCacheRef = useRef<Map<string, string>>(new Map());
 
   // Estado de Janet Gerencia (inicializado con persistencia local para no perder conversaciones)
   const [gerenciaLoading, setGerenciaLoading] = useState(false);
@@ -702,6 +704,11 @@ export function JanetFloatingAssistant() {
         setGerenciaSessionId(targetSessionId);
       }
       if (snap.mensajesRecientes && snap.mensajesRecientes.length > 0) {
+        snap.mensajesRecientes.forEach((m) => {
+          if (m.adjuntoUrl && m.esAudio) {
+            audioCacheRef.current.set(m.id, m.adjuntoUrl);
+          }
+        });
         setGerenciaMessages((prev) =>
           prev && prev.length > snap.mensajesRecientes.length ? prev : snap.mensajesRecientes
         );
@@ -728,6 +735,11 @@ export function JanetFloatingAssistant() {
         setCeoSessionId(targetSessionId);
         const msgsRes = await getCeoSessionMessages(token, targetSessionId);
         if (msgsRes.messages && msgsRes.messages.length > 0) {
+          (msgsRes.messages as FloatingCeoMessage[]).forEach((m) => {
+            if (m.adjuntoUrl && m.esAudio) {
+              audioCacheRef.current.set(m.id, m.adjuntoUrl);
+            }
+          });
           setCeoMessages((prev) =>
             prev && prev.length > (msgsRes.messages?.length || 0)
               ? prev
@@ -1103,7 +1115,13 @@ export function JanetFloatingAssistant() {
       const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
       audioChunksRef.current = [];
 
-      if (audioBlob.size === 0) return;
+      if (audioBlob.size === 0 || (durationSec < 1 && !capturedHint)) {
+        toast({
+          title: 'Nota de voz muy corta',
+          description: 'No se detectó audio. Mantén presionado o habla al micrófono antes de enviar.',
+        });
+        return;
+      }
 
       const audioDataUrl = await new Promise<string>((resolve) => {
         const reader = new FileReader();
@@ -1130,7 +1148,14 @@ export function JanetFloatingAssistant() {
   };
 
   const handleToggleAudioPlayback = (msgId: string, audioUrl?: string | null) => {
-    if (!audioUrl) return;
+    const finalAudioUrl = audioUrl || audioCacheRef.current.get(msgId);
+    if (!finalAudioUrl) {
+      toast({
+        title: 'Audio no disponible',
+        description: 'No se encontró la pista de audio para reproducir.',
+      });
+      return;
+    }
     if (playingAudioMsgId === msgId && activeAudioElementRef.current) {
       activeAudioElementRef.current.pause();
       activeAudioElementRef.current = null;
@@ -1142,7 +1167,7 @@ export function JanetFloatingAssistant() {
       activeAudioElementRef.current = null;
     }
     try {
-      const audio = new Audio(audioUrl);
+      const audio = new Audio(finalAudioUrl);
       activeAudioElementRef.current = audio;
       setPlayingAudioMsgId(msgId);
       audio.onended = () => {
@@ -1152,6 +1177,11 @@ export function JanetFloatingAssistant() {
       audio.onerror = () => {
         setPlayingAudioMsgId(null);
         activeAudioElementRef.current = null;
+        toast({
+          variant: 'destructive',
+          title: 'Error de audio',
+          description: 'No se pudo reproducir este archivo en tu navegador.',
+        });
       };
       audio.play().catch(() => {
         setPlayingAudioMsgId(null);
@@ -1233,6 +1263,9 @@ export function JanetFloatingAssistant() {
         setActiveTab('chat');
 
         const tempId = `temp_${Date.now()}`;
+        if (voicePayload?.audioDataUrl) {
+          audioCacheRef.current.set(tempId, voicePayload.audioDataUrl);
+        }
         const tempMsg: FloatingCeoMessage = {
           id: tempId,
           rol: 'user',
@@ -1284,7 +1317,7 @@ export function JanetFloatingAssistant() {
           ];
         });
 
-        if (res.subagentsInvoked?.includes('enviar_consigna_a_gerencia_sucursal')) {
+        if ((res.subagentsInvoked as string[] | undefined)?.includes('enviar_consigna_a_gerencia_sucursal')) {
           loadGerenciaData();
         }
       } catch (err: any) {
@@ -1306,6 +1339,9 @@ export function JanetFloatingAssistant() {
       setActiveTab('chat');
 
       const tempId = `temp_${Date.now()}`;
+      if (voicePayload?.audioDataUrl) {
+        audioCacheRef.current.set(tempId, voicePayload.audioDataUrl);
+      }
       const tempMsg: GerenciaChatMessage = {
         id: tempId,
         rol: 'user',
@@ -1662,13 +1698,13 @@ export function JanetFloatingAssistant() {
               <button
                 type="button"
                 onClick={() => handleToggleAudioPlayback(msg.id, msg.adjuntoUrl)}
-                className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center shrink-0 transition-colors cursor-pointer shadow-xs"
                 title={playingAudioMsgId === msg.id ? 'Pausar nota de voz' : 'Reproducir nota de voz'}
               >
                 {playingAudioMsgId === msg.id ? (
-                  <VolumeX className="h-4 w-4 text-blue-300 animate-pulse" />
+                  <Pause className="h-4 w-4 text-blue-300 animate-pulse fill-blue-300" />
                 ) : (
-                  <Volume2 className="h-4 w-4 text-white" />
+                  <Play className="h-4 w-4 text-white ml-0.5 fill-white" />
                 )}
               </button>
 

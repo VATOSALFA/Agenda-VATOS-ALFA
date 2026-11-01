@@ -224,7 +224,7 @@ export async function processCeoAgentMessage({
           model: 'googleai/gemini-2.5-flash',
           prompt: [
             {
-              text: 'Escucha atentamente esta nota de voz enviada por el Administrador General (Dueño) de la barbería VATOS ALFA a su asistente ejecutiva Janet CEO. Transcribe exactamente en español lo que dice (incluyendo términos como Estado de Resultados, utilidad, comisiones, auditoría, código 1234, nombres como Beatriz/Bety, Lalo, Alfredo, Ivon, Lupita, Erika, inventario, insumos o sucursales). Devuelve ÚNICAMENTE el texto transcrito en español, sin comillas ni comentarios adicionales.',
+              text: 'Escucha atentamente esta nota de voz enviada por el Administrador General (Dueño) de la barbería VATOS ALFA a su asistente ejecutiva Janet CEO. Transcribe exactamente en español lo que dice (incluyendo términos como Estado de Resultados, utilidad, comisiones, auditoría, código 1234, nombres como Beatriz/Bety, Lalo, Alfredo, Ivon, Lupita, Erika, inventario, insumos o sucursales). Si el audio está en silencio, contiene solo estática, no hay voz audible, o el micrófono estaba apagado, responde EXACTAMENTE la palabra: SILENCIO. Devuelve ÚNICAMENTE el texto transcrito en español o la palabra SILENCIO sin comillas ni comentarios adicionales.',
             },
             {
               media: {
@@ -243,9 +243,83 @@ export async function processCeoAgentMessage({
     }
   }
 
+  // Comprobar si la nota de voz vino en silencio, micrófono apagado o sin audio
+  const cleanTrans = transcribedAudioText.toLowerCase().replace(/[\[\]\(\)\.\,\"\']/g, '').trim();
+  const isSilenceOrEmptyAudio =
+    Boolean(audioDataUrl) &&
+    (!transcribedAudioText ||
+      cleanTrans === 'silencio' ||
+      cleanTrans === 'silencio_o_sin_audio' ||
+      cleanTrans === 'audio vacio' ||
+      cleanTrans === 'sin audio' ||
+      cleanTrans === 'no se escucha' ||
+      cleanTrans === 'no se escucha nada' ||
+      cleanTrans === 'sin voz' ||
+      cleanTrans.includes('no contiene audio') ||
+      cleanTrans.includes('no contiene voz') ||
+      cleanTrans.includes('silencio'));
+
+  const trimmedUserMessage = userMessage.trim();
+
+  // GUARDA DETERMINISTA: Si la nota de voz llegó vacía/en silencio o el mensaje está completamente en blanco
+  if (
+    (Boolean(audioDataUrl) && isSilenceOrEmptyAudio && !trimmedUserMessage && !attachmentDataUrl) ||
+    (!audioDataUrl && !trimmedUserMessage && !attachmentDataUrl)
+  ) {
+    const politeResponse = audioDataUrl
+      ? 'No alcancé a escucharte, parece que el micrófono estaba apagado o no se grabó ningún audio. Por favor verifica tu micrófono y repíteme tu indicación, con gusto te ayudo.'
+      : 'El mensaje llegó vacío. Por favor escribe o dicta nuevamente lo que necesitas para que pueda ayudarte.';
+
+    let activeSessionId = sessionId;
+    if (!activeSessionId) {
+      const newSessionRef = await db.collection('ceo_sesiones').add({
+        titulo: audioDataUrl ? 'Nota de voz (sin audio)' : 'Mensaje vacío',
+        creado_por: adminUser.uid,
+        creado_en: FieldValue.serverTimestamp(),
+        actualizado_en: FieldValue.serverTimestamp(),
+      });
+      activeSessionId = newSessionRef.id;
+    } else {
+      await db.collection('ceo_sesiones').doc(activeSessionId).set(
+        {
+          actualizado_en: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    const msgsCol = db.collection('ceo_sesiones').doc(activeSessionId).collection('mensajes');
+
+    await msgsCol.add({
+      rol: 'user',
+      contenido: audioDataUrl ? '🎤 Nota de voz (sin audio o micrófono apagado)' : '(Mensaje vacío)',
+      adjuntoNombre: attachmentName || null,
+      adjuntoUrl: audioDataUrl || null,
+      esAudio: Boolean(audioDataUrl),
+      audioDuracion: audioDuration || null,
+      audioTranscripcion: null,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+
+    const savedReplyRef = await msgsCol.add({
+      rol: 'assistant',
+      contenido: politeResponse,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      sessionId: activeSessionId,
+      audioTranscription: null,
+      messageId: savedReplyRef.id,
+      reply: politeResponse,
+      subagentsInvoked: [],
+      propuestaAccion: null,
+    };
+  }
+
   const effectiveMessage =
-    transcribedAudioText ||
-    userMessage.trim() ||
+    (!isSilenceOrEmptyAudio ? transcribedAudioText : '') ||
+    trimmedUserMessage ||
     (attachmentDataUrl ? 'Analiza este archivo o imagen adjunta.' : 'Consulta ejecutiva');
 
   let activeSessionId = sessionId;
@@ -273,10 +347,10 @@ export async function processCeoAgentMessage({
     rol: 'user',
     contenido: effectiveMessage,
     adjuntoNombre: attachmentName || null,
-    adjuntoUrl: attachmentDataUrl || null,
+    adjuntoUrl: attachmentDataUrl || audioDataUrl || null,
     esAudio: Boolean(audioDataUrl),
     audioDuracion: audioDuration || null,
-    audioTranscripcion: transcribedAudioText || (audioDataUrl ? effectiveMessage : null),
+    audioTranscripcion: (!isSilenceOrEmptyAudio ? transcribedAudioText : null) || (audioDataUrl ? effectiveMessage : null),
     creado_en: FieldValue.serverTimestamp(),
   });
 

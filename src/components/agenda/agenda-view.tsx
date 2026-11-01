@@ -2298,16 +2298,8 @@ export default function AgendaView() {
                                     event.pago_estado !== 'Pagado' &&
                                     (event as any).estado !== 'No asiste' &&
                                     (event as any).estado !== 'En espera' &&
-                                    !Boolean(
-                                      event.canal_reserva?.includes('chatbot') ||
-                                      event.origen?.includes('chatbot') ||
-                                      event.canal_reserva?.includes('janet') ||
-                                      event.origen?.includes('janet') ||
-                                      event.canal_reserva?.includes('app') ||
-                                      event.origen?.includes('app') ||
-                                      String((event as any).notas || '').toLowerCase().includes('asistente virtual') ||
-                                      String((event as any).notas || '').toLowerCase().includes('app vatos alfa')
-                                    ) && (
+                                    (event as any).estado !== 'Cancelado' &&
+                                    (
                                       (whatsappConfirmationAnimation && !event.whatsappConfirmationSent && !(event as any).confirmationSentViaApp) ||
                                       (whatsappReminderAnimation && !event.whatsappReminderSent && !(event as any).chatReminderSent)
                                     )) && "animate-pending-notification"
@@ -2348,12 +2340,15 @@ export default function AgendaView() {
                                             const canal = String(event.canal_reserva || '').toLowerCase();
                                             const origen = String(event.origen || '').toLowerCase();
                                             const notas = String((event as any).notas || '').toLowerCase();
+                                            const creadaPor = String((event as any).creada_por || '').toLowerCase();
                                             const isJanet =
                                               canal.includes('chatbot') ||
                                               canal.includes('janet') ||
                                               origen.includes('chatbot') ||
                                               origen.includes('janet') ||
-                                              notas.includes('asistente virtual');
+                                              creadaPor.includes('janet') ||
+                                              notas.includes('asistente virtual') ||
+                                              notas.includes('janet');
                                             const isAppClient =
                                               !isJanet &&
                                               (canal.includes('app') ||
@@ -2446,12 +2441,15 @@ export default function AgendaView() {
                                         const canal = String(event.canal_reserva || '').toLowerCase();
                                         const origen = String(event.origen || '').toLowerCase();
                                         const notas = String((event as any).notas || '').toLowerCase();
+                                        const creadaPor = String((event as any).creada_por || '').toLowerCase();
                                         const isJanet =
                                           canal.includes('chatbot') ||
                                           canal.includes('janet') ||
                                           origen.includes('chatbot') ||
                                           origen.includes('janet') ||
-                                          notas.includes('asistente virtual');
+                                          creadaPor.includes('janet') ||
+                                          notas.includes('asistente virtual') ||
+                                          notas.includes('janet');
                                         const isAppClient =
                                           !isJanet &&
                                           (canal.includes('app') ||

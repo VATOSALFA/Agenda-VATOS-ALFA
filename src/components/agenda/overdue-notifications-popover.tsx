@@ -53,6 +53,61 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// Helper para determinar si una reserva requiere confirmación manual de recepción
+function isEligibleForConfirmation(res: Reservation): boolean {
+  if (Boolean((res as any).confirmationSentViaApp)) return false;
+  if (res.whatsappConfirmationSent) return false;
+  if (
+    res.estado === 'Confirmado' ||
+    res.estado === 'Cancelado' ||
+    res.estado === 'No asiste' ||
+    res.estado === 'Completado' ||
+    res.estado === 'Venta completada'
+  ) {
+    return false;
+  }
+
+  // Descartar citas sin cliente real o bloqueos de agenda
+  const clientName = (
+    (res as any).cliente_nombre ||
+    (res as any).customer?.nombre ||
+    (res as any).client?.nombre ||
+    (res as any).nombre_cliente ||
+    ''
+  ).trim();
+  if (!clientName || clientName.toLowerCase() === 'undefined' || clientName.toLowerCase() === 'bloqueo') {
+    return false;
+  }
+
+  const canal = String(res.canal_reserva || '').toLowerCase();
+  const origen = String((res as any).origen || '').toLowerCase();
+  const creadaPor = String((res as any).creada_por || '').toLowerCase();
+  const notas = String((res as any).notas || '').toLowerCase();
+
+  const isJanet =
+    canal.includes('janet') ||
+    origen.includes('janet') ||
+    canal.includes('chatbot') ||
+    origen.includes('chatbot') ||
+    creadaPor.includes('janet') ||
+    notas.includes('janet') ||
+    notas.includes('asistente virtual');
+
+  const isWeb =
+    canal.startsWith('web') ||
+    origen.startsWith('web') ||
+    canal === 'online' ||
+    origen === 'online';
+
+  const isApp =
+    canal.includes('app') ||
+    origen.includes('app') ||
+    canal.includes('mobile') ||
+    origen.includes('mobile');
+
+  return isJanet || isWeb || isApp || res.whatsappConfirmationSent === false;
+}
+
 interface OverdueNotificationsPopoverProps {
   reservations: Reservation[];
   professionals: Profesional[];
@@ -201,42 +256,7 @@ export function OverdueNotificationsPopover({
             return;
           }
 
-          const canal = (res.canal_reserva || '').toLowerCase();
-          const origen = (res.origen || '').toLowerCase();
-          const notas = String((res as any).notas || '').toLowerCase();
-
-          // Citas hechas desde la App o por Janet mandan confirmación automática a la sala de chat de la App
-          const isAppOrJanet =
-            canal.includes('app') ||
-            canal.includes('mobile') ||
-            canal.includes('chat') ||
-            canal.includes('janet') ||
-            origen.includes('app') ||
-            origen.includes('mobile') ||
-            origen.includes('chat') ||
-            origen.includes('janet') ||
-            notas.includes('asistente virtual') ||
-            notas.includes('app vatos alfa') ||
-            Boolean((res as any).confirmationSentViaApp);
-
-          if (isAppOrJanet) return;
-
-          const isOnline = canal.startsWith('web') || origen.startsWith('web');
-
-          if (!isOnline) return;
-
-          // Excluir canceladas, completadas o no asiste
-          if (
-            res.estado === 'Cancelado' ||
-            res.estado === 'No asiste' ||
-            res.estado === 'Completado' ||
-            res.estado === 'Venta completada'
-          ) {
-            return;
-          }
-
-          // Citas pendientes de confirmación por recepción
-          if (!res.whatsappConfirmationSent && res.estado !== 'Confirmado') {
+          if (isEligibleForConfirmation(res)) {
             list.push(res);
           }
         });
@@ -259,30 +279,7 @@ export function OverdueNotificationsPopover({
           const sandboxList: Reservation[] = [];
           snap.forEach((d) => {
             const res = { id: d.id, ...d.data(), isSandbox: true } as unknown as Reservation;
-            const canal = (res.canal_reserva || '').toLowerCase();
-            const origen = (res.origen || '').toLowerCase();
-            const notas = String((res as any).notas || '').toLowerCase();
-            const isAppOrJanet =
-              canal.includes('app') ||
-              canal.includes('mobile') ||
-              canal.includes('chat') ||
-              canal.includes('janet') ||
-              origen.includes('app') ||
-              origen.includes('mobile') ||
-              origen.includes('chat') ||
-              origen.includes('janet') ||
-              notas.includes('asistente virtual') ||
-              notas.includes('app vatos alfa') ||
-              Boolean((res as any).confirmationSentViaApp);
-            const isOnline = !isAppOrJanet && (canal.startsWith('web') || origen.startsWith('web'));
-            if (
-              isOnline &&
-              !res.whatsappConfirmationSent &&
-              res.estado !== 'Confirmado' &&
-              res.estado !== 'Cancelado' &&
-              res.estado !== 'No asiste' &&
-              res.estado !== 'Completado'
-            ) {
+            if (isEligibleForConfirmation(res)) {
               sandboxList.push(res);
             }
           });
@@ -309,35 +306,14 @@ export function OverdueNotificationsPopover({
     if (isStaff) return [];
 
     const map = new Map<string, Reservation>();
-    onlineReservationsFromDb.forEach((r) => map.set(r.id, r));
+    onlineReservationsFromDb.forEach((r) => {
+      if (isEligibleForConfirmation(r)) {
+        map.set(r.id, r);
+      }
+    });
 
     (reservations || []).forEach((r) => {
-      const canal = (r.canal_reserva || '').toLowerCase();
-      const origen = (r.origen || '').toLowerCase();
-      const notas = String((r as any).notas || '').toLowerCase();
-      const isAppOrJanet =
-        canal.includes('app') ||
-        canal.includes('mobile') ||
-        canal.includes('chat') ||
-        canal.includes('janet') ||
-        origen.includes('app') ||
-        origen.includes('mobile') ||
-        origen.includes('chat') ||
-        origen.includes('janet') ||
-        notas.includes('asistente virtual') ||
-        notas.includes('app vatos alfa') ||
-        Boolean((r as any).confirmationSentViaApp);
-      const isOnline = !isAppOrJanet && (canal.startsWith('web') || origen.startsWith('web'));
-
-      if (
-        isOnline &&
-        !r.whatsappConfirmationSent &&
-        r.estado !== 'Confirmado' &&
-        r.estado !== 'Cancelado' &&
-        r.estado !== 'No asiste' &&
-        r.estado !== 'Completado' &&
-        r.estado !== 'Venta completada'
-      ) {
+      if (isEligibleForConfirmation(r)) {
         map.set(r.id, r);
       }
     });
@@ -519,24 +495,8 @@ export function OverdueNotificationsPopover({
       if (res.whatsappReminderSent || (res as any).chatReminderSent) return false;
       if (res.whatsappReminderNotNeeded) return false;
 
-      // Citas de App / Janet reciben recordatorio automático de Janet en el chat de la App
-      const canal = (res.canal_reserva || '').toLowerCase();
-      const origen = (res.origen || '').toLowerCase();
-      const notas = String((res as any).notas || '').toLowerCase();
-      const isAppOrJanet =
-        canal.includes('app') ||
-        canal.includes('mobile') ||
-        canal.includes('chat') ||
-        canal.includes('janet') ||
-        origen.includes('app') ||
-        origen.includes('mobile') ||
-        origen.includes('chat') ||
-        origen.includes('janet') ||
-        notas.includes('asistente virtual') ||
-        notas.includes('app vatos alfa') ||
-        Boolean((res as any).confirmationSentViaApp);
-
-      if (isAppOrJanet) return false;
+      // Si ya se envió recordatorio en el chat de la App del cliente, omitir
+      if (Boolean((res as any).chatReminderSent)) return false;
 
       if (
         res.estado === 'Cancelado' ||
@@ -1000,7 +960,7 @@ export function OverdueNotificationsPopover({
                   )}
                 >
                   <Globe className="w-3 h-3 text-blue-400" />
-                  En Línea ({allOnlineReservations.length})
+                  Por Confirmar ({allOnlineReservations.length})
                 </button>
               )}
 
@@ -1044,11 +1004,29 @@ export function OverdueNotificationsPopover({
                 const prof = professionals.find(
                   (p) => p.id === res.barbero_id || res.items?.some((i) => i.barbero_id === p.id)
                 );
-                const canal = (res.canal_reserva || res.origen || 'web_publica').toLowerCase();
-                const canalLabel = canal.includes('app')
-                  ? 'App Móvil'
-                  : canal.includes('chat') || canal.includes('janet')
+                const canal = String(res.canal_reserva || '').toLowerCase();
+                const origen = String((res as any).origen || '').toLowerCase();
+                const creadaPor = String((res as any).creada_por || '').toLowerCase();
+                const notas = String((res as any).notas || '').toLowerCase();
+
+                const isJanet =
+                  canal.includes('janet') ||
+                  origen.includes('janet') ||
+                  canal.includes('chatbot') ||
+                  origen.includes('chatbot') ||
+                  creadaPor.includes('janet') ||
+                  notas.includes('janet') ||
+                  notas.includes('asistente virtual');
+
+                const isApp =
+                  !isJanet && (canal.includes('app') || origen.includes('app') || canal.includes('mobile'));
+
+                const canalLabel = isJanet
                   ? 'Janet'
+                  : isApp
+                  ? 'App Móvil'
+                  : canal.includes('agenda')
+                  ? 'Agenda'
                   : 'Web';
 
                 const isDepositPaid =
@@ -1088,7 +1066,15 @@ export function OverdueNotificationsPopover({
                             variant="outline"
                             className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px] font-semibold py-0 px-1.5 flex items-center gap-1"
                           >
-                            <Globe className="w-3 h-3" />
+                            {isJanet ? (
+                              <img
+                                src="/janet-avatar.png"
+                                alt="Janet"
+                                className="w-3.5 h-3.5 rounded-full object-cover shrink-0 ring-1 ring-blue-500/50"
+                              />
+                            ) : (
+                              <Globe className="w-3 h-3 text-blue-400 shrink-0" />
+                            )}
                             {canalLabel}
                           </Badge>
 

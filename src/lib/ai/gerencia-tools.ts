@@ -253,6 +253,31 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
     reservasDelDia.sort((a, b) => a.horario.localeCompare(b.horario));
 
     const bloqueosYExcepciones: any[] = [];
+
+    // Jornadas especiales (públicas en web y app)
+    journeySnap.forEach((doc) => {
+      const j = doc.data();
+      const profInfo = profMap.get(j.profesionalId);
+      const barberoNombre = profInfo?.nombre || j.profesionalName || 'Barbero';
+
+      const matchesFilter =
+        !filterNorm ||
+        barberoNombre.toLowerCase().includes(filterNorm) ||
+        (profInfo?.raw && matchesBarber(profInfo.raw, filterNorm));
+
+      if (!matchesFilter) return;
+
+      bloqueosYExcepciones.push({
+        bloqueoId: doc.id,
+        barbero: barberoNombre,
+        barberoId: j.profesionalId,
+        horario: `${j.hora_inicio} - ${j.hora_fin}`,
+        tipo: 'Jornada Especial (PÚBLICA en Web y App Móvil)',
+        motivo: sanitizeExternalUntrustedText(j.motivo || 'Jornada especial habilitada para reservas en línea y agenda', 80),
+      });
+    });
+
+    // Bloqueos y horarios especiales internos
     blocksSnap.forEach((doc) => {
       const b = doc.data();
       const profInfo = profMap.get(b.barbero_id);
@@ -270,7 +295,7 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
         barbero: barberoNombre,
         barberoId: b.barbero_id,
         horario: `${b.hora_inicio} - ${b.hora_fin}`,
-        tipo: b.type === 'available' ? 'Horario Especial Habilitado' : 'Horario Bloqueado',
+        tipo: b.type === 'available' ? 'Horario Especial Interno (Agenda Recepción, NO visible en Web/App)' : 'Horario Bloqueado',
         motivo: sanitizeExternalUntrustedText(b.motivo || 'Sin motivo', 80),
       });
     });
@@ -1370,17 +1395,17 @@ export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
 );
 
 // ============================================================================
-// 5. GESTIONAR HORARIO DE BARBERO (BLOQUEAR / HABILITAR ESPECIAL / DESBLOQUEAR)
+// 5. GESTIONAR HORARIO DE BARBERO (BLOQUEAR / HABILITAR ESPECIAL INTERNO / DESBLOQUEAR)
 // ============================================================================
 export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
   {
     name: 'gestionar_horario_barbero_sucursal',
     description:
-      'Gestiona bloqueos y horarios especiales en la agenda de los barberos. Respeta las reglas de la agenda: no encima bloques duplicados sobre horarios que ya están bloqueados o descansando, respeta las horas no laborales, y valida citas antes de bloquear.',
+      'Gestiona bloqueos de horario y HORARIOS ESPECIALES INTERNOS en la agenda física de recepción. REGLA CLAVE: "habilitar_especial" aquí es ESTRICTAMENTE INTERNO para el local (los clientes NO lo ven en la web ni en la app móvil). Para habilitar una JORNADA ESPECIAL PÚBLICA que sea visible en la web y en la app móvil para que los clientes reserven en línea, usa la herramienta "gestionar_jornada_especial_sucursal".',
     inputSchema: z.object({
       accion: z
-        .enum(['bloquear', 'habilitar_especial', 'desbloquear'])
-        .describe('Acción a realizar en la agenda del barbero.'),
+        .enum(['bloquear', 'habilitar_especial', 'desbloquear', 'habilitar_jornada_especial'])
+        .describe('Acción: "bloquear" (cierra turno/rango), "habilitar_especial" (horario especial interno solo para recepción en la agenda física), "desbloquear" (elimina bloqueos), o "habilitar_jornada_especial" (pública en web y app).'),
       nombreBarbero: z
         .string()
         .describe('Nombre o apodo del barbero (ej. "Lalo", "Eduardo", "Alfredo", "Ivon", "Lupita", "Beatriz").'),
@@ -1435,6 +1460,92 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
     });
 
     const displayName = barberSchedule.displayName;
+
+    // Si se solicitó habilitar jornada especial o si el motivo hace referencia a jornada pública/web/app,
+    // enrutar de forma segura a jornadas_especiales para garantizar que sea visible a clientes en la web y app
+    const isJornadaEspecialRequest =
+      accion === 'habilitar_jornada_especial' ||
+      (accion === 'habilitar_especial' &&
+        (/(jornada\s*especial|p[uú]blic|web|app\s*m[oó]vil|clientes\s*agend)/i.test(motivo || '')));
+
+    if (isJornadaEspecialRequest) {
+      const start = horaInicio || '10:00';
+      const end = horaFin || '18:00';
+      if (end <= start) {
+        return {
+          ok: false,
+          mensaje: `La hora de fin (${end}) debe ser posterior a la hora de inicio (${start}).`,
+        };
+      }
+
+      const existingSnap = await db
+        .collection('jornadas_especiales')
+        .where('profesionalId', '==', prof.id)
+        .where('fecha', '==', fecha)
+        .get();
+
+      let jornadaId = '';
+      const cleanMotivo = (motivo || 'Jornada especial solicitada por gerencia').trim().slice(0, 100);
+
+      if (!existingSnap.empty) {
+        const docRef = existingSnap.docs[0].ref;
+        jornadaId = existingSnap.docs[0].id;
+        await docRef.update({
+          hora_inicio: start,
+          hora_fin: end,
+          motivo: cleanMotivo,
+          actualizado_en: Timestamp.now(),
+          actualizado_por: caller.creatorDisplay,
+        });
+      } else {
+        const newDocRef = await db.collection('jornadas_especiales').add({
+          profesionalId: prof.id,
+          profesionalName: prof.name || displayName,
+          local_id: defaultLocalId,
+          fecha,
+          hora_inicio: start,
+          hora_fin: end,
+          creado_en: Timestamp.now(),
+          creado_por: caller.creatorDisplay || 'Janet Gerencia',
+          motivo: cleanMotivo,
+        });
+        jornadaId = newDocRef.id;
+      }
+
+      // Limpiar bloqueos de tipo 'available' internos huérfanos para esa fecha si existieran
+      try {
+        const blocksSnap = await db
+          .collection('bloqueos_horario')
+          .where('barbero_id', '==', prof.id)
+          .where('fecha', '==', fecha)
+          .where('type', '==', 'available')
+          .get();
+
+        for (const bDoc of blocksSnap.docs) {
+          await bDoc.ref.delete();
+        }
+      } catch (err) {
+        console.warn('Error limpiando bloqueos available residuales:', err);
+      }
+
+      await db.collection('audit_logs').add({
+        action: `Habilitar Jornada Especial (${caller.assistantName})`,
+        details: `Jornada especial PÚBLICA habilitada para ${displayName} el ${fecha} de ${start} a ${end}. Visible en Web y App Móvil. Motivo: ${cleanMotivo}`,
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
+        severity: 'info',
+        entityId: jornadaId,
+        localId: defaultLocalId,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        ok: true,
+        jornadaId,
+        mensaje: `Listo ${saludoOperador}: quedó habilitada la **Jornada Especial** para **${displayName}** el día **${fecha}** de **${start} a ${end}** (motivo: "${cleanMotivo}"). Este horario ya es **público y 100% visible para que los clientes agenden en la página web y en la app móvil**, además de mostrarse en la cuadrícula de la agenda.`,
+      };
+    }
 
     if (accion === 'bloquear') {
       // 1. Validar si el barbero labora ese día
@@ -1571,14 +1682,14 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
         fecha,
         hora_inicio: start,
         hora_fin: end,
-        motivo: motivo || 'Horario Habilitado',
+        motivo: motivo || 'Horario Habilitado (Interno)',
         type: 'available',
         created_at: new Date(),
       });
 
       await db.collection('audit_logs').add({
-        action: `Habilitar Horario Especial (${caller.assistantName})`,
-        details: `Horario especial habilitado para ${displayName} el ${fecha} de ${start} a ${end}. Motivo: ${motivo}`,
+        action: `Habilitar Horario Especial Interno (${caller.assistantName})`,
+        details: `Horario especial INTERNO habilitado para ${displayName} el ${fecha} de ${start} a ${end}. Solo visible en recepción. Motivo: ${motivo}`,
         userId: caller.auditUserId,
         userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
         userRole: caller.auditUserRole,
@@ -1591,7 +1702,7 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       return {
         ok: true,
         bloqueoId: enableRef.id,
-        mensaje: `Listo ${saludoOperador}: se habilitó el horario especial para **${displayName}** el día **${fecha}** de **${start} a ${end}**. Ya puede recibir citas en ese rango.`,
+        mensaje: `Listo ${saludoOperador}: se habilitó el **Horario Especial Interno** para **${displayName}** el día **${fecha}** de **${start} a ${end}** (motivo: "${motivo}"). Este horario es **únicamente visible dentro de recepción en la agenda física** para permitir citas manuales en el local (los clientes NO lo ven en la página web ni en la app móvil).`,
       };
     }
 
@@ -1639,6 +1750,186 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
       ok: true,
       eliminados: toDelete.length,
       mensaje: `Listo ${saludoOperador}: se eliminaron ${toDelete.length} bloqueo(s) de **${displayName}** para el día **${fecha}** (${motivosEliminados.join(', ')}). Su horario vuelve a estar disponible en la agenda.`,
+    };
+  }
+);
+
+// ============================================================================
+// 5.1 GESTIONAR JORNADA ESPECIAL DE PROFESIONAL (PÚBLICA EN WEB Y APP MÓVIL)
+// ============================================================================
+export const gestionarJornadaEspecialSucursalTool = ai.defineTool(
+  {
+    name: 'gestionar_jornada_especial_sucursal',
+    description:
+      'Habilita o elimina una Jornada Especial de un profesional (la misma función que se activa desde Administración -> Profesionales). Una Jornada Especial es PÚBLICA y 100% VISIBLE en la página web y en la app móvil para que los clientes puedan agendar en línea, y sustituye el horario laboral regular del barbero para esa fecha. Úsala siempre que te pidan "habilitar jornada especial", "abrir jornada especial", "poner disponible en la web/app" o abrir un día para citas públicas de clientes. (Para horarios internos que solo recepción debe ver en la agenda física sin mostrar a clientes online, usa gestionar_horario_barbero_sucursal con habilitar_especial).',
+    inputSchema: z.object({
+      accion: z
+        .enum(['habilitar', 'eliminar'])
+        .describe('Acción a realizar: "habilitar" para abrir jornada especial pública en web y app móvil, o "eliminar" para quitarla y volver al horario habitual/libre.'),
+      nombreBarbero: z
+        .string()
+        .describe('Nombre o apodo del barbero/profesional (ej. "Lupita", "Alfredo", "Lalo", "Beatriz", "Ivon").'),
+      fecha: z
+        .string()
+        .describe('Fecha en formato YYYY-MM-DD para la cual se habilitará o eliminará la jornada especial.'),
+      horaInicio: z
+        .string()
+        .optional()
+        .describe('Hora de inicio de la jornada en formato 24h HH:mm (ej. "10:00"). Requerido al habilitar.'),
+      horaFin: z
+        .string()
+        .optional()
+        .describe('Hora de fin de la jornada en formato 24h HH:mm (ej. "14:00" o "18:00"). Requerido al habilitar.'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Motivo de la jornada especial (ej. "Jornada especial solicitada por Beatriz").'),
+    }),
+  },
+  async ({ accion, nombreBarbero, fecha, horaInicio, horaFin, motivo }) => {
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+    const db = getDb();
+    const profSnap = await db.collection('profesionales').get();
+    const activeProfessionals: any[] = [];
+
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.deleted && p.active !== false) {
+        activeProfessionals.push({ id: doc.id, ...p });
+      }
+    });
+
+    const prof = findBarber(nombreBarbero, activeProfessionals);
+
+    if (!prof) {
+      return {
+        ok: false,
+        mensaje: `No encontré un barbero activo que coincida con "${nombreBarbero}". Verifica el nombre (ej. Lupita, Alfredo, Lalo, Ivon, Bety).`,
+      };
+    }
+
+    const displayName = prof.publicName || prof.name || 'Barbero';
+    let defaultLocalId = prof.local_id || prof.localId || '';
+    if (!defaultLocalId) {
+      const localesSnap = await db.collection('locales').limit(1).get();
+      if (!localesSnap.empty) defaultLocalId = localesSnap.docs[0].id;
+    }
+
+    if (accion === 'habilitar') {
+      const start = (horaInicio && horaInicio.trim()) || '10:00';
+      const end = (horaFin && horaFin.trim()) || '18:00';
+
+      if (timeToMinutes(end) <= timeToMinutes(start)) {
+        return {
+          ok: false,
+          mensaje: `La hora de fin (${end}) debe ser posterior a la hora de inicio (${start}).`,
+        };
+      }
+
+      // 1. Revisar si ya existe una jornada especial para este profesional y fecha
+      const existingSnap = await db
+        .collection('jornadas_especiales')
+        .where('profesionalId', '==', prof.id)
+        .where('fecha', '==', fecha)
+        .get();
+
+      let jornadaId = '';
+      const cleanMotivo = (motivo || 'Jornada especial solicitada por gerencia').trim().slice(0, 100);
+
+      if (!existingSnap.empty) {
+        const docRef = existingSnap.docs[0].ref;
+        jornadaId = existingSnap.docs[0].id;
+        await docRef.update({
+          hora_inicio: start,
+          hora_fin: end,
+          motivo: cleanMotivo,
+          actualizado_en: Timestamp.now(),
+          actualizado_por: caller.creatorDisplay,
+        });
+      } else {
+        const newDocRef = await db.collection('jornadas_especiales').add({
+          profesionalId: prof.id,
+          profesionalName: prof.name || displayName,
+          local_id: defaultLocalId,
+          fecha,
+          hora_inicio: start,
+          hora_fin: end,
+          creado_en: Timestamp.now(),
+          creado_por: caller.creatorDisplay || 'Janet Gerencia',
+          motivo: cleanMotivo,
+        });
+        jornadaId = newDocRef.id;
+      }
+
+      // 2. Limpiar bloqueos de tipo 'available' internos huérfanos para esa fecha si existieran
+      try {
+        const blocksSnap = await db
+          .collection('bloqueos_horario')
+          .where('barbero_id', '==', prof.id)
+          .where('fecha', '==', fecha)
+          .where('type', '==', 'available')
+          .get();
+
+        for (const bDoc of blocksSnap.docs) {
+          await bDoc.ref.delete();
+        }
+      } catch (err) {
+        console.warn('Error limpiando bloqueos available residuales:', err);
+      }
+
+      // 3. Registrar auditoría
+      await db.collection('audit_logs').add({
+        action: `Habilitar Jornada Especial (${caller.assistantName})`,
+        details: `Jornada especial PÚBLICA habilitada para ${displayName} el ${fecha} de ${start} a ${end}. Visible en Web y App Móvil. Motivo: ${cleanMotivo}`,
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
+        severity: 'info',
+        entityId: jornadaId,
+        localId: defaultLocalId,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        ok: true,
+        jornadaId,
+        mensaje: `Listo ${saludoOperador}: quedó habilitada la **Jornada Especial** para **${displayName}** el día **${fecha}** de **${start} a ${end}** (motivo: "${cleanMotivo}"). Este horario ya es **público y 100% visible para que los clientes agenden en la página web y en la app móvil**, además de quedar abierto en la agenda física.`,
+      };
+    }
+
+    // accion === 'eliminar'
+    const snap = await db
+      .collection('jornadas_especiales')
+      .where('profesionalId', '==', prof.id)
+      .where('fecha', '==', fecha)
+      .get();
+
+    if (snap.empty) {
+      return {
+        ok: false,
+        mensaje: `No se encontró ninguna jornada especial registrada para ${displayName} en la fecha ${fecha}.`,
+      };
+    }
+
+    for (const doc of snap.docs) {
+      await doc.ref.delete();
+    }
+
+    await db.collection('audit_logs').add({
+      action: `Eliminar Jornada Especial (${caller.assistantName})`,
+      details: `Se eliminó la jornada especial de ${displayName} para el ${fecha}. Motivo: ${motivo || 'Solicitud de gerencia'}`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      localId: defaultLocalId,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      mensaje: `Listo ${saludoOperador}: se eliminó la jornada especial de **${displayName}** para el **${fecha}**. Su disponibilidad vuelve a regirse por su horario habitual regular (o día libre si no labora ese día).`,
     };
   }
 );
@@ -2205,6 +2496,7 @@ export function getGerenciaAgentTools() {
     agendarCitaSucursalTool,
     reagendarCitaSucursalTool,
     gestionarHorarioBarberoSucursalTool,
+    gestionarJornadaEspecialSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,

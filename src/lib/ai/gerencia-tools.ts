@@ -5,6 +5,7 @@ import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { sanitizeExternalUntrustedText } from '@/lib/ai/ceo-security';
 import { getMexicoDateInfo } from '@/lib/ai/agent-utils';
+import { parseClientCustomDuration } from '@/lib/client-notes-helper';
 import {
   findBarber,
   matchesBarber,
@@ -348,8 +349,29 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
 // ============================================================================
 async function resolveServiceForGerencia(
   db: any,
-  query?: string
-): Promise<{ id: string; name: string; price: number; duration: number }> {
+  query?: string,
+  barberId?: string,
+  clientNotes?: string,
+  barberName?: string
+): Promise<{
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+  serviceIds: string[];
+  items: Array<{
+    id: string;
+    nombre: string;
+    servicio: string;
+    tipo: string;
+    barbero_id: string;
+    precio: number;
+    duracion: number;
+    cantidad: number;
+    professional_lock: boolean;
+  }>;
+  rawService?: any;
+}> {
   const servSnap = await db.collection('servicios').where('active', '==', true).get();
   const allServices: any[] = [];
   servSnap.forEach((d: any) => allServices.push({ id: d.id, ...d.data() }));
@@ -363,7 +385,7 @@ async function resolveServiceForGerencia(
   if (!matched) {
     if (q.includes('corte') && (q.includes('barba') || q.includes('combo') || q.includes('completo'))) {
       matched =
-        allServices.find((s) => s.name?.includes('Caballero alfa')) ||
+        allServices.find((s) => s.name?.includes('Caballero alfa') || s.name?.includes('1 El Caballero alfa')) ||
         allServices.find((s) => s.name === 'Corte de cabello');
     } else if (q.includes('barba') || q.includes('afeitado')) {
       matched =
@@ -390,11 +412,56 @@ async function resolveServiceForGerencia(
     matched = allServices.find((s) => s.name === 'Corte de cabello') || allServices[0];
   }
 
+  const baseDuration = Number(matched?.duration ?? 40);
+  let finalDuration = baseDuration;
+
+  // 1. Ajuste prioritario por barbero según durationPorProfesional configurado en el servicio
+  if (
+    barberId &&
+    matched?.durationPorProfesional &&
+    typeof matched.durationPorProfesional === 'object' &&
+    matched.durationPorProfesional[barberId] !== undefined &&
+    matched.durationPorProfesional[barberId] !== null &&
+    matched.durationPorProfesional[barberId] !== ''
+  ) {
+    const custom = Number(matched.durationPorProfesional[barberId]);
+    if (!isNaN(custom) && custom > 0) {
+      finalDuration = custom;
+    }
+  }
+
+  // 2. Ajuste complementario por expediente / notas del cliente si especifica duración especial (ej. "Cliente de 45 min", "Lupita realiza en 45 min")
+  if (clientNotes) {
+    const clientCustomDur = parseClientCustomDuration(clientNotes, barberName);
+    if (clientCustomDur && clientCustomDur > 0) {
+      finalDuration = clientCustomDur;
+    }
+  }
+
+  const sId = matched?.id || 's56EgUXPyLpZbjCf2Ung';
+  const sName = matched?.name || 'Corte de cabello';
+  const sPrice = Number(matched?.price ?? 140);
+
   return {
-    id: matched?.id || 's56EgUXPyLpZbjCf2Ung',
-    name: matched?.name || 'Corte de cabello',
-    price: Number(matched?.price ?? 140),
-    duration: Number(matched?.duration ?? 40),
+    id: sId,
+    name: sName,
+    price: sPrice,
+    duration: finalDuration,
+    serviceIds: [sId],
+    items: [
+      {
+        id: sId,
+        nombre: sName,
+        servicio: sName,
+        tipo: 'servicio',
+        barbero_id: barberId || '',
+        precio: sPrice,
+        duracion: finalDuration,
+        cantidad: 1,
+        professional_lock: true,
+      },
+    ],
+    rawService: matched,
   };
 }
 
@@ -409,6 +476,7 @@ async function resolveOrCreateClientForGerencia(
   telefono: string;
   correo: string;
   numeroCliente?: string;
+  notas?: string;
   fueEncontrado: boolean;
 }> {
   const cleanPhone = (telefonoCliente || '').replace(/\D/g, '');
@@ -420,6 +488,7 @@ async function resolveOrCreateClientForGerencia(
   let resolvedPhone = cleanPhone;
   let resolvedEmail = '';
   let resolvedNum = '';
+  let resolvedNotas = '';
   let fueEncontrado = false;
 
   // 1. Buscar directamente por teléfono si tiene al menos 7 dígitos (probando variantes 10 dígitos, con 52, con +52)
@@ -435,6 +504,7 @@ async function resolveOrCreateClientForGerencia(
         resolvedPhone = cd.telefono || cleanPhone;
         resolvedEmail = cd.correo || cd.email || '';
         resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
+        resolvedNotas = cd.notas || cd.nota || '';
         fueEncontrado = true;
         break;
       }
@@ -451,6 +521,7 @@ async function resolveOrCreateClientForGerencia(
       resolvedPhone = cd.telefono || resolvedPhone || '';
       resolvedEmail = cd.correo || cd.email || '';
       resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
+      resolvedNotas = cd.notas || cd.nota || '';
       fueEncontrado = true;
     }
   }
@@ -509,6 +580,7 @@ async function resolveOrCreateClientForGerencia(
       resolvedPhone = bestDoc.telefono || resolvedPhone || '';
       resolvedEmail = bestDoc.correo || bestDoc.email || '';
       resolvedNum = String(bestDoc.numero_cliente ?? bestDoc.numeroCliente ?? '');
+      resolvedNotas = bestDoc.notas || bestDoc.nota || '';
       fueEncontrado = true;
     }
   }
@@ -548,6 +620,7 @@ async function resolveOrCreateClientForGerencia(
     telefono: resolvedPhone,
     correo: resolvedEmail,
     numeroCliente: resolvedNum,
+    notas: resolvedNotas,
     fueEncontrado,
   };
 }
@@ -800,13 +873,27 @@ export const agendarCitaSucursalTool = ai.defineTool(
     const barberDisplayName = prof.publicName || prof.name || 'Barbero';
     const defaultLocalId = prof.local_id || prof.localId || 'rkbEgvwP67JliXQ1Qeyj';
 
-    // 2. Resolver servicio y duración
-    const service = await resolveServiceForGerencia(db, servicioNombre);
+    // 2. Resolver o registrar cliente
+    const client = await resolveOrCreateClientForGerencia(
+      db,
+      nombreCliente,
+      telefonoCliente,
+      numeroCliente
+    );
+
+    // 3. Resolver servicio y duración considerando la duración personalizada por barbero (durationPorProfesional) y notas de cliente
+    const service = await resolveServiceForGerencia(
+      db,
+      servicioNombre,
+      prof.id,
+      client?.notas,
+      barberDisplayName
+    );
     const startMins = timeToMinutes(horaInicio);
     const endMins = startMins + service.duration;
     const horaFin = minutesToTime(endMins);
 
-    // 3. Validar disponibilidad del barbero en la agenda
+    // 4. Validar disponibilidad del barbero en la agenda
     const barberSchedule = await getBarberScheduleForDay({
       db,
       barber: prof,
@@ -865,14 +952,6 @@ export const agendarCitaSucursalTool = ai.defineTool(
       }
     }
 
-    // 4. Resolver o registrar cliente
-    const client = await resolveOrCreateClientForGerencia(
-      db,
-      nombreCliente,
-      telefonoCliente,
-      numeroCliente
-    );
-
     // 5. Crear la reserva en la base de datos oficial
     const newResRef = await db.collection('reservas').add({
       cliente_id: client.id,
@@ -892,22 +971,13 @@ export const agendarCitaSucursalTool = ai.defineTool(
       hora_fin: horaFin,
       duracion: service.duration,
       servicio: service.name,
-      servicios: [service.id],
-      items: [
-        {
-          id: service.id,
-          nombre: service.name,
-          servicio: service.name,
-          tipo: 'servicio',
-          barbero_id: prof.id,
-          precio: service.price,
-          duracion: service.duration,
-          cantidad: 1,
-          professional_lock: true,
-          hora_inicio: horaInicio,
-          hora_fin: horaFin,
-        },
-      ],
+      servicios: service.serviceIds,
+      items: service.items.map((it) => ({
+        ...it,
+        barbero_id: prof.id,
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+      })),
       precio: service.price,
       total: service.price,
       saldo_pendiente: service.price,
@@ -1086,7 +1156,28 @@ export const reagendarCitaSucursalTool = ai.defineTool(
     }
 
     const barberDisplayName = targetProf.publicName || targetProf.name || 'Barbero';
-    const durationMins = Number(resData.duracion || 40);
+
+    // Determinar la duración considerando la duración personalizada por barbero (durationPorProfesional)
+    let durationMins = Number(resData.duracion || 40);
+    const serviceName = resData.servicio || resData.items?.[0]?.nombre || resData.items?.[0]?.servicio;
+
+    if (serviceName) {
+      try {
+        const resolvedServ = await resolveServiceForGerencia(
+          db,
+          serviceName,
+          targetProf.id,
+          resData.customer?.notas || resData.notas,
+          barberDisplayName
+        );
+        if (resolvedServ?.duration && resolvedServ.duration > 0) {
+          durationMins = resolvedServ.duration;
+        }
+      } catch (err) {
+        console.warn('Error resolviendo duración en reagendación:', err);
+      }
+    }
+
     const startMins = timeToMinutes(parsedHour);
     const endMins = startMins + durationMins;
     const nuevaHoraFin = minutesToTime(endMins);
@@ -1130,6 +1221,7 @@ export const reagendarCitaSucursalTool = ai.defineTool(
     const updatedItems = (Array.isArray(resData.items) ? resData.items : []).map((item: any) => ({
       ...item,
       barbero_id: targetProf.id,
+      duracion: durationMins,
       hora_inicio: parsedHour,
       hora_fin: nuevaHoraFin,
     }));
@@ -1138,6 +1230,7 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       fecha: nuevaFecha,
       hora_inicio: parsedHour,
       hora_fin: nuevaHoraFin,
+      duracion: durationMins,
       barbero_id: targetProf.id,
       professionalNames: barberDisplayName,
       items: updatedItems.length > 0 ? updatedItems : resData.items,
@@ -1190,13 +1283,17 @@ export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
         .string()
         .optional()
         .describe('Opcional: nombre o apodo del barbero (ej. "Lalo", "Alfredo", "Ivon", "Lupita", "Beatriz"). Si se omite, analiza a todos.'),
+      servicioNombre: z
+        .string()
+        .optional()
+        .describe('Opcional: nombre del servicio a consultar (ej. "Corte de cabello", "Barba"). Permite calcular la duración exacta según el tiempo personalizado de cada barbero.'),
       duracionMinutos: z
         .number()
         .optional()
-        .describe('Duración del servicio en minutos (por defecto 40 minutos para un corte estándar).'),
+        .describe('Duración manual en minutos. Si se omite, se calcula automáticamente según la configuración personalizada del barbero para el servicio.'),
     }),
   },
-  async ({ fecha, barberoNombre, duracionMinutos = 40 }) => {
+  async ({ fecha, barberoNombre, servicioNombre, duracionMinutos }) => {
     const db = getDb();
     const { todayIso } = getMexicoDateInfo();
     const targetDate = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
@@ -1222,6 +1319,18 @@ export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
     const disponibilidad: any[] = [];
 
     for (const barber of targetBarbers) {
+      let barberDuration = duracionMinutos;
+      if (!barberDuration) {
+        const resolvedServ = await resolveServiceForGerencia(
+          db,
+          servicioNombre || 'Corte de cabello',
+          barber.id,
+          undefined,
+          barber.publicName || barber.name
+        );
+        barberDuration = resolvedServ.duration || 40;
+      }
+
       const schedule = await getBarberScheduleForDay({
         db,
         barber,
@@ -1229,19 +1338,20 @@ export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
         localId: barber.local_id || defaultLocalId,
       });
 
-      const freeSlots = calculateBarberFreeSlots(schedule, duracionMinutos);
+      const freeSlots = calculateBarberFreeSlots(schedule, barberDuration);
 
       disponibilidad.push({
         barbero: schedule.displayName,
         barberoId: schedule.barberId,
         diaSemana: schedule.diaSemana,
+        duracionServicioMinutos: barberDuration,
         laboraHoy: schedule.isWorkingDay,
         jornada: schedule.workingHours ? `${schedule.workingHours.start} - ${schedule.workingHours.end}` : 'Día libre',
         horariosLibresDisponibles: freeSlots,
         totalEspaciosLibres: freeSlots.length,
         resumen: schedule.isWorkingDay
           ? freeSlots.length > 0
-            ? `${schedule.displayName} tiene ${freeSlots.length} horario(s) disponible(s) entre ${freeSlots[0]} y ${freeSlots[freeSlots.length - 1]}.`
+            ? `${schedule.displayName} tiene ${freeSlots.length} horario(s) disponible(s) de ${barberDuration} min entre ${freeSlots[0]} y ${freeSlots[freeSlots.length - 1]}.`
             : `${schedule.displayName} tiene su jornada completa ocupada o bloqueada hoy.`
           : `${schedule.displayName} no labora los ${schedule.diaSemana}s (día libre).`,
       });
@@ -1249,7 +1359,8 @@ export const consultarDisponibilidadBarberosSucursalTool = ai.defineTool(
 
     return {
       fecha: targetDate,
-      duracionServicioConsultada: `${duracionMinutos} minutos`,
+      servicioConsultado: servicioNombre || 'Corte de cabello',
+      duracionServicioConsultada: duracionMinutos ? `${duracionMinutos} minutos (manual)` : 'Personalizada según barbero',
       disponibilidad,
     };
   }

@@ -537,11 +537,13 @@ export function resolveServices({
   serviceIds,
   servicesNames,
   serviceName,
+  barberId,
 }: {
   allServices: Array<any>;
   serviceIds?: string[];
   servicesNames?: string[];
   serviceName?: string;
+  barberId?: string;
 }): ResolvedServicesResult {
   const matchedServices: Array<any> = [];
 
@@ -696,7 +698,9 @@ export function resolveServices({
 
   const names = matchedServices.map((s) => s.name || s.nombre || 'Servicio');
   const ids = matchedServices.map((s) => s.id);
-  const totalDuration = matchedServices.reduce((sum, s) => sum + Number(s.duration || s.duracion || 30), 0);
+  const totalDuration = barberId
+    ? getBarberServiceDuration(matchedServices, barberId)
+    : matchedServices.reduce((sum, s) => sum + Number(s.duration || s.duracion || 30), 0);
   const totalPrice = matchedServices.reduce((sum, s) => sum + Number(s.price || s.precio || 0), 0);
   const displayTitle = formatServiceTitle(matchedServices);
 

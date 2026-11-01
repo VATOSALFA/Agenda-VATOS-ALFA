@@ -725,7 +725,7 @@ export function NewReservationForm({
 
       try {
         let startMins;
-        if (item.hora_inicio_hora && item.hora_inicio_minuto) {
+        if (items.length > 1 && item.hora_inicio_hora && item.hora_inicio_minuto) {
           item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
           const [sh, sm] = item_hora_inicio.split(':').map(Number);
           startMins = sh * 60 + sm;
@@ -947,8 +947,15 @@ export function NewReservationForm({
       );
       let itemsToSet: { servicio: string; barbero_id: string; duracion: number; hora_inicio_hora?: string; hora_inicio_minuto?: string; professional_lock?: boolean }[] = [];
       if (isEditMode && initialData.items && Array.isArray(initialData.items)) {
+        const hasMultipleItems = initialData.items.length > 1;
         itemsToSet = initialData.items.map((i: SaleItemType) => {
-          const [itemH = '', itemM = ''] = (i as any).hora_inicio?.split(':') || [];
+          let itemH = '';
+          let itemM = '';
+          if (hasMultipleItems && (i as any).hora_inicio && (i as any).hora_inicio !== initialData.hora_inicio) {
+            const [h = '', m = ''] = (i as any).hora_inicio.split(':') || [];
+            itemH = h;
+            itemM = m;
+          }
           const itemLock = (i as any).professional_lock !== undefined
             ? (i as any).professional_lock
             : (initialData.professional_lock !== undefined ? initialData.professional_lock : defaultOnlineLock);
@@ -1200,7 +1207,7 @@ export function NewReservationForm({
               const dur = currentItem.duracion !== undefined ? currentItem.duracion : (customDur !== undefined ? customDur : (service?.duration || 0));
 
               let itemStartMins;
-              if (currentItem.hora_inicio_hora && currentItem.hora_inicio_minuto) {
+              if (items.length > 1 && currentItem.hora_inicio_hora && currentItem.hora_inicio_minuto) {
                 itemStartMins = parseInt(currentItem.hora_inicio_hora, 10) * 60 + parseInt(currentItem.hora_inicio_minuto, 10);
               } else {
                 itemStartMins = profCurrentStartMins.get(profId) ?? globalStartMins;
@@ -1299,10 +1306,10 @@ export function NewReservationForm({
         let item_hora_inicio = undefined;
         let item_hora_fin = undefined;
         const profId = item.barbero_id || 'unassigned';
-        const hasAnyCustomStartTime = data.items.some((i: any) => Boolean(i.hora_inicio_hora && i.hora_inicio_minuto));
+        const hasAnyCustomStartTime = data.items.length > 1 && data.items.some((i: any) => Boolean(i.hora_inicio_hora && i.hora_inicio_minuto));
         let startMins;
 
-        if (item.hora_inicio_hora && item.hora_inicio_minuto) {
+        if (data.items.length > 1 && item.hora_inicio_hora && item.hora_inicio_minuto) {
           item_hora_inicio = `${item.hora_inicio_hora}:${item.hora_inicio_minuto}`;
           try {
             const startParsed = parse(item_hora_inicio, 'HH:mm', new Date());
@@ -1315,15 +1322,13 @@ export function NewReservationForm({
           startMins = sh * 60 + sm;
         } else {
           startMins = profCurrentStartMins.get(profId) ?? globalStartMins;
-          if (hasAnyCustomStartTime) {
-            const sh = String(Math.floor(startMins / 60)).padStart(2, '0');
-            const sm = String(startMins % 60).padStart(2, '0');
-            const endTotal = startMins + duracion;
-            const eh = String(Math.floor(endTotal / 60)).padStart(2, '0');
-            const em = String(endTotal % 60).padStart(2, '0');
-            item_hora_inicio = `${sh}:${sm}`;
-            item_hora_fin = `${eh}:${em}`;
-          }
+          const sh = String(Math.floor(startMins / 60)).padStart(2, '0');
+          const sm = String(startMins % 60).padStart(2, '0');
+          const endTotal = startMins + duracion;
+          const eh = String(Math.floor(endTotal / 60)).padStart(2, '0');
+          const em = String(endTotal % 60).padStart(2, '0');
+          item_hora_inicio = `${sh}:${sm}`;
+          item_hora_fin = `${eh}:${em}`;
         }
 
         const endMins = startMins + duracion;
@@ -1341,9 +1346,23 @@ export function NewReservationForm({
           duracion,
           tipo,
           professional_lock: item.professional_lock ?? false,
-          ...(item_hora_inicio ? { hora_inicio: item_hora_inicio, hora_fin: item_hora_fin } : {})
+          hora_inicio: item_hora_inicio,
+          hora_fin: item_hora_fin
         };
       });
+
+      // Si es un solo servicio y el usuario ajustó manualmente la hora de fin en el encabezado
+      if (data.items.length === 1 && data.hora_fin_hora && data.hora_fin_minuto) {
+        const explicitEndMins = parseInt(data.hora_fin_hora, 10) * 60 + parseInt(data.hora_fin_minuto, 10);
+        if (explicitEndMins > globalStartMins) {
+          latestEnd = explicitEndMins;
+          const totalDur = latestEnd - globalStartMins;
+          itemsToSave[0].duracion = totalDur;
+          const eh = String(Math.floor(latestEnd / 60)).padStart(2, '0');
+          const em = String(latestEnd % 60).padStart(2, '0');
+          itemsToSave[0].hora_fin = `${eh}:${em}`;
+        }
+      }
 
       const globalStartHour = String(Math.floor(earliestStart / 60)).padStart(2, '0');
       const globalStartMin = String(earliestStart % 60).padStart(2, '0');
@@ -1379,17 +1398,23 @@ export function NewReservationForm({
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);
-      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean } = {
+      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean; duracion?: number; duracionMinutos?: number; servicios?: any[] } = {
         cliente_id: data.cliente_id,
         cliente_nombre: selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : (data.cliente_nombre || ''),
         cliente_telefono: selectedClient?.telefono || data.cliente_telefono || '',
         cliente_email: selectedClient?.correo || (selectedClient as any)?.email || data.cliente_email || '',
         barbero_id: primaryBarberoId,
         items: itemsToSave,
+        servicios: itemsToSave.map((i: any) => ({
+          ...i,
+          profesional: professionals.find(p => p.id === i.barbero_id)?.name || i.barbero_id || ''
+        })),
         servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
         fecha: formattedDate,
         hora_inicio: hora_inicio,
         hora_fin: hora_fin,
+        duracion: latestEnd - earliestStart,
+        duracionMinutos: latestEnd - earliestStart,
         estado: resolvedEstado,
         precio: data.precio,
         notas: data.notas || '',

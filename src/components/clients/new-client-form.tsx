@@ -347,12 +347,15 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
         onFormSubmit(client.id);
         form.reset();
       }).catch((err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: clientRef.path,
-          operation: 'update',
-          requestResourceData: dataToSave,
-          message: err.message,
-        }));
+        if (err?.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: clientRef.path,
+            operation: 'update',
+            requestResourceData: dataToSave,
+            message: err.message,
+          }));
+        }
+        toast({ title: 'Error al actualizar', description: err?.message || 'No se pudo actualizar el cliente.', variant: 'destructive' });
       }).finally(() => { setIsSubmitting(false); });
 
     } else {
@@ -397,12 +400,15 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
         onFormSubmit(newClientRef.id);
         form.reset();
       }).catch((err) => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({
-          path: newClientRef.path,
-          operation: 'create',
-          requestResourceData: fullData,
-          message: err.message,
-        }));
+        if (err?.code === 'permission-denied') {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: newClientRef.path,
+            operation: 'create',
+            requestResourceData: fullData,
+            message: err.message,
+          }));
+        }
+        toast({ title: 'Error al crear cliente', description: err?.message || 'No se pudo crear el cliente.', variant: 'destructive' });
       }).finally(() => { setIsSubmitting(false); });
     }
   }

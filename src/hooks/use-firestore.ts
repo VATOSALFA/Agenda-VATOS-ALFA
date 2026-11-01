@@ -86,13 +86,17 @@ export function useFirestoreQuery<T>(
           .catch((err: FirestoreError) => {
             if (!isMounted) return;
             console.error(`Error fetching collection ${collectionName}:`, err);
-            const permissionError = new FirestorePermissionError({
-              path: collectionName,
-              operation: 'list',
-              message: err.message,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            setError(permissionError);
+            if (err.code === 'permission-denied') {
+              const permissionError = new FirestorePermissionError({
+                path: collectionName,
+                operation: 'list',
+                message: err.message,
+              });
+              errorEmitter.emit('permission-error', permissionError);
+              setError(permissionError);
+            } else {
+              setError(err);
+            }
             setLoading(false);
           });
 
@@ -111,14 +115,17 @@ export function useFirestoreQuery<T>(
       }, (err: FirestoreError) => {
         console.error(`Error listening to collection ${collectionName}:`, err);
 
-        const permissionError = new FirestorePermissionError({
-          path: collectionName,
-          operation: 'list',
-          message: err.message,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-
-        setError(permissionError);
+        if (err.code === 'permission-denied') {
+          const permissionError = new FirestorePermissionError({
+            path: collectionName,
+            operation: 'list',
+            message: err.message,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+          setError(permissionError);
+        } else {
+          setError(err);
+        }
         setLoading(false);
       });
 

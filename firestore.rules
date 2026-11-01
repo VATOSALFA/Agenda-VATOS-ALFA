@@ -15,7 +15,7 @@ service cloud.firestore {
     }
 
     function isNotAppAnonymousSync() {
-      return isAuthenticated() && request.auth.token.email != 'app_client_sync@vatosalfa.com';
+      return isAuthenticated() && request.auth.token.get('email', '') != 'app_client_sync@vatosalfa.com';
     }
 
     function isGeneralAdmin() {
@@ -122,11 +122,11 @@ service cloud.firestore {
       allow write: if isNotAppAnonymousSync();
     }
     
-    match /sales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /ventas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /ventas_canceladas/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /sales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /ventas/{document=**} { allow read, write: if isAuthenticated(); }
+    match /ventas_canceladas/{document=**} { allow read, write: if isAuthenticated(); }
 
-    match /caja/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /caja/{document=**} { allow read, write: if isAuthenticated(); }
     
     match /clientes/{document=**} { allow read, write: if isAuthenticated(); } 
     match /clients/{document=**} { allow read, write: if isAuthenticated(); } 
@@ -149,10 +149,10 @@ service cloud.firestore {
     match /terminales/{document=**} { allow read: if isAuthenticated(); allow write: if isNotAppAnonymousSync(); }
     match /codigos_autorizacion/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
     match /codigos_verificacion/{document=**} { allow read, write: if isAuthenticated(); }
-    match /egresos/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /ingresos_manuales/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /liquidaciones_admin/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
-    match /cortes_caja/{document=**} { allow read, write: if isNotAppAnonymousSync(); }
+    match /egresos/{document=**} { allow read, write: if isAuthenticated(); }
+    match /ingresos_manuales/{document=**} { allow read, write: if isAuthenticated(); }
+    match /liquidaciones_admin/{document=**} { allow read, write: if isAuthenticated(); }
+    match /cortes_caja/{document=**} { allow read, write: if isAuthenticated(); }
     
     // Product Catalog (Spanish)
     match /categorias_productos/{document=**} { allow read: if true; allow write: if isNotAppAnonymousSync(); }

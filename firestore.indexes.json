@@ -9,7 +9,31 @@
       ]
     },
     {
+      "collectionGroup": "ventas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha_hora_venta", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "egresos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "egresos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "local_id", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ingresos_manuales",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "local_id", "order": "ASCENDING" },
@@ -21,7 +45,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "local_id", "order": "ASCENDING" },
-        { "fieldPath": "fecha", "order": "DESCENDING" }
+        { "fieldPath": "fecha", "order": "ASCENDING" }
       ]
     },
     {

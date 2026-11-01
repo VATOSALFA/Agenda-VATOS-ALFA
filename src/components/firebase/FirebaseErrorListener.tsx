@@ -11,8 +11,10 @@ export function FirebaseErrorListener() {
 
   useEffect(() => {
     const handleError = (e: FirestorePermissionError) => {
-      console.info("Contextual error received by listener:", e);
-      setError(e);
+      console.warn("Contextual error received by listener:", e);
+      if (process.env.NODE_ENV !== 'production') {
+        setError(e);
+      }
     };
 
     errorEmitter.on('permission-error', handleError);
@@ -22,7 +24,7 @@ export function FirebaseErrorListener() {
     };
   }, []);
 
-  if (!error) {
+  if (process.env.NODE_ENV === 'production' || !error) {
     return null;
   }
   

@@ -29,6 +29,7 @@ import {
     TrendingDown
 } from "lucide-react";
 import type { StockMovement, Product, ProductCategory } from "@/lib/types";
+import { StockMovementDetailModal } from "@/components/products/stock-movement-detail-modal";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -51,6 +52,9 @@ export default function StockMovementPage() {
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    // Detail Modal State
+    const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
 
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -617,7 +621,12 @@ export default function StockMovementPage() {
                                     const isPositive = diff > 0;
 
                                     return (
-                                        <TableRow key={movement.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                        <TableRow
+                                            key={movement.id}
+                                            onClick={() => setSelectedMovement(movement)}
+                                            className="h-9 hover:bg-muted/40 transition-colors border-b border-border/40 cursor-pointer"
+                                            title="Click para ver detalle del movimiento"
+                                        >
                                             <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">
                                                 {format(date, "dd/MM/yyyy HH:mm", { locale: es })}
                                             </TableCell>
@@ -676,10 +685,22 @@ export default function StockMovementPage() {
                                 const isPositive = diff > 0;
 
                                 return (
-                                    <div key={movement.id} className="p-3 space-y-1.5 bg-card/40 hover:bg-muted/20 transition-colors">
+                                    <div
+                                        key={movement.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => setSelectedMovement(movement)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                e.preventDefault();
+                                                setSelectedMovement(movement);
+                                            }
+                                        }}
+                                        className="p-3 space-y-1.5 bg-card/40 hover:bg-muted/20 active:bg-muted/30 transition-all cursor-pointer select-none group"
+                                    >
                                         <div className="flex items-center justify-between">
                                             <div className="min-w-0 pr-2">
-                                                <p className="font-bold text-sm text-foreground truncate">
+                                                <p className="font-bold text-sm text-foreground truncate group-hover:text-blue-400 transition-colors">
                                                     {movement.product_name || 'Producto desconocido'}
                                                 </p>
                                                 <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -688,18 +709,21 @@ export default function StockMovementPage() {
                                                     <span className="truncate">{movement.local_name || movement.local_id}</span>
                                                 </p>
                                             </div>
-                                            <div className="text-right shrink-0">
-                                                <div className="flex items-center gap-1 font-mono text-xs">
-                                                    <span className="text-muted-foreground">{movement.from}</span>
-                                                    <ArrowRight className="h-3 w-3 text-slate-400" />
-                                                    <span className="font-bold text-foreground">{movement.to}</span>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <div className="text-right">
+                                                    <div className="flex items-center gap-1 font-mono text-xs">
+                                                        <span className="text-muted-foreground">{movement.from}</span>
+                                                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                                                        <span className="font-bold text-foreground">{movement.to}</span>
+                                                    </div>
+                                                    <span className={cn(
+                                                        "inline-block text-[10px] font-bold px-1.5 py-0.5 rounded font-mono mt-0.5",
+                                                        isPositive ? "text-blue-400 bg-blue-500/10" : "text-slate-300 bg-white/10"
+                                                    )}>
+                                                        {isPositive ? '+' : ''}{diff}
+                                                    </span>
                                                 </div>
-                                                <span className={cn(
-                                                    "inline-block text-[10px] font-bold px-1.5 py-0.5 rounded font-mono mt-0.5",
-                                                    isPositive ? "text-blue-400 bg-blue-500/10" : "text-slate-300 bg-white/10"
-                                                )}>
-                                                    {isPositive ? '+' : ''}{diff}
-                                                </span>
+                                                <ChevronRight className="h-4 w-4 text-slate-400 group-hover:text-blue-400 transition-colors shrink-0" />
                                             </div>
                                         </div>
 
@@ -775,6 +799,15 @@ export default function StockMovementPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Modal de Detalle Completo de Movimiento */}
+            <StockMovementDetailModal
+                isOpen={!!selectedMovement}
+                onOpenChange={(open) => {
+                    if (!open) setSelectedMovement(null);
+                }}
+                movement={selectedMovement}
+            />
         </div>
     );
 }

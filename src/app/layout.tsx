@@ -49,7 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL('https://vatosalfa.com'),
     title: title,
     description: description,
-    manifest: '/manifest.json?v=2',
+    manifest: '/manifest.json?v=3',
     icons: {
       icon: [
         { url: '/icon-192x192.png?v=2', sizes: '192x192', type: 'image/png' },

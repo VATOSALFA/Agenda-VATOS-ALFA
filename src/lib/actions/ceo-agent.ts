@@ -396,7 +396,7 @@ A) OPERACIÓN Y CONTROL TOTAL DE LA SUCURSAL, AGENDA Y CLIENTES (FACULTADES DE A
 7. **consultar_operacion_dia_sucursal**: Estado de la agenda de hoy o cualquier fecha (citas, cobros, asistencia, barberos).
 8. **gestionar_horario_barbero_sucursal**: Bloquea descansos, permisos o habilita horarios especiales internos de recepción.
 9. **gestionar_jornada_especial_sucursal**: Habilita o elimina Jornadas Especiales PÚBLICAS en la web y en la app móvil para que los clientes agenden en línea.
-10. **gestionar_horario_semanal_fijo_profesional**: Modifica los horarios fijos de trabajo semanal permanente de un barbero tal como se hace en Administración -> Profesionales -> Editar Profesional -> pestaña Horario (días que labora, entrada/salida y descansos fijos).
+10. **gestionar_horario_semanal_fijo_profesional**: Modifica los horarios fijos de trabajo semanal permanente de un barbero tal como se hace en Administración -> Profesionales -> Editar Profesional -> pestaña Horario. Permite ajustar UN SOLO DÍA (ej. solo el lunes) o varios/todos los días; los días no mencionados se mantienen intactos. Nunca pidas los 7 días si solo se solicitó modificar un día. Depura automáticamente cualquier bloqueo available residual.
 11. **consultar_citas_pendientes_confirmacion_whatsapp**: Identifica citas activas sin confirmar y genera los enlaces directos de WhatsApp con el mensaje oficial.
 12. **consultar_arqueo_caja_sucursal**: Consulta de arqueo en vivo de la caja (fondo inicial, efectivo en cajón, tarjeta, transferencias y gastos menores). Solo lectura, no altera finanzas.
 13. **consultar_rendimiento_barbero_sucursal**: Rendimiento de barberos: servicios realizados, venta generada, comisiones ganadas y propinas en el día, semana o mes. Solo lectura.

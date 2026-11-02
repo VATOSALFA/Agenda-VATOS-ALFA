@@ -1949,7 +1949,7 @@ export const gestionarHorarioSemanalFijoProfesionalTool = ai.defineTool(
   {
     name: 'gestionar_horario_semanal_fijo_profesional',
     description:
-      'Modifica o ajusta los horarios fijos de trabajo semanal (jornada laboral permanente) de un profesional/barbero, exactamente igual a como se realiza desde Administración -> Profesionales -> Editar Profesional. Permite definir qué días labora y en qué horario (ej. Lunes de 14:00 a 20:00, Domingo de 13:00 a 20:00) y qué días descansa (ej. Miércoles y Jueves descanso). Úsala SIEMPRE que te pidan "modificar los horarios fijos de [Barbero]", "ajustar el horario semanal de [Barbero]", "cambiar los días que trabaja [Barbero]" o "poner días de descanso fijos".',
+      'Modifica o ajusta los horarios fijos de trabajo semanal (jornada laboral permanente) de un profesional/barbero, exactamente igual a como se realiza desde Administración -> Profesionales -> Editar Profesional -> pestaña Horario. Permite modificar UN SOLO DÍA (ej. solo el lunes de 14:00 a 20:00), varios días o la semana completa. Los días que no se incluyan en la solicitud se mantienen intactos tal como están configurados en el sistema sin alterarse. Úsala SIEMPRE que te pidan "modificar el horario fijo de [Barbero] los [Día]", "ajustar el horario semanal de [Barbero]", "cambiar el turno de [Barbero]" o "poner descanso fijo a [Barbero]". NUNCA pidas los 7 días de la semana si el usuario solo te pidió cambiar un día o un subconjunto de días.',
     inputSchema: z.object({
       nombreBarbero: z
         .string()
@@ -1959,21 +1959,21 @@ export const gestionarHorarioSemanalFijoProfesionalTool = ai.defineTool(
           z.object({
             dia: z
               .string()
-              .describe('Día de la semana (lunes, martes, miercoles, jueves, viernes, sabado, domingo).'),
+              .describe('Día de la semana a ajustar (lunes, martes, miercoles, jueves, viernes, sabado, domingo).'),
             labora: z
               .boolean()
-              .describe('true si el barbero labora ese día, false si descansa / día libre.'),
+              .describe('true si el barbero labora ese día, false si es día de descanso / día libre.'),
             horaInicio: z
               .string()
               .optional()
-              .describe('Hora de entrada (ej. "14:00", "13:00", "2", "1pm"). Requerida si labora es true.'),
+              .describe('Hora de entrada (ej. "14:00", "13:00", "2", "2pm"). Requerida si labora es true.'),
             horaFin: z
               .string()
               .optional()
               .describe('Hora de salida (ej. "20:00", "21:00", "8", "8pm"). Requerida si labora es true.'),
           })
         )
-        .describe('Lista de ajustes por día para el horario semanal del profesional.'),
+        .describe('Lista de ajustes por día. Puede contener UN SOLO DÍA (ej. solo lunes de 14:00 a 20:00), varios días, o toda la semana. Los días no incluidos se conservan exactamente como están en el sistema.'),
       motivo: z
         .string()
         .optional()
@@ -2088,6 +2088,31 @@ export const gestionarHorarioSemanalFijoProfesionalTool = ai.defineTool(
       actualizado_en: FieldValue.serverTimestamp(),
       actualizado_por: caller.creatorDisplay,
     });
+
+    // Limpiar bloqueos de tipo 'available' huérfanos en bloqueos_horario que pudieran interferir con los días modificados
+    try {
+      const { todayIso } = getMexicoDateInfo();
+      const blocksSnap = await db
+        .collection('bloqueos_horario')
+        .where('barbero_id', '==', prof.id)
+        .where('fecha', '>=', todayIso)
+        .get();
+
+      for (const bDoc of blocksSnap.docs) {
+        const bData = bDoc.data();
+        if (bData.type === 'available' && bData.fecha) {
+          const dateObj = parseISO(bData.fecha);
+          const dayName = format(dateObj, 'eeee', { locale: es }).toLowerCase();
+          const cleanDay = cleanDayKey(dayName);
+          const wasModified = ajustesPorDia.some((a) => cleanDayKey(a.dia) === cleanDay);
+          if (wasModified) {
+            await bDoc.ref.delete();
+          }
+        }
+      }
+    } catch (errClean) {
+      console.warn('Aviso limpiando bloqueos available residuales al actualizar horario fijo:', errClean);
+    }
 
     const cleanMotivo = (motivo || 'Ajuste de horarios fijos solicitado por gerencia').trim().slice(0, 150);
 

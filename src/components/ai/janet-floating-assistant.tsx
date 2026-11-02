@@ -1383,11 +1383,23 @@ export function JanetFloatingAssistant() {
       });
       loadGerenciaData();
     } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error en Janet Gerencia',
-        description: err?.message || 'No se pudo procesar la solicitud operativa.',
-      });
+      const isServerActionNotFoundError =
+        String(err?.message || '').includes('Server Action') &&
+        (String(err?.message || '').includes('not found') || String(err?.message || '').includes('failed-to-find-server-action'));
+
+      if (isServerActionNotFoundError) {
+        toast({
+          variant: 'destructive',
+          title: 'Sistema actualizado',
+          description: 'Se desplegó una nueva versión de la app. Por favor recarga la página (F5) para sincronizar tu sesión de Janet.',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Error en Janet Gerencia',
+          description: err?.message || 'No se pudo procesar la solicitud operativa.',
+        });
+      }
     } finally {
       setGerenciaSending(false);
     }

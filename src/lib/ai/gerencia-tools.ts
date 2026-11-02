@@ -1937,6 +1937,192 @@ export const gestionarJornadaEspecialSucursalTool = ai.defineTool(
 );
 
 // ============================================================================
+// 5.2 GESTIONAR HORARIOS FIJOS SEMANALES DE PROFESIONAL (EDITAR PROFESIONAL)
+// ============================================================================
+export const gestionarHorarioSemanalFijoProfesionalTool = ai.defineTool(
+  {
+    name: 'gestionar_horario_semanal_fijo_profesional',
+    description:
+      'Modifica o ajusta los horarios fijos de trabajo semanal (jornada laboral permanente) de un profesional/barbero, exactamente igual a como se realiza desde Administración -> Profesionales -> Editar Profesional. Permite definir qué días labora y en qué horario (ej. Lunes de 14:00 a 20:00, Domingo de 13:00 a 20:00) y qué días descansa (ej. Miércoles y Jueves descanso). Úsala SIEMPRE que te pidan "modificar los horarios fijos de [Barbero]", "ajustar el horario semanal de [Barbero]", "cambiar los días que trabaja [Barbero]" o "poner días de descanso fijos".',
+    inputSchema: z.object({
+      nombreBarbero: z
+        .string()
+        .describe('Nombre o apodo del barbero/profesional (ej. "Lalo", "Eduardo", "Alfredo", "Lupita", "Beatriz", "Ivon").'),
+      ajustesPorDia: z
+        .array(
+          z.object({
+            dia: z
+              .string()
+              .describe('Día de la semana (lunes, martes, miercoles, jueves, viernes, sabado, domingo).'),
+            labora: z
+              .boolean()
+              .describe('true si el barbero labora ese día, false si descansa / día libre.'),
+            horaInicio: z
+              .string()
+              .optional()
+              .describe('Hora de entrada (ej. "14:00", "13:00", "2", "1pm"). Requerida si labora es true.'),
+            horaFin: z
+              .string()
+              .optional()
+              .describe('Hora de salida (ej. "20:00", "21:00", "8", "8pm"). Requerida si labora es true.'),
+          })
+        )
+        .describe('Lista de ajustes por día para el horario semanal del profesional.'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Motivo u observación del ajuste de horario para la bitácora de auditoría.'),
+    }),
+    outputSchema: z.object({
+      ok: z.boolean(),
+      mensaje: z.string(),
+      barbero: z.string().optional(),
+      horarioActualizado: z.record(z.any()).optional(),
+    }),
+  },
+  async ({ nombreBarbero, ajustesPorDia, motivo }) => {
+    const db = getDb();
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+
+    const profSnap = await db.collection('profesionales').get();
+    const activeProfessionals: any[] = [];
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.deleted && p.active !== false) {
+        activeProfessionals.push({ id: doc.id, ...p });
+      }
+    });
+
+    const prof = findBarber(nombreBarbero, activeProfessionals);
+    if (!prof) {
+      return {
+        ok: false,
+        mensaje: `No encontré un barbero activo que coincida con "${nombreBarbero}". Verifica el nombre (ej. Lupita, Alfredo, Lalo, Ivon, Bety).`,
+      };
+    }
+
+    const displayName = prof.publicName || prof.name || 'Barbero';
+    const profRef = db.collection('profesionales').doc(prof.id);
+    const existingDoc = await profRef.get();
+    if (!existingDoc.exists) {
+      return {
+        ok: false,
+        mensaje: `El registro de **${displayName}** no fue encontrado en la base de datos.`,
+      };
+    }
+
+    const currentSchedule = existingDoc.data()?.schedule || {};
+    const updatedSchedule = { ...currentSchedule };
+
+    const cleanDayKey = (d: string): string => {
+      return d
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+    };
+
+    const normalizeTime = (t?: string, isEnd = false): string => {
+      if (!t) return isEnd ? '20:00' : '10:00';
+      const clean = t.trim().toLowerCase();
+      if (/^\d{1,2}$/.test(clean)) {
+        let n = parseInt(clean, 10);
+        if (n >= 1 && n <= 7) n += 12;
+        if (n === 8) n = 20;
+        return `${String(n).padStart(2, '0')}:00`;
+      }
+      if (/^\d{1,2}:\d{2}$/.test(clean)) {
+        const [h, m] = clean.split(':').map((x) => parseInt(x, 10));
+        let realH = h;
+        if (realH >= 1 && realH <= 7) realH += 12;
+        if (realH === 8) realH = 20;
+        return `${String(realH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      }
+      return clean;
+    };
+
+    const daysLabels: Record<string, string> = {
+      lunes: 'Lunes',
+      martes: 'Martes',
+      miercoles: 'Miércoles',
+      jueves: 'Jueves',
+      viernes: 'Viernes',
+      sabado: 'Sábado',
+      domingo: 'Domingo',
+    };
+
+    const cambiosRealizados: string[] = [];
+
+    for (const ajuste of ajustesPorDia) {
+      const dKey = cleanDayKey(ajuste.dia);
+      if (!daysLabels[dKey]) continue;
+
+      if (!ajuste.labora) {
+        updatedSchedule[dKey] = {
+          ...(updatedSchedule[dKey] || {}),
+          enabled: false,
+        };
+        cambiosRealizados.push(`• **${daysLabels[dKey]}**: Descanso (Día libre)`);
+      } else {
+        const startNorm = normalizeTime(ajuste.horaInicio, false);
+        const endNorm = normalizeTime(ajuste.horaFin, true);
+        updatedSchedule[dKey] = {
+          ...(updatedSchedule[dKey] || {}),
+          enabled: true,
+          start: startNorm,
+          end: endNorm,
+        };
+        cambiosRealizados.push(`• **${daysLabels[dKey]}**: ${startNorm} a ${endNorm}`);
+      }
+    }
+
+    await profRef.update({
+      schedule: updatedSchedule,
+      actualizado_en: FieldValue.serverTimestamp(),
+      actualizado_por: caller.creatorDisplay,
+    });
+
+    const cleanMotivo = (motivo || 'Ajuste de horarios fijos solicitado por gerencia').trim().slice(0, 150);
+
+    await db.collection('audit_logs').add({
+      action: `Editar Horarios Fijos (${caller.assistantName})`,
+      details: `Se actualizaron los horarios fijos de ${displayName} en Editar Profesional: ${cambiosRealizados.join(' | ')}. Motivo: ${cleanMotivo}`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      localId: prof.local_id || prof.localId || '',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    const diasOrden = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+    const resumenSemanal = diasOrden
+      .map((dKey) => {
+        const dData = updatedSchedule[dKey];
+        const label = daysLabels[dKey];
+        if (dData && dData.enabled) {
+          return `  - **${label}**: ${dData.start} a ${dData.end}`;
+        }
+        return `  - **${label}**: Descanso`;
+      })
+      .join('\n');
+
+    return {
+      ok: true,
+      barbero: displayName,
+      horarioActualizado: updatedSchedule,
+      mensaje:
+        `¡Listo ${saludoOperador}! He modificado los horarios fijos de **${displayName}** directamente en **Editar Profesional**:\n\n` +
+        cambiosRealizados.join('\n') +
+        `\n\n**Jornada semanal completa resultante de ${displayName}:**\n` +
+        resumenSemanal +
+        `\n\nEste ajuste permanente ya quedó guardado en el sistema y se refleja automáticamente en la agenda interna, en la página web y en la app móvil.`,
+    };
+  }
+);
+
+// ============================================================================
 // 3. PROPONER CANCELACIÓN DE CITA O ELIMINACIÓN DE VENTA (CON TARJETA DE CONFIRMACIÓN)
 // ============================================================================
 export const proponerCancelacionOEliminacionSucursalTool = ai.defineTool(
@@ -3391,6 +3577,7 @@ export function getGerenciaAgentTools() {
     reagendarCitaSucursalTool,
     gestionarHorarioBarberoSucursalTool,
     gestionarJornadaEspecialSucursalTool,
+    gestionarHorarioSemanalFijoProfesionalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,

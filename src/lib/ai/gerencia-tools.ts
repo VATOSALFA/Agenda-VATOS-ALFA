@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { sanitizeExternalUntrustedText } from '@/lib/ai/ceo-security';
@@ -2488,6 +2490,898 @@ export const consultarYGestionarInventarioInsumosTool = ai.defineTool(
   }
 );
 
+// ============================================================================
+// 7. CONSULTAR ARQUEO Y DINERO EN CAJA EN VIVO (SOLO LECTURA SEGURA)
+// ============================================================================
+export const consultarArqueoCajaSucursalTool = ai.defineTool(
+  {
+    name: 'consultar_arqueo_caja_sucursal',
+    description:
+      'Consulta el estado del dinero en caja en vivo de la sucursal (cálculo de arqueo exacto entre fondo inicial, cobros en efectivo e ingresos/egresos menores de caja chica). Esta herramienta es ESTRICTAMENTE DE LECTURA y CÁLCULO INFORMATIVO: NO altera, NO modifica y NO agrega transacciones de dinero. Úsala cuando pregunten cuánto efectivo debe haber en el cajón en este momento, cuánto se ha cobrado en tarjeta/transferencia en el turno, o para verificar el arqueo de caja.',
+    inputSchema: z.object({
+      localId: z
+        .string()
+        .optional()
+        .describe('ID opcional del local. Por defecto consulta Suc. Sombrerete.'),
+    }),
+  },
+  async ({ localId }) => {
+    const db = getDb();
+    const targetLocalId = localId || 'rkbEgvwP67JliXQ1Qeyj'; // Suc. Sombrerete
+
+    // 1. Obtener último corte de caja
+    const cutsSnap = await db
+      .collection('cortes_caja')
+      .where('local_id', '==', targetLocalId)
+      .orderBy('fecha_corte', 'desc')
+      .limit(1)
+      .get();
+
+    let liveStartDate: Date;
+    let baseCash = 0;
+    let fechaUltimoCorteStr = 'Inicio del día (sin corte previo registrado hoy)';
+
+    if (!cutsSnap.empty) {
+      const lastCut = cutsSnap.docs[0].data();
+      liveStartDate = lastCut.fecha_corte?.toDate ? lastCut.fecha_corte.toDate() : new Date();
+      fechaUltimoCorteStr = liveStartDate.toLocaleString('es-MX', { timeZone: 'America/Mexico_City' });
+      if (lastCut.total_sistema !== undefined) {
+        baseCash = Number(lastCut.total_sistema);
+      } else if (lastCut.total_calculado !== undefined && Number(lastCut.monto_entregado) < 0) {
+        baseCash = Number(lastCut.total_calculado);
+      } else {
+        baseCash = Number(lastCut.fondo_base || 0);
+      }
+    } else {
+      const { todayIso } = getMexicoDateInfo();
+      liveStartDate = new Date(`${todayIso}T00:00:00.000-06:00`);
+    }
+
+    // 2. Traer transacciones desde el inicio del día del corte
+    const dayStart = new Date(liveStartDate);
+    dayStart.setHours(0, 0, 0, 0);
+
+    const [salesSnap, ingresosSnap, egresosSnap] = await Promise.all([
+      db
+        .collection('ventas')
+        .where('local_id', '==', targetLocalId)
+        .where('fecha_hora_venta', '>=', Timestamp.fromDate(dayStart))
+        .get(),
+      db
+        .collection('ingresos_manuales')
+        .where('local_id', '==', targetLocalId)
+        .where('fecha', '>=', Timestamp.fromDate(dayStart))
+        .get(),
+      db
+        .collection('egresos')
+        .where('local_id', '==', targetLocalId)
+        .where('fecha', '>=', Timestamp.fromDate(dayStart))
+        .get(),
+    ]);
+
+    const isAfterCut = (dateVal: any) => {
+      if (!dateVal) return false;
+      const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+      return d > liveStartDate;
+    };
+
+    let salesCash = 0;
+    let salesTarjeta = 0;
+    let salesTransferencia = 0;
+    let salesAlfaCoins = 0;
+    let propinasTotal = 0;
+    let totalVentasCount = 0;
+
+    salesSnap.forEach((doc) => {
+      const s = doc.data();
+      if (s.estado_venta === 'cancelada') return;
+      if (!isAfterCut(s.fecha_hora_venta)) return;
+
+      totalVentasCount++;
+      const metodo = (s.metodo_pago || '').toLowerCase();
+      const totalVenta = Number(s.total || 0);
+
+      const priorDeposit =
+        s.deposit_paid_at && !isAfterCut(s.deposit_paid_at)
+          ? Number(s.anticipoPagado || s.monto_anticipo || 0)
+          : 0;
+
+      if (metodo === 'efectivo') {
+        const amount =
+          s.monto_pagado_real !== undefined && s.monto_pagado_real < totalVenta
+            ? Number(s.monto_pagado_real)
+            : Math.max(0, totalVenta - priorDeposit);
+        salesCash += amount;
+      } else if (metodo === 'combinado') {
+        const combCash = Number(s.detalle_pago_combinado?.efectivo || 0);
+        salesCash += Math.max(0, combCash - priorDeposit);
+        salesTarjeta += Number(s.detalle_pago_combinado?.tarjeta || s.detalle_pago_combinado?.terminal || 0);
+        salesTransferencia += Number(s.detalle_pago_combinado?.transferencia || 0);
+      } else if (
+        metodo.includes('tarjeta') ||
+        metodo.includes('terminal') ||
+        metodo.includes('mercadopago') ||
+        metodo.includes('point')
+      ) {
+        salesTarjeta += totalVenta;
+      } else if (metodo.includes('transferencia')) {
+        salesTransferencia += totalVenta;
+      } else if (metodo.includes('alfa') || metodo.includes('coin')) {
+        salesAlfaCoins += totalVenta;
+      }
+
+      if (s.propina) {
+        propinasTotal += Number(s.propina || 0);
+      }
+    });
+
+    let ingresosCash = 0;
+    ingresosSnap.forEach((doc) => {
+      const i = doc.data();
+      if (isAfterCut(i.fecha)) {
+        ingresosCash += Number(i.monto || 0);
+      }
+    });
+
+    let egresosCash = 0;
+    const egresosDetalle: Array<{ concepto: string; monto: number }> = [];
+    const financeConcepts = ['pago de renta', 'insumos', 'publicidad', 'internet', 'costos fijos', 'nómina', 'nomina'];
+
+    egresosSnap.forEach((doc) => {
+      const e = doc.data();
+      if (!isAfterCut(e.fecha)) return;
+      if (e.source === 'finanzas') return;
+      const conceptoLower = (e.concepto || '').toLowerCase();
+      if (financeConcepts.some((fc) => conceptoLower.includes(fc))) return;
+
+      const m = Number(e.monto || 0);
+      egresosCash += m;
+      egresosDetalle.push({
+        concepto: e.concepto || 'Egreso de caja chica',
+        monto: m,
+      });
+    });
+
+    const efectivoTeoricoEnCaja = round2(baseCash + salesCash + ingresosCash - egresosCash);
+
+    return {
+      ok: true,
+      informativoSoloLectura: true,
+      seguridadDatosDinero: 'Esta herramienta no modifica ni crea movimientos financieros.',
+      fechaUltimoCorte: fechaUltimoCorteStr,
+      arqueoEnVivo: {
+        fondoBaseInicial: round2(baseCash),
+        ventasEfectivoCobrado: round2(salesCash),
+        ingresosManualesCaja: round2(ingresosCash),
+        egresosCajaChica: round2(egresosCash),
+        efectivoTeoricoEnCajon: efectivoTeoricoEnCaja,
+      },
+      otrosMetodosCobro: {
+        ventasTarjetaTerminal: round2(salesTarjeta),
+        ventasTransferencia: round2(salesTransferencia),
+        ventasAlfaCoins: round2(salesAlfaCoins),
+      },
+      propinasRegistradas: round2(propinasTotal),
+      totalVentasRealizadas: totalVentasCount,
+      egresosDetallados: egresosDetalle,
+      mensaje: `Arqueo en vivo de caja: El efectivo que debe haber físicamente en el cajón es de **$${efectivoTeoricoEnCaja.toFixed(
+        2
+      )} MXN** (Fondo inicial: $${baseCash.toFixed(2)} + Efectivo cobrado: $${salesCash.toFixed(
+        2
+      )} + Ingresos manuales: $${ingresosCash.toFixed(2)} - Gastos menores: $${egresosCash.toFixed(
+        2
+      )}). Además se cobraron $${salesTarjeta.toFixed(2)} en tarjeta/terminal y $${salesTransferencia.toFixed(
+        2
+      )} en transferencias.`,
+    };
+  }
+);
+
+// ============================================================================
+// 8. REGISTRAR SALIDA DE INSUMOS POR USO INTERNO EN CABINA O MERMA
+// ============================================================================
+export const registrarSalidaInsumoCabinaTool = ai.defineTool(
+  {
+    name: 'registrar_salida_insumo_cabina',
+    description:
+      'Registra la salida física de productos o insumos del inventario para uso diario en cabina de los barberos (ej. ceras, geles, talcos, navajas entregadas a una estación) o por merma/producto dañado. Descuenta el stock y registra el movimiento oficial en la bitácora de inventario.',
+    inputSchema: z.object({
+      nombreProducto: z
+        .string()
+        .describe('Nombre del producto o insumo (ej. "Cera para peinar", "Talco", "Aftershave").'),
+      cantidad: z.number().int().positive().describe('Cantidad de unidades a descontar (ej. 1, 2).'),
+      tipoSalida: z
+        .enum(['uso_interno_cabina', 'merma_o_danado'])
+        .describe('Tipo de salida: "uso_interno_cabina" o "merma_o_danado".'),
+      destinatarioOArea: z
+        .string()
+        .optional()
+        .describe('Barbero o área a la que se destina el insumo (ej. "Alfredo", "Lalo", "Cabina 1", "Recepción").'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Detalle opcional (ej. "Para uso en estación de Alfredo", "Bote quebrado al desempacar").'),
+    }),
+  },
+  async ({ nombreProducto, cantidad, tipoSalida, destinatarioOArea, motivo }) => {
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+    const db = getDb();
+
+    const prodSnap = await db.collection('productos').get();
+    const productos: any[] = [];
+    prodSnap.forEach((doc) => {
+      const data = doc.data();
+      if (data.active !== false) {
+        productos.push({ id: doc.id, ...data });
+      }
+    });
+
+    const targetProduct = findMatchingCatalogProduct(nombreProducto, productos);
+
+    if (!targetProduct) {
+      return {
+        ok: false,
+        mensaje: `No encontré en el catálogo ningún producto que coincida con "${nombreProducto}".`,
+        productosDisponibles: productos.map((p) => p.nombre),
+      };
+    }
+
+    const currentStock = Number(targetProduct.stock ?? 0);
+    const unitsToSub = Math.max(1, Math.round(Number(cantidad) || 1));
+
+    if (currentStock < unitsToSub) {
+      return {
+        ok: false,
+        stockInsuficiente: true,
+        mensaje: `No hay suficiente stock para descontar ${unitsToSub} unidad(es) de "${targetProduct.nombre}". Actualmente solo hay ${currentStock} unidad(es) en existencia.`,
+      };
+    }
+
+    const newStock = currentStock - unitsToSub;
+
+    // Actualizar stock oficial en el producto
+    await db.collection('productos').doc(targetProduct.id).update({
+      stock: newStock,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    const conceptoTexto =
+      tipoSalida === 'uso_interno_cabina' ? 'Uso interno en cabina' : 'Merma de producto';
+    const causaTexto =
+      motivo?.trim() ||
+      (tipoSalida === 'uso_interno_cabina'
+        ? `Uso interno para ${destinatarioOArea || 'cabina de barbería'}`
+        : 'Producto dañado o merma');
+
+    // Registrar en movimientos_inventario para trazabilidad oficial
+    const movRef = await db.collection('movimientos_inventario').add({
+      date: Timestamp.now(),
+      local_id: 'rkbEgvwP67JliXQ1Qeyj', // Suc. Sombrerete
+      product_id: targetProduct.id,
+      presentation_id: targetProduct.presentation_id || 'default',
+      from: currentStock,
+      to: newStock,
+      cause: causaTexto,
+      staff_id: caller.auditUserId,
+      staff_name: caller.operatorName,
+      local_name: 'Suc. Sombrerete',
+      concepto: conceptoTexto,
+      comment: `${unitsToSub} unidad(es) descontada(s) por ${conceptoTexto.toLowerCase()}${
+        destinatarioOArea ? ` para ${destinatarioOArea}` : ''
+      } a solicitud de ${caller.operatorName}`,
+      product_name: targetProduct.nombre,
+    });
+
+    // Auditoría
+    await db.collection('audit_logs').add({
+      action: `Salida Insumo (${caller.assistantName})`,
+      details: `${unitsToSub} unidad(es) de "${targetProduct.nombre}" descontadas del stock (${currentStock} -> ${newStock}) por ${conceptoTexto}. Motivo: ${causaTexto}`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      entityId: movRef.id,
+      localId: 'rkbEgvwP67JliXQ1Qeyj',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      producto: targetProduct.nombre,
+      unidadesDescontadas: unitsToSub,
+      stockAnterior: currentStock,
+      nuevoStock: newStock,
+      tipoSalida: conceptoTexto,
+      mensaje: `Listo ${saludoOperador}: se registraron **${unitsToSub} unidad(es)** de **${targetProduct.nombre}** como salida por **${conceptoTexto}**${
+        destinatarioOArea ? ` para **${destinatarioOArea}**` : ''
+      }. El stock disponible pasó de ${currentStock} a **${newStock} unidad(es)** y quedó registrado en el historial oficial de movimientos de stock.`,
+    };
+  }
+);
+
+// ============================================================================
+// 9. CONSULTAR RENDIMIENTO, COMISIONES Y PROPINAS DE BARBEROS (SOLO LECTURA)
+// ============================================================================
+export const consultarRendimientoBarberoSucursalTool = ai.defineTool(
+  {
+    name: 'consultar_rendimiento_barbero_sucursal',
+    description:
+      'Consulta informativa del rendimiento, servicios realizados, comisiones ganadas y propinas de los barberos en un día, semana o período. Esta herramienta es ESTRICTAMENTE DE LECTURA y CÁLCULO INFORMATIVO: NO modifica comisiones, NO genera pagos y NO altera finanzas. Úsala cuando pregunten cuántos cortes lleva un barbero, cuánto lleva de comisión o cuánto le toca de propinas.',
+    inputSchema: z.object({
+      nombreBarbero: z
+        .string()
+        .optional()
+        .describe('Nombre o apodo del barbero (ej. "Lalo", "Alfredo", "Lupita", "Ivon", "Beatriz", o "todos").'),
+      periodo: z
+        .enum(['hoy', 'semana_actual', 'mes_actual', 'fecha_especifica'])
+        .optional()
+        .describe('Período a consultar. Por defecto "hoy".'),
+      fecha: z
+        .string()
+        .optional()
+        .describe('Fecha en formato YYYY-MM-DD si el período es "fecha_especifica" o "hoy".'),
+    }),
+  },
+  async ({ nombreBarbero, periodo = 'hoy', fecha }) => {
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const targetDateStr = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
+
+    let startDate: Date;
+    let endDate: Date;
+    const baseDate = parseISO(targetDateStr);
+
+    if (periodo === 'semana_actual') {
+      startDate = startOfWeek(baseDate, { weekStartsOn: 1 });
+      endDate = endOfWeek(baseDate, { weekStartsOn: 1 });
+    } else if (periodo === 'mes_actual') {
+      startDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+      endDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else {
+      // hoy o fecha_especifica
+      startDate = startOfDay(baseDate);
+      endDate = endOfDay(baseDate);
+    }
+
+    // 1. Cargar barberos activos
+    const [profSnap, servSnap, prodSnap, salesSnap] = await Promise.all([
+      db.collection('profesionales').get(),
+      db.collection('servicios').get(),
+      db.collection('productos').get(),
+      db
+        .collection('ventas')
+        .where('fecha_hora_venta', '>=', Timestamp.fromDate(startDate))
+        .where('fecha_hora_venta', '<=', Timestamp.fromDate(endDate))
+        .get(),
+    ]);
+
+    const activeProfessionals: any[] = [];
+    const profMap = new Map<string, any>();
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      if (!p.deleted) {
+        const item = { id: doc.id, ...p, displayName: p.publicName || p.name || 'Barbero' };
+        profMap.set(doc.id, item);
+        if (p.active !== false) activeProfessionals.push(item);
+      }
+    });
+
+    const servMap = new Map<string, any>();
+    servSnap.forEach((doc) => servMap.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    const prodMap = new Map<string, any>();
+    prodSnap.forEach((doc) => prodMap.set(doc.id, { id: doc.id, ...doc.data() }));
+
+    // Determinar profesional objetivo o todos
+    const isAll = !nombreBarbero || nombreBarbero.toLowerCase() === 'todos';
+    let targetProfId: string | null = null;
+    let targetProfName = 'Todos los barberos';
+
+    if (!isAll) {
+      const found = findBarber(nombreBarbero, activeProfessionals);
+      if (found) {
+        targetProfId = found.id;
+        targetProfName = found.displayName || found.name;
+      }
+    }
+
+    // Agrupación por barbero
+    const statsByBarber = new Map<
+      string,
+      {
+        id: string;
+        nombre: string;
+        serviciosRealizados: number;
+        productosVendidos: number;
+        ventasServiciosTotal: number;
+        ventasProductosTotal: number;
+        comisionServicios: number;
+        comisionProductos: number;
+        propinasTotal: number;
+        propinasEfectivo: number;
+        propinasTarjeta: number;
+      }
+    >();
+
+    const getOrInitStats = (profId: string) => {
+      if (!statsByBarber.has(profId)) {
+        const pInfo = profMap.get(profId);
+        statsByBarber.set(profId, {
+          id: profId,
+          nombre: pInfo?.displayName || pInfo?.name || 'Barbero',
+          serviciosRealizados: 0,
+          productosVendidos: 0,
+          ventasServiciosTotal: 0,
+          ventasProductosTotal: 0,
+          comisionServicios: 0,
+          comisionProductos: 0,
+          propinasTotal: 0,
+          propinasEfectivo: 0,
+          propinasTarjeta: 0,
+        });
+      }
+      return statsByBarber.get(profId)!;
+    };
+
+    salesSnap.forEach((doc) => {
+      const s = doc.data();
+      if (s.estado_venta === 'cancelada') return;
+
+      const items = Array.isArray(s.items) ? s.items : [];
+      const primaryBarberId = s.barbero_id || items[0]?.barbero_id;
+
+      items.forEach((item: any) => {
+        const itemBarberId = item.barbero_id || primaryBarberId;
+        if (!itemBarberId) return;
+        if (targetProfId && itemBarberId !== targetProfId) return;
+
+        const profObj = profMap.get(itemBarberId);
+        if (!profObj) return;
+
+        const stats = getOrInitStats(itemBarberId);
+        const itemPrice = Number(item.subtotal || item.precio || 0);
+        const itemDiscount = Number(item.descuento?.monto || 0);
+        const realAmount = Math.max(0, itemPrice - itemDiscount);
+
+        if (item.tipo === 'producto') {
+          stats.productosVendidos += Number(item.cantidad || 1);
+          stats.ventasProductosTotal += realAmount;
+          const productCfg = prodMap.get(item.id);
+          const commCfg =
+            profObj.comisionesPorProducto?.[item.id] ||
+            productCfg?.commission ||
+            profObj.defaultCommission || { type: '%', value: 10 };
+          const commVal =
+            commCfg.type === '%' ? realAmount * (Number(commCfg.value) / 100) : Number(commCfg.value || 0);
+          stats.comisionProductos += commVal;
+        } else {
+          // Servicio
+          stats.serviciosRealizados += 1;
+          stats.ventasServiciosTotal += realAmount;
+          const servCfg = servMap.get(item.id);
+          const commCfg =
+            profObj.comisionesPorServicio?.[item.id] ||
+            servCfg?.defaultCommission ||
+            profObj.defaultCommission || { type: '%', value: 50 };
+          const commVal =
+            commCfg.type === '%' ? realAmount * (Number(commCfg.value) / 100) : Number(commCfg.value || 0);
+          stats.comisionServicios += commVal;
+        }
+      });
+
+      // Propinas
+      const tipAmount = Number(s.propina || 0);
+      if (tipAmount > 0) {
+        const sellers = Array.from(new Set(items.map((i: any) => i.barbero_id).filter(Boolean)));
+        const relevantSellers = sellers.filter((id) => profMap.has(id as string)) as string[];
+        const splitCount = relevantSellers.length > 0 ? relevantSellers.length : 1;
+        const tipPerBarber = tipAmount / splitCount;
+
+        relevantSellers.forEach((sId) => {
+          if (targetProfId && sId !== targetProfId) return;
+          const stats = getOrInitStats(sId);
+          stats.propinasTotal += tipPerBarber;
+          const metodo = (s.metodo_pago || '').toLowerCase();
+          if (metodo === 'efectivo') {
+            stats.propinasEfectivo += tipPerBarber;
+          } else {
+            stats.propinasTarjeta += tipPerBarber;
+          }
+        });
+      }
+    });
+
+    const resultados = Array.from(statsByBarber.values()).map((st) => {
+      const comisionTotal = round2(st.comisionServicios + st.comisionProductos);
+      const totalVenta = round2(st.ventasServiciosTotal + st.ventasProductosTotal);
+      return {
+        barberoId: st.id,
+        nombreBarbero: st.nombre,
+        serviciosRealizados: st.serviciosRealizados,
+        productosVendidos: st.productosVendidos,
+        ventasServiciosTotal: round2(st.ventasServiciosTotal),
+        ventasProductosTotal: round2(st.ventasProductosTotal),
+        ventaTotalGenerada: totalVenta,
+        comisionServicios: round2(st.comisionServicios),
+        comisionProductos: round2(st.comisionProductos),
+        comisionTotalEstimada: comisionTotal,
+        propinasTotal: round2(st.propinasTotal),
+        propinasEfectivo: round2(st.propinasEfectivo),
+        propinasTarjetaTerminal: round2(st.propinasTarjeta),
+      };
+    });
+
+    const periodoDesc =
+      periodo === 'semana_actual'
+        ? `semana del ${format(startDate, 'dd/MM/yyyy')} al ${format(endDate, 'dd/MM/yyyy')}`
+        : periodo === 'mes_actual'
+        ? `mes de ${format(startDate, 'MMMM yyyy', { locale: es })}`
+        : `día ${targetDateStr}`;
+
+    return {
+      ok: true,
+      informativoSoloLectura: true,
+      seguridadDatosDinero: 'Esta herramienta no modifica comisiones ni transacciones financieras.',
+      periodoConsultado: periodoDesc,
+      barberoConsultado: targetProfName,
+      totalBarberosConActividad: resultados.length,
+      resumenPorBarbero: resultados,
+      mensaje: `Rendimiento de ${targetProfName} (${periodoDesc}): ${resultados
+        .map(
+          (r) =>
+            `**${r.nombreBarbero}**: ${r.serviciosRealizados} servicio(s), $${r.ventaTotalGenerada.toFixed(
+              2
+            )} en ventas, comisión estimada: **$${r.comisionTotalEstimada.toFixed(
+              2
+            )}** (Servicios: $${r.comisionServicios.toFixed(2)}, Productos: $${r.comisionProductos.toFixed(
+              2
+            )}) y propinas acumuladas: **$${r.propinasTotal.toFixed(2)}** (Tarjeta: $${r.propinasTarjetaTerminal.toFixed(
+              2
+            )}, Efectivo: $${r.propinasEfectivo.toFixed(2)}).`
+        )
+        .join('\n')}`,
+    };
+  }
+);
+
+// ============================================================================
+// 10. CONSULTAR PERFIL 360 DEL CLIENTE Y FIDELIZACIÓN (SOLO LECTURA)
+// ============================================================================
+export const consultarPerfilCliente360Tool = ai.defineTool(
+  {
+    name: 'consultar_perfil_cliente_360',
+    description:
+      'Consulta la ficha completa 360 de un cliente: datos de contacto, saldo de ALFAcoins, estatus de Pase ALFA Club, cortes acumulados para la décima por la casa o regalo de cumpleaños, notas de preferencias de corte/estilo e historial de visitas. Herramienta 100% DE LECTURA.',
+    inputSchema: z.object({
+      terminoBusqueda: z
+        .string()
+        .describe('Nombre, apellido, número de teléfono o número de cliente a buscar (ej. "David Luna", "4423955988", "311").'),
+    }),
+  },
+  async ({ terminoBusqueda }) => {
+    const db = getDb();
+    const queryTerm = terminoBusqueda.trim().toLowerCase();
+    const cleanPhoneDigits = terminoBusqueda.replace(/\D/g, '');
+
+    const clientSnap = await db.collection('clientes').get();
+    const matches: any[] = [];
+
+    clientSnap.forEach((doc) => {
+      const data = doc.data();
+      const fullName = `${data.nombre || ''} ${data.apellido || ''}`.trim().toLowerCase();
+      const phoneDigits = String(data.telefono || '').replace(/\D/g, '');
+      const numCliente = String(data.numero_cliente || '').toLowerCase();
+
+      const isMatch =
+        fullName.includes(queryTerm) ||
+        (cleanPhoneDigits.length >= 7 && phoneDigits.includes(cleanPhoneDigits)) ||
+        (queryTerm.length >= 2 && numCliente === queryTerm);
+
+      if (isMatch) {
+        matches.push({ id: doc.id, ...data });
+      }
+    });
+
+    if (matches.length === 0) {
+      return {
+        ok: false,
+        mensaje: `No encontré ningún cliente que coincida con "${terminoBusqueda}".`,
+      };
+    }
+
+    if (matches.length > 1) {
+      return {
+        ok: true,
+        coincidenciasMultiples: true,
+        totalEncontrados: matches.length,
+        clientes: matches.slice(0, 5).map((c) => ({
+          id: c.id,
+          nombreCompleto: `${c.nombre || ''} ${c.apellido || ''}`.trim(),
+          telefono: c.telefono || 'Sin teléfono',
+          numeroCliente: c.numero_cliente || '',
+        })),
+        mensaje: `Encontré ${matches.length} clientes con ese nombre. ¿Podrías confirmarme el teléfono o número de cliente para mostrarte el expediente exacto?`,
+      };
+    }
+
+    const c = matches[0];
+    const clientFullName = `${c.nombre || ''} ${c.apellido || ''}`.trim();
+
+    // Consultar últimas 3 reservas del cliente para historial reciente
+    let ultimasCitas: Array<{ fecha: string; horario: string; barbero: string; servicio: string; estado: string }> = [];
+    try {
+      const resSnap = await db
+        .collection('reservas')
+        .where('cliente_id', '==', c.id)
+        .orderBy('fecha', 'desc')
+        .limit(3)
+        .get();
+
+      ultimasCitas = resSnap.docs.map((d) => {
+        const r = d.data();
+        return {
+          fecha: r.fecha || '',
+          horario: `${r.hora_inicio || ''} - ${r.hora_fin || ''}`,
+          barbero: r.professionalNames || 'Barbero',
+          servicio: r.servicio || 'Corte de cabello',
+          estado: r.estado || 'Reservado',
+        };
+      });
+    } catch {
+      // Fallback si no hay índice
+    }
+
+    const alfaCoins = Number(c.alfaCoins ?? c.alfa_coins ?? 0);
+    const cortesAcumulados = Number(c.cortes_acumulados ?? c.cortesAcumulados ?? 0);
+    const tieneCorteGratis = Boolean(c.corte_gratis_disponible ?? c.corteGratisDisponible ?? cortesAcumulados >= 10);
+    const nivelMembresia = c.nivel || (c.appVinculada ? 'Pase ALFA Club' : 'Cliente Regular');
+
+    return {
+      ok: true,
+      informativoSoloLectura: true,
+      cliente: {
+        id: c.id,
+        nombreCompleto: clientFullName,
+        telefono: c.telefono || 'Sin teléfono',
+        correo: c.correo || 'Sin correo',
+        numeroCliente: c.numero_cliente || 'N/A',
+        programaLealtad: {
+          nivel: nivelMembresia,
+          alfaCoinsDisponibles: alfaCoins,
+          cortesAcumuladosParaDecima: cortesAcumulados,
+          tieneCorteGratisDisponible: tieneCorteGratis,
+        },
+        estadisticasVisitas: {
+          citasTotales: Number(c.citas_totales || ultimasCitas.length),
+          citasAsistidas: Number(c.citas_asistidas || 0),
+          citasCanceladas: Number(c.citas_canceladas || 0),
+        },
+        notasPreferenciaCorte: c.notas || 'Sin notas registradas en perfil',
+        ultimasVisitas: ultimasCitas,
+      },
+      mensaje: `Ficha 360 de **${clientFullName}** (${c.telefono || 'Sin tel'}): Nivel: **${nivelMembresia}**, Saldo ALFAcoins: **${alfaCoins} ALFAcoins**, Sellos/cortes acumulados: **${cortesAcumulados} de 10** (${
+        tieneCorteGratis ? '🎉 ¡Corte gratis disponible!' : 'le faltan ' + Math.max(0, 10 - cortesAcumulados) + ' para el corte de cortesía'
+      }). Notas de corte: "${c.notas || 'Sin notas registradas'}".`,
+    };
+  }
+);
+
+// ============================================================================
+// 11. ACTUALIZAR NOTAS Y PREFERENCIAS DEL CLIENTE
+// ============================================================================
+export const actualizarNotasClienteTool = ai.defineTool(
+  {
+    name: 'actualizar_notas_cliente',
+    description:
+      'Agrega o actualiza notas internas en el expediente del cliente (preferencias de corte, estilo, alergias al talco, trato preferido, etc.). NO toca dinero, NO toca membresías, únicamente preferencias de atención.',
+    inputSchema: z.object({
+      terminoBusqueda: z
+        .string()
+        .describe('Nombre o teléfono del cliente (ej. "David Luna" o "4423955988").'),
+      nuevaNota: z
+        .string()
+        .describe('Preferencia o nota que se desea anotar (ej. "Prefiere corte con tijera arriba, fade 0.5 y sin talco").'),
+      modo: z
+        .enum(['agregar', 'reemplazar'])
+        .optional()
+        .describe('Modo de actualización: "agregar" (concatena a lo ya existente) o "reemplazar". Por defecto "agregar".'),
+    }),
+  },
+  async ({ terminoBusqueda, nuevaNota, modo = 'agregar' }) => {
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+    const db = getDb();
+    const queryTerm = terminoBusqueda.trim().toLowerCase();
+    const cleanPhoneDigits = terminoBusqueda.replace(/\D/g, '');
+
+    const clientSnap = await db.collection('clientes').get();
+    const matches: any[] = [];
+
+    clientSnap.forEach((doc) => {
+      const data = doc.data();
+      const fullName = `${data.nombre || ''} ${data.apellido || ''}`.trim().toLowerCase();
+      const phoneDigits = String(data.telefono || '').replace(/\D/g, '');
+
+      const isMatch =
+        fullName.includes(queryTerm) ||
+        (cleanPhoneDigits.length >= 7 && phoneDigits.includes(cleanPhoneDigits));
+
+      if (isMatch) {
+        matches.push({ id: doc.id, ...data });
+      }
+    });
+
+    if (matches.length === 0) {
+      return {
+        ok: false,
+        mensaje: `No encontré ningún cliente que coincida con "${terminoBusqueda}".`,
+      };
+    }
+
+    if (matches.length > 1) {
+      return {
+        ok: false,
+        coincidenciasMultiples: true,
+        mensaje: `Encontré varios clientes con ese nombre (${matches
+          .slice(0, 3)
+          .map((c) => `${c.nombre} ${c.apellido} - ${c.telefono}`)
+          .join(', ')}). Indícame el teléfono para actualizar al cliente correcto.`,
+      };
+    }
+
+    const targetDoc = matches[0];
+    const clientFullName = `${targetDoc.nombre || ''} ${targetDoc.apellido || ''}`.trim();
+    const notasPrevias = (targetDoc.notas || '').trim();
+
+    let notasFinales = nuevaNota.trim();
+    if (modo === 'agregar' && notasPrevias) {
+      notasFinales = `${notasPrevias} | ${nuevaNota.trim()}`;
+    }
+
+    await db.collection('clientes').doc(targetDoc.id).update({
+      notas: notasFinales,
+      actualizado_en: FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('audit_logs').add({
+      action: `Actualizar Notas Cliente (${caller.assistantName})`,
+      details: `Notas actualizadas para ${clientFullName}: "${nuevaNota.trim()}". Modo: ${modo}`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      entityId: targetDoc.id,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      cliente: clientFullName,
+      notasFinales,
+      mensaje: `Listo ${saludoOperador}: quedó registrada la preferencia en el expediente de **${clientFullName}**: "${nuevaNota.trim()}". Ahora el equipo de barbería y recepción la tendrán visible en su perfil de citas.`,
+    };
+  }
+);
+
+// ============================================================================
+// 12. CONSULTAR CITAS PENDIENTES DE CONFIRMACIÓN POR WHATSAPP (SOLO LECTURA)
+// ============================================================================
+export const consultarCitasPendientesConfirmacionWhatsAppTool = ai.defineTool(
+  {
+    name: 'consultar_citas_pendientes_confirmacion_whatsapp',
+    description:
+      'Identifica las citas del día (o fecha dada) que aún no han recibido mensaje de confirmación por WhatsApp o App Móvil, generando los enlaces directos de wa.me listos con el texto oficial para que recepción envíe la confirmación con un solo clic. Herramienta 100% DE LECTURA.',
+    inputSchema: z.object({
+      fecha: z
+        .string()
+        .optional()
+        .describe('Fecha en formato YYYY-MM-DD. Si se omite, consulta las citas de hoy.'),
+    }),
+  },
+  async ({ fecha }) => {
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const targetDate = (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) ? fecha.trim() : todayIso;
+
+    const [resSnap, profSnap] = await Promise.all([
+      db.collection('reservas').where('fecha', '==', targetDate).get(),
+      db.collection('profesionales').get(),
+    ]);
+
+    const profMap = new Map<string, string>();
+    profSnap.forEach((doc) => {
+      const p = doc.data();
+      profMap.set(doc.id, p.publicName || p.name || 'Barbero');
+    });
+
+    const pendientes: Array<{
+      reservaId: string;
+      cliente: string;
+      telefono: string;
+      horario: string;
+      barbero: string;
+      servicio: string;
+      enlaceWhatsApp: string;
+      mensajeTexto: string;
+    }> = [];
+
+    resSnap.forEach((doc) => {
+      const r = doc.data();
+      if (
+        r.estado === 'Cancelado' ||
+        r.estado === 'No asiste' ||
+        r.estado === 'Completado' ||
+        r.estado === 'Venta completada'
+      ) {
+        return;
+      }
+
+      // Si ya se le envió confirmación WhatsApp o por app
+      if (r.whatsappConfirmationSent === true || (r as any).confirmationSentViaApp === true) {
+        return;
+      }
+
+      const clientName = (
+        r.customer?.nombre ||
+        r.cliente_nombre ||
+        r.client?.nombre ||
+        'Cliente'
+      ).trim();
+
+      if (!clientName || clientName.toLowerCase() === 'undefined' || clientName.toLowerCase() === 'bloqueo') {
+        return;
+      }
+
+      const rawPhone = String(r.customer?.telefono || r.telefono || '').replace(/\D/g, '');
+      const cleanPhone = rawPhone.length === 10 ? rawPhone : rawPhone.startsWith('52') ? rawPhone.slice(2) : rawPhone;
+      const barberoName = profMap.get(r.barbero_id) || r.professionalNames || 'Barbero';
+      const servicioName =
+        r.servicio ||
+        (Array.isArray(r.items) ? r.items.map((i: any) => i.nombre).join(', ') : 'Corte de cabello');
+      const horario = `${r.hora_inicio || ''} - ${r.hora_fin || ''}`;
+
+      const textoWhatsApp = `¡Hola *${clientName}*, tu cita en VATOS ALFA Sombrerete está confirmada! 🎉\n\n💈 *Servicio(s):* ${servicioName}\n📅 *Fecha:* ${targetDate}\n⏰ *Hora:* ${r.hora_inicio || ''} hrs\n👤 *Profesional:* ${barberoName}\n📍 *Ubicación:* Suc. Sombrerete (Plaza Ubika)\n\n_Favor de llegar 5 minutos antes de tu cita. Podrás cancelar hasta 2 horas antes._`;
+
+      const linkWa = cleanPhone
+        ? `https://wa.me/52${cleanPhone}?text=${encodeURIComponent(textoWhatsApp)}`
+        : '';
+
+      pendientes.push({
+        reservaId: doc.id,
+        cliente: clientName,
+        telefono: cleanPhone || 'Sin número registrado',
+        horario,
+        barbero: barberoName,
+        servicio: servicioName,
+        enlaceWhatsApp: linkWa,
+        mensajeTexto: textoWhatsApp,
+      });
+    });
+
+    pendientes.sort((a, b) => a.horario.localeCompare(b.horario));
+
+    return {
+      ok: true,
+      informativoSoloLectura: true,
+      fechaConsultada: targetDate,
+      totalPendientesConfirmacion: pendientes.length,
+      citasPendientes: pendientes,
+      mensaje:
+        pendientes.length === 0
+          ? `¡Excelente! Para la fecha ${targetDate} no hay citas pendientes de confirmación por WhatsApp; todas las citas activas ya fueron confirmadas.`
+          : `Hay **${pendientes.length} cita(s) pendiente(s) de confirmación** para el ${targetDate}: ${pendientes
+              .map(
+                (p) =>
+                  `\n• **${p.cliente}** (${p.horario}) con **${p.barbero}** - Tel: ${p.telefono} ${
+                    p.enlaceWhatsApp ? `[Abrir WhatsApp](${p.enlaceWhatsApp})` : '(Sin número)'
+                  }`
+              )
+              .join('')}`,
+    };
+  }
+);
+
 export function getGerenciaAgentTools() {
   return [
     consultarOperacionDiaSucursalTool,
@@ -2500,5 +3394,11 @@ export function getGerenciaAgentTools() {
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,
+    consultarArqueoCajaSucursalTool,
+    registrarSalidaInsumoCabinaTool,
+    consultarRendimientoBarberoSucursalTool,
+    consultarPerfilCliente360Tool,
+    actualizarNotasClienteTool,
+    consultarCitasPendientesConfirmacionWhatsAppTool,
   ];
 }

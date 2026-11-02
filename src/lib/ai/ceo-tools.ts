@@ -12,9 +12,16 @@ import {
   agendarCitaSucursalTool,
   reagendarCitaSucursalTool,
   gestionarHorarioBarberoSucursalTool,
+  gestionarJornadaEspecialSucursalTool,
   proponerCancelacionOEliminacionSucursalTool,
   consultarYGestionarInventarioInsumosTool,
   ingresarStockInventarioTool,
+  consultarArqueoCajaSucursalTool,
+  registrarSalidaInsumoCabinaTool,
+  consultarRendimientoBarberoSucursalTool,
+  consultarPerfilCliente360Tool,
+  actualizarNotasClienteTool,
+  consultarCitasPendientesConfirmacionWhatsAppTool,
 } from './gerencia-tools';
 
 const MONTH_NAMES_ES = [
@@ -1168,8 +1175,15 @@ export function getCeoAgentTools() {
     consultarDisponibilidadBarberosSucursalTool,
     consultarOperacionDiaSucursalTool,
     gestionarHorarioBarberoSucursalTool,
+    gestionarJornadaEspecialSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,
+    consultarArqueoCajaSucursalTool,
+    registrarSalidaInsumoCabinaTool,
+    consultarRendimientoBarberoSucursalTool,
+    consultarPerfilCliente360Tool,
+    actualizarNotasClienteTool,
+    consultarCitasPendientesConfirmacionWhatsAppTool,
   ];
 }

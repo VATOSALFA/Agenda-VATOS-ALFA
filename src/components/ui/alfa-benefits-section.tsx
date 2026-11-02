@@ -23,6 +23,7 @@ export interface BenefitItem {
   imagenUrl?: string;
   badgeType?: 'vip' | 'gold' | 'promo';
   ctaText?: string;
+  proximamente?: boolean;
 }
 
 interface AlfaBenefitsSectionProps {
@@ -67,9 +68,18 @@ function StickyBenefitCard({
 
   const scale = useTransform(progress, inputRange, outputRange);
 
-  // Limpieza de etiqueta de descuento
+  const isComingSoon =
+    Boolean(benefit.proximamente) ||
+    benefit.id === 'alfacoins-club' ||
+    benefit.id === 'priv_1790983371866' ||
+    (benefit.titulo || '').toLowerCase().includes('alfa coin') ||
+    (benefit.tag || '').toLowerCase().includes('alfa coin');
+
+  // Limpieza de etiqueta de descuento o distintivo
   const rawDiscount = benefit.discount || '';
-  const discountLabel = rawDiscount
+  const discountLabel = isComingSoon
+    ? 'PRÓXIMAMENTE'
+    : rawDiscount
     ? rawDiscount.includes('%') || rawDiscount.includes('GRATIS') || rawDiscount.includes('PUNTOS') || rawDiscount.includes('CLUB')
       ? rawDiscount
       : `-${rawDiscount}% OFF`
@@ -123,19 +133,43 @@ function StickyBenefitCard({
             <div className="flex items-center justify-between">
               <div className="flex-1" />
               {discountLabel ? (
-                <div className="bg-[#2563EB] text-white text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider shadow-md">
-                  {discountLabel}
+                <div
+                  className={cn(
+                    "text-[10px] sm:text-[11px] font-black uppercase px-2.5 py-1 rounded-lg tracking-wider shadow-md flex items-center gap-1.5",
+                    isComingSoon
+                      ? "bg-[#202A49]/95 border border-[#C5A880] text-[#C5A880] shadow-[0_2px_10px_rgba(197,168,128,0.25)] backdrop-blur-sm"
+                      : "bg-[#2563EB] text-white"
+                  )}
+                >
+                  {isComingSoon && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C5A880] animate-pulse" />
+                  )}
+                  <span>{discountLabel}</span>
                 </div>
               ) : null}
             </div>
 
             {/* Bottom Row: Título limpio en negrita y botón circular con flecha */}
             <div className="flex items-center justify-between gap-3">
-              <h3 className="flex-1 text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] line-clamp-2 leading-snug">
-                {benefit.titulo}
-              </h3>
+              <div className="flex flex-col flex-1 min-w-0">
+                {isComingSoon && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#C5A880] drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]">
+                    Próximo Lanzamiento
+                  </span>
+                )}
+                <h3 className="text-white font-extrabold text-sm sm:text-base tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.95)] line-clamp-2 leading-snug">
+                  {benefit.titulo}
+                </h3>
+              </div>
 
-              <div className="w-8 h-8 rounded-full bg-[#2563EB] flex items-center justify-center text-white shadow-[0_2px_8px_rgba(37,99,235,0.45)] group-hover:scale-110 group-hover:bg-blue-500 transition-transform duration-200 shrink-0">
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-full flex items-center justify-center text-white transition-all duration-200 shrink-0",
+                  isComingSoon
+                    ? "bg-[#202A49] border border-[#C5A880]/80 shadow-[0_2px_8px_rgba(197,168,128,0.35)] group-hover:scale-110 group-hover:bg-[#202A49]/90 group-hover:border-[#C5A880]"
+                    : "bg-[#2563EB] shadow-[0_2px_8px_rgba(37,99,235,0.45)] group-hover:scale-110 group-hover:bg-blue-500"
+                )}
+              >
                 <ArrowRight className="w-3.5 h-3.5 text-white stroke-[2.5]" />
               </div>
             </div>
@@ -156,6 +190,13 @@ export function AlfaBenefitsSection({
   const [selectedBenefit, setSelectedBenefit] = useState<BenefitItem | null>(null);
   const [showTerms, setShowTerms] = useState(false);
   const stackContainerRef = useRef<HTMLDivElement>(null);
+
+  const isSelectedComingSoon =
+    Boolean(selectedBenefit?.proximamente) ||
+    selectedBenefit?.id === 'alfacoins-club' ||
+    selectedBenefit?.id === 'priv_1790983371866' ||
+    (selectedBenefit?.titulo || '').toLowerCase().includes('alfa coin') ||
+    (selectedBenefit?.tag || '').toLowerCase().includes('alfa coin');
 
   // Default Club Benefits
   const defaultClubBenefits: BenefitItem[] = [
@@ -187,16 +228,17 @@ export function AlfaBenefitsSection({
     },
     {
       id: 'alfacoins-club',
-      tag: 'ALFA COINS & RECOMPENSAS',
-      discount: 'PUNTOS',
+      tag: 'PRÓXIMAMENTE • CLUB ALFA',
+      discount: 'PRÓXIMAMENTE',
       badgeType: 'vip',
+      proximamente: true,
       titulo: 'Gana ALFA COINS en Cada Servicio',
-      descripcion: 'Cada vez que te atiendes en nuestra barbería acumulas ALFA COINS que puedes canjear directamente por productos de peinado, ceras, tónicos o descuentos.',
-      recompensa: 'Canjeable por Ceras, Polvos y Bálsamos',
-      vigencia: 'Vigencia Permanente',
-      terminos: 'Los puntos ALFA COINS se acreditan automáticamente a tu cuenta registrada al finalizar cada cita atendida.',
+      descripcion: 'Cada vez que te atiendes en nuestra barbería acumularás ALFA COINS que podrás canjear directamente por productos de peinado, ceras, tónicos o descuentos.',
+      recompensa: 'Canjeable por Ceras, Polvos y Bálsamos (Próximo Lanzamiento)',
+      vigencia: 'Próximamente en App Móvil',
+      terminos: 'El programa de ALFA COINS se encuentra actualmente en fase final de integración y estará disponible muy pronto de forma exclusiva a través de nuestra App Oficial.',
       imagenUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=800&q=80',
-      ctaText: 'Conocer Dinámica del Club',
+      ctaText: 'Descargar App Oficial (Próximo Lanzamiento)',
     },
   ];
 
@@ -207,19 +249,30 @@ export function AlfaBenefitsSection({
 
   const dynamicPrivilegios: BenefitItem[] = rawPrivilegios
     .filter((p: any) => p && p.activo !== false)
-    .map((p: any) => ({
-      id: p.id || `vip_${p.titulo || Math.random()}`,
-      tag: 'PRIVILEGIO VIP',
-      discount: 'CLUB ALFA',
-      badgeType: 'gold' as const,
-      titulo: p.titulo || 'Beneficio Exclusivo',
-      descripcion: p.descripcion || 'Privilegio exclusivo para miembros del Club Pase Alfa.',
-      recompensa: p.recompensa,
-      vigencia: p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa Club',
-      terminos: p.terminos || 'Exclusivo para clientes registrados en la app móvil.',
-      imagenUrl: p.imagenUrl || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
-      ctaText: 'Aprovechar Beneficio',
-    }));
+    .map((p: any) => {
+      const isCoin =
+        Boolean(p.proximamente) ||
+        p.id === 'priv_1790983371866' ||
+        (p.titulo || '').toLowerCase().includes('alfa coin') ||
+        (p.tag || '').toLowerCase().includes('alfa coin');
+
+      return {
+        id: p.id || `vip_${p.titulo || Math.random()}`,
+        tag: isCoin ? (p.tag || 'PRÓXIMAMENTE • CLUB ALFA') : (p.tag || 'PRIVILEGIO VIP'),
+        discount: isCoin ? 'PRÓXIMAMENTE' : (p.discount || 'CLUB ALFA'),
+        badgeType: 'gold' as const,
+        proximamente: isCoin,
+        titulo: p.titulo || 'Beneficio Exclusivo',
+        descripcion: p.descripcion || 'Privilegio exclusivo para miembros del Club Pase Alfa.',
+        recompensa: p.recompensa,
+        vigencia: isCoin ? 'Próximamente en App Móvil' : (p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa Club'),
+        terminos: isCoin
+          ? (p.terminos || 'El programa de ALFA COINS se encuentra actualmente en fase final de integración y estará disponible muy pronto en la App Oficial.')
+          : (p.terminos || 'Exclusivo para clientes registrados en la app móvil.'),
+        imagenUrl: p.imagenUrl || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
+        ctaText: isCoin ? (p.ctaText || 'Descargar App Oficial (Próximo Lanzamiento)') : (p.ctaText || 'Aprovechar Beneficio'),
+      };
+    });
 
 
   // Beneficios del Club Alfa exclusivos para usuarios de la app.
@@ -349,10 +402,35 @@ export function AlfaBenefitsSection({
                     unoptimized={true}
                   />
                   {selectedBenefit.discount && (
-                    <div className="absolute top-3 right-3 bg-blue-600 text-white font-black text-xs px-3 py-1 rounded-full shadow-lg">
-                      {selectedBenefit.discount}
+                    <div
+                      className={cn(
+                        "absolute top-3 right-3 font-black text-xs px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5",
+                        isSelectedComingSoon
+                          ? "bg-[#202A49]/95 border border-[#C5A880] text-[#C5A880]"
+                          : "bg-blue-600 text-white"
+                      )}
+                    >
+                      {isSelectedComingSoon && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#C5A880] animate-pulse" />
+                      )}
+                      <span>{isSelectedComingSoon ? 'PRÓXIMAMENTE' : selectedBenefit.discount}</span>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Banner informativo de Próximamente si aplica */}
+              {isSelectedComingSoon && (
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-[#C5A880]/50 text-white flex items-start gap-3 shadow-md">
+                  <Sparkles className="w-5 h-5 text-[#C5A880] shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#C5A880] block">
+                      Funcionalidad en Desarrollo • Próximo Lanzamiento
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      Los ALFA COINS estarán disponibles muy pronto en la App Oficial de VATOS ALFA. Estamos en la fase final de integración para que puedas acumularlos y canjearlos automáticamente con cada servicio en barbería.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -442,12 +520,30 @@ export function AlfaBenefitsSection({
                   const b = selectedBenefit;
                   setSelectedBenefit(null);
                   setShowTerms(false);
-                  if (onBookBenefit && b) {
+                  if (isSelectedComingSoon) {
+                    if (onDownloadApp) {
+                      onDownloadApp();
+                    } else {
+                      const appEl = document.getElementById('descargar-app');
+                      if (appEl) {
+                        appEl.scrollIntoView({ behavior: 'smooth' });
+                      } else {
+                        toast({
+                          title: "¡Próximamente en la App!",
+                          description: "Los ALFA COINS estarán disponibles muy pronto en la App Oficial de VATOS ALFA.",
+                        });
+                      }
+                    }
+                  } else if (onBookBenefit && b) {
                     onBookBenefit(b);
                   }
                 }}
               >
-                <span>{selectedBenefit?.ctaText || 'Aprovechar Beneficio'}</span>
+                <span>
+                  {isSelectedComingSoon
+                    ? 'Descargar App Oficial (Próximo Lanzamiento)'
+                    : selectedBenefit?.ctaText || 'Aprovechar Beneficio'}
+                </span>
                 <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
               </Button>
             </div>

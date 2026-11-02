@@ -396,18 +396,19 @@ A) OPERACIÓN Y CONTROL TOTAL DE LA SUCURSAL, AGENDA Y CLIENTES (FACULTADES DE A
 7. **consultar_operacion_dia_sucursal**: Estado de la agenda de hoy o cualquier fecha (citas, cobros, asistencia, barberos).
 8. **gestionar_horario_barbero_sucursal**: Bloquea descansos, permisos o habilita horarios especiales internos de recepción.
 9. **gestionar_jornada_especial_sucursal**: Habilita o elimina Jornadas Especiales PÚBLICAS en la web y en la app móvil para que los clientes agenden en línea.
-10. **consultar_citas_pendientes_confirmacion_whatsapp**: Identifica citas activas sin confirmar y genera los enlaces directos de WhatsApp con el mensaje oficial.
-11. **consultar_arqueo_caja_sucursal**: Consulta de arqueo en vivo de la caja (fondo inicial, efectivo en cajón, tarjeta, transferencias y gastos menores). Solo lectura, no altera finanzas.
-12. **consultar_rendimiento_barbero_sucursal**: Rendimiento de barberos: servicios realizados, venta generada, comisiones ganadas y propinas en el día, semana o mes. Solo lectura.
-13. **consultar_y_gestionar_inventario_insumos**: Revisa existencias de productos, insumos y guarda recordatorios operativos.
-14. **ingresar_stock_inventario**: Suma unidades al stock oficial y registra el movimiento de compra/ingreso.
-15. **registrar_salida_insumo_cabina**: Registra salidas físicas de producto para cabina de barberos (uso interno) o mermas/roturas.
-16. **proponer_cancelacion_o_eliminacion_sucursal**: Permite cancelar citas o eliminar ventas facturadas con tarjeta de confirmación y bitácora de auditoría.
+10. **gestionar_horario_semanal_fijo_profesional**: Modifica los horarios fijos de trabajo semanal permanente de un barbero tal como se hace en Administración -> Profesionales -> Editar Profesional -> pestaña Horario (días que labora, entrada/salida y descansos fijos).
+11. **consultar_citas_pendientes_confirmacion_whatsapp**: Identifica citas activas sin confirmar y genera los enlaces directos de WhatsApp con el mensaje oficial.
+12. **consultar_arqueo_caja_sucursal**: Consulta de arqueo en vivo de la caja (fondo inicial, efectivo en cajón, tarjeta, transferencias y gastos menores). Solo lectura, no altera finanzas.
+13. **consultar_rendimiento_barbero_sucursal**: Rendimiento de barberos: servicios realizados, venta generada, comisiones ganadas y propinas en el día, semana o mes. Solo lectura.
+14. **consultar_y_gestionar_inventario_insumos**: Revisa existencias de productos, insumos y guarda recordatorios operativos.
+15. **ingresar_stock_inventario**: Suma unidades al stock oficial y registra el movimiento de compra/ingreso.
+16. **registrar_salida_insumo_cabina**: Registra salidas físicas de producto para cabina de barberos (uso interno) o mermas/roturas.
+17. **proponer_cancelacion_o_eliminacion_sucursal**: Permite cancelar citas o eliminar ventas facturadas con tarjeta de confirmación y bitácora de auditoría.
 
 B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
-17. **subagente_cfo_estado_resultados**: Estado de Resultados (P&L) exacto de cualquier mes (ingresos, comisiones 50%, nómina, insumos, costos fijos, utilidad gerencia Beatriz, utilidad neta del dueño, RESICO y producción por barbero).
-18. **subagente_cfo_simulador_financiero**: Simula cambios de comisiones, precios o costos fijos con datos reales.
-19. **subagente_auditor_forense_antirobo**: Escaneo de ventas eliminadas, código 1234 en audit_logs, diferencias en cortes_caja y anticipos.
+18. **subagente_cfo_estado_resultados**: Estado de Resultados (P&L) exacto de cualquier mes (ingresos, comisiones 50%, nómina, insumos, costos fijos, utilidad gerencia Beatriz, utilidad neta del dueño, RESICO y producción por barbero).
+19. **subagente_cfo_simulador_financiero**: Simula cambios de comisiones, precios o costos fijos con datos reales.
+20. **subagente_auditor_forense_antirobo**: Escaneo de ventas eliminadas, código 1234 en audit_logs, diferencias en cortes_caja y anticipos.
 20. **subagente_voz_cliente_y_chats**: Reseñas y quejas de clientes de la App Móvil y WhatsApp.
 21. **subagente_coo_operaciones_agenda_inventario**: Horas muertas vs. pico, efectividad por barbero y stock crítico.
 22. **subagente_cmo_clientes_y_lealtad**: Retención, Pase Alfa Club y clientes en riesgo de abandono.

@@ -32,14 +32,14 @@ export const janetCallerStorage = new AsyncLocalStorage<JanetCallerContext>();
 
 export function getCallerInfo(quienSolicita?: string) {
   const store = janetCallerStorage.getStore();
-  let rawName = quienSolicita?.trim() || store?.operatorName || 'Alejandro Pacheco';
+  let rawName = quienSolicita?.trim() || store?.operatorName || 'Beatriz Elizarraga Casas';
   rawName = rawName.replace(/\s+/g, ' ').trim();
   const lower = rawName.toLowerCase();
   const operatorName =
     lower.includes('alejandro') || lower.includes('alex') || lower.includes('dueño')
       ? 'Alejandro Pacheco'
       : lower.includes('beatriz') || lower.includes('bety')
-      ? 'Beatriz'
+      ? 'Beatriz Elizarraga Casas'
       : rawName;
 
   const assistantName =
@@ -204,6 +204,8 @@ export const consultarOperacionDiaSucursalTool = ai.defineTool(
           id: blk.id,
           horario: `${blk.hora_inicio} - ${blk.hora_fin}`,
           motivo: blk.motivo,
+          creado_por: blk.creado_por || 'Registro de administración interna',
+          solicitado_por: blk.solicitado_por || 'Administración de sucursal',
         })),
         horariosEspecialesHabilitados: s.specialAvailableHours.map((sp) => `${sp.hora_inicio} - ${sp.hora_fin}`),
         citasActivasDelBarbero: s.activeReservations.map((r) => ({
@@ -1646,6 +1648,8 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
         hora_inicio: effectiveStart,
         hora_fin: effectiveEnd,
         creado_en: Timestamp.now(),
+        creado_por: caller.creatorDisplay,
+        solicitado_por: caller.operatorName,
         local_id: defaultLocalId,
       });
 
@@ -1687,6 +1691,8 @@ export const gestionarHorarioBarberoSucursalTool = ai.defineTool(
         motivo: motivo || 'Horario Habilitado (Interno)',
         type: 'available',
         created_at: new Date(),
+        creado_por: caller.creatorDisplay,
+        solicitado_por: caller.operatorName,
       });
 
       await db.collection('audit_logs').add({

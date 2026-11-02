@@ -20,6 +20,8 @@ export interface BarberDayScheduleInfo {
     hora_fin: string;
     motivo: string;
     type?: string;
+    creado_por?: string | null;
+    solicitado_por?: string | null;
   }>;
   specialAvailableHours: Array<{
     id: string;
@@ -265,6 +267,8 @@ export async function getBarberScheduleForDay({
         hora_fin: b.hora_fin,
         motivo: b.motivo || 'Horario Bloqueado',
         type: b.type,
+        creado_por: b.creado_por || b.created_by || null,
+        solicitado_por: b.solicitado_por || null,
       });
     }
   });

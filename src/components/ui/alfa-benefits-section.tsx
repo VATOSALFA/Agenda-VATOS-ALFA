@@ -294,13 +294,22 @@ export function AlfaBenefitsSection({
         {/* Sticky Stacking Deck of Cards (Estilo StickyPromoStack de la App Móvil) */}
         <div
           ref={stackContainerRef}
-          className={cn("relative w-full max-w-xl mx-auto", onDownloadApp ? "[--stack-top:225px] sm:[--stack-top:235px]" : "[--stack-top:195px] sm:[--stack-top:225px]")}
+          className={cn("relative w-full max-w-xl mx-auto", onDownloadApp ? "[--stack-top:270px] sm:[--stack-top:285px]" : "[--stack-top:235px] sm:[--stack-top:255px]")}
           style={{
             paddingBottom: `${Math.max(0, (allBenefits.length - 1) * 36 + 60)}px`,
           }}
         >
           {/* Section Header: Sticky bajo el navbar para mantenerse visible mientras se apilan las tarjetas */}
           <div className="sticky top-[64px] z-30 bg-white/95 backdrop-blur-md pt-2 pb-3 mb-6 sm:mb-8 text-center">
+            {/* Letrero Oficial Próximamente (Posición solicitada en recuadro del encabezado) */}
+            <div className="flex justify-center mb-3">
+              <div className="relative inline-flex items-center gap-2.5 px-6 py-2 rounded-xl bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-2 border-[#C5A880] text-[#C5A880] text-xs sm:text-sm font-black uppercase tracking-widest shadow-[0_4px_20px_rgba(197,168,128,0.3)] overflow-hidden select-none">
+                <div className="header-light-beam" aria-hidden="true" />
+                <span className="relative z-10 w-2 h-2 rounded-full bg-[#C5A880] animate-pulse" />
+                <span className="relative z-10">PRÓXIMAMENTE</span>
+              </div>
+            </div>
+
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-xs font-bold uppercase tracking-wider mb-2">
               <Sparkles className="w-3.5 h-3.5 text-blue-600" />
               <span>Beneficios Exclusivos</span>

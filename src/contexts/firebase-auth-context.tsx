@@ -1,17 +1,73 @@
-
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { allPermissions, initialRoles } from '@/lib/permissions';
+import { resolveAuthenticatedUserAction, type ServerResolvedUserProfile } from '@/lib/actions/auth-session';
 import { usePathname, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { CustomLoader } from "@/components/ui/custom-loader";
 
 import { FirebaseErrorListener } from '@/components/firebase/FirebaseErrorListener';
 
 // Lazy-loaded Firebase modules (avoid loading ~163KB on public pages)
 let _firebaseModules: Awaited<ReturnType<typeof loadFirebaseModules>> | null = null;
+let _usingSessionOnlyPersistence = false;
+
+const AUTH_PROFILE_CACHE_PREFIX = 'vatos_alfa_auth_profile_';
+
+interface CachedAuthProfile extends ServerResolvedUserProfile {
+  cachedAt: number;
+}
+
+function saveCachedUserProfile(profile: ServerResolvedUserProfile) {
+  if (typeof window === 'undefined' || !profile?.uid) return;
+  try {
+    const payload: CachedAuthProfile = {
+      ...profile,
+      cachedAt: Date.now(),
+    };
+    localStorage.setItem(`${AUTH_PROFILE_CACHE_PREFIX}${profile.uid}`, JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function loadCachedUserProfile(uid: string): CachedAuthProfile | null {
+  if (typeof window === 'undefined' || !uid) return null;
+  try {
+    const raw = localStorage.getItem(`${AUTH_PROFILE_CACHE_PREFIX}${uid}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedAuthProfile;
+    if (!parsed || parsed.uid !== uid || !parsed.role) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearCachedUserProfile(uid?: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (uid) {
+      localStorage.removeItem(`${AUTH_PROFILE_CACHE_PREFIX}${uid}`);
+      return;
+    }
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(AUTH_PROFILE_CACHE_PREFIX)) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 async function loadFirebaseModules() {
   const [clientMod, authMod, firestoreMod] = await Promise.all([
@@ -27,6 +83,7 @@ async function loadFirebaseModules() {
     firebaseSignOut: authMod.signOut,
     signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
     setPersistence: authMod.setPersistence,
+    indexedDBLocalPersistence: authMod.indexedDBLocalPersistence,
     browserLocalPersistence: authMod.browserLocalPersistence,
     browserSessionPersistence: authMod.browserSessionPersistence,
     GoogleAuthProvider: authMod.GoogleAuthProvider,
@@ -55,6 +112,7 @@ export interface CustomUser extends FirebaseUser {
   permissions?: string[];
   local_id?: string;
   avatarUrl?: string;
+  audio_settings?: Record<string, any>;
 }
 interface AuthContextType {
   user: CustomUser | null;
@@ -83,120 +141,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseDb, setFirebaseDb] = useState<any>(null);
   const [firebaseStorage, setFirebaseStorage] = useState<any>(null);
 
+  const inFlightValidationRef = useRef<Map<string, Promise<CustomUser>>>(new Map());
+  const activeAuthUidRef = useRef<string | null>(null);
+
   const pathname = usePathname();
   const router = useRouter();
 
   const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname.startsWith('/reserva') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
   const isAuthPage = pathname === '/login';
-
-  // Helper function to validate user against Firestore
-  const validateUserPermissions = async (firebaseUser: FirebaseUser) => {
-    const fb = await getFirebase();
-    let customData: any;
-    let userRole: string = 'Staff (Sin edición)';
-    let userPermissions: string[] = [];
-    let userDoc: any;
-
-    // 1. Check 'usuarios' collection by UID
-    const userDocRef = fb.doc(fb.db, 'usuarios', firebaseUser.uid);
-    userDoc = await fb.getDoc(userDocRef);
-
-    if (userDoc.exists()) {
-      customData = userDoc.data();
-      userRole = customData.role || 'Staff (Sin edición)';
-    } else {
-      // 1.5. Fallback: Check 'usuarios' by EMAIL
-      const usersRef = fb.collection(fb.db, 'usuarios');
-      const q = fb.query(usersRef, fb.where('email', '==', firebaseUser.email));
-      const querySnapshot = await fb.getDocs(q);
-
-      if (!querySnapshot.empty) {
-        userDoc = querySnapshot.docs[0];
-        customData = userDoc.data();
-        userRole = customData.role || 'Staff (Sin edición)';
-      } else {
-        // 1.6 Fallback: check case-insensitively in 'usuarios'
-        if (firebaseUser.email) {
-          const allUsersSnap = await fb.getDocs(usersRef);
-          const targetEmail = firebaseUser.email.toLowerCase().trim();
-          const matchedDoc = allUsersSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === targetEmail);
-          if (matchedDoc) {
-            userDoc = matchedDoc;
-            customData = userDoc.data();
-            userRole = customData.role || 'Staff (Sin edición)';
-          }
-        }
-
-        if (!userDoc) {
-          // 2. Check 'profesionales' collection by UID
-          const profDocRef = fb.doc(fb.db, 'profesionales', firebaseUser.uid);
-          const profDoc = await fb.getDoc(profDocRef);
-
-          if (profDoc.exists()) {
-            customData = profDoc.data();
-            userRole = 'Staff (Sin edición)';
-          } else {
-            // 2.5 Fallback: Check 'profesionales' by email
-            const prosRef = fb.collection(fb.db, 'profesionales');
-            const qPro = fb.query(prosRef, fb.where('email', '==', firebaseUser.email));
-            const querySnapshotPro = await fb.getDocs(qPro);
-
-            if (!querySnapshotPro.empty) {
-              customData = querySnapshotPro.docs[0].data();
-              userRole = 'Staff (Sin edición)';
-            } else {
-              // 2.6 Fallback: check case-insensitively in 'profesionales'
-              if (firebaseUser.email) {
-                const allProsSnap = await fb.getDocs(prosRef);
-                const targetEmail = firebaseUser.email.toLowerCase().trim();
-                const matchedPro = allProsSnap.docs.find(d => (d.data().email || '').toLowerCase().trim() === targetEmail);
-                if (matchedPro) {
-                  customData = matchedPro.data();
-                  userRole = 'Staff (Sin edición)';
-                }
-              }
-
-              if (!customData) {
-                // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
-                console.warn(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
-                const accessError: any = new Error("ACCESS_DENIED");
-                accessError.userEmail = firebaseUser.email;
-                throw accessError;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 4. Fetch permissions based on Role
-    if (userRole === 'Administrador general') {
-      userPermissions = allPermissions.map(p => p.key);
-    } else {
-      const roleId = userRole.toLowerCase().replace(/ /g, '_');
-      const roleDocRef = fb.doc(fb.db, 'roles', roleId);
-      const roleDoc = await fb.getDoc(roleDocRef);
-
-      if (roleDoc.exists()) {
-        userPermissions = roleDoc.data().permissions || [];
-      } else {
-        const initialRole = initialRoles.find(r => r.title === userRole);
-        userPermissions = initialRole ? initialRole.permissions : [];
-      }
-    }
-
-    return {
-      ...firebaseUser,
-      displayName: customData.name || firebaseUser.displayName,
-      email: customData.email || firebaseUser.email,
-      role: userRole,
-      permissions: userPermissions,
-      uid: firebaseUser.uid,
-      local_id: customData.local_id,
-      avatarUrl: customData.avatarUrl || firebaseUser.photoURL,
-      audio_settings: customData.audio_settings || undefined,
-    };
-  };
 
   const checkLocalSchedule = async (localId: string): Promise<boolean> => {
     try {
@@ -243,64 +195,346 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const buildCustomUser = (
+    firebaseUser: FirebaseUser,
+    profile: ServerResolvedUserProfile
+  ): CustomUser => {
+    return {
+      ...firebaseUser,
+      uid: firebaseUser.uid,
+      displayName: profile.displayName || firebaseUser.displayName,
+      email: profile.email || firebaseUser.email,
+      role: profile.role,
+      permissions: profile.permissions,
+      local_id: profile.local_id,
+      avatarUrl: profile.avatarUrl || firebaseUser.photoURL || undefined,
+      audio_settings: profile.audio_settings || undefined,
+      getIdToken: (forceRefresh?: boolean) => firebaseUser.getIdToken(forceRefresh),
+      getIdTokenResult: (forceRefresh?: boolean) => firebaseUser.getIdTokenResult(forceRefresh),
+      reload: () => firebaseUser.reload(),
+      delete: () => firebaseUser.delete(),
+      toJSON: () => firebaseUser.toJSON(),
+    } as CustomUser;
+  };
+
+  const queryClientFirestoreProfile = async (
+    firebaseUser: FirebaseUser
+  ): Promise<ServerResolvedUserProfile> => {
+    const fb = await getFirebase();
+    let customData: any;
+    let userRole: string = 'Staff (Sin edición)';
+    let userPermissions: string[] = [];
+    let userDoc: any;
+
+    // 1. Check 'usuarios' collection by UID
+    const userDocRef = fb.doc(fb.db, 'usuarios', firebaseUser.uid);
+    userDoc = await fb.getDoc(userDocRef);
+
+    if (userDoc.exists()) {
+      customData = userDoc.data();
+      userRole = customData.role || customData.rol || 'Staff (Sin edición)';
+    } else {
+      // 1.5. Fallback: Check 'usuarios' by EMAIL
+      const usersRef = fb.collection(fb.db, 'usuarios');
+      if (firebaseUser.email) {
+        const q = fb.query(usersRef, fb.where('email', '==', firebaseUser.email));
+        const querySnapshot = await fb.getDocs(q);
+
+        if (!querySnapshot.empty) {
+          userDoc = querySnapshot.docs[0];
+          customData = userDoc.data();
+          userRole = customData.role || customData.rol || 'Staff (Sin edición)';
+        } else {
+          // 1.6 Fallback: check case-insensitively in 'usuarios'
+          const allUsersSnap = await fb.getDocs(usersRef);
+          const targetEmail = firebaseUser.email.toLowerCase().trim();
+          const matchedDoc = allUsersSnap.docs.find(
+            d => (d.data().email || '').toLowerCase().trim() === targetEmail
+          );
+          if (matchedDoc) {
+            userDoc = matchedDoc;
+            customData = userDoc.data();
+            userRole = customData.role || customData.rol || 'Staff (Sin edición)';
+          }
+        }
+      }
+
+      if (!userDoc) {
+        // 2. Check 'profesionales' collection by UID
+        const profDocRef = fb.doc(fb.db, 'profesionales', firebaseUser.uid);
+        const profDoc = await fb.getDoc(profDocRef);
+
+        if (profDoc.exists()) {
+          customData = profDoc.data();
+          userRole = 'Staff (Sin edición)';
+        } else {
+          // 2.5 Fallback: Check 'profesionales' by email
+          const prosRef = fb.collection(fb.db, 'profesionales');
+          if (firebaseUser.email) {
+            const qPro = fb.query(prosRef, fb.where('email', '==', firebaseUser.email));
+            const querySnapshotPro = await fb.getDocs(qPro);
+
+            if (!querySnapshotPro.empty) {
+              customData = querySnapshotPro.docs[0].data();
+              userRole = 'Staff (Sin edición)';
+            } else {
+              // 2.6 Fallback: check case-insensitively in 'profesionales'
+              const allProsSnap = await fb.getDocs(prosRef);
+              const targetEmail = firebaseUser.email.toLowerCase().trim();
+              const matchedPro = allProsSnap.docs.find(
+                d => (d.data().email || '').toLowerCase().trim() === targetEmail
+              );
+              if (matchedPro) {
+                customData = matchedPro.data();
+                userRole = 'Staff (Sin edición)';
+              }
+            }
+          }
+
+          if (!customData) {
+            // 3. STRICT MODE: User authenticated but NOT AUTHORIZED
+            console.warn(`User ${firebaseUser.email} (${firebaseUser.uid}) not found in database. Access Denied.`);
+            const accessError: any = new Error("ACCESS_DENIED");
+            accessError.userEmail = firebaseUser.email;
+            throw accessError;
+          }
+        }
+      }
+    }
+
+    // 4. Fetch permissions based on Role
+    if (userRole === 'Administrador general') {
+      userPermissions = allPermissions.map(p => p.key);
+    } else {
+      const roleId = userRole.toLowerCase().replace(/ /g, '_');
+      const roleDocRef = fb.doc(fb.db, 'roles', roleId);
+      const roleDoc = await fb.getDoc(roleDocRef);
+
+      if (roleDoc.exists()) {
+        userPermissions = roleDoc.data().permissions || [];
+      } else {
+        const initialRole = initialRoles.find(r => r.title === userRole);
+        userPermissions = initialRole ? initialRole.permissions : [];
+      }
+    }
+
+    // Enforce schedule limits for Receptionists
+    if (userRole === 'Recepcionista' && customData.local_id) {
+      const isWithinHours = await checkLocalSchedule(customData.local_id);
+      if (!isWithinHours) {
+        console.warn(`User ${customData.email || firebaseUser.email} denied access: outside working hours.`);
+        throw new Error("OUTSIDE_HOURS");
+      }
+    }
+
+    return {
+      uid: firebaseUser.uid,
+      displayName: customData.name || customData.nombre || firebaseUser.displayName,
+      email: customData.email || firebaseUser.email,
+      role: userRole,
+      permissions: userPermissions,
+      local_id: customData.local_id,
+      avatarUrl: customData.avatarUrl || firebaseUser.photoURL,
+      audio_settings: customData.audio_settings || undefined,
+    };
+  };
+
+  // Valida permisos deduplicando llamadas concurrentes (signInWithPopup + onAuthStateChanged)
+  // y respaldando con verificación criptográfica en servidor si el WebChannel del cliente aún está sincronizando credenciales.
+  const validateUserPermissions = async (
+    firebaseUser: FirebaseUser,
+    options?: { isInteractiveSignIn?: boolean }
+  ): Promise<CustomUser> => {
+    const existingPromise = inFlightValidationRef.current.get(firebaseUser.uid);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const validationPromise = (async (): Promise<CustomUser> => {
+      // 1. Garantizar que el ID token esté vigente y propagado en Firebase Auth antes de consultar Firestore
+      let idToken = await firebaseUser.getIdToken(false);
+
+      // 2. Intentar lectura por SDK cliente (con reintento corto si Firestore está cambiando de UNAUTHENTICATED a AUTHENTICATED)
+      const retryDelays = options?.isInteractiveSignIn ? [180, 350] : [200];
+      let lastClientError: any = null;
+
+      for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+        try {
+          const clientProfile = await queryClientFirestoreProfile(firebaseUser);
+          saveCachedUserProfile(clientProfile);
+          return buildCustomUser(firebaseUser, clientProfile);
+        } catch (err: any) {
+          if (err?.message === 'ACCESS_DENIED' || err?.message === 'OUTSIDE_HOURS') {
+            throw err;
+          }
+          lastClientError = err;
+          const isPermissionRace =
+            err?.code === 'permission-denied' ||
+            String(err?.message || '').toLowerCase().includes('missing or insufficient permissions');
+
+          if (isPermissionRace && attempt < retryDelays.length) {
+            try {
+              idToken = await firebaseUser.getIdToken(attempt === 1);
+            } catch {
+              // Ignore token refresh transient error; fallback handles it
+            }
+            await sleep(retryDelays[attempt]);
+            continue;
+          }
+          break;
+        }
+      }
+
+      // 3. Respaldo en Servidor (Firebase Admin SDK + verifyIdToken): inmune a bloqueos de pestañas IndexedDB o desfase de WebChannel
+      try {
+        let serverResult = await resolveAuthenticatedUserAction(idToken);
+        if (serverResult.status === 'invalid_token') {
+          idToken = await firebaseUser.getIdToken(true);
+          serverResult = await resolveAuthenticatedUserAction(idToken);
+        }
+
+        if (serverResult.status === 'access_denied') {
+          const accessError: any = new Error('ACCESS_DENIED');
+          accessError.userEmail = serverResult.email || firebaseUser.email;
+          throw accessError;
+        }
+
+        if (serverResult.status === 'outside_hours') {
+          throw new Error('OUTSIDE_HOURS');
+        }
+
+        if (serverResult.status === 'ok') {
+          // Dar un breve margen para que el SyncEngine local termine de absorber el token antes de abrir listeners en /agenda
+          if (options?.isInteractiveSignIn) {
+            await sleep(150);
+          }
+          saveCachedUserProfile(serverResult.profile);
+          return buildCustomUser(firebaseUser, serverResult.profile);
+        }
+      } catch (serverErr: any) {
+        if (serverErr?.message === 'ACCESS_DENIED' || serverErr?.message === 'OUTSIDE_HOURS') {
+          throw serverErr;
+        }
+        console.warn('Server auth fallback warning:', serverErr);
+      }
+
+      // 4. Respaldo de caché local verificada para el mismo UID (evita cerrar la sesión al abrir la PWA durante reconexión de red)
+      if (!options?.isInteractiveSignIn) {
+        const cached = loadCachedUserProfile(firebaseUser.uid);
+        if (cached) {
+          if (cached.role === 'Recepcionista' && cached.local_id) {
+            const withinHours = await checkLocalSchedule(cached.local_id);
+            if (!withinHours) {
+              throw new Error('OUTSIDE_HOURS');
+            }
+          }
+          return buildCustomUser(firebaseUser, cached);
+        }
+      }
+
+      throw lastClientError || new Error('No se pudo verificar la sesión del usuario.');
+    })();
+
+    inFlightValidationRef.current.set(firebaseUser.uid, validationPromise);
+    try {
+      return await validationPromise;
+    } finally {
+      inFlightValidationRef.current.delete(firebaseUser.uid);
+    }
+  };
+
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let isUnmounted = false;
+
+    const handleOnlineRevalidation = async () => {
+      try {
+        const fb = await getFirebase();
+        const current = fb.auth.currentUser;
+        if (!current) return;
+        const refreshedUser = await validateUserPermissions(current);
+        if (!isUnmounted && fb.auth.currentUser?.uid === current.uid) {
+          setUser(refreshedUser);
+        }
+      } catch (err: any) {
+        if (err?.message === 'ACCESS_DENIED' || err?.message === 'OUTSIDE_HOURS') {
+          const fb = await getFirebase();
+          clearCachedUserProfile(fb.auth.currentUser?.uid);
+          await fb.firebaseSignOut(fb.auth);
+          if (!isUnmounted) setUser(null);
+        }
+      }
+    };
 
     (async () => {
       // Load full Firebase client and set up auth listener on all pages
       const fb = await getFirebase();
+      if (isUnmounted) return;
       setFirebaseDb(fb.db);
       setFirebaseStorage(fb.storage);
 
-      // Ensure persistence is set to browserLocalPersistence so logins survive app/tab restarts
-      try {
-        await fb.setPersistence(fb.auth, fb.browserLocalPersistence);
-      } catch (e) {
-        // Persistence already configured
+      // IMPORTANTE: No llamar setPersistence(browserLocalPersistence) en cada arranque.
+      // getAuth() ya utiliza la jerarquía nativa [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence],
+      // migrando sesiones previas automáticamente sin borrar IndexedDB ni cerrar sesiones entre pestañas y la ventana PWA.
+      if (typeof (fb.auth as any).authStateReady === 'function') {
+        try {
+          await (fb.auth as any).authStateReady();
+        } catch (e) {
+          console.warn('authStateReady warning:', e);
+        }
       }
 
       if (typeof window !== 'undefined') {
         setCurrentSessionId(localStorage.getItem('current_session_id'));
+        window.addEventListener('online', handleOnlineRevalidation);
       }
 
       unsubscribe = fb.onAuthStateChanged(fb.auth, async (firebaseUser) => {
+        activeAuthUidRef.current = firebaseUser?.uid || null;
+
         if (firebaseUser) {
           try {
             const customUser = await validateUserPermissions(firebaseUser);
-
-            // Enforce schedule limits for Receptionists
-            if (customUser.role === 'Recepcionista' && customUser.local_id) {
-              const isWithinHours = await checkLocalSchedule(customUser.local_id);
-              if (!isWithinHours) {
-                console.warn(`User ${customUser.email} denied access: outside working hours.`);
-                throw new Error("OUTSIDE_HOURS");
-              }
+            if (!isUnmounted && activeAuthUidRef.current === firebaseUser.uid) {
+              setUser(customUser);
             }
-
-            setUser(customUser);
           } catch (error: any) {
             if (error.message === "ACCESS_DENIED") {
               console.warn("Access denied for user:", firebaseUser.email);
+              clearCachedUserProfile(firebaseUser.uid);
               await fb.firebaseSignOut(fb.auth);
             } else if (error.message === "OUTSIDE_HOURS") {
-              if (typeof window !== 'undefined') {
+              clearCachedUserProfile(firebaseUser.uid);
+              if (typeof window !== 'undefined' && !isAuthPage) {
                 alert("Acceso Restringido: Las recepcionistas no pueden acceder a la plataforma fuera del horario de la sucursal (permitido desde 30 mins antes de abrir hasta las 11:00 PM).");
               }
               await fb.firebaseSignOut(fb.auth);
             } else {
               console.error("Error fetching user data from Firestore:", error);
+              // Evitar estado zombi donde fb.auth sigue autenticado pero user es null en /login
+              await fb.firebaseSignOut(fb.auth).catch(() => {});
             }
-            setUser(null);
+            if (!isUnmounted) {
+              setUser(null);
+            }
           }
         } else {
-          setUser(null);
+          if (!isUnmounted) {
+            setUser(null);
+          }
         }
-        setLoading(false);
+        if (!isUnmounted) {
+          setLoading(false);
+        }
       });
     })();
 
     return () => {
+      isUnmounted = true;
       if (unsubscribe) unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnlineRevalidation);
+      }
     };
   }, []);
 
@@ -439,7 +673,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = async () => {
     const fb = await getFirebase();
+    const uidToClear = user?.uid || fb.auth.currentUser?.uid || null;
     await closeCurrentSession();
+    clearCachedUserProfile(uidToClear);
+    activeAuthUidRef.current = null;
     await fb.firebaseSignOut(fb.auth);
     setUser(null);
     router.push('/login');
@@ -447,16 +684,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signInAndSetup = async (email: string, pass: string, rememberMe: boolean = true) => {
     const fb = await getFirebase();
-    const persistence = rememberMe !== false ? fb.browserLocalPersistence : fb.browserSessionPersistence;
-    await fb.setPersistence(fb.auth, persistence);
+    if (rememberMe === false) {
+      await fb.setPersistence(fb.auth, fb.browserSessionPersistence);
+      _usingSessionOnlyPersistence = true;
+    } else if (_usingSessionOnlyPersistence) {
+      await fb.setPersistence(fb.auth, fb.indexedDBLocalPersistence);
+      _usingSessionOnlyPersistence = false;
+    }
+
     const userCredential = await fb.signInWithEmailAndPassword(fb.auth, email, pass);
-    
-    // Explicitly validate user and start session
+    activeAuthUidRef.current = userCredential.user.uid;
+
     try {
-      const customUser = await validateUserPermissions(userCredential.user);
+      const customUser = await validateUserPermissions(userCredential.user, { isInteractiveSignIn: true });
+      setUser(customUser);
+      setLoading(false);
       await createSession(customUser);
     } catch (error) {
-       console.error("User validation failed during sign in:", error);
+      clearCachedUserProfile(userCredential.user.uid);
+      activeAuthUidRef.current = null;
+      setUser(null);
+      await fb.firebaseSignOut(fb.auth).catch(() => {});
+      throw error;
     }
 
     return userCredential.user;
@@ -464,17 +713,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signInWithGoogle = async () => {
     const fb = await getFirebase();
+    if (_usingSessionOnlyPersistence) {
+      try {
+        await fb.setPersistence(fb.auth, fb.indexedDBLocalPersistence);
+        _usingSessionOnlyPersistence = false;
+      } catch {
+        // Ignore persistence switch warning
+      }
+    }
+
     const provider = new fb.GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
     const userCredential = await fb.signInWithPopup(fb.auth, provider);
+    activeAuthUidRef.current = userCredential.user.uid;
 
-    // Explicitly validate user immediately to prevent inconsistent UI state
+    // Validar permisos garantizando que user quede listo en estado antes de redirigir a /agenda
     try {
-      const customUser = await validateUserPermissions(userCredential.user);
+      const customUser = await validateUserPermissions(userCredential.user, { isInteractiveSignIn: true });
+      setUser(customUser);
+      setLoading(false);
       await createSession(customUser);
     } catch (error) {
-      // If validation fails, sign out and re-throw so the UI catches it
-      await fb.firebaseSignOut(fb.auth);
+      clearCachedUserProfile(userCredential.user.uid);
+      activeAuthUidRef.current = null;
+      setUser(null);
+      await fb.firebaseSignOut(fb.auth).catch(() => {});
       throw error;
     }
 

@@ -105,29 +105,60 @@ export function useFirestoreQuery<T>(
         };
       }
 
-      unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
-        const items = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as T[];
-        setData(items);
-        setLoading(false);
-      }, (err: FirestoreError) => {
-        console.error(`Error listening to collection ${collectionName}:`, err);
+      let isCancelled = false;
+      let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+      let permissionRetryCount = 0;
 
-        if (err.code === 'permission-denied') {
-          const permissionError = new FirestorePermissionError({
-            path: collectionName,
-            operation: 'list',
-            message: err.message,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-          setError(permissionError);
-        } else {
-          setError(err);
-        }
-        setLoading(false);
-      });
+      const attachListener = () => {
+        if (isCancelled) return;
+        unsubscribe();
+        unsubscribe = onSnapshot(q, (querySnapshot: QuerySnapshot<DocumentData>) => {
+          if (isCancelled) return;
+          permissionRetryCount = 0;
+          const items = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as T[];
+          setData(items);
+          setLoading(false);
+        }, (err: FirestoreError) => {
+          if (isCancelled) return;
+
+          // Si el usuario acaba de autenticarse y el canal WebChannel de Firestore aún está propagando el token,
+          // reintentar brevemente antes de declarar error de permisos definitivo.
+          if (err.code === 'permission-denied' && user && permissionRetryCount < 2) {
+            permissionRetryCount += 1;
+            const delayMs = permissionRetryCount === 1 ? 350 : 800;
+            retryTimeout = setTimeout(() => {
+              attachListener();
+            }, delayMs);
+            return;
+          }
+
+          console.error(`Error listening to collection ${collectionName}:`, err);
+
+          if (err.code === 'permission-denied') {
+            const permissionError = new FirestorePermissionError({
+              path: collectionName,
+              operation: 'list',
+              message: err.message,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            setError(permissionError);
+          } else {
+            setError(err);
+          }
+          setLoading(false);
+        });
+      };
+
+      attachListener();
+
+      return () => {
+        isCancelled = true;
+        if (retryTimeout) clearTimeout(retryTimeout);
+        unsubscribe();
+      };
 
     } catch (err: unknown) {
       console.error(`Error setting up query for ${collectionName}:`, err);

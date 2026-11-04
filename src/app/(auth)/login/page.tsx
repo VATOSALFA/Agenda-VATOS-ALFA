@@ -72,7 +72,7 @@ export default function LoginPage() {
         try {
             await signInAndSetup(email, password, rememberMe);
             toast({ title: "¡Bienvenido!", description: "Has iniciado sesión correctamente." });
-            router.push('/agenda');
+            router.replace('/agenda');
         } catch (err: unknown) {
             console.error("Error de inicio de sesión:", err);
             if (err instanceof FirebaseError) {
@@ -89,7 +89,9 @@ export default function LoginPage() {
                         setError("Ocurrió un error inesperado. Por favor, inténtalo de nuevo.");
                 }
             } else if (err instanceof Error && err.message.includes("ACCESS_DENIED")) {
-                setError("Tu cuenta de Google está autenticada, pero tu correo no está registrado en el sistema. Contacta al administrador.");
+                setError("Tu cuenta está autenticada, pero tu correo no está registrado en el sistema. Contacta al administrador.");
+            } else if (err instanceof Error && err.message.includes("OUTSIDE_HOURS")) {
+                setError("Acceso restringido: Las recepcionistas solo pueden acceder dentro del horario de la sucursal.");
             } else {
                 setError("Ocurrió un error. Verifica tus credenciales o si tu cuenta tiene acceso.");
             }
@@ -202,11 +204,12 @@ export default function LoginPage() {
                             className="w-full"
                             onClick={async () => {
                                 setIsLoading(true);
+                                setError(null);
                                 try {
                                     if (signInWithGoogle) {
                                         await signInWithGoogle();
                                         toast({ title: "¡Bienvenido!", description: "Has iniciado sesión con Google correctamente." });
-                                        router.push('/agenda');
+                                        router.replace('/agenda');
                                     }
                                 } catch (error: any) {
                                     console.error("Error Google Auth:", error);
@@ -246,7 +249,8 @@ export default function LoginPage() {
                                         return;
                                     }
 
-                                    setError(`Error al iniciar sesión con Google: ${error.message || error.code || 'Inténtalo de nuevo'}.`);
+                                    const cleanDetail = String(error.message || error.code || 'Inténtalo de nuevo').trim().replace(/\.+$/, '');
+                                    setError(`Error al iniciar sesión con Google: ${cleanDetail}.`);
                                 } finally {
                                     setIsLoading(false);
                                 }

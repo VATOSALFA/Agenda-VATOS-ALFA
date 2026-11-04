@@ -297,11 +297,19 @@ export function JanetFloatingAssistant() {
 
   // Posición arrastrable del botón circular con persistencia en localStorage y adaptación a resize
   const [btnPos, setBtnPos] = useState<FloatingButtonPos | null>(null);
+  const floatingContainerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{
     startX: number;
     startY: number;
     origX: number;
     origY: number;
+    currentX: number;
+    currentY: number;
+    btnSize: number;
+    winW: number;
+    winH: number;
+    maxX: number;
+    maxY: number;
     hasMoved: boolean;
   } | null>(null);
 
@@ -599,15 +607,31 @@ export function JanetFloatingAssistant() {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    const btnElem = (e.currentTarget as HTMLElement).closest('.janet-floating-container') as HTMLElement | null;
-    const rect = btnElem
-      ? btnElem.getBoundingClientRect()
+    const containerEl =
+      floatingContainerRef.current ||
+      ((e.currentTarget as HTMLElement).closest('.janet-floating-container') as HTMLDivElement | null);
+    const rect = containerEl
+      ? containerEl.getBoundingClientRect()
       : (e.currentTarget as HTMLElement).getBoundingClientRect();
+
+    const winW = window.innerWidth;
+    const winH = window.innerHeight;
+    const btnSize = winW >= 640 ? 64 : 56;
+    const maxX = Math.max(12, winW - btnSize - 16);
+    const maxY = Math.max(12, winH - btnSize - 16);
+
     dragRef.current = {
       startX: e.clientX,
       startY: e.clientY,
       origX: rect.left,
       origY: rect.top,
+      currentX: rect.left,
+      currentY: rect.top,
+      btnSize,
+      winW,
+      winH,
+      maxX,
+      maxY,
       hasMoved: false,
     };
     try {
@@ -616,64 +640,80 @@ export function JanetFloatingAssistant() {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    if (Math.hypot(dx, dy) > 5) {
-      dragRef.current.hasMoved = true;
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+
+    if (!drag.hasMoved) {
+      if (dx * dx + dy * dy <= 16) return;
+      drag.hasMoved = true;
+      const el = floatingContainerRef.current;
+      if (el) {
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.left = '0px';
+        el.style.top = '0px';
+      }
     }
-    if (dragRef.current.hasMoved) {
-      const btnSize = window.innerWidth >= 640 ? 64 : 56;
-      const maxX = Math.max(12, window.innerWidth - btnSize - 16);
-      const maxY = Math.max(12, window.innerHeight - btnSize - 16);
-      const newX = Math.min(Math.max(12, dragRef.current.origX + dx), maxX);
-      const newY = Math.min(Math.max(12, dragRef.current.origY + dy), maxY);
-      setBtnPos({
-        x: newX,
-        y: newY,
-        isCustom: true,
-        fromRight: window.innerWidth - (newX + btnSize),
-        fromBottom: window.innerHeight - (newY + btnSize),
-      });
+
+    const newX = Math.min(Math.max(12, drag.origX + dx), drag.maxX);
+    const newY = Math.min(Math.max(12, drag.origY + dy), drag.maxY);
+    drag.currentX = newX;
+    drag.currentY = newY;
+
+    // Actualización directa en GPU vía translate3d sin disparar re-renders de React en cada frame
+    const el = floatingContainerRef.current;
+    if (el) {
+      el.style.transform = `translate3d(${newX}px, ${newY}px, 0)`;
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const wasMoved = dragRef.current.hasMoved;
+    const drag = dragRef.current;
+    if (!drag) return;
+    const wasMoved = drag.hasMoved;
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
     } catch (_) {}
 
-    if (wasMoved && btnPos) {
-      const btnSize = window.innerWidth >= 640 ? 64 : 56;
-      const fromRight = window.innerWidth - (btnPos.x + btnSize);
-      const fromBottom = window.innerHeight - (btnPos.y + btnSize);
+    if (wasMoved) {
+      const finalX = drag.currentX;
+      const finalY = drag.currentY;
+      const fromRight = drag.winW - (finalX + drag.btnSize);
+      const fromBottom = drag.winH - (finalY + drag.btnSize);
 
       // Si se soltó cerca del área por defecto (inferior derecha), volver al anclaje natural CSS
       if (fromRight < 40 && fromBottom < 130) {
+        const el = floatingContainerRef.current;
+        if (el) {
+          el.style.left = '';
+          el.style.top = '';
+          el.style.transform = '';
+          el.style.right = '18px';
+          el.style.bottom = '90px';
+        }
         setBtnPos({ x: 0, y: 0, isCustom: false });
         try {
           localStorage.removeItem('janet_floating_pos');
         } catch (_) {}
       } else {
+        const nextPos: FloatingButtonPos = {
+          x: finalX,
+          y: finalY,
+          isCustom: true,
+          fromRight,
+          fromBottom,
+        };
+        setBtnPos(nextPos);
         try {
-          localStorage.setItem(
-            'janet_floating_pos',
-            JSON.stringify({
-              x: btnPos.x,
-              y: btnPos.y,
-              isCustom: true,
-              fromRight,
-              fromBottom,
-            })
-          );
+          localStorage.setItem('janet_floating_pos', JSON.stringify(nextPos));
         } catch (_) {}
       }
     }
     dragRef.current = null;
 
-    if (!wasMoved) {
+    if (!wasMoved && e.type !== 'pointercancel') {
       setIsOpen(true);
     }
   };
@@ -1815,20 +1855,24 @@ export function JanetFloatingAssistant() {
           ========================================================================= */}
       {!isOpen && btnPos && (
         <div
+          ref={floatingContainerRef}
           style={
             btnPos.isCustom
               ? {
-                  left: `${btnPos.x}px`,
-                  top: `${btnPos.y}px`,
+                  left: '0px',
+                  top: '0px',
+                  transform: `translate3d(${btnPos.x}px, ${btnPos.y}px, 0)`,
                   touchAction: 'none',
+                  willChange: 'transform',
                 }
               : {
                   right: '18px',
                   bottom: '90px',
                   touchAction: 'none',
+                  willChange: 'transform',
                 }
           }
-          className="janet-floating-container fixed z-50 select-none animate-in fade-in zoom-in-90 duration-300"
+          className="janet-floating-container fixed z-50 select-none"
         >
           {/* Aura azul eléctrica sutil de respiración */}
           <div className="absolute inset-[-6px] rounded-full bg-blue-600/25 blur-sm animate-pulse pointer-events-none" />
@@ -1839,6 +1883,7 @@ export function JanetFloatingAssistant() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
             className="btn-vatos-alfa relative w-14 h-14 sm:w-16 sm:h-16 rounded-full p-[1.5px] border-none overflow-hidden inline-flex items-center justify-center shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_14px_rgba(59,130,246,0.35)] hover:scale-105 active:scale-95 transition-transform cursor-grab active:cursor-grabbing outline-none select-none z-10"
             title={
               isGeneralOwner

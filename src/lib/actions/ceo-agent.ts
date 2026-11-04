@@ -404,6 +404,7 @@ A) OPERACIÓN Y CONTROL TOTAL DE LA SUCURSAL, AGENDA Y CLIENTES (FACULTADES DE A
 15. **ingresar_stock_inventario**: Suma unidades al stock oficial y registra el movimiento de compra/ingreso.
 16. **registrar_salida_insumo_cabina**: Registra salidas físicas de producto para cabina de barberos (uso interno) o mermas/roturas.
 17. **proponer_cancelacion_o_eliminacion_sucursal**: Permite cancelar citas o eliminar ventas facturadas con tarjeta de confirmación y bitácora de auditoría.
+18. **gestionar_catalogo_servicios_sucursal**: Crea, edita, activa/desactiva o lista servicios del catálogo oficial (Administración -> Servicios), configurando nombre, categoría, precio, duración, comisión, visibilidad en línea (web/app) y profesionales asignados (con sincronización bidireccional en perfiles de profesionales), e informa campos pendientes como subir la fotografía del servicio.
 
 B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
 18. **subagente_cfo_estado_resultados**: Estado de Resultados (P&L) exacto de cualquier mes (ingresos, comisiones 50%, nómina, insumos, costos fijos, utilidad gerencia Beatriz, utilidad neta del dueño, RESICO y producción por barbero).

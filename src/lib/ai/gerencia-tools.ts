@@ -3599,6 +3599,673 @@ export const consultarCitasPendientesConfirmacionWhatsAppTool = ai.defineTool(
   }
 );
 
+// ============================================================================
+// 13. GESTIONAR CATÁLOGO DE SERVICIOS (CREAR / EDITAR / ACTIVAR-DESACTIVAR / LISTAR)
+//     IDÉNTICO AL MODAL "NUEVO SERVICIO / EDITAR SERVICIO" DE ADMINISTRACIÓN -> SERVICIOS
+// ============================================================================
+export const gestionarCatalogoServiciosSucursalTool = ai.defineTool(
+  {
+    name: 'gestionar_catalogo_servicios_sucursal',
+    description:
+      'Crea, edita, activa/desactiva o consulta servicios en el catálogo oficial de la sucursal exactamente igual que cuando Beatriz entra a Administración -> Servicios -> Nuevo Servicio / Editar Servicio. Llena todos los campos de las 3 pestañas (Datos y Precios, Profesionales, Pago y Foto), sincroniza bidireccionalmente los servicios en el perfil de cada profesional (profesionales.services) y reporta qué campos quedaron pendientes por completar (como subir la fotografía del servicio).',
+    inputSchema: z.object({
+      accion: z
+        .enum(['crear_servicio', 'editar_servicio', 'activar_desactivar_servicio', 'listar_servicios'])
+        .describe(
+          'Acción a ejecutar: "crear_servicio" (agrega un nuevo servicio o actualiza si ya existe con ese nombre), "editar_servicio" (modifica precio, duración, visibilidad en línea, profesionales, categoría o comisión de un servicio existente), "activar_desactivar_servicio" (activa o desactiva un servicio), o "listar_servicios" (consulta todos los servicios y categorías).'
+        ),
+      nombreServicio: z
+        .string()
+        .optional()
+        .describe('Nombre del servicio a crear, editar o activar/desactivar (ej. "Tinte para barba", "Corte de cabello").'),
+      nuevoNombreServicio: z
+        .string()
+        .optional()
+        .describe('Opcional en editar_servicio: nuevo nombre si se desea renombrar el servicio.'),
+      precio: z
+        .number()
+        .optional()
+        .describe('Precio del servicio en pesos MXN (ej. 180, 200).'),
+      duracionMinutos: z
+        .number()
+        .optional()
+        .describe('Duración estándar del servicio en minutos (ej. 20, 30, 40).'),
+      categoriaNombre: z
+        .string()
+        .optional()
+        .describe('Nombre de la categoría (ej. "Barba", "Facial", "Capilar", "Paquete"). Si no se especifica al crear, se infiere automáticamente según el nombre del servicio y se avisa a Beatriz.'),
+      crearCategoriaSiNoExiste: z
+        .boolean()
+        .optional()
+        .describe('Si es true y la categoría indicada no existe en categorias_servicios, la crea automáticamente.'),
+      visibleEnWeb: z
+        .boolean()
+        .optional()
+        .describe('Mostrar en sitio web y app móvil para reservas online. Poner en false si Beatriz pide "que no aparezca en línea", "oculto en web" o "solo interno". Por defecto true al crear.'),
+      profesionalesAsignados: z
+        .array(z.string())
+        .optional()
+        .describe('Lista de nombres o apodos de los profesionales que realizan este servicio (ej. ["Bety"], ["Bety", "Alfredo"], o ["todos"]).'),
+      modoProfesionales: z
+        .enum(['reemplazar', 'agregar', 'quitar'])
+        .optional()
+        .describe('Cómo aplicar profesionalesAsignados al editar: "reemplazar" (deja solo los indicados, por defecto), "agregar" (suma a los que ya estaban), o "quitar" (desvincula a los indicados).'),
+      duracionPorProfesional: z
+        .array(
+          z.object({
+            nombreBarbero: z.string(),
+            duracionMinutos: z.number(),
+          })
+        )
+        .optional()
+        .describe('Opcional: duración personalizada en cabina para barberos específicos.'),
+      comisionValor: z
+        .number()
+        .optional()
+        .describe('Valor de la comisión por defecto para el profesional (por defecto 50 si no se indica al crear).'),
+      comisionTipo: z
+        .enum(['%', '$'])
+        .optional()
+        .describe('Tipo de comisión por defecto: "%" (porcentaje, por defecto) o "$" (monto fijo en pesos).'),
+      descripcion: z
+        .string()
+        .optional()
+        .describe('Descripción opcional del servicio (máximo 200 caracteres).'),
+      incluyeIva: z
+        .boolean()
+        .optional()
+        .describe('Si el precio incluye IVA (por defecto false).'),
+      politicaPagoOnline: z
+        .enum(['no-payment', 'online-deposit', 'full-payment'])
+        .optional()
+        .describe('Política de pago en línea: "no-payment" (Sin cobro anticipado, por defecto), "online-deposit" (Abono/anticipo en línea), o "full-payment" (Pago completo 100% en línea).'),
+      montoAnticipoOnline: z
+        .number()
+        .optional()
+        .describe('Monto o porcentaje del anticipo cuando politicaPagoOnline es "online-deposit".'),
+      tipoAnticipoOnline: z
+        .enum(['%', '$'])
+        .optional()
+        .describe('Tipo de anticipo en línea: "%" o "$".'),
+      activo: z
+        .boolean()
+        .optional()
+        .describe('Estado activo (true) o inactivo (false) del servicio.'),
+    }),
+  },
+  async ({
+    accion,
+    nombreServicio,
+    nuevoNombreServicio,
+    precio,
+    duracionMinutos,
+    categoriaNombre,
+    crearCategoriaSiNoExiste,
+    visibleEnWeb,
+    profesionalesAsignados,
+    modoProfesionales = 'reemplazar',
+    duracionPorProfesional,
+    comisionValor,
+    comisionTipo,
+    descripcion,
+    incluyeIva,
+    politicaPagoOnline,
+    montoAnticipoOnline,
+    tipoAnticipoOnline,
+    activo,
+  }) => {
+    const caller = getCallerInfo();
+    const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+    const db = getDb();
+
+    const [catsSnap, servsSnap, profsSnap] = await Promise.all([
+      db.collection('categorias_servicios').get(),
+      db.collection('servicios').get(),
+      db.collection('profesionales').get(),
+    ]);
+
+    const categories = catsSnap.docs
+      .map((d) => ({ id: d.id, name: String(d.data().name || '').trim(), order: Number(d.data().order ?? 99) }))
+      .sort((a, b) => a.order - b.order);
+
+    const catIdToName = new Map<string, string>();
+    categories.forEach((c) => catIdToName.set(c.id, c.name));
+
+    const allProfessionals: Array<{ id: string; name: string; publicName?: string; deleted?: boolean; active?: boolean }> = [];
+    const profIdToName = new Map<string, string>();
+    profsSnap.forEach((d) => {
+      const p = d.data();
+      const display = p.publicName || p.name || 'Profesional';
+      profIdToName.set(d.id, display);
+      if (!p.deleted) {
+        allProfessionals.push({
+          id: d.id,
+          name: p.name || display,
+          publicName: p.publicName,
+          deleted: Boolean(p.deleted),
+          active: p.active !== false,
+        });
+      }
+    });
+
+    const activeProfessionals = allProfessionals.filter((p) => p.active !== false);
+
+    // 1. ACCIÓN: LISTAR SERVICIOS Y CATEGORÍAS
+    if (accion === 'listar_servicios') {
+      const lista = servsSnap.docs
+        .map((d) => {
+          const s = d.data();
+          const prosNames = (Array.isArray(s.professionals) ? s.professionals : [])
+            .map((pid: string) => profIdToName.get(pid))
+            .filter(Boolean);
+          return {
+            id: d.id,
+            nombre: s.name || '',
+            categoria: catIdToName.get(s.category) || s.category || 'Sin categoría',
+            precioMxn: Number(s.price || 0),
+            duracionMin: Number(s.duration || 0),
+            visibleEnWeb: s.visible_en_web ?? true,
+            activo: s.active !== false,
+            comision: `${s.defaultCommission?.value ?? 50}${s.defaultCommission?.type || '%'}`,
+            profesionales: prosNames,
+            tieneFoto: Array.isArray(s.images) && s.images.length > 0,
+            order: Number(s.order ?? 99),
+          };
+        })
+        .sort((a, b) => a.order - b.order);
+
+      return {
+        ok: true,
+        categoriasDisponibles: categories.map((c) => c.name),
+        totalServicios: lista.length,
+        servicios: lista,
+      };
+    }
+
+    if (!nombreServicio || !nombreServicio.trim()) {
+      return {
+        ok: false,
+        mensaje: 'Por favor indícame el nombre del servicio que deseas crear o modificar.',
+      };
+    }
+
+    const cleanInputName = nombreServicio.trim();
+    const formattedServiceName =
+      cleanInputName.charAt(0).toUpperCase() + cleanInputName.slice(1);
+    const normTarget = normalizeName(cleanInputName);
+
+    // Buscar si ya existe un servicio con ese nombre
+    let existingDoc = servsSnap.docs.find(
+      (d) => normalizeName(d.data().name || '') === normTarget
+    );
+    if (!existingDoc && accion !== 'crear_servicio') {
+      existingDoc = servsSnap.docs.find((d) => {
+        const n = normalizeName(d.data().name || '');
+        return n.includes(normTarget) || normTarget.includes(n);
+      });
+    }
+
+    // 2. ACCIÓN: ACTIVAR O DESACTIVAR SERVICIO
+    if (accion === 'activar_desactivar_servicio') {
+      if (!existingDoc) {
+        return {
+          ok: false,
+          mensaje: `No encontré un servicio llamado "${cleanInputName}" en el catálogo.`,
+        };
+      }
+      const currentData = existingDoc.data();
+      const nextActive = activo !== undefined ? activo : !(currentData.active !== false);
+      await existingDoc.ref.update({ active: nextActive });
+
+      await db.collection('audit_logs').add({
+        action: `${nextActive ? 'Activar' : 'Desactivar'} Servicio (${caller.assistantName})`,
+        details: `Servicio "${currentData.name}" ${nextActive ? 'activado' : 'desactivado'} en el catálogo.`,
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
+        severity: 'info',
+        entityId: existingDoc.id,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        ok: true,
+        servicioId: existingDoc.id,
+        nombre: currentData.name,
+        activo: nextActive,
+        mensaje: `Listo ${saludoOperador}: el servicio **${currentData.name}** quedó **${
+          nextActive ? 'Activo' : 'Inactivo'
+        }** en el catálogo de servicios.`,
+      };
+    }
+
+    // Helper para resolver categoría (ID y nombre) igual que en el selector de Nuevo Servicio
+    const resolveCategory = async (
+      requestedCatName?: string,
+      serviceTitle?: string,
+      fallbackCatId?: string
+    ): Promise<{ id: string; name: string; wasAutoAssigned: boolean }> => {
+      if (requestedCatName && requestedCatName.trim()) {
+        const normCat = normalizeName(requestedCatName);
+        const match = categories.find(
+          (c) =>
+            normalizeName(c.name) === normCat ||
+            normalizeName(c.name).includes(normCat) ||
+            normCat.includes(normalizeName(c.name))
+        );
+        if (match) {
+          return { id: match.id, name: match.name, wasAutoAssigned: false };
+        }
+        if (crearCategoriaSiNoExiste) {
+          const formattedCat =
+            requestedCatName.trim().charAt(0).toUpperCase() + requestedCatName.trim().slice(1);
+          const newCatRef = await db.collection('categorias_servicios').add({
+            name: formattedCat,
+            order: categories.length,
+            created_at: Timestamp.now(),
+          });
+          return { id: newCatRef.id, name: formattedCat, wasAutoAssigned: false };
+        }
+      }
+
+      if (fallbackCatId && catIdToName.has(fallbackCatId)) {
+        return {
+          id: fallbackCatId,
+          name: catIdToName.get(fallbackCatId)!,
+          wasAutoAssigned: false,
+        };
+      }
+
+      // Inferencia inteligente basada en el nombre del servicio
+      const normTitle = normalizeName(serviceTitle || '');
+      let inferredKeyword = 'capilar';
+      if (/(tinte.*barba|mascarilla|facial|ceja|nasal|limpieza|exfoli|puntos negros|vapor)/i.test(normTitle)) {
+        inferredKeyword = 'facial';
+      } else if (/(barba|bigote|afeitado|toalla|ritual de barba)/i.test(normTitle)) {
+        inferredKeyword = 'barba';
+      } else if (/(paquete|combo|alfa|heroe|caballero|campeon|renovacion)/i.test(normTitle)) {
+        inferredKeyword = 'paquete';
+      }
+
+      const inferredMatch =
+        categories.find((c) => normalizeName(c.name).includes(inferredKeyword)) ||
+        categories[0];
+
+      if (inferredMatch) {
+        return {
+          id: inferredMatch.id,
+          name: inferredMatch.name,
+          wasAutoAssigned: true,
+        };
+      }
+
+      return { id: 'general', name: 'General', wasAutoAssigned: true };
+    };
+
+    // Helper para resolver profesionales asignados y sincronizar profesionales/{profId}.services
+    const resolveProfessionalsList = (
+      inputNames?: string[],
+      currentProfIds: string[] = []
+    ): {
+      finalProfIds: string[];
+      resolvedNames: string[];
+      unmatchedNames: string[];
+      wasProvided: boolean;
+    } => {
+      if (!inputNames || inputNames.length === 0) {
+        const existingValid = currentProfIds.filter((id) => profIdToName.has(id));
+        return {
+          finalProfIds: existingValid,
+          resolvedNames: existingValid.map((id) => profIdToName.get(id)!),
+          unmatchedNames: [],
+          wasProvided: false,
+        };
+      }
+
+      const isAll = inputNames.some((n) =>
+        /^(todos|todas|todo el equipo|cualquiera)$/i.test(n.trim())
+      );
+
+      const matchedIds: string[] = [];
+      const unmatched: string[] = [];
+
+      if (isAll) {
+        activeProfessionals.forEach((p) => {
+          if (!matchedIds.includes(p.id)) matchedIds.push(p.id);
+        });
+      } else {
+        for (const rawName of inputNames) {
+          const subNames = rawName
+            .split(/[,y&]+/i)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          for (const sub of subNames) {
+            const found = findBarber(sub, allProfessionals);
+            if (found) {
+              if (!matchedIds.includes(found.id)) matchedIds.push(found.id);
+            } else {
+              unmatched.push(sub);
+            }
+          }
+        }
+      }
+
+      let finalIds: string[] = [];
+      if (modoProfesionales === 'agregar') {
+        finalIds = Array.from(new Set([...currentProfIds, ...matchedIds]));
+      } else if (modoProfesionales === 'quitar') {
+        const removeSet = new Set(matchedIds);
+        finalIds = currentProfIds.filter((id) => !removeSet.has(id));
+      } else {
+        finalIds = matchedIds;
+      }
+
+      return {
+        finalProfIds: finalIds,
+        resolvedNames: finalIds.map((id) => profIdToName.get(id) || id),
+        unmatchedNames: unmatched,
+        wasProvided: true,
+      };
+    };
+
+    // Sincronización bidireccional idéntica a syncProfessionals en EditServicioModal
+    const syncProfessionalsInFirestore = async (
+      serviceId: string,
+      oldProfIds: string[],
+      newProfIds: string[]
+    ) => {
+      const addedPros = newProfIds.filter((p) => !oldProfIds.includes(p));
+      const removedPros = oldProfIds.filter((p) => !newProfIds.includes(p));
+      const existingProfIds = new Set(allProfessionals.map((p) => p.id));
+
+      const batch = db.batch();
+      let batchCount = 0;
+
+      for (const profId of addedPros) {
+        if (existingProfIds.has(profId)) {
+          batch.update(db.collection('profesionales').doc(profId), {
+            services: FieldValue.arrayUnion(serviceId),
+          });
+          batchCount++;
+        }
+      }
+
+      for (const profId of removedPros) {
+        if (existingProfIds.has(profId)) {
+          batch.update(db.collection('profesionales').doc(profId), {
+            services: FieldValue.arrayRemove(serviceId),
+          });
+          batchCount++;
+        }
+      }
+
+      if (batchCount > 0) {
+        await batch.commit();
+      }
+    };
+
+    // 3. ACCIÓN: CREAR SERVICIO (O ACTUALIZAR SI YA EXISTE CON EL MISMO NOMBRE) Y EDITAR SERVICIO
+    if (accion === 'editar_servicio' && !existingDoc) {
+      return {
+        ok: false,
+        mensaje: `No encontré ningún servicio registrado con el nombre "${cleanInputName}" para editar. Si deseas agregarlo como servicio nuevo, indícamelo o usa la acción "crear_servicio".`,
+      };
+    }
+
+    const isUpdatingExisting = Boolean(existingDoc);
+    const prevData: Record<string, any> = existingDoc ? existingDoc.data() : {};
+    const oldProfessionals: string[] = Array.isArray(prevData.professionals)
+      ? prevData.professionals
+      : [];
+
+    const finalName =
+      nuevoNombreServicio && nuevoNombreServicio.trim()
+        ? nuevoNombreServicio.trim()
+        : prevData.name || formattedServiceName;
+
+    const finalPrice =
+      precio !== undefined && !isNaN(Number(precio))
+        ? round2(Number(precio))
+        : prevData.price !== undefined
+        ? round2(Number(prevData.price))
+        : 0;
+
+    const durationWasProvided =
+      duracionMinutos !== undefined && !isNaN(Number(duracionMinutos)) && Number(duracionMinutos) > 0;
+    const finalDuration = durationWasProvided
+      ? Math.round(Number(duracionMinutos))
+      : prevData.duration !== undefined
+      ? Number(prevData.duration)
+      : 30;
+
+    const resolvedCat = await resolveCategory(
+      categoriaNombre,
+      finalName,
+      prevData.category
+    );
+
+    const commissionWasProvided =
+      comisionValor !== undefined && !isNaN(Number(comisionValor));
+    const finalCommissionValue = commissionWasProvided
+      ? Number(comisionValor)
+      : prevData.defaultCommission?.value !== undefined
+      ? Number(prevData.defaultCommission.value)
+      : 50;
+    const finalCommissionType: '%' | '$' =
+      comisionTipo || prevData.defaultCommission?.type || '%';
+
+    const finalVisibleEnWeb =
+      visibleEnWeb !== undefined
+        ? Boolean(visibleEnWeb)
+        : prevData.visible_en_web !== undefined
+        ? Boolean(prevData.visible_en_web)
+        : true;
+
+    const descriptionWasProvided =
+      descripcion !== undefined && descripcion.trim().length > 0;
+    const finalDescription =
+      descripcion !== undefined
+        ? descripcion.trim().slice(0, 200)
+        : String(prevData.description || '');
+
+    const finalIncludeVat =
+      incluyeIva !== undefined
+        ? Boolean(incluyeIva)
+        : Boolean(prevData.include_vat ?? false);
+
+    const finalPaymentType =
+      politicaPagoOnline || prevData.payment_type || 'no-payment';
+    const finalPaymentAmountValue =
+      finalPaymentType === 'online-deposit'
+        ? Number(montoAnticipoOnline ?? prevData.payment_amount_value ?? 0)
+        : 0;
+    const finalPaymentAmountType: '%' | '$' =
+      finalPaymentType === 'online-deposit'
+        ? tipoAnticipoOnline || prevData.payment_amount_type || '%'
+        : '%';
+
+    const profResolution = resolveProfessionalsList(
+      profesionalesAsignados,
+      oldProfessionals
+    );
+
+    // Duración por profesional (mantener previas de los profesionales activos y aplicar nuevas si se enviaron)
+    const finalDurationPorProf: Record<string, number> = {};
+    const prevDurMap = prevData.durationPorProfesional || {};
+    for (const pid of profResolution.finalProfIds) {
+      if (prevDurMap[pid] !== undefined && prevDurMap[pid] !== null && prevDurMap[pid] !== '') {
+        finalDurationPorProf[pid] = Number(prevDurMap[pid]);
+      }
+    }
+    if (Array.isArray(duracionPorProfesional)) {
+      for (const item of duracionPorProfesional) {
+        const found = findBarber(item.nombreBarbero, allProfessionals);
+        if (found && profResolution.finalProfIds.includes(found.id) && item.duracionMinutos > 0) {
+          finalDurationPorProf[found.id] = Math.round(Number(item.duracionMinutos));
+        }
+      }
+    }
+
+    const finalImages: string[] = Array.isArray(prevData.images)
+      ? prevData.images.filter(Boolean)
+      : [];
+
+    const finalActive =
+      activo !== undefined
+        ? Boolean(activo)
+        : prevData.active !== undefined
+        ? Boolean(prevData.active)
+        : true;
+
+    const servicePayload: Record<string, any> = {
+      name: finalName,
+      description: finalDescription,
+      price: finalPrice,
+      duration: finalDuration,
+      category: resolvedCat.id,
+      include_vat: finalIncludeVat,
+      visible_en_web: finalVisibleEnWeb,
+      payment_type: finalPaymentType,
+      payment_amount_value: finalPaymentAmountValue,
+      payment_amount_type: finalPaymentAmountType,
+      defaultCommission: {
+        value: finalCommissionValue,
+        type: finalCommissionType,
+      },
+      professionals: profResolution.finalProfIds,
+      durationPorProfesional: finalDurationPorProf,
+      images: finalImages,
+      active: finalActive,
+    };
+
+    let serviceId = '';
+    if (isUpdatingExisting && existingDoc) {
+      serviceId = existingDoc.id;
+      await existingDoc.ref.update(servicePayload);
+      await syncProfessionalsInFirestore(serviceId, oldProfessionals, profResolution.finalProfIds);
+    } else {
+      const newDocRef = await db.collection('servicios').add({
+        ...servicePayload,
+        order: 99,
+        created_at: Timestamp.now(),
+      });
+      serviceId = newDocRef.id;
+      await syncProfessionalsInFirestore(serviceId, [], profResolution.finalProfIds);
+    }
+
+    // Construir lista de campos pendientes o llenados por defecto para avisar a Beatriz
+    const camposPendientesOPorRevisar: string[] = [];
+
+    if (finalImages.length === 0) {
+      camposPendientesOPorRevisar.push(
+        '📸 **Fotografía del servicio (Pestaña Pago y Foto):** Quedó pendiente subir la imagen del servicio desde *Administración > Servicios > Editar*.'
+      );
+    }
+
+    if (!finalDescription) {
+      camposPendientesOPorRevisar.push(
+        '📝 **Descripción del servicio (Pestaña Datos y Precios):** Quedó en blanco (opcional; puedes indicármela si deseas agregar qué incluye).'
+      );
+    }
+
+    if (!isUpdatingExisting && resolvedCat.wasAutoAssigned) {
+      camposPendientesOPorRevisar.push(
+        `🗂️ **Categoría (Pestaña Datos y Precios):** Se asignó automáticamente en **${resolvedCat.name}** (avísame si prefieres cambiarla a otra categoría como ${categories.map((c) => c.name).join(', ')}).`
+      );
+    }
+
+    if (!isUpdatingExisting && !commissionWasProvided) {
+      camposPendientesOPorRevisar.push(
+        `💰 **Comisión por defecto (Pestaña Datos y Precios):** Se configuró con el estándar de **${finalCommissionValue}${finalCommissionType}** (dime si lleva un porcentaje o monto distinto).`
+      );
+    }
+
+    if (!isUpdatingExisting && !durationWasProvided) {
+      camposPendientesOPorRevisar.push(
+        `⏱️ **Duración estándar:** Se asignó por defecto en **${finalDuration} min** (indícame si requiere otro tiempo).`
+      );
+    }
+
+    if (profResolution.finalProfIds.length === 0) {
+      camposPendientesOPorRevisar.push(
+        '👥 **Profesionales asignados (Pestaña Profesionales):** Aún no tiene ningún barbero seleccionado (indícame quiénes lo realizan para habilitarlo en su agenda).'
+      );
+    }
+
+    if (profResolution.unmatchedNames.length > 0) {
+      camposPendientesOPorRevisar.push(
+        `⚠️ **Profesionales no identificados:** No encontré coincidencia para: ${profResolution.unmatchedNames.join(', ')}.`
+      );
+    }
+
+    await db.collection('audit_logs').add({
+      action: `${isUpdatingExisting ? 'Editar' : 'Crear'} Servicio (${caller.assistantName})`,
+      details: `Servicio "${finalName}" ($${finalPrice.toFixed(2)} MXN, ${finalDuration} min, categoría: ${resolvedCat.name}, visible en web: ${finalVisibleEnWeb ? 'Sí' : 'No'}, profesionales: ${profResolution.resolvedNames.join(', ') || 'Ninguno'}).`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      entityId: serviceId,
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    const resumenConfiguracion = [
+      `• **Nombre del servicio:** ${finalName}`,
+      `• **Categoría:** ${resolvedCat.name}`,
+      `• **Precio:** $${finalPrice.toFixed(2)} MXN`,
+      `• **Duración estándar:** ${finalDuration} min`,
+      `• **Comisión por defecto:** ${finalCommissionValue}${finalCommissionType}`,
+      `• **Mostrar en sitio web / App (Reservas en línea):** ${
+        finalVisibleEnWeb ? 'Activado (Visible para clientes en línea)' : 'Desactivado (Solo uso interno en sucursal)'
+      }`,
+      `• **Profesionales asignados (${profResolution.resolvedNames.length}):** ${
+        profResolution.resolvedNames.length > 0
+          ? profResolution.resolvedNames.join(', ')
+          : 'Ninguno asignado aún'
+      }`,
+      `• **Política de pago en línea:** ${
+        finalPaymentType === 'no-payment'
+          ? 'Sin cobro anticipado'
+          : finalPaymentType === 'online-deposit'
+          ? `Anticipo en línea (${finalPaymentAmountValue}${finalPaymentAmountType})`
+          : 'Pago completo en línea (100%)'
+      }`,
+    ].join('\n');
+
+    const textoPendientes =
+      camposPendientesOPorRevisar.length > 0
+        ? `\n\n**Campos pendientes o asignados por defecto para tu revisión:**\n${camposPendientesOPorRevisar.join('\n')}`
+        : '\n\nTodos los campos (incluyendo fotografía y descripción) están completos.';
+
+    return {
+      ok: true,
+      operacion: isUpdatingExisting ? 'servicio_actualizado' : 'servicio_creado',
+      servicioId: serviceId,
+      datosGuardados: {
+        nombre: finalName,
+        categoria: resolvedCat.name,
+        precioMxn: finalPrice,
+        duracionMinutos: finalDuration,
+        comisionPorDefecto: `${finalCommissionValue}${finalCommissionType}`,
+        visibleEnWeb: finalVisibleEnWeb,
+        profesionalesAsignados: profResolution.resolvedNames,
+        descripcion: finalDescription || null,
+        tieneFoto: finalImages.length > 0,
+      },
+      camposPendientesOPorRevisar,
+      mensaje: `¡Listo ${saludoOperador}! ${
+        isUpdatingExisting
+          ? `Actualicé el servicio **${finalName}**`
+          : `Ya di de alta el nuevo servicio **${finalName}**`
+      } en **Administración > Servicios** y vinculé el servicio en el perfil de ${
+        profResolution.resolvedNames.length > 0
+          ? profResolution.resolvedNames.join(', ')
+          : 'los profesionales correspondientes'
+      }:\n\n${resumenConfiguracion}${textoPendientes}`,
+    };
+  }
+);
+
 export function getGerenciaAgentTools() {
   return [
     consultarOperacionDiaSucursalTool,
@@ -3609,6 +4276,7 @@ export function getGerenciaAgentTools() {
     gestionarHorarioBarberoSucursalTool,
     gestionarJornadaEspecialSucursalTool,
     gestionarHorarioSemanalFijoProfesionalTool,
+    gestionarCatalogoServiciosSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,

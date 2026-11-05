@@ -423,11 +423,15 @@ export default function AgendaDisplayPage() {
 
                                     {/* Events */}
                                     {eventsWithLayout
-                                        .filter(event =>
-                                            ((event.type === 'block' && event.barbero_id === barber.id) ||
-                                                (event.type === 'appointment' && event.items?.some((i: SaleItem) => i.barbero_id === barber.id))) &&
-                                            (event as any).originalType !== 'available'
-                                        )
+                                        .filter(event => {
+                                            if ((event as any).originalType === 'available') return false;
+                                            if (event.type === 'block') return event.barbero_id === barber.id;
+                                            if (event.type === 'appointment') {
+                                                if ((event as any).target_barber_id) return (event as any).target_barber_id === barber.id;
+                                                return event.barbero_id === barber.id || event.items?.some((i: SaleItem) => i.tipo !== 'producto' && i.barbero_id === barber.id);
+                                            }
+                                            return false;
+                                        })
                                         .map((event: AgendaEvent) => (
                                             <div
                                                 key={event.id}

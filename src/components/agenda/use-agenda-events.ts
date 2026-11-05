@@ -28,20 +28,27 @@ export function useAgendaEvents(
             .filter(res => Boolean(res && res.hora_inicio))
             .flatMap(res => {
                 const [startH = 0, startM = 0] = (res.hora_inicio || '00:00').split(':').map(Number);
+                const totalItemsDurationMins = (res.items || [])
+                    .filter((item: any) => item.tipo !== 'producto')
+                    .reduce((sum: number, item: any) => sum + (Number(item.duracion) || 0), 0);
+                const effectiveDurationMins = Number((res as any).duracion || res.duration || totalItemsDurationMins || 30);
+
                 let endH = startH;
                 let endM = startM + 30;
-                if (res.hora_fin) {
+                if (res.hora_fin && typeof res.hora_fin === 'string' && res.hora_fin.includes(':')) {
                     const [eh = 0, em = 0] = res.hora_fin.split(':').map(Number);
                     endH = eh;
                     endM = em;
-                } else if ((res as any).duracion || res.duration) {
-                    const dur = Number((res as any).duracion || res.duration);
-                    const totalMins = startH * 60 + startM + dur;
+                } else {
+                    const totalMins = startH * 60 + startM + effectiveDurationMins;
                     endH = Math.floor(totalMins / 60);
                     endM = totalMins % 60;
                 }
                 const globalStart = startH + startM / 60;
-                const globalEnd = endH + endM / 60;
+                let globalEnd = endH + endM / 60;
+                if (globalEnd <= globalStart) {
+                    globalEnd = globalStart + (effectiveDurationMins / 60);
+                }
                 const globalDuration = Math.max(0.0833, globalEnd - globalStart);
                 const baseCustomer = (res as any).isSandbox
                     ? ((res as any).customer || clientMap.get(res.cliente_id))
@@ -126,18 +133,17 @@ export function useAgendaEvents(
                     }] as AgendaEvent[];
                 }
 
-                // Group items by professional and start time, ignoring product items
+                // Group items by professional only (one block per professional, summing duration of all services)
                 const serviceItems = res.items.filter(item => item.tipo !== 'producto');
                 const itemsToProcess = serviceItems.length > 0 ? serviceItems : res.items;
 
                 const groupedItemsMap = new Map<string, typeof itemsToProcess>();
                 itemsToProcess.forEach(item => {
-                    const startKey = (item as any).hora_inicio || 'global';
-                    const key = `${item.barbero_id || 'unassigned'}_${startKey}`;
-                    if (!groupedItemsMap.has(key)) {
-                        groupedItemsMap.set(key, []);
+                    const profId = item.barbero_id || res.barbero_id || 'unassigned';
+                    if (!groupedItemsMap.has(profId)) {
+                        groupedItemsMap.set(profId, []);
                     }
-                    groupedItemsMap.get(key)!.push(item);
+                    groupedItemsMap.get(profId)!.push(item);
                 });
 
                 if (groupedItemsMap.size <= 1) {
@@ -170,26 +176,23 @@ export function useAgendaEvents(
                     }] as unknown as AgendaEvent[];
                 }
 
-                // Split into multiple events
+                // Split into multiple events ONLY if different professionals are assigned in the same reservation
                 const splitEvents: AgendaEvent[] = [];
-                groupedItemsMap.forEach((groupItems) => {
-                    const profId = groupItems[0].barbero_id;
-                    const itemStartStr = (groupItems[0] as any).hora_inicio;
-                    
+                groupedItemsMap.forEach((groupItems, profId) => {
+                    const sortedItems = [...groupItems].sort((a: any, b: any) => {
+                        const aStart = a.hora_inicio || '99:99';
+                        const bStart = b.hora_inicio || '99:99';
+                        return aStart.localeCompare(bStart);
+                    });
+                    const firstItemStart = (sortedItems[0] as any)?.hora_inicio;
                     let startVal = globalStart;
-                    let endVal = globalEnd;
-
-                    if (itemStartStr && typeof itemStartStr === 'string' && itemStartStr.includes(':')) {
-                        const [sh = 0, sm = 0] = itemStartStr.split(':').map(Number);
+                    if (firstItemStart && typeof firstItemStart === 'string' && firstItemStart.includes(':')) {
+                        const [sh = 0, sm = 0] = firstItemStart.split(':').map(Number);
                         startVal = sh + sm / 60;
-                        
-                        const totalProfDurationMins = groupItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
-                        endVal = startVal + totalProfDurationMins / 60;
-                    } else {
-                        const totalProfDurationMins = groupItems.reduce((acc, currentItem: any) => acc + (currentItem.duracion || 0), 0);
-                        const profDurationHours = totalProfDurationMins > 0 ? (totalProfDurationMins / 60) : globalDuration;
-                        endVal = globalStart + profDurationHours;
                     }
+
+                    const totalProfDurationMins = groupItems.reduce((acc: number, currentItem: any) => acc + (Number(currentItem.duracion) || 0), 0);
+                    const endVal = totalProfDurationMins > 0 ? (startVal + totalProfDurationMins / 60) : globalEnd;
 
                     splitEvents.push({
                         ...res,

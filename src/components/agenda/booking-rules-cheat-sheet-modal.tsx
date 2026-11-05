@@ -35,9 +35,14 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
     getDoc(doc(db, 'configuracion', 'reglas_reservas'))
       .then((snap) => {
         if (snap.exists()) {
+          const data = snap.data();
           setRules({
             ...DEFAULT_BOOKING_RULES,
-            ...snap.data(),
+            ...data,
+            tolerancia_anticipo_minutos:
+              !data.tolerancia_anticipo_minutos || Number(data.tolerancia_anticipo_minutos) === 20
+                ? 30
+                : Number(data.tolerancia_anticipo_minutos),
           });
         }
       })
@@ -143,10 +148,13 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
                   <strong className="text-foreground">Franja de apertura ({rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM):</strong> Todas las citas que inicien en la franja de apertura (<span className="font-bold text-foreground">{rules.anticipo_horario_apertura_hora || '10:00'} a {rules.anticipo_horario_apertura_hora_fin || '10:30'} AM</span>, ej. 10:00, 10:10 o 10:30) requieren obligatoriamente el <span className="font-bold text-foreground">{rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo</span> sin importar el servicio o canal (Web, App o Agenda).
                 </li>
                 <li>
-                  <strong className="text-foreground">Citas con anticipo pendiente (Apartado tentativo):</strong> Ocupan únicamente el 50% de la columna en la agenda con textura semitransparente y cuentan con una tolerancia de {rules.tolerancia_anticipo_minutos || 20} minutos para recibir el anticipo. Al registrarse el pago, pasan al 100% de la celda formal en estado Confirmado.
+                  <strong className="text-foreground">Citas con anticipo pendiente (Apartado tentativo):</strong> Ocupan únicamente el 50% de la columna en la agenda con textura semitransparente y cuentan con una tolerancia de <span className="font-bold text-foreground">{rules.tolerancia_anticipo_minutos || 30} minutos</span> para recibir el anticipo. Al registrarse el pago, pasan al 100% de la celda formal en estado Confirmado; si vence el plazo sin pago, se cancelan automáticamente.
                 </li>
                 <li>
                   <strong className="text-foreground">Umbral de cobro:</strong> Si la suma de servicios reservados es igual o mayor a <span className="font-bold text-foreground">${rules.anticipo_monto_minimo || 190} MXN</span>, o son servicios especiales de 60+ min, se exige el {rules.anticipo_porcentaje_defecto || 50}% de anticipo para confirmar.
+                </li>
+                <li>
+                  <strong className="text-foreground">Clientes Exentos y Códigos de 1 Uso (4 dígitos):</strong> Los clientes marcados en su perfil como <em>Exento de Anticipo</em> no requieren depósito en ningún horario ni monto (pierden el beneficio automáticamente si acumulan 2 inasistencias). Para exentar una cita puntual en recepción, se requiere un código de autorización de 4 dígitos de un solo uso y motivo obligatorio.
                 </li>
                 <li>
                   <strong className="text-foreground">Acreditación en caja:</strong> Todo anticipo se descuenta de forma automática al momento de liquidar la cuenta final al terminar el servicio.

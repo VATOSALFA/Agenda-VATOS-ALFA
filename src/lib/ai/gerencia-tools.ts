@@ -507,6 +507,9 @@ async function resolveOrCreateClientForGerencia(
   numeroCliente?: string;
   notas?: string;
   fueEncontrado: boolean;
+  exentoAnticipo: boolean;
+  citasNoAsistidas: number;
+  citasAsistidas: number;
 }> {
   const cleanPhone = (telefonoCliente || '').replace(/\D/g, '');
   const rawQuery = (nombreCliente || '').trim();
@@ -519,6 +522,9 @@ async function resolveOrCreateClientForGerencia(
   let resolvedNum = '';
   let resolvedNotas = '';
   let fueEncontrado = false;
+  let exentoAnticipo = false;
+  let citasNoAsistidas = 0;
+  let citasAsistidas = 0;
 
   // 1. Buscar directamente por teléfono si tiene al menos 7 dígitos (probando variantes 10 dígitos, con 52, con +52)
   if (cleanPhone && cleanPhone.length >= 7) {
@@ -534,6 +540,9 @@ async function resolveOrCreateClientForGerencia(
         resolvedEmail = cd.correo || cd.email || '';
         resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
         resolvedNotas = cd.notas || cd.nota || '';
+        exentoAnticipo = Boolean(cd.exento_anticipo === true && (Number(cd.faltas_desde_exencion) || 0) < 2);
+        citasNoAsistidas = Number(cd.citas_no_asistidas) || 0;
+        citasAsistidas = Number(cd.citas_asistidas) || 0;
         fueEncontrado = true;
         break;
       }
@@ -551,6 +560,9 @@ async function resolveOrCreateClientForGerencia(
       resolvedEmail = cd.correo || cd.email || '';
       resolvedNum = String(cd.numero_cliente ?? cd.numeroCliente ?? '');
       resolvedNotas = cd.notas || cd.nota || '';
+      exentoAnticipo = Boolean(cd.exento_anticipo === true && (Number(cd.faltas_desde_exencion) || 0) < 2);
+      citasNoAsistidas = Number(cd.citas_no_asistidas) || 0;
+      citasAsistidas = Number(cd.citas_asistidas) || 0;
       fueEncontrado = true;
     }
   }
@@ -610,6 +622,9 @@ async function resolveOrCreateClientForGerencia(
       resolvedEmail = bestDoc.correo || bestDoc.email || '';
       resolvedNum = String(bestDoc.numero_cliente ?? bestDoc.numeroCliente ?? '');
       resolvedNotas = bestDoc.notas || bestDoc.nota || '';
+      exentoAnticipo = Boolean(bestDoc.exento_anticipo === true && (Number(bestDoc.faltas_desde_exencion) || 0) < 2);
+      citasNoAsistidas = Number(bestDoc.citas_no_asistidas) || 0;
+      citasAsistidas = Number(bestDoc.citas_asistidas) || 0;
       fueEncontrado = true;
     }
   }
@@ -651,6 +666,9 @@ async function resolveOrCreateClientForGerencia(
     numeroCliente: resolvedNum,
     notas: resolvedNotas,
     fueEncontrado,
+    exentoAnticipo,
+    citasNoAsistidas,
+    citasAsistidas,
   };
 }
 
@@ -854,6 +872,10 @@ export const agendarCitaSucursalTool = ai.defineTool(
         .boolean()
         .optional()
         .describe('Si es true, permite agendar sobrecupo o fuera de turno si la administración lo autoriza explícitamente.'),
+      exentarAnticipoPorEstaOcasion: z
+        .boolean()
+        .optional()
+        .describe('Si es true, aplica un código de exención de anticipo de 4 dígitos por esta ocasión para confirmar la cita al 100% sin pedir anticipo (únicamente cuando Beatriz o el Administrador General lo pidan de forma expresa).'),
     }),
   },
   async ({
@@ -867,6 +889,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
     servicioNombre,
     notas,
     forzarSobrecupo,
+    exentarAnticipoPorEstaOcasion,
   }) => {
     const caller = getCallerInfo(quienSolicita);
     const db = getDb();
@@ -981,7 +1004,70 @@ export const agendarCitaSucursalTool = ai.defineTool(
       }
     }
 
-    // 5. Crear la reserva en la base de datos oficial
+    // 5. Evaluar Reglas de Anticipo (10:00 a 10:30 AM, >= $190.00 MXN, 2+ inasistencias, o cliente exento)
+    const isOpeningSlot = startMins >= 600 && startMins <= 630;
+    const isHighAmount = service.price >= 190;
+    const isNoShowPenalized = client.citasNoAsistidas >= 2;
+    const rawNeedsDeposit = isOpeningSlot || isHighAmount || isNoShowPenalized;
+
+    const depositReason = isNoShowPenalized
+      ? `historial de ${client.citasNoAsistidas} inasistencias`
+      : isOpeningSlot
+        ? 'franja de apertura (10:00 a 10:30 AM)'
+        : 'importe igual o mayor a $190.00 MXN';
+
+    const expectedDeposit = Math.ceil(service.price * 0.5);
+    let finalRequiresDeposit = false;
+    let finalEstado = 'Reservado';
+    let finalPagoEstado = 'Pendiente';
+    let finalExentoAnticipo = false;
+    let finalExentoPor = '';
+    let finalExentoMotivo = '';
+    let finalExentoCodigo = '';
+
+    if (client.exentoAnticipo) {
+      finalRequiresDeposit = false;
+      finalEstado = 'Confirmado';
+      finalPagoEstado = 'Pendiente';
+      finalExentoAnticipo = true;
+      finalExentoPor = 'Cliente Exento de Anticipo';
+      finalExentoMotivo = 'Cliente exento de anticipo en base de datos';
+    } else if (rawNeedsDeposit && exentarAnticipoPorEstaOcasion) {
+      // Generar y quemar código de 4 dígitos de un solo uso auditado
+      const autoPin = String(Math.floor(1000 + Math.random() * 9000));
+      const nowIso = new Date().toISOString();
+      await db.collection('codigos_autorizacion').add({
+        name: `Código 1 Uso (${caller.assistantName}: Exención Anticipo ${client.nombre})`,
+        code: autoPin,
+        active: false,
+        reserves: true,
+        cashbox: true,
+        download: true,
+        invoiced_sales: true,
+        is_one_time: true,
+        used: true,
+        used_at: nowIso,
+        used_by: `${caller.operatorName} vía ${caller.assistantName}`,
+        used_in_module: 'Exención de Anticipo al Agendar Cita',
+        used_details: `Cliente: ${client.nombre} | Fecha: ${targetDate} ${horaInicio}`,
+        created_at: nowIso,
+        created_by: caller.operatorName,
+        purpose: `Exención de anticipo autorizada por ${caller.operatorName}`,
+      });
+      finalRequiresDeposit = false;
+      finalEstado = 'Confirmado';
+      finalPagoEstado = 'Pendiente';
+      finalExentoAnticipo = true;
+      finalExentoPor = caller.operatorName;
+      finalExentoMotivo = `Exentado por instrucción de ${caller.operatorName} vía ${caller.assistantName}`;
+      finalExentoCodigo = `${autoPin} (1 uso)`;
+    } else if (rawNeedsDeposit) {
+      finalRequiresDeposit = true;
+      finalEstado = 'Pendiente de pago';
+      finalPagoEstado = 'pendiente_anticipo';
+    }
+
+    // 6. Crear la reserva en la base de datos oficial
     const newResRef = await db.collection('reservas').add({
       cliente_id: client.id,
       cliente_nombre: client.nombre,
@@ -1014,10 +1100,20 @@ export const agendarCitaSucursalTool = ai.defineTool(
       monto_pagado_real: 0,
       anticipo_pagado: 0,
       anticipoPagado: 0,
-      anticipo_esperado: 0,
-      requiere_anticipo: false,
-      estado: 'Reservado',
-      pago_estado: 'Pendiente',
+      anticipo_esperado: finalRequiresDeposit ? expectedDeposit : 0,
+      monto_anticipo: finalRequiresDeposit ? expectedDeposit : 0,
+      requiere_anticipo: finalRequiresDeposit,
+      estado: finalEstado,
+      pago_estado: finalPagoEstado,
+      ...(finalExentoAnticipo
+        ? {
+            exento_anticipo: true,
+            exento_por: finalExentoPor,
+            exento_motivo: finalExentoMotivo,
+            ...(finalExentoCodigo ? { exento_codigo: finalExentoCodigo } : {}),
+            exento_en: new Date().toISOString(),
+          }
+        : {}),
       local_id: defaultLocalId,
       canal_reserva: 'janet',
       origen: 'janet_gerencia',
@@ -1037,10 +1133,10 @@ export const agendarCitaSucursalTool = ai.defineTool(
       },
     });
 
-    // 6. Auditoría institucional
+    // 7. Auditoría institucional
     await db.collection('audit_logs').add({
       action: `Crear Cita (${caller.assistantName})`,
-      details: `Cita agendada para ${client.nombre} con ${barberDisplayName} el ${targetDate} de ${horaInicio} a ${horaFin} (${service.name} - $${service.price.toFixed(2)})`,
+      details: `Cita agendada para ${client.nombre} con ${barberDisplayName} el ${targetDate} de ${horaInicio} a ${horaFin} (${service.name} - $${service.price.toFixed(2)}). ${finalRequiresDeposit ? `Pendiente de anticipo ($${expectedDeposit.toFixed(2)} MXN - 30 min tolerancia)` : finalExentoAnticipo ? `Exenta de anticipo (${finalExentoPor})` : 'Confirmada sin anticipo'}`,
       userId: caller.auditUserId,
       userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
       userRole: caller.auditUserRole,
@@ -1050,10 +1146,17 @@ export const agendarCitaSucursalTool = ai.defineTool(
       timestamp: FieldValue.serverTimestamp(),
     });
 
+    const avisoAnticipo = finalRequiresDeposit
+      ? `\n\n⚠️ **Aviso de Anticipo:** Por regla del sistema (${depositReason}), esta cita quedó en estado **Tentativa / Esperando Anticipo de $${expectedDeposit.toFixed(2)} MXN** (con **30 minutos de tolerancia**).\n\n¿Deseas que:\n1. **Le aplique un código de exención por esta ocasión** para confirmarla al 100%, o\n2. **Marque a ${client.nombre} como cliente exento permanente** en la base de datos para que nunca se le pida anticipo?`
+      : finalExentoAnticipo
+        ? `\n\n★ **Anticipo Exentado:** La cita quedó confirmada al 100% sin requerir anticipo (${finalExentoMotivo}).`
+        : '';
+
     return {
       ok: true,
       reservaId: newResRef.id,
       cliente: client.nombre,
+      clienteId: client.id,
       telefono: client.telefono,
       numeroCliente: client.numeroCliente,
       clienteIdentificadoPreviamente: client.fueEncontrado,
@@ -1063,7 +1166,11 @@ export const agendarCitaSucursalTool = ai.defineTool(
       duracionMinutos: service.duration,
       servicio: service.name,
       precio: service.price,
-      mensaje: `¡Listo! La cita quedó agendada con éxito en la agenda:\n\n• **Cliente:** ${client.nombre}${client.numeroCliente ? ` (Cliente #${client.numeroCliente})` : ''}${client.telefono ? ` - Celular: ${client.telefono}` : ''}\n• **Barbero:** ${barberDisplayName}\n• **Fecha:** ${targetDate}\n• **Horario:** ${horaInicio} a ${horaFin} (${service.duration} min)\n• **Servicio:** ${service.name}\n• **Total a liquidar en caja:** $${service.price.toFixed(2)} MXN\n\nYa aparece visible en la cuadrícula de la agenda para todo el equipo.`,
+      requiereAnticipo: finalRequiresDeposit,
+      montoAnticipoRequerido: finalRequiresDeposit ? expectedDeposit : 0,
+      motivoAnticipo: finalRequiresDeposit ? depositReason : null,
+      exentoAnticipo: finalExentoAnticipo,
+      mensaje: `¡Listo! La cita de **${client.nombre}** ya quedó puesta en la agenda:\n\n• **Cliente:** ${client.nombre}${client.numeroCliente ? ` (Cliente #${client.numeroCliente})` : ''}${client.telefono ? ` - Celular: ${client.telefono}` : ''}\n• **Barbero:** ${barberDisplayName}\n• **Fecha:** ${targetDate}\n• **Horario:** ${horaInicio} a ${horaFin} (${service.duration} min)\n• **Servicio:** ${service.name}\n• **Total cita:** $${service.price.toFixed(2)} MXN${avisoAnticipo}`,
     };
   }
 );
@@ -4266,6 +4373,345 @@ export const gestionarCatalogoServiciosSucursalTool = ai.defineTool(
   }
 );
 
+// ============================================================================
+// 19. GESTIONAR CÓDIGOS DE UN SOLO USO (4 DÍGITOS) Y EXENCIÓN DE ANTICIPOS (CITA O CLIENTE)
+// ============================================================================
+export const gestionarExencionYCodigosAnticipoSucursalTool = ai.defineTool(
+  {
+    name: 'gestionar_exencion_y_codigos_anticipo_sucipo_sucursal'.replace('_sucipo_', '_'),
+    description:
+      'Permite a Janet (Gerencia o Dirección General): 1) Generar un código de autorización temporal de un solo uso de 4 dígitos para Recepción/Caja/Anticipos; 2) Exentar por esta ocasión el anticipo de una cita específica aplicando un código de un solo uso auditado para confirmarla al 100%; 3) Marcar o desmarcar a un cliente como Exento de Anticipo permanente en la base de datos de Clientes (se revoca automáticamente si acumula 2 faltas).',
+    inputSchema: z.object({
+      accion: z
+        .enum([
+          'generar_codigo_un_uso',
+          'exentar_anticipo_cita',
+          'configurar_cliente_exento_anticipo',
+        ])
+        .describe(
+          'Acción a ejecutar: "generar_codigo_un_uso" (crea un PIN de 4 dígitos de 1 solo uso), "exentar_anticipo_cita" (omite el anticipo de una cita por esta ocasión y la pasa a Confirmado al 100%), o "configurar_cliente_exento_anticipo" (marca o desmarca al cliente en la base de datos como exento permanente de anticipos).'
+        ),
+      reservaId: z
+        .string()
+        .optional()
+        .describe('ID de la reserva (si se conoce) cuando accion es "exentar_anticipo_cita".'),
+      nombreCliente: z
+        .string()
+        .optional()
+        .describe('Nombre del cliente para buscar su cita o su perfil en la base de datos.'),
+      telefonoCliente: z
+        .string()
+        .optional()
+        .describe('Teléfono del cliente a 10 dígitos (opcional).'),
+      numeroCliente: z
+        .string()
+        .optional()
+        .describe('Número de cliente en la base de datos (opcional).'),
+      fechaCita: z
+        .string()
+        .optional()
+        .describe('Fecha de la cita en formato YYYY-MM-DD (opcional, por defecto busca hoy o citas activas próximas).'),
+      exentoPermanente: z
+        .boolean()
+        .optional()
+        .describe('Cuando accion es "configurar_cliente_exento_anticipo": true para marcar al cliente como Exento de Anticipo, false para quitarle la exención. Por defecto true.'),
+      motivo: z
+        .string()
+        .optional()
+        .describe('Motivo o nota de la autorización/exención (ej. "Autorizado por Beatriz", "Cliente frecuente de confianza").'),
+      vigenciaMinutos: z
+        .number()
+        .optional()
+        .describe('Vigencia en minutos para el código de 4 dígitos de un solo uso (por defecto 30 minutos).'),
+      quienSolicita: z
+        .string()
+        .optional()
+        .describe('Nombre de quien solicita la operación (Beatriz o Alejandro Pacheco).'),
+    }),
+  },
+  async ({
+    accion,
+    reservaId,
+    nombreCliente,
+    telefonoCliente,
+    numeroCliente,
+    fechaCita,
+    exentoPermanente,
+    motivo,
+    vigenciaMinutos,
+    quienSolicita,
+  }) => {
+    const caller = getCallerInfo(quienSolicita);
+    const db = getDb();
+    const { todayIso } = getMexicoDateInfo();
+    const cleanReason = (motivo || '').trim() || `Autorizado por ${caller.operatorName} vía ${caller.assistantName}`;
+
+    // ACCIÓN 1: GENERAR CÓDIGO DE UN SOLO USO DE 4 DÍGITOS
+    if (accion === 'generar_codigo_un_uso') {
+      let pin = '';
+      for (let i = 0; i < 10; i++) {
+        const candidate = String(Math.floor(1000 + Math.random() * 9000));
+        const existing = await db
+          .collection('codigos_autorizacion')
+          .where('code', '==', candidate)
+          .where('active', '==', true)
+          .get();
+        if (existing.empty) {
+          pin = candidate;
+          break;
+        }
+      }
+      if (!pin) pin = String(Math.floor(1000 + Math.random() * 9000));
+
+      const mins = vigenciaMinutos && vigenciaMinutos > 0 ? vigenciaMinutos : 30;
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + mins * 60 * 1000).toISOString();
+
+      const docRef = await db.collection('codigos_autorizacion').add({
+        name: `Código 1 Uso (${cleanReason.slice(0, 40)})`,
+        code: pin,
+        active: true,
+        reserves: true,
+        cashbox: true,
+        download: true,
+        invoiced_sales: true,
+        is_one_time: true,
+        used: false,
+        created_at: now.toISOString(),
+        created_by: `${caller.operatorName} (${caller.assistantName})`,
+        expires_at: expiresAt,
+        purpose: cleanReason,
+      });
+
+      await db.collection('audit_logs').add({
+        action: `Generar Código 1 Uso (${caller.assistantName})`,
+        details: `Se generó el código temporal de un solo uso [${pin}] válido por ${mins} min. Motivo: ${cleanReason}`,
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
+        severity: 'info',
+        entityId: docRef.id,
+        localId: 'rkbEgvwP67JliXQ1Qeyj',
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        ok: true,
+        accion: 'generar_codigo_un_uso',
+        codigo: pin,
+        vigenciaMinutos: mins,
+        expiraEn: expiresAt,
+        mensaje: `¡Listo! Generé el código de autorización de un solo uso de 4 dígitos:\n\n🔑 **Código:** **${pin}**\n⏱ **Vigencia:** ${mins} minutos (se invalida automáticamente en cuanto se utilice por primera vez)\n📋 **Permisos:** Omitir anticipo, cancelar reservas, ajustes de caja, ventas facturadas y descargas.`,
+      };
+    }
+
+    // ACCIÓN 2: EXENTAR ANTICIPO DE UNA CITA POR ESTA OCASIÓN
+    if (accion === 'exentar_anticipo_cita') {
+      let targetResDoc: any = null;
+
+      if (reservaId && reservaId.trim()) {
+        const directSnap = await db.collection('reservas').doc(reservaId.trim()).get();
+        if (directSnap.exists) {
+          targetResDoc = { id: directSnap.id, ...directSnap.data() };
+        }
+      }
+
+      if (!targetResDoc) {
+        const targetDate = fechaCita && /^\d{4}-\d{2}-\d{2}$/.test(fechaCita.trim()) ? fechaCita.trim() : null;
+        const qNorm = normalizeName(nombreCliente || '');
+        const cleanPhone = (telefonoCliente || '').replace(/\D/g, '').slice(-10);
+
+        const resSnap = targetDate
+          ? await db.collection('reservas').where('fecha', '==', targetDate).get()
+          : await db.collection('reservas').where('fecha', '>=', todayIso).get();
+
+        const candidates: any[] = [];
+        resSnap.forEach((d: any) => {
+          const r = d.data();
+          if (r.estado === 'Cancelado' || r.estado === 'No asiste') return;
+          const cName = normalizeName(r.cliente_nombre || `${r.customer?.nombre || ''} ${r.customer?.apellido || ''}`);
+          const cPhone = String(r.cliente_telefono || r.customer?.telefono || '').replace(/\D/g, '').slice(-10);
+
+          let match = false;
+          if (cleanPhone && cPhone && cleanPhone === cPhone) match = true;
+          if (qNorm && cName && (cName.includes(qNorm) || qNorm.includes(cName))) match = true;
+          if (match) {
+            candidates.push({ id: d.id, ...r });
+          }
+        });
+
+        // Priorizar las que estén pendientes de anticipo
+        candidates.sort((a, b) => {
+          const aPend = a.pago_estado === 'pendiente_anticipo' || a.requiere_anticipo ? 1 : 0;
+          const bPend = b.pago_estado === 'pendiente_anticipo' || b.requiere_anticipo ? 1 : 0;
+          if (aPend !== bPend) return bPend - aPend;
+          return String(a.fecha || '').localeCompare(String(b.fecha || ''));
+        });
+
+        if (candidates.length > 0) {
+          targetResDoc = candidates[0];
+        }
+      }
+
+      if (!targetResDoc) {
+        return {
+          ok: false,
+          mensaje: `No encontré ninguna cita activa${nombreCliente ? ` para "${nombreCliente}"` : ''}${fechaCita ? ` en la fecha ${fechaCita}` : ''} que requiera exención de anticipo. Verifica el nombre del cliente o la fecha de la cita.`,
+        };
+      }
+
+      // Generar y quemar código de 4 dígitos de 1 uso para trazabilidad
+      const autoPin = String(Math.floor(1000 + Math.random() * 9000));
+      const nowIso = new Date().toISOString();
+      await db.collection('codigos_autorizacion').add({
+        name: `Código 1 Uso (${caller.assistantName}: Exención Cita ${targetResDoc.cliente_nombre || nombreCliente || ''})`,
+        code: autoPin,
+        active: false,
+        reserves: true,
+        cashbox: true,
+        download: true,
+        invoiced_sales: true,
+        is_one_time: true,
+        used: true,
+        used_at: nowIso,
+        used_by: `${caller.operatorName} vía ${caller.assistantName}`,
+        used_in_module: 'Exención de Anticipo en Cita',
+        used_details: `Reserva ID: ${targetResDoc.id} | Cliente: ${targetResDoc.cliente_nombre || ''} | Fecha: ${targetResDoc.fecha} ${targetResDoc.hora_inicio}`,
+        created_at: nowIso,
+        created_by: caller.operatorName,
+        purpose: cleanReason,
+      });
+
+      await db.collection('reservas').doc(targetResDoc.id).update({
+        exento_anticipo: true,
+        exento_por: caller.operatorName,
+        exento_motivo: cleanReason,
+        exento_codigo: `${autoPin} (1 uso)`,
+        exento_en: nowIso,
+        requiere_anticipo: false,
+        anticipo_esperado: 0,
+        estado: 'Confirmado',
+        pago_estado: 'Pendiente',
+      });
+
+      await db.collection('audit_logs').add({
+        action: `Exención de Anticipo con Código (${caller.assistantName})`,
+        details: `Se exentó el anticipo de la cita de ${targetResDoc.cliente_nombre || 'Cliente'} (${targetResDoc.fecha} a las ${targetResDoc.hora_inicio}) con el código de 1 uso [${autoPin}]. Motivo: ${cleanReason}`,
+        userId: caller.auditUserId,
+        userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+        userRole: caller.auditUserRole,
+        severity: 'warning',
+        entityId: targetResDoc.id,
+        localId: targetResDoc.local_id || 'rkbEgvwP67JliXQ1Qeyj',
+        timestamp: FieldValue.serverTimestamp(),
+      });
+
+      return {
+        ok: true,
+        accion: 'exentar_anticipo_cita',
+        reservaId: targetResDoc.id,
+        cliente: targetResDoc.cliente_nombre,
+        fecha: targetResDoc.fecha,
+        hora: targetResDoc.hora_inicio,
+        codigoAplicado: autoPin,
+        mensaje: `¡Listo! Apliqué el código de autorización de un solo uso **${autoPin}** y dejé **Confirmada al 100%** la cita de **${targetResDoc.cliente_nombre}** para el **${targetResDoc.fecha} a las ${targetResDoc.hora_inicio}** sin requerir anticipo por esta ocasión.`,
+      };
+    }
+
+    // ACCIÓN 3: CONFIGURAR CLIENTE COMO EXENTO PERMANENTE EN LA BASE DE DATOS DE CLIENTES
+    const client = await resolveOrCreateClientForGerencia(
+      db,
+      nombreCliente,
+      telefonoCliente,
+      numeroCliente
+    );
+
+    if (!client.fueEncontrado) {
+      return {
+        ok: false,
+        mensaje: `No encontré un cliente registrado con los datos proporcionados (${nombreCliente || telefonoCliente || numeroCliente || ''}). Por favor verifica su nombre o teléfono.`,
+      };
+    }
+
+    const shouldExempt = exentoPermanente !== false;
+    const nowIso = new Date().toISOString();
+
+    if (shouldExempt) {
+      await db.collection('clientes').doc(client.id).update({
+        exento_anticipo: true,
+        faltas_desde_exencion: 0,
+        exento_anticipo_por: caller.operatorName,
+        exento_anticipo_fecha: nowIso,
+        exento_anticipo_motivo: cleanReason,
+      });
+    } else {
+      await db.collection('clientes').doc(client.id).update({
+        exento_anticipo: false,
+        exento_revocado_en: nowIso,
+        exento_revocado_motivo: cleanReason,
+      });
+    }
+
+    // Si se marcó como exento permanente y tiene citas hoy o futuras pendientes de anticipo, confirmarlas automáticamente
+    let citasConfirmadasCount = 0;
+    if (shouldExempt) {
+      const pendingResSnap = await db
+        .collection('reservas')
+        .where('cliente_id', '==', client.id)
+        .get();
+
+      for (const rDoc of pendingResSnap.docs) {
+        const rData = rDoc.data();
+        if (
+          rData.fecha >= todayIso &&
+          rData.estado !== 'Cancelado' &&
+          rData.estado !== 'No asiste' &&
+          (rData.pago_estado === 'pendiente_anticipo' || rData.requiere_anticipo === true || rData.estado === 'Pendiente de pago')
+        ) {
+          await rDoc.ref.update({
+            exento_anticipo: true,
+            exento_por: caller.operatorName,
+            exento_motivo: 'Cliente marcado como Exento de Anticipo permanente',
+            exento_en: nowIso,
+            requiere_anticipo: false,
+            anticipo_esperado: 0,
+            estado: 'Confirmado',
+            pago_estado: 'Pendiente',
+          });
+          citasConfirmadasCount++;
+        }
+      }
+    }
+
+    await db.collection('audit_logs').add({
+      action: shouldExempt
+        ? `Marcar Cliente Exento de Anticipo (${caller.assistantName})`
+        : `Retirar Exención de Anticipo a Cliente (${caller.assistantName})`,
+      details: `${shouldExempt ? 'Se marcó como EXENTO DE ANTICIPO permanente' : 'Se retiró la exención de anticipo'} al cliente ${client.nombre} (#${client.numeroCliente || client.id.slice(0, 6)}). Motivo: ${cleanReason}`,
+      userId: caller.auditUserId,
+      userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
+      userRole: caller.auditUserRole,
+      severity: 'info',
+      entityId: client.id,
+      localId: 'rkbEgvwP67JliXQ1Qeyj',
+      timestamp: FieldValue.serverTimestamp(),
+    });
+
+    return {
+      ok: true,
+      accion: 'configurar_cliente_exento_anticipo',
+      clienteId: client.id,
+      cliente: client.nombre,
+      numeroCliente: client.numeroCliente,
+      exentoAnticipo: shouldExempt,
+      citasConfirmadasAutomaticamente: citasConfirmadasCount,
+      mensaje: shouldExempt
+        ? `¡Listo! Ya entré a la sección de **Clientes**, busqué a **${client.nombre}**${client.numeroCliente ? ` (#${client.numeroCliente})` : ''} y lo marqué como **★ Exento de Anticipo** de forma indefinida.${citasConfirmadasCount > 0 ? ` Además, confirmé automáticamente al 100% su(s) ${citasConfirmadasCount} cita(s) programada(s) que estaban esperando anticipo.` : ''}\n\n*(Nota: Si en el futuro llegara a acumular 2 inasistencias, el sistema le retirará el beneficio automáticamente).*`
+        : `Listo, retiré la exención de anticipo del perfil de **${client.nombre}**. A partir de ahora se le aplicarán las reglas estándar de anticipo.`,
+    };
+  }
+);
+
 export function getGerenciaAgentTools() {
   return [
     consultarOperacionDiaSucursalTool,
@@ -4277,6 +4723,7 @@ export function getGerenciaAgentTools() {
     gestionarJornadaEspecialSucursalTool,
     gestionarHorarioSemanalFijoProfesionalTool,
     gestionarCatalogoServiciosSucursalTool,
+    gestionarExencionYCodigosAnticipoSucursalTool,
     proponerCancelacionOEliminacionSucursalTool,
     consultarYGestionarInventarioInsumosTool,
     ingresarStockInventarioTool,

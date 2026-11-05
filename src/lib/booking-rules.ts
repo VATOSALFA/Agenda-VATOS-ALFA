@@ -153,7 +153,7 @@ export function isShortNoticeAppointment(
 
 /**
  * Determina si una reserva se encuentra actualmente esperando el pago de su anticipo
- * (estado preliminar de 20 minutos de tolerancia).
+ * (estado preliminar de 30 minutos de tolerancia).
  */
 export function isPendingDepositReservation(res: any): boolean {
   if (!res) return false;
@@ -167,6 +167,8 @@ export function isPendingDepositReservation(res: any): boolean {
   }
 
   const estado = String(res.estado || '').trim();
+  const pagoEstado = String(res.pago_estado || '').trim();
+
   if (
     estado === 'Cancelado' ||
     estado === 'Cancelada' ||
@@ -174,13 +176,20 @@ export function isPendingDepositReservation(res: any): boolean {
     estado === 'Completado' ||
     estado === 'Venta completada' ||
     estado === 'Asiste' ||
-    estado === 'Confirmado' ||
     estado === 'En espera'
   ) {
     return false;
   }
 
-  const pagoEstado = String(res.pago_estado || '').trim();
+  // Si está en 'Confirmado', solo se exime si NO tiene el flag explícito de pendiente_anticipo sin pagar
+  if (
+    estado === 'Confirmado' &&
+    pagoEstado !== 'pendiente_anticipo' &&
+    pagoEstado !== 'pending_payment'
+  ) {
+    return false;
+  }
+
   if (pagoEstado === 'Pagado') return false;
 
   const isExplicitlyUnpaid =
@@ -216,13 +225,13 @@ export function isPendingDepositReservation(res: any): boolean {
 }
 
 /**
- * Calcula el tiempo transcurrido y si ya vencieron los 20 minutos de tolerancia
+ * Calcula el tiempo transcurrido y si ya vencieron los 30 minutos de tolerancia
  * para una cita con anticipo pendiente.
  */
 export function getPendingDepositTiming(
   res: any,
   nowMs: number = Date.now(),
-  toleranceMinutes: number = 20
+  toleranceMinutes: number = 30
 ): {
   isPendingDeposit: boolean;
   createdMs: number | null;
@@ -255,11 +264,12 @@ export function getPendingDepositTiming(
     if (!isNaN(parsed)) createdMs = parsed;
   }
 
+  const effectiveTolerance = !toleranceMinutes || toleranceMinutes === 20 ? 30 : toleranceMinutes;
   const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
   const depositMinutesRemaining = createdMs
-    ? Math.max(0, Math.ceil(toleranceMinutes - diffMinutes))
-    : toleranceMinutes;
-  const depositExpired = Boolean(createdMs && diffMinutes >= toleranceMinutes);
+    ? Math.max(0, Math.ceil(effectiveTolerance - diffMinutes))
+    : effectiveTolerance;
+  const depositExpired = Boolean(createdMs && diffMinutes >= effectiveTolerance);
 
   return {
     isPendingDeposit: true,
@@ -271,12 +281,12 @@ export function getPendingDepositTiming(
 }
 
 /**
- * Devuelve true si la cita requería anticipo, no ha sido pagada y ya superó los 20 minutos de tolerancia.
+ * Devuelve true si la cita requería anticipo, no ha sido pagada y ya superó los 30 minutos de tolerancia.
  */
 export function isExpiredPendingDepositReservation(
   res: any,
   nowMs: number = Date.now(),
-  toleranceMinutes: number = 20
+  toleranceMinutes: number = 30
 ): boolean {
   return getPendingDepositTiming(res, nowMs, toleranceMinutes).depositExpired;
 }
@@ -356,7 +366,7 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
   tiempo_minimo_anticipacion_minutos: 30,
   dias_maximos_futuro: 14,
   tolerancia_puntualidad_minutos: 10,
-  tolerancia_anticipo_minutos: 20,
+  tolerancia_anticipo_minutos: 30,
   intervalo_horarios_minutos: 30,
 
   reglas_personalizadas: [],
@@ -404,6 +414,7 @@ export interface BookingRulesEvaluation {
   depositAmount: number;
   depositPercentage: number;
   reason: 'client_history' | 'service_specific' | 'opening_hour' | 'custom_rule' | 'global_threshold' | 'same_day_accumulation' | 'none';
+  isClientExempt?: boolean;
   clientNoShowsCount?: number;
   sameDayActiveCount?: number;
   sameDayActiveTotal?: number;
@@ -416,6 +427,7 @@ export interface BookingRulesEvaluation {
 
 /**
  * Evalúa las reglas de reserva respetando la jerarquía de mayor peso:
+ * 0. Exención de Cliente: Si el cliente está marcado como exento_anticipo y tiene < 2 faltas desde su exención, se exenta de todo.
  * 1. Regla de Cliente (Máxima Prioridad): Si tiene >= N inasistencias o cancelaciones, siempre paga anticipo.
  * 2. Regla de Servicio Específico: Si un servicio tiene regla propia de anticipo, se respeta.
  * 2.5. Regla de Horario de Apertura (10:00 AM): Toda cita en el horario de apertura requiere anticipo.
@@ -447,6 +459,8 @@ export function evaluateDepositRequirement({
   clientHistory?: {
     citas_canceladas?: number;
     citas_no_asistidas?: number;
+    exento_anticipo?: boolean;
+    faltas_desde_exencion?: number;
   } | null;
   date?: string; // 'YYYY-MM-DD'
   time?: string; // 'HH:mm'
@@ -462,6 +476,20 @@ export function evaluateDepositRequirement({
   };
 
   const safeTotal = Number(totalPrice) || 0;
+
+  // --- 0. EXENCIÓN PERMANENTE DEL CLIENTE (EXENTO DE TODO SALVO QUE ACUMULE 2 FALTAS DESDE SU EXENCIÓN) ---
+  if (
+    clientHistory?.exento_anticipo === true &&
+    Number(clientHistory?.faltas_desde_exencion || 0) < 2
+  ) {
+    return {
+      requiresDeposit: false,
+      depositAmount: 0,
+      depositPercentage: 0,
+      reason: 'none',
+      isClientExempt: true,
+    };
+  }
 
   // --- CÁLCULO DE ANTICIPO POR SERVICIOS ESPECÍFICOS ---
   let specificDepositSum = 0;

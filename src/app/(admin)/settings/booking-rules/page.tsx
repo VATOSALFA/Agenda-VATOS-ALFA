@@ -231,6 +231,10 @@ export default function BookingRulesPage() {
         if (reglasSnap.exists()) {
           const rData = reglasSnap.data() as Partial<ReglasReservasConfig>;
           Object.assign(currentRules, rData);
+          if (!rData.tolerancia_anticipo_minutos || Number(rData.tolerancia_anticipo_minutos) === 20) {
+            currentRules.tolerancia_anticipo_minutos = 30;
+            setDoc(reglasRef, { tolerancia_anticipo_minutos: 30 }, { merge: true }).catch(() => {});
+          }
           if (Array.isArray(rData.reglas_personalizadas)) {
             currentRules.reglas_personalizadas = rData.reglas_personalizadas;
           }
@@ -309,7 +313,7 @@ export default function BookingRulesPage() {
         tiempo_minimo_anticipacion_minutos: Number(rules.tiempo_minimo_anticipacion_minutos) || 30,
         dias_maximos_futuro: Number(rules.dias_maximos_futuro) || 14,
         tolerancia_puntualidad_minutos: Number(rules.tolerancia_puntualidad_minutos) || 10,
-        tolerancia_anticipo_minutos: Number(rules.tolerancia_anticipo_minutos) || 20,
+        tolerancia_anticipo_minutos: Number(rules.tolerancia_anticipo_minutos) || 30,
         intervalo_horarios_minutos: Number(rules.intervalo_horarios_minutos) || 30,
         reglas_personalizadas: rules.reglas_personalizadas || [],
         reglas_avisos_agenda: rules.reglas_avisos_agenda || DEFAULT_AVISOS_AGENDA_RULES,
@@ -338,7 +342,7 @@ export default function BookingRulesPage() {
           max_inasistencias_permitidas: payload.max_inasistencias_permitidas,
           penalizacion_anticipo_porcentaje: payload.penalizacion_anticipo_porcentaje,
           penalizacion_inasistencias_descripcion: payload.penalizacion_inasistencias_descripcion,
-          tolerancia_anticipo_minutos: payload.tolerancia_anticipo_minutos ?? 20,
+          tolerancia_anticipo_minutos: payload.tolerancia_anticipo_minutos ?? 30,
           reglas_personalizadas: payload.reglas_personalizadas || [],
           reglas_avisos_agenda: payload.reglas_avisos_agenda || [],
           actualizado_el: Timestamp.now(),
@@ -1179,6 +1183,30 @@ export default function BookingRulesPage() {
                   Esta descripción documenta para todo el equipo de recepción y administración la razón de ser de este escudo contra inasistencias.
                 </p>
               </div>
+
+              {/* RESUMEN INFORMATIVO DE EXENCIÓN DE ANTICIPO Y PÉRDIDA AUTOMÁTICA A LAS 2 FALTAS */}
+              <div className="col-span-1 md:col-span-2 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5">
+                    <UserCheck className="w-4 h-4 text-blue-400 shrink-0" />
+                    Política de Clientes Exentos de Anticipo y Códigos de 1 Uso (4 Dígitos)
+                  </span>
+                  <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">
+                    Regla Activa
+                  </Badge>
+                </div>
+                <ul className="list-disc pl-4 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
+                  <li>
+                    <strong className="text-foreground">Clientes Exentos de Anticipo:</strong> Los clientes marcados manualmente como <em>Exento de Anticipo</em> en la Base de Clientes (o vía Janet) quedan exentos de todas las reglas de anticipo (incluyendo franja de apertura 10:00-10:30 AM y servicios mayores a ${rules.anticipo_monto_minimo || 190} MXN).
+                  </li>
+                  <li>
+                    <strong className="text-foreground">Pérdida automática del beneficio a la 2.ª falta:</strong> Si un cliente exento acumula <strong>1 inasistencia (No asiste)</strong>, conserva su beneficio con advertencia; si acumula una <strong>2.ª inasistencia</strong>, el sistema revoca automáticamente su exención y vuelve a exigirle anticipo.
+                  </li>
+                  <li>
+                    <strong className="text-foreground">Exención por única ocasión en recepción:</strong> Para omitir el anticipo en una cita puntual sin marcar al cliente como exento permanente, recepción debe ingresar un <strong>Código de Autorización de 4 dígitos de un solo uso</strong> (generado en <em>Códigos de Autorización</em> o solicitándolo a Janet) junto con el motivo.
+                  </li>
+                </ul>
+              </div>
             </div>
           </CardContent>
         )}
@@ -1438,16 +1466,16 @@ export default function BookingRulesPage() {
                   min="5"
                   max="120"
                   className="font-medium h-9 text-xs"
-                  value={rules.tolerancia_anticipo_minutos ?? 20}
+                  value={rules.tolerancia_anticipo_minutos ?? 30}
                   onChange={(e) =>
                     setRules((prev) => ({
                       ...prev,
-                      tolerancia_anticipo_minutos: Number(e.target.value) || 20,
+                      tolerancia_anticipo_minutos: Number(e.target.value) || 30,
                     }))
                   }
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Tiempo de espera para recibir el anticipo antes de que el sistema cancele la cita preliminar automáticamente (ej. 20 min).
+                  Tiempo de espera para recibir el anticipo antes de que el sistema cancele la cita preliminar automáticamente (por defecto 30 min).
                 </p>
               </div>
 

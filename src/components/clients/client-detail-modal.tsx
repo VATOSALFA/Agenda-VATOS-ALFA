@@ -9,11 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, type LucideIcon } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, ShieldCheck, type LucideIcon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
+import { logAuditAction } from '@/lib/audit-logger';
 import type { Client, Profesional, CanjeBeneficio } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { where, doc, onSnapshot, collection, query } from 'firebase/firestore';
+import { where, doc, updateDoc, onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -176,8 +179,62 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   }, [liveClient.fecha_nacimiento]);
 
   const { user } = useAuth();
+  const { toast } = useToast();
   const canViewPhone = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('ver_numero_telefono')), [user]);
   const canEditClient = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('editar_clientes')), [user]);
+  const canManageExemption = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local', [user]);
+  const isClientExempt = Boolean(liveClient.exento_anticipo === true && (Number(liveClient.faltas_desde_exencion) || 0) < 2);
+  const [isTogglingExemption, setIsTogglingExemption] = useState(false);
+
+  const handleToggleExemption = async (nextExempt: boolean) => {
+    if (!db || !liveClient?.id || !canManageExemption || isTogglingExemption) return;
+    setIsTogglingExemption(true);
+    const adminName = user?.displayName || user?.email || 'Administración';
+    try {
+      const clientRef = doc(db, 'clientes', liveClient.id);
+      if (nextExempt) {
+        await updateDoc(clientRef, {
+          exento_anticipo: true,
+          faltas_desde_exencion: 0,
+          exento_anticipo_por: adminName,
+          exento_anticipo_fecha: new Date().toISOString(),
+          exento_anticipo_motivo: 'Marcado como Exento de Anticipo desde Perfil del Cliente',
+        });
+      } else {
+        await updateDoc(clientRef, {
+          exento_anticipo: false,
+          exento_revocado_en: new Date().toISOString(),
+          exento_revocado_motivo: `Exención desactivada manualmente por ${adminName}`,
+        });
+      }
+
+      await logAuditAction({
+        action: nextExempt ? 'Activar Exención de Anticipo a Cliente' : 'Revocar Exención de Anticipo a Cliente',
+        details: `${nextExempt ? 'Se activó Exento de Anticipo' : 'Se desactivó Exento de Anticipo'} para ${liveClient.nombre} ${liveClient.apellido || ''} (#${liveClient.numero_cliente || liveClient.id.slice(0, 6)}).`,
+        userId: user?.uid || 'unknown',
+        userName: adminName,
+        userRole: user?.role,
+        severity: 'info',
+        localId: user?.local_id || 'default',
+      });
+
+      toast({
+        title: nextExempt ? '★ Exento de Anticipo Activado' : 'Exención de Anticipo Desactivada',
+        description: nextExempt
+          ? 'No se le solicitará anticipo en ninguna cita (se revoca automáticamente si acumula 2 inasistencias).'
+          : 'El cliente volverá a regirse por las reglas estándar de anticipo.',
+      });
+    } catch (error) {
+      console.error('Error updating client exemption:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo actualizar el estado de exención del cliente.',
+      });
+    } finally {
+      setIsTogglingExemption(false);
+    }
+  };
 
   const [resSortConfig, setResSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
   const [salesSortConfig, setSalesSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
@@ -426,6 +483,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
               <div className="min-w-0 space-y-0.5">
                 <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 truncate">
                   <span>{liveClient.nombre} {liveClient.apellido}</span>
+                  {isClientExempt && (
+                    <Badge variant="outline" className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] px-2 py-0.5 font-bold">
+                      ★ EXENTO DE ANTICIPO
+                    </Badge>
+                  )}
                   {freeCutReady && (
                     <Badge className="bg-[#C5A880] text-black font-extrabold text-[10px] px-2 py-0.5 border-none shadow-sm shadow-[#C5A880]/30">
                       10.° CORTE GRATIS
@@ -627,6 +689,42 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   </p>
                   <p className="text-foreground/90 italic leading-snug line-clamp-3 hover:line-clamp-none transition-all">
                     {liveClient.notas}
+                  </p>
+                </div>
+              )}
+
+              {/* Control de Exención de Anticipos (Confianza / VIP) */}
+              {(canManageExemption || isClientExempt) && (
+                <div className={cn(
+                  "rounded-xl border p-3 text-xs space-y-2 transition-all",
+                  isClientExempt
+                    ? "bg-[#C5A880]/10 border-[#C5A880]/40"
+                    : "bg-card border-border/60"
+                )}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <ShieldCheck className={cn("h-4 w-4 shrink-0", isClientExempt ? "text-[#C5A880]" : "text-slate-400")} />
+                      <span className="font-bold text-foreground truncate">Exento de Anticipo</span>
+                    </div>
+                    {canManageExemption ? (
+                      <Switch
+                        checked={isClientExempt}
+                        disabled={isTogglingExemption}
+                        onCheckedChange={handleToggleExemption}
+                        className="scale-90"
+                      />
+                    ) : (
+                      <Badge variant="outline" className="border-[#C5A880]/40 text-[#C5A880] text-[10px] py-0 px-1.5">
+                        Activo
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    {isClientExempt
+                      ? `No se le solicita anticipo en ninguna cita (${Number(liveClient.faltas_desde_exencion) || 0}/2 inasistencias de margen antes de revocarse).`
+                      : liveClient.exento_revocado_motivo
+                        ? `Exención revocada: ${liveClient.exento_revocado_motivo}`
+                        : "Actívalo para no solicitar anticipo a este cliente de confianza (se revoca automáticamente si acumula 2 faltas)."}
                   </p>
                 </div>
               )}

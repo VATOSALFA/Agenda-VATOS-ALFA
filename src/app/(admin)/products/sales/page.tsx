@@ -50,6 +50,7 @@ import { useAuth } from "@/contexts/firebase-auth-context";
 import { useProductSalesData } from './use-product-sales-data';
 import type { AggregatedProductSale, AggregatedSellerSale } from "@/lib/types";
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 
 export default function ProductSalesPage() {
     const { user } = useAuth();
@@ -201,29 +202,23 @@ export default function ProductSalesPage() {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }
-        const authCodeQuery = query(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where('download', '==', true)
-        );
-        const querySnapshot = await getDocs(authCodeQuery);
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: 'download',
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: 'unknown',
+            operationDescription: 'Descargar reporte detallado de ventas de productos',
+            moduleLabel: 'Ventas de Productos',
+        });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             triggerDownload();
             setIsDownloadModalOpen(false);
-            await logAuditAction({
-                action: 'Autorización por Código',
-                details: 'Acción autorizada: Descargar reporte detallado de ventas de productos.',
-                userId: user?.uid || 'unknown',
-                userName: user?.displayName || user?.email || 'Unknown',
-                userRole: user?.role,
-                authCode: authCode,
-                severity: 'info',
-                localId: 'unknown'
-            });
             setAuthCode('');
         }
     };

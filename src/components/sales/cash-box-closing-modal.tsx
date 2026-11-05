@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { collection, addDoc, Timestamp, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -191,15 +192,19 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
       toast({ variant: 'destructive', title: 'Código requerido' });
       return;
     }
-    const authCodeQuery = query(
-      collection(db, 'codigos_autorizacion'),
-      where('code', '==', authCode),
-      where('active', '==', true),
-      where('cashbox', '==', true)
-    );
-    const querySnapshot = await getDocs(authCodeQuery);
-    if (querySnapshot.empty) {
-      toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    const result = await validateAndConsumeAuthCode({
+      db,
+      code: authCode,
+      requiredPermission: 'cashbox',
+      userId: user?.uid || 'unknown',
+      userName: user?.displayName || user?.email || 'Unknown',
+      userRole: user?.role,
+      localId: localId,
+      operationDescription: 'Editar fondo base de caja en corte de caja',
+      moduleLabel: 'Corte de Caja',
+    });
+    if (!result.valid) {
+      toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
     } else {
       toast({ title: 'Código correcto' });
       setIsEditingFondo(true);

@@ -16,6 +16,7 @@ import { doc, updateDoc, deleteDoc, writeBatch, getDocs, query, collection, wher
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 import { Input } from '@/components/ui/input';
 import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, KeyboardSensor, DragOverlay, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -260,27 +261,22 @@ export default function ServiciosPage() {
       toast({ variant: 'destructive', title: 'Código requerido' });
       return;
     }
-    const authCodeQuery = query(
-      collection(db, 'codigos_autorizacion'),
-      where('code', '==', authCode),
-      where('active', '==', true)
-    );
-    const querySnapshot = await getDocs(authCodeQuery);
-    if (querySnapshot.empty) {
-      toast({ variant: 'destructive', title: 'Código inválido o inactivo' });
+    const result = await validateAndConsumeAuthCode({
+      db,
+      code: authCode,
+      requiredPermission: 'any',
+      userId: user?.uid || 'unknown',
+      userName: user?.displayName || user?.email || 'Unknown',
+      userRole: user?.role,
+      operationDescription: `Acción autorizada en servicios: ${authAction?.description || 'Desconocida'}`,
+      moduleLabel: 'Catálogo de Servicios',
+    });
+    if (!result.valid) {
+      toast({ variant: 'destructive', title: 'Código inválido o inactivo', description: result.error });
     } else {
       toast({ title: 'Código correcto' });
       authAction?.execute();
       setIsAuthModalOpen(false);
-      await logAuditAction({
-        action: 'Autorización por Código',
-        details: `Acción autorizada en servicios: ${authAction?.description || 'Desconocida'}.`,
-        userId: user?.uid || 'unknown',
-        userName: user?.displayName || user?.email || 'Unknown',
-        userRole: user?.role,
-        authCode: authCode,
-        severity: 'warning'
-      });
     }
     setAuthCode('');
     setAuthAction(null);

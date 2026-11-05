@@ -220,10 +220,10 @@ export async function getAvailableSlots({ date, professionalId, durationMinutes,
             const data = doc.data();
             if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
 
-            if (isExpiredPendingDepositReservation(data, nowMs, 20)) {
+            if (isExpiredPendingDepositReservation(data, nowMs, 30)) {
                 doc.ref.update({
                     estado: 'Cancelado',
-                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 30 minutos de tolerancia.',
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});
@@ -821,10 +821,10 @@ export async function createPublicReservation(data: any) {
             const res = doc.data();
             if (res.estado === 'Cancelado' || res.estado === 'No asiste') return false;
 
-            if (isExpiredPendingDepositReservation(res, nowCheckMs, 20)) {
+            if (isExpiredPendingDepositReservation(res, nowCheckMs, 30)) {
                 doc.ref.update({
                     estado: 'Cancelado',
-                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
+                    motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 30 minutos de tolerancia.',
                     cancelada_automaticamente: true,
                     cancelado_en: FieldValue.serverTimestamp(),
                 }).catch(() => {});
@@ -979,6 +979,8 @@ export async function createPublicReservation(data: any) {
             clientHistory = {
                 citas_canceladas: canceladas,
                 citas_no_asistidas: trueNoShows,
+                exento_anticipo: Boolean(cData.exento_anticipo),
+                faltas_desde_exencion: Number(cData.faltas_desde_exencion) || 0,
             };
         }
 
@@ -1082,7 +1084,12 @@ export async function createPublicReservation(data: any) {
             pago_estado: data.paymentStatus || (finalRequiresDeposit && !isPaid ? 'pending_payment' : 'pendiente'),
             anticipo_esperado: finalAmountDue,
             saldo_pendiente: isPaid ? Math.max(0, grandTotal - finalAmountDue) : grandTotal,
-            requiere_pago_anticipado: finalRequiresDeposit
+            requiere_pago_anticipado: finalRequiresDeposit,
+            ...(evalResult.isClientExempt ? {
+                exento_anticipo: true,
+                exento_por: existingDoc?.data()?.exento_anticipo_por || 'Cliente Exento de Anticipo',
+                exento_motivo: existingDoc?.data()?.exento_anticipo_motivo || 'Cliente exento de anticipo en base de datos',
+            } : {}),
         };
 
         // MODO SANDBOX / PRUEBAS LOCAL:
@@ -1226,6 +1233,7 @@ export async function checkClientBookingEligibility(
     newBookingTotal?: number
 ): Promise<{
     requiresDepositDueToHistory: boolean;
+    exento_anticipo?: boolean;
     citas_canceladas: number;
     citas_no_asistidas: number;
     totalFaltas: number;
@@ -1326,9 +1334,10 @@ export async function checkClientBookingEligibility(
             }).catch(() => {});
         }
 
+        const isClientExempt = Boolean(data.exento_anticipo === true && (Number(data.faltas_desde_exencion) || 0) < 2);
         const totalFaltas = canceladas + realNoShows;
         const maxPermitidas = Number(config.max_inasistencias_permitidas) || 2;
-        const requiresDeposit = config.penalizacion_inasistencias_activa && ((realNoShows >= maxPermitidas) || (totalFaltas >= maxPermitidas));
+        const requiresDeposit = !isClientExempt && config.penalizacion_inasistencias_activa && ((realNoShows >= maxPermitidas) || (totalFaltas >= maxPermitidas));
 
         // 4. Verificación de Citas Activas en la Misma Fecha (Escudo Anti-Fragmentación y Acumulado Diario)
         let sameDayActiveCount = 0;
@@ -1371,7 +1380,7 @@ export async function checkClientBookingEligibility(
         let requiresDepositDueToSameDay = false;
         let sameDayDepositReason = '';
 
-        if (config.anticipo_monto_minimo_activo && sameDayActiveCount > 0) {
+        if (!isClientExempt && config.anticipo_monto_minimo_activo && sameDayActiveCount > 0) {
             if (sameDayAccumulatedTotal >= minThreshold || sameDayActiveCount >= 1) {
                 requiresDepositDueToSameDay = true;
                 sameDayDepositReason = `Detectamos que ya cuentas con ${sameDayActiveCount} cita(s) programada(s) para este día ($${sameDayActiveTotal.toFixed(2)} MXN). Al reservar este horario adicional y acumular $${sameDayAccumulatedTotal.toFixed(2)} MXN en la fecha, se requiere un anticipo del ${defaultPercent}% de garantía.`;
@@ -1380,6 +1389,7 @@ export async function checkClientBookingEligibility(
 
         return {
             requiresDepositDueToHistory: requiresDeposit,
+            exento_anticipo: isClientExempt,
             citas_canceladas: canceladas,
             citas_no_asistidas: realNoShows,
             totalFaltas,

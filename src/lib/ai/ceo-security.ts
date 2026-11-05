@@ -242,10 +242,30 @@ export async function verifyMasterExecutivePin(uid: string, pinInput: string): P
     .get();
 
   if (!codesSnap.empty) {
-    return { valid: true };
+    for (const d of codesSnap.docs) {
+      const cData = d.data() || {};
+      if (cData.is_one_time === true) {
+        if (cData.used === true) continue;
+        const expMs = cData.expires_at ? new Date(cData.expires_at).getTime() : 0;
+        if (expMs > 0 && Date.now() > expMs) {
+          await d.ref.update({ active: false });
+          continue;
+        }
+        await d.ref.update({
+          active: false,
+          used: true,
+          used_at: new Date().toISOString(),
+          used_by: uid,
+          used_in_module: 'Janet CEO (Autorización Ejecutiva)',
+        });
+        return { valid: true };
+      } else {
+        return { valid: true };
+      }
+    }
   }
 
-  return { valid: false, message: 'Código de autorización o PIN Maestro inválido.' };
+  return { valid: false, message: 'Código de autorización o PIN Maestro inválido o ya utilizado.' };
 }
 
 export async function configureMasterExecutivePin(uid: string, newPin: string): Promise<{ success: boolean; message: string }> {

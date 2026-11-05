@@ -46,7 +46,11 @@ import {
   HelpCircle,
   UserCheck,
   Link2,
+  KeyRound,
+  ShieldCheck,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 import { RegisterDepositModal } from './register-deposit-modal';
 import { SendConfirmationModal } from './send-confirmation-modal';
 import type { Reservation, Sale, Local, Profesional, Client } from '@/lib/types';
@@ -253,7 +257,13 @@ export function ReservationDetailModal({
     return clientStats.totalCitas === 0;
   }, [clientData, clientStats.totalCitas]);
 
-  const hasUnattendedAlert = isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
+  const isClientExempt = Boolean(
+    clientData?.exento_anticipo === true &&
+    Number(clientData?.faltas_desde_exencion || 0) < 2
+  );
+  const isReservationExempt = Boolean(reservation.exento_anticipo === true || isClientExempt);
+
+  const hasUnattendedAlert = !isReservationExempt && isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
 
   // Resolución de nombre de quién agendó la cita
   const resolvedCreatorName = useMemo(() => {
@@ -462,6 +472,89 @@ export function ReservationDetailModal({
   };
 
   const [isReactivating, setIsReactivating] = useState(false);
+  const [showExemptBox, setShowExemptBox] = useState(false);
+  const [exemptAuthCode, setExemptAuthCode] = useState('');
+  const [exemptReason, setExemptReason] = useState('');
+  const [isValidatingExempt, setIsValidatingExempt] = useState(false);
+
+  const handleExemptDepositWithCode = async () => {
+    if (!reservation?.id || !db) return;
+    if (!exemptAuthCode.trim()) {
+      toast({ variant: 'destructive', title: 'Código requerido', description: 'Ingresa el código de autorización de 4 dígitos o código maestro.' });
+      return;
+    }
+    if (!exemptReason.trim()) {
+      toast({ variant: 'destructive', title: 'Motivo requerido', description: 'Especifica el motivo por el cual se exenta el anticipo.' });
+      return;
+    }
+
+    setIsValidatingExempt(true);
+    try {
+      const validation = await validateAndConsumeAuthCode({
+        db,
+        code: exemptAuthCode.trim(),
+        requiredPermission: 'exempt_deposits',
+        usedBy: user?.displayName || user?.email || 'Recepción',
+        usedInModule: 'Exención de Anticipo en Detalle de Reserva',
+        usedDetails: `Cliente: ${formatClientName(clientData?.nombre, clientData?.apellido)} | Cita: ${reservation.fecha} ${reservation.hora_inicio} | Motivo: ${exemptReason.trim()}`,
+      });
+
+      if (!validation.valid) {
+        toast({
+          variant: 'destructive',
+          title: 'Código inválido',
+          description: validation.errorMessage || 'El código ingresado no es válido o ya fue utilizado.',
+        });
+        setIsValidatingExempt(false);
+        return;
+      }
+
+      const isSandboxRes = Boolean((reservation as any).isSandbox);
+      const targetCol = isSandboxRes ? 'reservas_sandbox' : 'reservas';
+      const resRef = doc(db, targetCol, reservation.id);
+
+      await updateDoc(resRef, {
+        exento_anticipo: true,
+        exento_por: validation.codeName || 'Código de Autorización',
+        exento_motivo: exemptReason.trim(),
+        exento_codigo: validation.isOneTime ? `${exemptAuthCode.trim()} (1 uso)` : (validation.codeName || 'Código Maestro'),
+        exento_en: new Date().toISOString(),
+        requiere_anticipo: false,
+        anticipo_esperado: 0,
+        estado: 'Confirmado',
+        pago_estado: 'Pendiente',
+      });
+
+      await logAuditAction({
+        action: 'Exención de Anticipo con Código',
+        details: `Se omitió el anticipo de la cita de ${formatClientName(clientData?.nombre, clientData?.apellido)} (${reservation.fecha} ${reservation.hora_inicio}). Autorizado por: ${validation.codeName || 'Código'}. Motivo: ${exemptReason.trim()}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        severity: 'warning',
+        localId: reservation.local_id || 'unknown',
+      });
+
+      toast({
+        title: 'Anticipo Exentado y Cita Confirmada',
+        description: `Autorizado con ${validation.codeName || 'código'}. La cita pasó al 100% de espacio confirmado.`,
+      });
+
+      setShowExemptBox(false);
+      setExemptAuthCode('');
+      setExemptReason('');
+      onUpdateStatus(reservation.id, 'Confirmado');
+    } catch (error) {
+      console.error('Error exentando anticipo:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo exentar el anticipo. Intenta nuevamente.',
+      });
+    } finally {
+      setIsValidatingExempt(false);
+    }
+  };
 
   const handleReactivateReservation = async (newStatus: string = 'Confirmado') => {
     if (!reservation?.id || !db || isReactivating) return;
@@ -470,17 +563,31 @@ export function ReservationDetailModal({
       const isSandboxRes = Boolean((reservation as any).isSandbox);
       const targetCol = isSandboxRes ? 'reservas_sandbox' : 'reservas';
       const resRef = doc(db, targetCol, reservation.id);
+
+      const needsDepositOnReactivate = !isReservationExempt && !isDepositPaid && reservation.pago_estado !== 'Pagado' && (
+        hasUnattendedAlert ||
+        reservation.requiere_anticipo ||
+        (bookingRules.anticipo_horario_apertura_activo !== false && isOpeningHourTime(reservation.hora_inicio, bookingRules.anticipo_horario_apertura_hora || '10:00', bookingRules.anticipo_horario_apertura_hora_fin || '10:30')) ||
+        (bookingRules.anticipo_monto_minimo_activo !== false && (reservation.precio ?? (reservation as any).total ?? 0) >= (Number(bookingRules.anticipo_monto_minimo) || 190))
+      );
+
+      const finalStatus = needsDepositOnReactivate ? 'Reservado' : newStatus;
       const updatePayload: any = {
-        estado: newStatus,
-        anticipo_en_sucursal: true,
-        requiere_anticipo: false,
-        anticipo_esperado: 0,
+        estado: finalStatus,
         cancelada_automaticamente: deleteField(),
         motivo_cancelacion: deleteField(),
         cancelado_en: deleteField(),
       };
-      if (reservation.pago_estado === 'pendiente_anticipo') {
-        updatePayload.pago_estado = 'Pendiente';
+      if (needsDepositOnReactivate) {
+        updatePayload.pago_estado = 'pendiente_anticipo';
+        updatePayload.requiere_anticipo = true;
+        updatePayload.creado_en = new Date();
+      } else {
+        updatePayload.requiere_anticipo = false;
+        updatePayload.anticipo_esperado = 0;
+        if (reservation.pago_estado === 'pendiente_anticipo') {
+          updatePayload.pago_estado = 'Pendiente';
+        }
       }
 
       await updateDoc(resRef, updatePayload);
@@ -503,10 +610,12 @@ export function ReservationDetailModal({
 
       toast({
         title: 'Cita Reactivada',
-        description: `La cita ha sido reactivada en estado "${newStatus}". Se permite el pago del anticipo en sucursal.`,
+        description: needsDepositOnReactivate
+          ? 'La cita fue reactivada con 30 minutos de tolerancia para cubrir o exentar el anticipo.'
+          : `La cita ha sido reactivada en estado "${finalStatus}".`,
       });
 
-      onUpdateStatus(reservation.id, newStatus);
+      onUpdateStatus(reservation.id, finalStatus);
     } catch (err: any) {
       console.error('Error reactivando cita:', err);
       toast({
@@ -705,7 +814,7 @@ export function ReservationDetailModal({
   const isConcluded = reservation.pago_estado === 'Pagado' && (isPastDate || isFullyPaidAndAttended);
 
   // Determinar si la cita realmente requiere anticipo (por inasistencias, franja de apertura 10:00 a 10:30 AM, regla >= $190 o estado)
-  const isAnticipoRequired = Boolean(
+  const isAnticipoRequired = !isReservationExempt && Boolean(
     hasUnattendedAlert ||
     reservation.requiere_anticipo ||
     reservation.pago_estado === 'pendiente_anticipo' ||
@@ -714,7 +823,9 @@ export function ReservationDetailModal({
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
 
-  // Tolerancia de 20 minutos para anticipo
+  // Tolerancia de 30 minutos para anticipo
+  const rawTol = Number(bookingRules.tolerancia_anticipo_minutos) || 30;
+  const toleranceMins = rawTol === 20 ? 30 : rawTol;
   const rawCreated = reservation.creado_en || (reservation as any).createdAt || (reservation as any).creada_el;
   let createdMs: number | null = null;
   if (typeof (rawCreated as any)?.toMillis === 'function') {
@@ -730,8 +841,8 @@ export function ReservationDetailModal({
 
   const nowMs = Date.now();
   const diffMinutes = createdMs ? (nowMs - createdMs) / (1000 * 60) : 0;
-  const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(20 - diffMinutes)) : 20;
-  const isDepositExpired = createdMs ? diffMinutes > 20 : false;
+  const depositMinutesRemaining = createdMs ? Math.max(0, Math.ceil(toleranceMins - diffMinutes)) : toleranceMins;
+  const isDepositExpired = createdMs ? diffMinutes > toleranceMins : false;
 
   // Auto-sync estado a 'Confirmado' si la cita tiene anticipo pagado pero seguía en 'Reservado' o 'Pendiente de pago'
   const effectiveReservationEstado = (isDepositPaid && (!reservation.estado || reservation.estado === 'Reservado' || reservation.estado === 'Pendiente de pago' || reservation.estado === 'Pendiente de Pago'))
@@ -1069,7 +1180,15 @@ export function ReservationDetailModal({
                       {formatClientName(clientData?.nombre, clientData?.apellido)}
                     </h4>
 
-                    {isNewClient ? (
+                    {isClientExempt ? (
+                      <Badge variant="outline" className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] py-0 px-1.5 font-semibold">
+                        ★ Exento de Anticipo
+                      </Badge>
+                    ) : reservation.exento_anticipo ? (
+                      <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px] py-0 px-1.5 font-semibold">
+                        ★ Anticipo Exentado (Código)
+                      </Badge>
+                    ) : isNewClient ? (
                       <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
                         ⭐ Nuevo
                       </Badge>
@@ -1132,23 +1251,88 @@ export function ReservationDetailModal({
                     : "border-blue-500/40 bg-blue-500/10 text-foreground"
                 )}>
                   <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-1 flex-1">
+                  <div className="text-xs space-y-1.5 flex-1">
                     <div className="flex items-center justify-between flex-wrap gap-1">
-                      <p className="font-bold uppercase tracking-wide text-[11px] text-blue-400">
+                      <p className="font-bold uppercase tracking-wide text-[11px] text-blue-400 font-sans">
                         Cita Tentativa: Esperando Anticipo (${expectedDepositAmount.toFixed(2)} MXN)
                       </p>
                       <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap",
+                        "text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap font-sans",
                         isDepositExpired
                           ? "bg-red-500/20 text-red-300 border-red-500/40"
                           : "bg-blue-500/20 text-blue-200 border-blue-400/40 animate-pulse"
                       )}>
-                        {isDepositExpired ? "Tolerancia 20m Vencida" : `${depositMinutesRemaining} min restantes`}
+                        {isDepositExpired ? `Tolerancia ${toleranceMins}m Vencida` : `${depositMinutesRemaining} min restantes`}
                       </span>
                     </div>
                     <p className="text-muted-foreground text-[11px] leading-snug">
-                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de 20 minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
+                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de {toleranceMins} minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
                     </p>
+
+                    {!isStaff && reservation.estado !== 'Cancelado' && (
+                      <div className="pt-1">
+                        {!showExemptBox ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowExemptBox(true)}
+                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-border/70 rounded-lg px-2.5 py-1 transition-colors"
+                          >
+                            <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
+                            Omitir anticipo con código de autorización (4 dígitos)
+                          </button>
+                        ) : (
+                          <div className="mt-1.5 p-2.5 rounded-xl border border-blue-500/40 bg-background/95 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                                <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
+                                Exentar Anticipo por esta ocasión
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowExemptBox(false);
+                                  setExemptAuthCode('');
+                                  setExemptReason('');
+                                }}
+                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              <Input
+                                type="password"
+                                placeholder="Código (4 dígitos o maestro)"
+                                value={exemptAuthCode}
+                                onChange={(e) => setExemptAuthCode(e.target.value)}
+                                className="h-8 text-xs font-sans"
+                              />
+                              <Input
+                                type="text"
+                                placeholder="Motivo (ej. Autorizado por Beatriz)"
+                                value={exemptReason}
+                                onChange={(e) => setExemptReason(e.target.value)}
+                                className="h-8 text-xs"
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={isValidatingExempt}
+                              onClick={handleExemptDepositWithCode}
+                              className="w-full h-8 text-xs font-bold btn-vatos-alfa"
+                            >
+                              {isValidatingExempt ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                              ) : (
+                                <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
+                              )}
+                              Confirmar Exención y Pasar al 100%
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1444,6 +1628,13 @@ export function ReservationDetailModal({
                                 handleCancelClick();
                               } else if (reservation.estado === 'Cancelado') {
                                 handleReactivateReservation(status);
+                              } else if (status === 'Confirmado' && isAnticipoRequired && !isDepositPaid && !isReservationExempt) {
+                                toast({
+                                  variant: 'destructive',
+                                  title: 'Anticipo Pendiente',
+                                  description: 'Para confirmar formalmente esta cita al 100%, primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
+                                });
+                                setShowExemptBox(true);
                               } else {
                                 onUpdateStatus(reservation.id, status);
                               }

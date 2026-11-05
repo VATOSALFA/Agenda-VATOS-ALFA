@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, Filter, Loader2, Smartphone, Check } from "lucide-react";
+import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, ShieldCheck, Filter, Loader2, Smartphone, Check } from "lucide-react";
+import { validateAndConsumeAuthCode } from "@/lib/auth-code-validator";
 import { isClientWithApp, isClientActiveInApp, getClientLastAppAccess, getClientAppInfo } from "@/lib/client-app-helper";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
@@ -33,7 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { deleteDoc, doc, where, Timestamp, collection, query, getDocs } from "firebase/firestore";
+import { deleteDoc, doc, updateDoc, where, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -75,6 +76,7 @@ const FiltersSidebar = ({
   inactiveTimeFilter, setInactiveTimeFilter,
   topSpentFilter, setTopSpentFilter,
   appFilter, setAppFilter,
+  depositExemptionFilter, setDepositExemptionFilter,
   locales,
   professionals,
   isLoading,
@@ -101,6 +103,8 @@ const FiltersSidebar = ({
   topSpentFilter: string,
   appFilter: string,
   setAppFilter: (val: string) => void,
+  depositExemptionFilter: string,
+  setDepositExemptionFilter: (val: string) => void,
   setTopSpentFilter: (val: string) => void,
   locales: Local[],
   professionals: Profesional[],
@@ -181,6 +185,22 @@ const FiltersSidebar = ({
               <SelectItem value="min1000">Consumo mayor a $1,000</SelectItem>
               <SelectItem value="min2000">Consumo mayor a $2,000</SelectItem>
               <SelectItem value="min5000">Consumo mayor a $5,000</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+            <ShieldCheck className="h-3 w-3 text-[#C5A880]" />
+            <span>Anticipo / Confianza</span>
+          </Label>
+          <Select value={depositExemptionFilter} onValueChange={setDepositExemptionFilter} disabled={isLoading}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos los clientes</SelectItem>
+              <SelectItem value="candidatos">Sugeridos (5+ asistencias y 0 faltas)</SelectItem>
+              <SelectItem value="exentos">★ Exentos de anticipo activos</SelectItem>
+              <SelectItem value="penalizados">Con 2+ inasistencias (Penalizados)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -412,6 +432,7 @@ export default function ClientsPage() {
   const [inactiveTimeFilter, setInactiveTimeFilter] = useState('todos');
   const [topSpentFilter, setTopSpentFilter] = useState('todos');
   const [appFilter, setAppFilter] = useState('todos');
+  const [depositExemptionFilter, setDepositExemptionFilter] = useState('todos');
 
   const [activeFilters, setActiveFilters] = useState({
     dateRange: dateRange,
@@ -422,7 +443,8 @@ export default function ClientsPage() {
     professional: 'todos',
     inactiveTime: 'todos',
     topSpent: 'todos',
-    app: 'todos'
+    app: 'todos',
+    depositExemption: 'todos'
   });
 
   const [queryKey, setQueryKey] = useState(0);
@@ -591,6 +613,98 @@ export default function ClientsPage() {
     return Boolean(user?.permissions?.includes('editar_clientes'));
   }, [user]);
 
+  const canManageExemption = useMemo(() => {
+    return user?.role === 'Administrador general' || user?.role === 'Administrador local';
+  }, [user]);
+
+  const clientAttendanceStatsMap = useMemo(() => {
+    const map = new Map<string, { asistidas: number; noAsistidas: number; isExempt: boolean; isCandidate: boolean; isPenalized: boolean }>();
+    const attendedByClient = new Map<string, number>();
+    const noShowByClient = new Map<string, number>();
+
+    historicalReservations.forEach((r) => {
+      if (!r.cliente_id) return;
+      if (r.estado === 'Asiste' || r.estado === 'Pagado' || r.pago_estado === 'Pagado') {
+        attendedByClient.set(r.cliente_id, (attendedByClient.get(r.cliente_id) || 0) + 1);
+      } else if (r.estado === 'No asiste') {
+        noShowByClient.set(r.cliente_id, (noShowByClient.get(r.cliente_id) || 0) + 1);
+      }
+    });
+
+    clients.forEach((c) => {
+      const asistidas = Math.max(Number(c.citas_asistidas) || 0, attendedByClient.get(c.id) || 0);
+      const noAsistidas = Math.max(Number(c.citas_no_asistidas) || 0, noShowByClient.get(c.id) || 0);
+      const isExempt = Boolean(c.exento_anticipo === true && (Number(c.faltas_desde_exencion) || 0) < 2);
+      const isCandidate = !isExempt && asistidas >= 5 && noAsistidas === 0;
+      const isPenalized = !isExempt && noAsistidas >= 2;
+      map.set(c.id, { asistidas, noAsistidas, isExempt, isCandidate, isPenalized });
+    });
+
+    return map;
+  }, [clients, historicalReservations]);
+
+  const exemptionCounts = useMemo(() => {
+    let exemptCount = 0;
+    let candidateCount = 0;
+    clientAttendanceStatsMap.forEach((st) => {
+      if (st.isExempt) exemptCount++;
+      if (st.isCandidate) candidateCount++;
+    });
+    return { exemptCount, candidateCount };
+  }, [clientAttendanceStatsMap]);
+
+  const handleToggleClientExemption = async (client: Client) => {
+    if (!db || !canManageExemption) return;
+    const currentlyExempt = Boolean(client.exento_anticipo === true && (Number(client.faltas_desde_exencion) || 0) < 2);
+    const nextExempt = !currentlyExempt;
+    const adminName = user?.displayName || user?.email || 'Administración';
+
+    try {
+      const clientRef = doc(db, 'clientes', client.id);
+      if (nextExempt) {
+        await updateDoc(clientRef, {
+          exento_anticipo: true,
+          faltas_desde_exencion: 0,
+          exento_anticipo_por: adminName,
+          exento_anticipo_fecha: new Date().toISOString(),
+          exento_anticipo_motivo: 'Marcado como Exento de Anticipo desde Base de Clientes',
+        });
+      } else {
+        await updateDoc(clientRef, {
+          exento_anticipo: false,
+          exento_revocado_en: new Date().toISOString(),
+          exento_revocado_motivo: `Exención desactivada manualmente por ${adminName}`,
+        });
+      }
+
+      await logAuditAction({
+        action: nextExempt ? 'Activar Exención de Anticipo a Cliente' : 'Revocar Exención de Anticipo a Cliente',
+        details: `${nextExempt ? 'Se marcó como EXENTO DE ANTICIPO' : 'Se retiró la exención de anticipo'} al cliente ${client.nombre} ${client.apellido || ''} (#${client.numero_cliente || client.id.slice(0, 6)}).`,
+        userId: user?.uid || 'unknown',
+        userName: adminName,
+        userRole: user?.role,
+        severity: 'info',
+        localId: user?.local_id || 'default',
+      });
+
+      toast({
+        title: nextExempt ? '★ Cliente Exento de Anticipo' : 'Exención Desactivada',
+        description: nextExempt
+          ? `${client.nombre} ${client.apellido || ''} ya no requerirá anticipo en ninguna cita (se revoca automáticamente si acumula 2 faltas).`
+          : `${client.nombre} ${client.apellido || ''} volverá a regirse por las reglas estándar de anticipo.`,
+      });
+
+      setQueryKey((prev) => prev + 1);
+    } catch (error) {
+      console.error('Error toggling client exemption:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'No se pudo actualizar el estado de exención del cliente.',
+      });
+    }
+  };
+
   useEffect(() => {
     if (user?.local_id) {
       setLocalFilter(user.local_id);
@@ -657,7 +771,8 @@ export default function ClientsPage() {
       professional: professionalFilter,
       inactiveTime: inactiveTimeFilter,
       topSpent: topSpentFilter,
-      app: appFilter
+      app: appFilter,
+      depositExemption: depositExemptionFilter
     });
     setCurrentPage(1);
     toast({ title: "Filtros aplicados" });
@@ -673,6 +788,7 @@ export default function ClientsPage() {
     setInactiveTimeFilter('todos');
     setTopSpentFilter('todos');
     setAppFilter('todos');
+    setDepositExemptionFilter('todos');
     setSortField(null);
     setSortDirection('asc');
     setActiveFilters({
@@ -684,7 +800,8 @@ export default function ClientsPage() {
       professional: 'todos',
       inactiveTime: 'todos',
       topSpent: 'todos',
-    app: 'todos'
+      app: 'todos',
+      depositExemption: 'todos'
     });
     setCurrentPage(1);
     setQueryKey(prev => prev + 1);
@@ -708,7 +825,7 @@ export default function ClientsPage() {
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
       activeFilters.app !== 'todos' ||
-      activeFilters.app !== 'todos';
+      activeFilters.depositExemption !== 'todos';
 
     if (hasAdvancedFilters) {
       // Filter by Inactive Time
@@ -838,6 +955,18 @@ export default function ClientsPage() {
         }
       }
 
+      // Filter by Exención de Anticipo / Confianza
+      if (activeFilters.depositExemption !== 'todos') {
+        filtered = filtered.filter(c => {
+          const st = clientAttendanceStatsMap.get(c.id);
+          if (!st) return false;
+          if (activeFilters.depositExemption === 'exentos') return st.isExempt;
+          if (activeFilters.depositExemption === 'candidatos') return st.isCandidate;
+          if (activeFilters.depositExemption === 'penalizados') return st.isPenalized;
+          return true;
+        });
+      }
+
       // Filter by Top Spenders (Mejores Clientes)
       if (activeFilters.topSpent !== 'todos') {
         if (activeFilters.topSpent === 'top10') {
@@ -881,7 +1010,7 @@ export default function ClientsPage() {
     }
 
     return filtered;
-  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap, clientLastVisitMap, appClientIdsFromReservations]);
+  }, [clients, sales, searchTerm, activeFilters, historicalSales, historicalReservations, hasLoadedHistory, clientSpentMap, clientLastVisitMap, appClientIdsFromReservations, clientAttendanceStatsMap]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -974,6 +1103,7 @@ export default function ClientsPage() {
     if (activeFilters.inactiveTime !== 'todos') count++;
     if (activeFilters.topSpent !== 'todos') count++;
     if (activeFilters.app !== 'todos') count++;
+    if (activeFilters.depositExemption !== 'todos') count++;
     return count;
   }, [activeFilters]);
 
@@ -1085,6 +1215,7 @@ export default function ClientsPage() {
       activeFilters.inactiveTime !== 'todos' ||
       activeFilters.topSpent !== 'todos' ||
       activeFilters.app !== 'todos' ||
+      activeFilters.depositExemption !== 'todos' ||
       Boolean(searchTerm)
     );
   }, [activeFilters, searchTerm]);
@@ -1240,15 +1371,16 @@ export default function ClientsPage() {
       toast({ variant: 'destructive', title: 'Código requerido' });
       return;
     }
-    const authCodeQuery = query(
-      collection(db, 'codigos_autorizacion'),
-      where('code', '==', authCode),
-      where('active', '==', true),
-      where('download', '==', true)
-    );
-    const querySnapshot = await getDocs(authCodeQuery);
-    if (querySnapshot.empty) {
-      toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+    const validation = await validateAndConsumeAuthCode({
+      db,
+      code: authCode,
+      requiredPermission: 'download',
+      usedBy: user?.displayName || user?.email || 'Unknown',
+      usedInModule: 'Descarga de Base de Clientes',
+      usedDetails: `Exportación Excel de ${filteredClients.length} clientes`,
+    });
+    if (!validation.valid) {
+      toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: validation.errorMessage });
     } else {
       toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
       triggerDownload();
@@ -1259,7 +1391,7 @@ export default function ClientsPage() {
         userId: user?.uid || 'unknown',
         userName: user?.displayName || user?.email || 'Unknown',
         userRole: user?.role,
-        authCode: authCode,
+        authCode: validation.isOneTime ? `${authCode.trim()} (1 uso)` : (validation.codeName || authCode),
         severity: 'info',
         localId: localFilter !== 'todos' ? localFilter : 'unknown'
       });
@@ -1358,6 +1490,8 @@ export default function ClientsPage() {
                 setTopSpentFilter={setTopSpentFilter}
                 appFilter={appFilter}
                 setAppFilter={setAppFilter}
+                depositExemptionFilter={depositExemptionFilter}
+                setDepositExemptionFilter={setDepositExemptionFilter}
                 professionals={professionals}
                 locales={locales}
                 isLoading={isLoading}
@@ -1389,6 +1523,8 @@ export default function ClientsPage() {
                 setTopSpentFilter={setTopSpentFilter}
                 appFilter={appFilter}
                 setAppFilter={setAppFilter}
+                depositExemptionFilter={depositExemptionFilter}
+                setDepositExemptionFilter={setDepositExemptionFilter}
                 professionals={professionals}
                 locales={locales}
                 isLoading={isLoading}
@@ -1457,9 +1593,53 @@ export default function ClientsPage() {
                 </DropdownMenu>
               </div>
 
-              {/* Barra Rápida Móvil: Ordenar + Chips Rápidos (sm:hidden) */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:hidden scrollbar-none">
-                {renderSortDropdown(true)}
+              {/* Barra Rápida de Filtros de Anticipo y Confianza + Ordenar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                <div className="sm:hidden">
+                  {renderSortDropdown(true)}
+                </div>
+
+                {/* Chip Rápido: Candidatos Sugeridos (5+ asistencias y 0 faltas) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFilter = activeFilters.depositExemption === 'candidatos' ? 'todos' : 'candidatos';
+                    setDepositExemptionFilter(newFilter);
+                    setActiveFilters(prev => ({ ...prev, depositExemption: newFilter }));
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-8 px-2.5 text-xs rounded-xl border flex items-center gap-1.5 shrink-0 transition-colors whitespace-nowrap font-sans",
+                    activeFilters.depositExemption === 'candidatos'
+                      ? "border-blue-500 bg-blue-500/15 text-blue-400 font-bold"
+                      : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Clientes con 5 o más asistencias y 0 inasistencias ideales para marcar como Exentos de Anticipo"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Sugeridos 5+ Asistencias / 0 Faltas ({exemptionCounts.candidateCount})</span>
+                </button>
+
+                {/* Chip Rápido: Exentos de Anticipo Activos */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newFilter = activeFilters.depositExemption === 'exentos' ? 'todos' : 'exentos';
+                    setDepositExemptionFilter(newFilter);
+                    setActiveFilters(prev => ({ ...prev, depositExemption: newFilter }));
+                    setCurrentPage(1);
+                  }}
+                  className={cn(
+                    "h-8 px-2.5 text-xs rounded-xl border flex items-center gap-1.5 shrink-0 transition-colors whitespace-nowrap font-sans",
+                    activeFilters.depositExemption === 'exentos'
+                      ? "border-[#C5A880] bg-[#C5A880]/15 text-[#C5A880] font-bold"
+                      : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Clientes marcados manualmente como Exentos de Anticipo"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-[#C5A880]" />
+                  <span>★ Exentos de Anticipo ({exemptionCounts.exemptCount})</span>
+                </button>
 
                 {/* Chip Rápido: Con App */}
                 <button
@@ -1475,7 +1655,7 @@ export default function ClientsPage() {
                     setCurrentPage(1);
                   }}
                   className={cn(
-                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    "h-8 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap sm:hidden",
                     activeFilters.app === 'con_app'
                       ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
                       : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
@@ -1499,7 +1679,7 @@ export default function ClientsPage() {
                     setCurrentPage(1);
                   }}
                   className={cn(
-                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    "h-8 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap sm:hidden",
                     activeFilters.topSpent === 'top25'
                       ? "border-[#C5A880] bg-[#C5A880]/15 text-[#C5A880] font-bold"
                       : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
@@ -1522,7 +1702,7 @@ export default function ClientsPage() {
                     setCurrentPage(1);
                   }}
                   className={cn(
-                    "h-9 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap",
+                    "h-8 px-2.5 text-xs rounded-xl border flex items-center gap-1 shrink-0 transition-colors whitespace-nowrap sm:hidden",
                     activeFilters.inactiveTime === '2'
                       ? "border-blue-500 bg-blue-500/15 text-blue-500 font-bold"
                       : "border-border/80 bg-background text-muted-foreground hover:text-foreground"
@@ -1673,6 +1853,11 @@ export default function ClientsPage() {
                                 #{client.numero_cliente}
                               </span>
                             )}
+                            {clientAttendanceStatsMap.get(client.id)?.isExempt && (
+                              <span className="text-[10px] font-semibold text-[#C5A880] bg-[#C5A880]/15 border border-[#C5A880]/40 px-1.5 py-0 rounded-full">
+                                ★ Exento
+                              </span>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground truncate">
                             {client.correo || 'Sin correo registrado'}
@@ -1682,6 +1867,25 @@ export default function ClientsPage() {
 
                       {/* Iconos limpios de acción */}
                       <div className="flex items-center shrink-0">
+                        {canManageExemption && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleClientExemption(client)}
+                            className={cn(
+                              "h-8 w-8 flex items-center justify-center transition-colors",
+                              clientAttendanceStatsMap.get(client.id)?.isExempt
+                                ? "text-[#C5A880] hover:text-[#d8bc96]"
+                                : "text-slate-400 hover:text-[#C5A880]"
+                            )}
+                            title={
+                              clientAttendanceStatsMap.get(client.id)?.isExempt
+                                ? "Cliente Exento de Anticipo (Toca para desactivar exención)"
+                                : "Marcar cliente como Exento de Anticipo (No pedir anticipo)"
+                            }
+                          >
+                            <ShieldCheck className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handleViewDetails(client)}
@@ -1847,6 +2051,14 @@ export default function ClientsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <span className="truncate max-w-[120px]">{client.nombre}</span>
+                              {clientAttendanceStatsMap.get(client.id)?.isExempt && (
+                                <span
+                                  className="text-[10px] font-semibold text-[#C5A880] bg-[#C5A880]/15 border border-[#C5A880]/40 px-1.5 py-0 rounded-full shrink-0"
+                                  title="Cliente Exento de Anticipo"
+                                >
+                                  ★ Exento
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="py-1.5 px-3 text-xs truncate max-w-[120px]">{client.apellido}</TableCell>
@@ -1921,6 +2133,25 @@ export default function ClientsPage() {
                           )}
                           <TableCell className="py-1 px-3 text-right">
                             <div className="flex items-center justify-end gap-1">
+                              {canManageExemption && (
+                                <button
+                                  type="button"
+                                  className={cn(
+                                    "h-7 w-7 flex items-center justify-center transition-colors",
+                                    clientAttendanceStatsMap.get(client.id)?.isExempt
+                                      ? "text-[#C5A880] hover:text-[#d8bc96]"
+                                      : "text-slate-400 hover:text-[#C5A880]"
+                                  )}
+                                  onClick={() => handleToggleClientExemption(client)}
+                                  title={
+                                    clientAttendanceStatsMap.get(client.id)?.isExempt
+                                      ? "Cliente Exento de Anticipo (Haz clic para retirar exención)"
+                                      : "Marcar cliente como Exento de Anticipo (No pedir anticipo)"
+                                  }
+                                >
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"

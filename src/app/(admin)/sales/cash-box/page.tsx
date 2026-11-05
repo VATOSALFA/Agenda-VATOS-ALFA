@@ -115,6 +115,7 @@ import { useCashBoxData } from './use-cash-box-data';
 import { useLiveCash } from './use-live-cash';
 import { useLocal } from '@/contexts/local-context';
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 
 
 const SummaryCard = ({
@@ -883,15 +884,19 @@ export default function CashBoxPage() {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }
-        const authCodeQuery = query(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where('download', '==', true)
-        );
-        const querySnapshot = await getDocs(authCodeQuery);
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: 'download',
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: selectedLocalId,
+            operationDescription: 'Descargar reporte de caja',
+            moduleLabel: 'Caja',
+        });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             triggerDownload();
@@ -905,30 +910,23 @@ export default function CashBoxPage() {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }
-        const authCodeQuery = query(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where('cashbox', '==', true) // Check for cashbox permission
-        );
-        const querySnapshot = await getDocs(authCodeQuery);
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: 'cashbox',
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: selectedLocalId,
+            operationDescription: `Acción autorizada en caja: ${authAction?.description || 'Desconocida'}`,
+            moduleLabel: 'Caja',
+        });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto' });
-            authAction?.execute(); // Execute the stored action
+            authAction?.execute();
             setIsAuthModalOpen(false);
-
-            await logAuditAction({
-                action: 'Autorización por Código',
-                details: `Acción autorizada en caja: ${authAction?.description || 'Desconocida'}.`,
-                userId: user?.uid || 'unknown',
-                userName: user?.displayName || user?.email || 'Unknown',
-                userRole: user?.role,
-                authCode: authCode,
-                severity: 'info',
-                localId: selectedLocalId
-            });
         }
         setAuthCode('');
         setAuthAction(null);

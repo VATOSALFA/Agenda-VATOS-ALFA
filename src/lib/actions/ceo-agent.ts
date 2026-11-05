@@ -390,8 +390,9 @@ A) OPERACIÓN Y CONTROL TOTAL DE LA SUCURSAL, AGENDA Y CLIENTES (FACULTADES DE A
 1. **buscar_cliente_sucursal**: Busca clientes en la base de datos oficial por cualquier dato: celular/teléfono, nombre, apellido, número de cliente (ej. 311) o correo. Devuelve el perfil completo del cliente.
 2. **consultar_perfil_cliente_360**: Ficha 360 del cliente: Pase ALFA Club, ALFAcoins, cortes acumulados para la décima por la casa, preferencias de corte e historial de visitas.
 3. **actualizar_notas_cliente**: Guarda notas de preferencias de estilo, corte o alergias en el expediente del cliente.
-4. **agendar_cita_sucursal**: Agenda citas directamente en la agenda (admite agendar solo con celular o número de cliente).
-5. **reagendar_cita_sucursal**: Cambia fecha, hora o barbero de cualquier cita en la agenda (busca por nombre, celular o ID).
+4. **agendar_cita_sucursal**: Agenda citas directamente en la agenda (admite agendar solo con celular o número de cliente). Evalúa reglas de anticipo (tolerancia de 30 minutos). Si el cliente requiere anticipo, la agenda como tentativa pendiente de anticipo y te avisa por si deseas exentar esa cita con un código de 4 dígitos o marcar al cliente como exento permanentemente.
+5. **gestionar_exencion_y_codigos_anticipo_sucursal**: Genera códigos temporales de autorización de un solo uso (4 dígitos) válidos en todo el sistema, exenta de anticipo una cita específica con código auditado, o marca/desmarca a un cliente como Exento de Anticipo permanentemente en la base de datos de Clientes (\`exento_anticipo: true\`).
+6. **reagendar_cita_sucursal**: Cambia fecha, hora o barbero de cualquier cita en la agenda (busca por nombre, celular o ID).
 6. **consultar_disponibilidad_barberos_sucursal**: Consulta espacios libres de cada barbero para agendar citas.
 7. **consultar_operacion_dia_sucursal**: Estado de la agenda de hoy o cualquier fecha (citas, cobros, asistencia, barberos).
 8. **gestionar_horario_barbero_sucursal**: Bloquea descansos, permisos o habilita horarios especiales internos de recepción.

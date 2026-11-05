@@ -50,6 +50,7 @@ import { db } from "@/lib/firebase-client";
 import { DonutChartCard } from "@/components/sales/donut-chart-card";
 import { useInvoicedSales, getSaleActualRevenue } from "./use-invoiced-sales";
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 
 function formatPaymentMethodName(saleOrMethod: any): string {
     const rawMethod = (typeof saleOrMethod === 'string'
@@ -541,17 +542,20 @@ export default function InvoicedSalesPage() {
             return;
         }
 
-        const authCodeQuery = firestoreQuery(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where('download', '==', true)
-        );
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: 'download',
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: localFilter !== 'todos' ? localFilter : 'unknown',
+            operationDescription: 'Descargar reporte de ventas facturadas',
+            moduleLabel: 'Ventas Facturadas',
+        });
 
-        const querySnapshot = await getDocs(authCodeQuery);
-
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             await triggerDownload();
@@ -580,30 +584,23 @@ export default function InvoicedSalesPage() {
             toast({ variant: 'destructive', title: 'Código requerido' });
             return;
         }
-        const authCodeQuery = firestoreQuery(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where(authPermissionField, '==', true)
-        );
-        const querySnapshot = await getDocs(authCodeQuery);
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: authPermissionField,
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: localFilter !== 'todos' ? localFilter : 'unknown',
+            operationDescription: `Acción autorizada en ventas facturadas: ${authAction?.description || 'Desconocida'}`,
+            moduleLabel: 'Ventas Facturadas',
+        });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto' });
             authAction?.execute();
             setIsAuthModalOpen(false);
-
-            await logAuditAction({
-                action: 'Autorización por Código',
-                details: `Acción autorizada en ventas facturadas: ${authAction?.description || 'Desconocida'}.`,
-                userId: user?.uid || 'unknown',
-                userName: user?.displayName || user?.email || 'Unknown',
-                userRole: user?.role,
-                authCode: authCode,
-                severity: 'info',
-                localId: localFilter !== 'todos' ? localFilter : 'unknown'
-            });
         }
         setAuthCode('');
         setAuthAction(null);

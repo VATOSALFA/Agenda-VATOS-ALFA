@@ -15,6 +15,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
@@ -2637,20 +2638,26 @@ export default function ConversationsDashboardPage() {
     setDeleteAuthError('');
 
     try {
-      // 1. Validar código en la colección codigos_autorizacion
-      const authQuery = query(
-        collection(db, 'codigos_autorizacion'),
-        where('code', '==', trimmedCode),
-        where('active', '==', true)
-      );
-      const authSnap = await getDocs(authQuery);
+      // 1. Validar código en la colección codigos_autorizacion (incluyendo códigos de 1 uso)
+      const convId = conversationToDelete.id;
+      const clientName = conversationToDelete.cliente_nombre || conversationToDelete.cliente_telefono || 'Conversación';
+      const authResult = await validateAndConsumeAuthCode({
+        db,
+        code: trimmedCode,
+        requiredPermission: 'any',
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Unknown',
+        userRole: user?.role,
+        operationDescription: `Eliminar conversación con ${clientName} (${convId})`,
+        moduleLabel: 'Conversaciones',
+      });
 
-      if (authSnap.empty) {
-        setDeleteAuthError('Código de autorización incorrecto o inactivo.');
+      if (!authResult.valid) {
+        setDeleteAuthError(authResult.error || 'Código de autorización incorrecto o inactivo.');
         toast({
           variant: 'destructive',
           title: 'Acceso Denegado',
-          description: 'El código ingresado no es válido o ha sido desactivado.',
+          description: authResult.error || 'El código ingresado no es válido o ha sido desactivado.',
         });
         setIsVerifyingDeleteCode(false);
         return;
@@ -2658,8 +2665,6 @@ export default function ConversationsDashboardPage() {
 
       // 2. Código válido -> Eliminar conversación de forma permanente
       setIsDeletingConversation(true);
-      const convId = conversationToDelete.id;
-      const clientName = conversationToDelete.cliente_nombre || conversationToDelete.cliente_telefono || 'Conversación';
 
       const res = await deleteConversation(convId);
 

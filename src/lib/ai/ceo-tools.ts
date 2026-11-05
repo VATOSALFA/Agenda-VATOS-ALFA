@@ -24,6 +24,7 @@ import {
   actualizarNotasClienteTool,
   consultarCitasPendientesConfirmacionWhatsAppTool,
   gestionarCatalogoServiciosSucursalTool,
+  gestionarExencionYCodigosAnticipoSucursalTool,
 } from './gerencia-tools';
 
 const MONTH_NAMES_ES = [
@@ -1189,5 +1190,6 @@ export function getCeoAgentTools() {
     actualizarNotasClienteTool,
     consultarCitasPendientesConfirmacionWhatsAppTool,
     gestionarCatalogoServiciosSucursalTool,
+    gestionarExencionYCodigosAnticipoSucursalTool,
   ];
 }

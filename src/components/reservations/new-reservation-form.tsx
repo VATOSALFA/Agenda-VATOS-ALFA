@@ -415,7 +415,15 @@ export function NewReservationForm({
     return isPast || isFullyPaidAndAttended;
   }, [isEditMode, initialData]);
 
-  const isAnticipoRequiredDueToHistory = isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
+  const isClientExempt = useMemo(() => {
+    if (!selectedClient) return false;
+    return Boolean(
+      selectedClient.exento_anticipo === true &&
+      Number(selectedClient.faltas_desde_exencion || 0) < 2
+    );
+  }, [selectedClient]);
+
+  const isAnticipoRequiredDueToHistory = !isClientExempt && isPenalizacionActive && unattendedCount >= maxInasistenciasPermitidas;
 
   const isMontoMinimoActive = bookingRules.anticipo_monto_minimo_activo !== false;
   const montoMinimoThreshold = Number(bookingRules.anticipo_monto_minimo) || 190;
@@ -459,9 +467,9 @@ export function NewReservationForm({
     return sum;
   }, [form, watchedItems, servicesMap]);
 
-  const isAnticipoRequiredDueToOpeningHour = isOpeningHourRuleActive && isOpeningHourSelected;
-  const isAnticipoRequiredDueToAmount = isMontoMinimoActive && montoMinimoThreshold > 0 && currentTotal >= montoMinimoThreshold;
-  const isAnticipoRequired = isAnticipoRequiredDueToHistory || isAnticipoRequiredDueToOpeningHour || isAnticipoRequiredDueToAmount;
+  const isAnticipoRequiredDueToOpeningHour = !isClientExempt && isOpeningHourRuleActive && isOpeningHourSelected;
+  const isAnticipoRequiredDueToAmount = !isClientExempt && isMontoMinimoActive && montoMinimoThreshold > 0 && currentTotal >= montoMinimoThreshold;
+  const isAnticipoRequired = !isClientExempt && (isAnticipoRequiredDueToHistory || isAnticipoRequiredDueToOpeningHour || isAnticipoRequiredDueToAmount);
 
   const depositAmountCalculated = useMemo(() => {
     const pct = isAnticipoRequiredDueToHistory
@@ -1374,7 +1382,7 @@ export function NewReservationForm({
 
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
-      const isInitialAlreadyPaid = isEditMode && initialData?.pago_estado === 'Pagado';
+      const isInitialAlreadyPaid = isEditMode && (initialData?.pago_estado === 'Pagado' || initialData?.pago_estado === 'deposit_paid');
       const rawEffectiveDepositPaid = data._depositPaidOverride !== undefined
         ? data._depositPaidOverride
         : (depositPaid || isInitialAlreadyPaid);
@@ -1384,20 +1392,35 @@ export function NewReservationForm({
         : (Number((data as any).monto_anticipo || (initialData as any)?.anticipo_pagado || (initialData as any)?.monto_pagado_real || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
       const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
 
+      const selectedClient = clients.find(c => c.id === data.cliente_id);
+      const isSelectedClientExempt = Boolean(
+        selectedClient?.exento_anticipo === true &&
+        Number(selectedClient?.faltas_desde_exencion || 0) < 2
+      );
+      const isExemptFromDeposit = Boolean(
+        data._exemptWithCode ||
+        isSelectedClientExempt ||
+        (isEditMode && initialData?.exento_anticipo === true)
+      );
+
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
       const preservedStatuses = effectiveDepositPaid
         ? ['Asiste', 'En espera', 'Completado', 'Venta completada']
         : ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
-      const cleanInitialEstado = (data.estado === 'Pendiente de pago' || data.estado === 'Pendiente de Pago')
-        ? 'Reservado'
-        : (data.estado || 'Reservado');
+      const cleanInitialEstado =
+        data.estado === 'Pendiente de pago' ||
+        data.estado === 'Pendiente de Pago' ||
+        (data.estado === 'Confirmado' && isAnyAnticipoActive && !effectiveDepositPaid && !isExemptFromDeposit)
+          ? 'Reservado'
+          : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
         ? data.estado
-        : (effectiveDepositPaid ? 'Confirmado' : (isAnyAnticipoActive && !isEditMode ? 'Pendiente de pago' : cleanInitialEstado));
+        : (effectiveDepositPaid || isExemptFromDeposit
+            ? 'Confirmado'
+            : (isAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
-      const selectedClient = clients.find(c => c.id === data.cliente_id);
       const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean; duracion?: number; duracionMinutos?: number; servicios?: any[] } = {
         cliente_id: data.cliente_id,
         cliente_nombre: selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : (data.cliente_nombre || ''),
@@ -1422,10 +1445,29 @@ export function NewReservationForm({
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
-        requiere_anticipo: Boolean(isAnyAnticipoActive),
+        requiere_anticipo: Boolean(isAnyAnticipoActive && !isExemptFromDeposit),
         manual_deposit: Boolean(manualDepositEnabled),
-        anticipo_esperado: (isAnyAnticipoActive || effectiveDepositPaid) ? targetDepositAmount : 0,
-        ...(isEditMode ? { anticipo_en_sucursal: true } : {}),
+        anticipo_esperado: (!isExemptFromDeposit && (isAnyAnticipoActive || effectiveDepositPaid)) ? targetDepositAmount : 0,
+        ...(isExemptFromDeposit
+          ? {
+              exento_anticipo: true,
+              ...(data._exemptWithCode
+                ? {
+                    exento_por: data._exemptWithCode.codeName,
+                    exento_motivo: data._exemptWithCode.reason,
+                    exento_codigo: data._exemptWithCode.code,
+                    exento_en: Timestamp.now(),
+                  }
+                : isSelectedClientExempt
+                ? {
+                    exento_por: selectedClient?.exento_anticipo_por || 'Cliente Exento Permanente',
+                    exento_motivo: selectedClient?.exento_anticipo_motivo || 'Cliente Exento de Anticipo',
+                  }
+                : {}),
+            }
+          : {
+              anticipo_en_sucursal: false,
+            }),
         ...(effectiveDepositPaid ? {
           pago_estado: (isInitialAlreadyPaid && !(initialData as any)?.deposit_payment_id) ? 'Pagado' : 'deposit_paid',
           monto_anticipo: targetDepositAmount,
@@ -1438,7 +1480,7 @@ export function NewReservationForm({
           deposit_paid_at: paidTimestamp,
           anticipo_en_sucursal: true,
         } : {
-          pago_estado: isAnyAnticipoActive ? 'pendiente_anticipo' : 'Pendiente',
+          pago_estado: (isAnyAnticipoActive && !isExemptFromDeposit) ? 'pendiente_anticipo' : 'Pendiente',
           monto_anticipo: 0,
           monto_pagado: 0,
           monto_pagado_real: 0,
@@ -1721,8 +1763,17 @@ export function NewReservationForm({
       return;
     }
 
-    // Alerta inteligente de anticipo por inasistencias o regla de monto (>= $190 MXN) antes de guardar
-    if (isAnticipoRequired && !depositPaid && !isEditMode) {
+    // Alerta inteligente de anticipo por inasistencias, horario de apertura o regla de monto (>= $190 MXN) antes de guardar
+    const isAlreadyPaidOrExempt = Boolean(
+      isClientExempt ||
+      (isEditMode && (
+        initialData?.exento_anticipo === true ||
+        initialData?.pago_estado === 'Pagado' ||
+        initialData?.pago_estado === 'deposit_paid' ||
+        Number(initialData?.anticipo_pagado || initialData?.monto_pagado_real || 0) > 0
+      ))
+    );
+    if (isAnticipoRequired && !depositPaid && !isAlreadyPaidOrExempt) {
       setPendingSaveData(data);
       setShowDepositWarningModal(true);
       return;
@@ -2570,13 +2621,7 @@ export function NewReservationForm({
         anticipoPorcentajeDefecto={anticipoPorcentajeDefecto}
         depositAmountCalculated={depositAmountCalculated}
         effectiveDepositAmount={effectiveDepositAmount}
-        onConfirmPaidNow={async () => {
-          setDepositPaid(true);
-          setShowDepositWarningModal(false);
-          if (pendingSaveData) {
-            await proceedWithSubmission(pendingSaveData, true);
-          }
-        }}
+        clientName={selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : ''}
         onSendPaymentLink={async () => {
           setDepositPaid(false);
           setShowDepositWarningModal(false);
@@ -2589,6 +2634,13 @@ export function NewReservationForm({
           setShowDepositWarningModal(false);
           if (pendingSaveData) {
             await proceedWithSubmission(pendingSaveData, false);
+          }
+        }}
+        onExemptWithCode={async (exemptData) => {
+          setDepositPaid(false);
+          setShowDepositWarningModal(false);
+          if (pendingSaveData) {
+            await proceedWithSubmission({ ...pendingSaveData, _exemptWithCode: exemptData }, false);
           }
         }}
       />

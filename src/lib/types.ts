@@ -39,6 +39,13 @@ export interface Client {
   puntosLealtad?: number;
   puntos_lealtad?: number;
   fecha_registro_app?: any;
+  exento_anticipo?: boolean;
+  exento_anticipo_por?: string;
+  exento_anticipo_fecha?: any;
+  exento_anticipo_motivo?: string;
+  faltas_desde_exencion?: number;
+  exento_revocado_en?: any;
+  exento_revocado_motivo?: string;
 }
 
 export interface CanjeBeneficio {
@@ -156,6 +163,13 @@ export interface Reservation {
   etiqueta_recordatorio?: 'confirmada' | 'reagendada' | 'cancelada';
   mercado_pago_link?: string;
   mercado_pago_preference_id?: string;
+  exento_anticipo?: boolean;
+  exento_por?: string;
+  exento_motivo?: string;
+  exento_codigo?: string;
+  exento_en?: any;
+  anticipo_en_sucursal?: boolean;
+  tolerancia_anticipo_extendida?: boolean;
 }
 
 export interface TimeBlock {
@@ -423,6 +437,16 @@ export interface AuthCode {
   cashbox: boolean;
   download: boolean;
   invoiced_sales?: boolean;
+  is_one_time?: boolean;
+  used?: boolean;
+  used_at?: any;
+  used_by?: string;
+  used_in_module?: string;
+  used_details?: string;
+  expires_at?: any;
+  created_at?: any;
+  created_by?: string;
+  purpose?: string;
 }
 
 export interface CashClosing {

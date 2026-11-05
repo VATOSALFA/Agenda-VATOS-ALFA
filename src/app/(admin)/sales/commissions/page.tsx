@@ -44,6 +44,7 @@ import { db } from "@/lib/firebase-client";
 import { useToast } from "@/hooks/use-toast";
 import { useCommissionsData } from './use-commissions-data';
 import { logAuditAction } from '@/lib/audit-logger';
+import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 
 export default function CommissionsPage() {
     const { user } = useAuth();
@@ -177,32 +178,24 @@ export default function CommissionsPage() {
             return;
         }
 
-        const authCodeQuery = firestoreQuery(
-            collection(db, 'codigos_autorizacion'),
-            where('code', '==', authCode),
-            where('active', '==', true),
-            where('download', '==', true)
-        );
+        const result = await validateAndConsumeAuthCode({
+            db,
+            code: authCode,
+            requiredPermission: 'download',
+            userId: user?.uid || 'unknown',
+            userName: user?.displayName || user?.email || 'Unknown',
+            userRole: user?.role,
+            localId: localFilter !== 'todos' ? localFilter : 'unknown',
+            operationDescription: 'Descargar reporte de comisiones filtrado',
+            moduleLabel: 'Comisiones',
+        });
 
-        const querySnapshot = await getDocs(authCodeQuery);
-
-        if (querySnapshot.empty) {
-            toast({ variant: 'destructive', title: 'Código inválido o sin permiso' });
+        if (!result.valid) {
+            toast({ variant: 'destructive', title: 'Código inválido o sin permiso', description: result.error });
         } else {
             toast({ title: 'Código correcto', description: 'Iniciando descarga...' });
             triggerDownload();
             setIsDownloadModalOpen(false);
-
-            await logAuditAction({
-                action: 'Autorización por Código',
-                details: 'Acción autorizada: Descargar reporte de comisiones filtrado.',
-                userId: user?.uid || 'unknown',
-                userName: user?.displayName || user?.email || 'Unknown',
-                userRole: user?.role,
-                authCode: authCode,
-                severity: 'info',
-                localId: localFilter !== 'todos' ? localFilter : 'unknown'
-            });
             setAuthCode('');
         }
     };

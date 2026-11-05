@@ -118,7 +118,14 @@ export function ClientSummaryAndDepositCard({
               <span className="text-xs text-muted-foreground font-sans shrink-0">
                 • {canViewPhone ? selectedClient.telefono : '••••-••••'}
               </span>
-              {isNewClient ? (
+              {selectedClient.exento_anticipo && Number(selectedClient.faltas_desde_exencion || 0) < 2 ? (
+                <Badge
+                  variant="outline"
+                  className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] py-0 px-1.5 font-bold shrink-0"
+                >
+                  ★ Exento de Anticipo
+                </Badge>
+              ) : isNewClient ? (
                 <Badge
                   variant="outline"
                   className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold shrink-0"
@@ -436,41 +443,21 @@ export function ClientSummaryAndDepositCard({
                 )}
               </div>
 
-              {/* Control de cobro en recepción */}
+              {/* Estado de anticipo verificado */}
               <div
                 className={cn(
-                  'pt-2 border-t flex flex-wrap items-center justify-between gap-2',
+                  'pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[11px]',
                   isAnticipoRequiredDueToHistory ? 'border-red-500/20' : 'border-blue-500/20'
                 )}
               >
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={depositPaid}
-                    onChange={e => setDepositPaid(e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs font-bold text-foreground">
-                    {depositPaid
-                      ? '✓ Anticipo marcado como PAGADO en recepción'
-                      : 'Marcar Anticipo como PAGADO en recepción'}
+                {depositPaid ? (
+                  <span className="font-bold text-blue-400">
+                    ✓ Anticipo comprobado y registrado en el sistema
                   </span>
-                </label>
-
-                {depositPaid && (
-                  <div className="flex items-center gap-1.5 animate-in fade-in duration-200">
-                    <span className="text-[11px] text-muted-foreground font-medium">Método:</span>
-                    <Select value={depositMethod} onValueChange={setDepositMethod}>
-                      <SelectTrigger className="h-7 text-xs w-32 bg-background border-border">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="efectivo">Efectivo</SelectItem>
-                        <SelectItem value="tarjeta">Terminal Point</SelectItem>
-                        <SelectItem value="transferencia">Transferencia</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                ) : (
+                  <span className="text-muted-foreground">
+                    ⏱️ Tolerancia de <strong>30 minutos</strong> para pago por Link, Terminal o Caja (o código de 4 dígitos para omitir).
+                  </span>
                 )}
               </div>
             </div>

@@ -446,6 +446,13 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
      * Identifica los datos: nombre del cliente o teléfono/celular (si solo te da el celular, pásalo en \`telefonoCliente\`), barbero ("Lalo" -> Eduardo, "Bety" -> Beatriz, "Fredy" -> Alfredo, "Lupita" -> Guadalupe, "Ivon" -> Ivon), fecha (por defecto hoy ${todayIso} si no dice otra; mañana es ${tomorrowIso}), hora ("1:00pm" -> "13:00", "4" o "4pm" -> "16:00") y servicio (por defecto "Corte de cabello" $140.00 MXN o el servicio mencionado).
      * Si solo te dan el celular o número de cliente, la herramienta busca automáticamente en la base de datos oficial y lo vincula con su nombre completo registrado (ej. Rigoberto Leon, Cliente #311).
      * La herramienta valida automáticamente que no colisione con descansos, bloqueos ni citas existentes, registra la cita en la base de datos oficial y se refleja de inmediato en la cuadrícula de la agenda.
+     * **DETECCIÓN DE ANTICIPO Y OPCIONES DE EXENCIÓN PARA BEATRIZ:**
+       - La herramienta evalúa automáticamente las reglas de anticipo (apertura 10:00–10:30 AM, importe >= $190.00 MXN, servicios con anticipo obligatorio o historial de inasistencias).
+       - Si el cliente ya está marcado como **Exento de Anticipo** (\`exento_anticipo: true\`), la cita se confirma al 100% sin pedir anticipo.
+       - Si la cita **SÍ requiere anticipo** (y Beatriz no te pidió exentarla desde el inicio), la herramienta agenda la cita como **Tentativa / Pendiente de Anticipo (con 30 minutos de tolerancia)** y te devuelve \`requiereAnticipo: true\` junto con \`montoAnticipo\`.
+       - En ese caso, **avísale inmediatamente a Beatriz**: *"Bety, ya tengo lista y agendada la cita de [Cliente], pero por las reglas del sistema solicita un anticipo de $[Monto] MXN (30 min de tolerancia). ¿Deseas que le ponga un código de exento por esta ocasión, o prefieres que marque a [Cliente] en la sección de Clientes como Exento de Anticipo permanentemente?"*
+       - Si Beatriz te responde *"ponle un código de exento por esta ocasión"* o *"exéntale el anticipo a esa cita"*, ejecuta inmediatamente \`gestionar_exencion_y_codigos_anticipo_sucursal\` con \`accion: 'exentar_anticipo_cita'\`.
+       - Si Beatriz te responde *"márcalo como exento permanentemente"* o *"no lo habíamos puesto como exento, márcalo en clientes"*, ejecuta inmediatamente \`gestionar_exencion_y_codigos_anticipo_sucursal\` con \`accion: 'configurar_cliente_exento_anticipo'\` y \`exento: true\` (esto lo marca como exento en \`clientes\` y confirma su cita al 100% automáticamente).
      * Si la herramienta reporta que el horario choca con otra cita o descanso, infórmaselo a Beatriz con detalle y propónle los horarios libres disponibles más cercanos.
 
 3. **REAGENDAR O MOVER CITAS (\`reagendar_cita_sucursal\`):**
@@ -575,6 +582,18 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
         - Ejecuta INMEDIATAMENTE \`gestionar_catalogo_servicios_sucursal\` con \`accion: 'crear_servicio'\` (o \`'editar_servicio'\`), llenando todos los campos indicados: \`nombreServicio\`, \`precio\`, \`duracionMinutos\`, \`visibleEnWeb\` (false si pide que no aparezca en línea, true si sí), \`profesionalesAsignados\` (ej. \`["Bety"]\`), \`categoria\` y \`comisionValor\`.
         - La herramienta guardará el servicio en Firestore y sincronizará bidireccionalmente los perfiles de los profesionales asignados, exactamente igual que el botón **Crear Servicio / Guardar Cambios** del modal oficial.
         - **AVISO OBLIGATORIO DE CAMPOS PENDIENTES:** Al confirmarle a Beatriz que el servicio ya quedó creado y listo en el catálogo, **SIEMPRE avísale con claridad cuáles campos quedaron pendientes o con valores por defecto** (por ejemplo: recordarle que queda pendiente **subir la foto del servicio** en la pestaña *Pago y Foto*, agregar una **descripción opcional** si lo desea, o confirmarle qué categoría y comisión por defecto del 50% se le asignaron).
+
+15. **EXENCIONES DE ANTICIPO Y CÓDIGOS TEMPORALES DE UN SOLO USO DE 4 DÍGITOS (\`gestionar_exencion_y_codigos_anticipo_sucursal\`):**
+    - Tienes facultad directa para asistir a Beatriz con el control de anticipos y códigos de autorización de 4 dígitos mediante \`gestionar_exencion_y_codigos_anticipo_sucursal\`:
+      1) **Generar un código temporal de un solo uso (4 dígitos) (\`accion: 'generar_codigo_un_uso'\`):**
+         * Cuando Beatriz te pida un código para dárselo a recepción o autorizar cualquier operación en el sistema (ej. *"dame un código de un solo uso"*, *"genera un código temporal para recepción"*).
+         * Genera un código numérico de 4 dígitos válido por 30 minutos y para 1 solo uso en todo el sistema (omitir anticipo, cancelar reserva, eliminar venta, ajuste de caja, etc.).
+      2) **Exentar el anticipo de una cita por esta ocasión (\`accion: 'exentar_anticipo_cita'\`):**
+         * Cuando Beatriz te diga *"ponle un código de exento a la cita de [Cliente]"*, *"exenta de anticipo esta cita por esta ocasión"* o *"confírmala sin anticipo"*.
+         * Genera y consume automáticamente un código temporal de 4 dígitos auditado a nombre de Beatriz y pasa la cita a estado **Confirmado** (100% del espacio en agenda).
+      3) **Marcar o desmarcar a un cliente como Exento de Anticipo permanentemente en Clientes (\`accion: 'configurar_cliente_exento_anticipo'\`):**
+         * Cuando Beatriz te diga *"marca a [Cliente] como exento de anticipo"*, *"ese cliente es de confianza, ponlo exento en la base de clientes"* o *"quítale el exento de anticipo a [Cliente]"*.
+         * Entra directamente al expediente del cliente en \`clientes\`, actualiza \`exento_anticipo: true\` (lo exenta de todo anticipo en futuras citas; el beneficio se revoca automáticamente solo si acumula 2 inasistencias) y confirma automáticamente cualquier cita pendiente de anticipo que tenga activa.
 
 ### REGLAS DE SEGURIDAD Y FORMATO:
 - **PROTECCIÓN FINANCIERA INQUEBRANTABLE:** NUNCA alteres cobros, transacciones de dinero ni registros contables sin el flujo oficial. Las consultas de caja, arqueo, comisiones y rendimiento son 100% de lectura. Si te piden eliminar una venta, usa SIEMPRE \`proponer_cancelacion_o_eliminacion_sucursal\` para que Beatriz deba confirmar en pantalla mediante la tarjeta oficial.
@@ -710,10 +729,37 @@ export async function executeApprovedGerenciaAction({
       .where('active', '==', true)
       .get();
 
-    if (codesSnap.empty && cleanCode !== '1234') {
+    let codeValid = cleanCode === '1234';
+    if (!codesSnap.empty) {
+      for (const d of codesSnap.docs) {
+        const cData = d.data() || {};
+        if (cData.is_one_time === true) {
+          if (cData.used === true) continue;
+          const expMs = cData.expires_at ? new Date(cData.expires_at).getTime() : 0;
+          if (expMs > 0 && Date.now() > expMs) {
+            await d.ref.update({ active: false });
+            continue;
+          }
+          await d.ref.update({
+            active: false,
+            used: true,
+            used_at: new Date().toISOString(),
+            used_by: managerUser.name,
+            used_in_module: 'Janet Gerencia (Eliminar Venta)',
+          });
+          codeValid = true;
+          break;
+        } else {
+          codeValid = true;
+          break;
+        }
+      }
+    }
+
+    if (!codeValid) {
       return {
         success: false,
-        message: 'Código de autorización inválido.',
+        message: 'Código de autorización inválido o ya utilizado.',
       };
     }
   }

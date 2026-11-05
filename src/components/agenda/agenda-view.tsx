@@ -723,7 +723,7 @@ export default function AgendaView() {
 
   const { allEvents, eventsWithLayout } = useAgendaEvents(effectiveReservations, timeBlocks, clients, professionals);
 
-  // Auto-cancelar citas pendientes de anticipo que superaron los 20 minutos de tolerancia
+  // Auto-cancelar citas pendientes de anticipo que superaron los 30 minutos de tolerancia
   const autoCancellingIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!db || !effectiveReservations || effectiveReservations.length === 0) return;
@@ -732,16 +732,18 @@ export default function AgendaView() {
     effectiveReservations.forEach((res) => {
       if (!res?.id || res.estado === 'Cancelado') return;
       if ((res as any).anticipo_en_sucursal === true || (res as any).tolerancia_anticipo_extendida === true || (res as any).exento_anticipo === true) return;
-      if (res.estado === 'Confirmado' || res.estado === 'Asiste' || res.estado === 'Completado') return;
+      const clientObj = clients?.find(c => c.id === res.cliente_id);
+      if (clientObj?.exento_anticipo === true && Number(clientObj?.faltas_desde_exencion || 0) < 2) return;
+      if (res.estado === 'Asiste' || res.estado === 'Completado') return;
       if (autoCancellingIdsRef.current.has(res.id)) return;
 
-      if (isExpiredPendingDepositReservation(res, nowMs, 20)) {
+      if (isExpiredPendingDepositReservation(res, nowMs, 30)) {
         autoCancellingIdsRef.current.add(res.id);
         const isSandbox = Boolean((res as any).isSandbox);
         const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
         updateDoc(doc(db, targetCol, res.id), {
           estado: 'Cancelado',
-          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
+          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 30 minutos de tolerancia.',
           cancelada_automaticamente: true,
           cancelado_en: Timestamp.now(),
         })
@@ -1312,6 +1314,29 @@ export default function AgendaView() {
             monto_retenido: depositAmount
           });
 
+          if (resData?.cliente_id && resData?.estado !== 'No asiste') {
+            try {
+              const clientRef = doc(db, 'clientes', resData.cliente_id);
+              const clientSnap = await getDoc(clientRef);
+              if (clientSnap.exists()) {
+                const cData = clientSnap.data();
+                const clientUpdates: Record<string, any> = { citas_no_asistidas: increment(1) };
+                if (cData?.exento_anticipo === true) {
+                  const newFaltas = (Number(cData?.faltas_desde_exencion) || 0) + 1;
+                  clientUpdates.faltas_desde_exencion = newFaltas;
+                  if (newFaltas >= 2) {
+                    clientUpdates.exento_anticipo = false;
+                    clientUpdates.exento_revocado_en = new Date().toISOString();
+                    clientUpdates.exento_revocado_motivo = 'Revocado automáticamente al acumular 2 inasistencias.';
+                  }
+                }
+                await updateDoc(clientRef, clientUpdates);
+              }
+            } catch (cErr) {
+              console.warn('Error actualizando inasistencias del cliente:', cErr);
+            }
+          }
+
           toast({
             title: 'No Asistió - Anticipo Retenido',
             description: `Se registró la inasistencia. Se retuvo el anticipo de $${depositAmount.toFixed(2)} y se asignó la comisión al profesional.`,
@@ -1331,25 +1356,21 @@ export default function AgendaView() {
       }
 
       const wasCancelled = resData?.estado === 'Cancelado';
+      const wasNoShow = resData?.estado === 'No asiste';
       const isReactivating = wasCancelled && newStatus !== 'Cancelado';
       const isCancelling = !wasCancelled && newStatus === 'Cancelado';
+      const isMarkingNoShow = !wasNoShow && newStatus === 'No asiste';
 
       const updateData: any = { estado: newStatus };
       if (isReactivating) {
         updateData.motivo_cancelacion = deleteField();
         updateData.cancelada_automaticamente = deleteField();
         updateData.cancelado_en = deleteField();
-        updateData.anticipo_en_sucursal = true;
-        updateData.requiere_anticipo = false;
-        updateData.anticipo_esperado = 0;
-        if (resData?.pago_estado === 'pendiente_anticipo') {
-          updateData.pago_estado = 'Pendiente';
-        }
       }
 
       await updateDoc(resRef, updateData);
 
-      // Sincronizar contador de citas_canceladas en el perfil del cliente
+      // Sincronizar contadores e inasistencias (incluyendo pérdida automática de exención a las 2 faltas) en el perfil del cliente
       if (!isSandboxRes && resData?.cliente_id) {
         try {
           const clientRef = doc(db, 'clientes', resData.cliente_id);
@@ -1364,8 +1385,38 @@ export default function AgendaView() {
               }
             }
           }
+
+          if (isMarkingNoShow) {
+            const clientSnap = await getDoc(clientRef);
+            if (clientSnap.exists()) {
+              const cData = clientSnap.data();
+              const clientUpdates: Record<string, any> = {
+                citas_no_asistidas: increment(1),
+              };
+              if (cData?.exento_anticipo === true) {
+                const newFaltasDesdeExencion = (Number(cData?.faltas_desde_exencion) || 0) + 1;
+                clientUpdates.faltas_desde_exencion = newFaltasDesdeExencion;
+                if (newFaltasDesdeExencion >= 2) {
+                  clientUpdates.exento_anticipo = false;
+                  clientUpdates.exento_revocado_en = new Date().toISOString();
+                  clientUpdates.exento_revocado_motivo = 'Revocado automáticamente al acumular 2 inasistencias.';
+                  toast({
+                    variant: 'destructive',
+                    title: 'Beneficio de Exención Revocado Automáticamente',
+                    description: 'El cliente acumuló una 2ª inasistencia y perdió automáticamente el beneficio de Exento de Anticipo.',
+                  });
+                } else {
+                  toast({
+                    title: 'Inasistencia Registrada (1/2 de tolerancia)',
+                    description: 'El cliente conserva su exención de anticipo, pero si falta una segunda vez perderá el beneficio automáticamente.',
+                  });
+                }
+              }
+              await updateDoc(clientRef, clientUpdates);
+            }
+          }
         } catch (cErr) {
-          console.warn('Error actualizando citas_canceladas del cliente:', cErr);
+          console.warn('Error actualizando historial del cliente:', cErr);
         }
       }
 
@@ -2421,7 +2472,7 @@ export default function AgendaView() {
                                         )}
 
                                         {event.layout.isPendingDeposit && (
-                                          <div className="h-full pr-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (20 min tolerancia)">
+                                          <div className="h-full pr-1.5 flex items-center justify-center shrink-0" title="Esperando pago de anticipo (30 min tolerancia)">
                                             <Hourglass className="h-3.5 w-3.5 text-red-600 dark:text-red-400 animate-pulse" />
                                           </div>
                                         )}
@@ -2504,7 +2555,7 @@ export default function AgendaView() {
                                         <span>Pendiente de pago de anticipo</span>
                                       </div>
                                       <p className="text-[11px] text-muted-foreground leading-snug">
-                                        {`⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 20} min para recibir el anticipo y confirmarse formalmente.`}
+                                        {`⏱ Tolerancia: quedan ${event.layout.depositMinutesRemaining ?? 30} min para recibir el anticipo y confirmarse formalmente.`}
                                       </p>
                                     </div>
                                   ) : (

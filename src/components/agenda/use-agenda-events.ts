@@ -75,7 +75,15 @@ export function useAgendaEvents(
                     res.pago_estado !== 'pendiente'
                 );
 
-                const timing = getPendingDepositTiming(res, nowMs, 20);
+                const isClientExempt = Boolean(
+                    (customer as any)?.exento_anticipo === true &&
+                    Number((customer as any)?.faltas_desde_exencion || 0) < 2
+                );
+                const timing = getPendingDepositTiming(
+                    isClientExempt ? { ...res, exento_anticipo: true } : res,
+                    nowMs,
+                    30
+                );
                 const isPendingDeposit = timing.isPendingDeposit && !timing.depositExpired;
                 const depositMinutesRemaining = timing.depositMinutesRemaining;
                 const depositExpired = timing.depositExpired;

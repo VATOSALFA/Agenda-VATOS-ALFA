@@ -1197,6 +1197,7 @@ export default function AgendaView() {
           deposit_payment_id: depositSaleId,
           deposit_paid_at: Timestamp.now(),
           anticipo_en_sucursal: true,
+          whatsappConfirmationSent: true,
           motivo_cancelacion: deleteField(),
           cancelada_automaticamente: deleteField(),
           cancelado_en: deleteField()
@@ -1362,6 +1363,13 @@ export default function AgendaView() {
       const isMarkingNoShow = !wasNoShow && newStatus === 'No asiste';
 
       const updateData: any = { estado: newStatus };
+      if (newStatus === 'Confirmado' || newStatus === 'Asiste' || newStatus === 'Completado') {
+        updateData.whatsappConfirmationSent = true;
+      }
+      if (newStatus === 'Asiste' || newStatus === 'Completado' || newStatus === 'No asiste' || newStatus === 'Cancelado') {
+        updateData.whatsappReminderSent = true;
+        updateData.whatsappReminderNotNeeded = true;
+      }
       if (isReactivating) {
         updateData.motivo_cancelacion = deleteField();
         updateData.cancelada_automaticamente = deleteField();
@@ -2347,11 +2355,16 @@ export default function AgendaView() {
                                   (event.type === 'appointment' &&
                                     !event.layout.isMinimized &&
                                     event.pago_estado !== 'Pagado' &&
+                                    event.pago_estado !== 'deposit_paid' &&
+                                    event.pago_estado !== 'anticipo_pagado' &&
+                                    (event as any).estado !== 'Asiste' &&
+                                    (event as any).estado !== 'Completado' &&
+                                    (event as any).estado !== 'Venta completada' &&
                                     (event as any).estado !== 'No asiste' &&
                                     (event as any).estado !== 'En espera' &&
                                     (event as any).estado !== 'Cancelado' &&
                                     (
-                                      (whatsappConfirmationAnimation && !event.whatsappConfirmationSent && !(event as any).confirmationSentViaApp) ||
+                                      (whatsappConfirmationAnimation && !event.whatsappConfirmationSent && !(event as any).confirmationSentViaApp && (event as any).estado !== 'Confirmado') ||
                                       (whatsappReminderAnimation && !event.whatsappReminderSent && !(event as any).chatReminderSent)
                                     )) && "animate-pending-notification"
                                 )}

@@ -53,18 +53,66 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// Helper para determinar si una reserva ya fue pagada (total o anticipo) o atendida
+function isPaidOrCompletedReservation(res: Reservation): boolean {
+  const estado = String(res.estado || '').trim();
+  if (
+    estado === 'Confirmado' ||
+    estado === 'Asiste' ||
+    estado === 'En espera' ||
+    estado === 'Cancelado' ||
+    estado === 'No asiste' ||
+    estado === 'Completado' ||
+    estado === 'Venta completada'
+  ) {
+    return true;
+  }
+
+  const pagoEstado = String(res.pago_estado || '').toLowerCase().trim();
+  if (
+    pagoEstado === 'pagado' ||
+    pagoEstado === 'paid' ||
+    pagoEstado === 'deposit_paid' ||
+    pagoEstado === 'anticipo_pagado' ||
+    pagoEstado === 'approved'
+  ) {
+    return true;
+  }
+
+  if (
+    pagoEstado !== 'pendiente_anticipo' &&
+    pagoEstado !== 'pending_payment' &&
+    pagoEstado !== 'pendiente' &&
+    (Number((res as any).anticipo_pagado || 0) > 0 ||
+      Number((res as any).anticipoPagado || 0) > 0 ||
+      Number((res as any).monto_pagado || 0) > 0 ||
+      Number((res as any).monto_pagado_real || 0) > 0)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 // Helper para determinar si una reserva requiere confirmación manual de recepción
-function isEligibleForConfirmation(res: Reservation): boolean {
+function isEligibleForConfirmation(res: Reservation, todayStr?: string, nowMinutes?: number): boolean {
   if (Boolean((res as any).confirmationSentViaApp)) return false;
   if (res.whatsappConfirmationSent) return false;
-  if (
-    res.estado === 'Confirmado' ||
-    res.estado === 'Cancelado' ||
-    res.estado === 'No asiste' ||
-    res.estado === 'Completado' ||
-    res.estado === 'Venta completada'
-  ) {
-    return false;
+  if (isPaidOrCompletedReservation(res)) return false;
+
+  // Si la cita ya pasó (fecha pasada o el horario de hoy ya terminó), no seguir sonando por confirmación
+  if (todayStr && res.fecha) {
+    if (res.fecha < todayStr) return false;
+    if (res.fecha === todayStr && typeof nowMinutes === 'number' && nowMinutes > 0) {
+      const endRef = res.hora_fin || res.hora_inicio;
+      if (endRef && typeof endRef === 'string') {
+        const [h, m] = endRef.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          const endMins = h * 60 + m;
+          if (nowMinutes > endMins) return false;
+        }
+      }
+    }
   }
 
   // Descartar citas sin cliente real o bloqueos de agenda
@@ -307,13 +355,13 @@ export function OverdueNotificationsPopover({
 
     const map = new Map<string, Reservation>();
     onlineReservationsFromDb.forEach((r) => {
-      if (isEligibleForConfirmation(r)) {
+      if (isEligibleForConfirmation(r, todayStr, nowMinutes)) {
         map.set(r.id, r);
       }
     });
 
     (reservations || []).forEach((r) => {
-      if (isEligibleForConfirmation(r)) {
+      if (isEligibleForConfirmation(r, todayStr, nowMinutes)) {
         map.set(r.id, r);
       }
     });
@@ -322,7 +370,7 @@ export function OverdueNotificationsPopover({
       if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
       return (a.hora_inicio || '').localeCompare(b.hora_inicio || '');
     });
-  }, [isStaff, onlineReservationsFromDb, reservations]);
+  }, [isStaff, onlineReservationsFromDb, reservations, todayStr, nowMinutes]);
 
   // Seguimiento de recordatorios omitidos manualmente en esta sesión
   const [dismissedReminderIds, setDismissedReminderIds] = useState<Set<string>>(new Set());
@@ -499,10 +547,14 @@ export function OverdueNotificationsPopover({
       if (Boolean((res as any).chatReminderSent)) return false;
 
       if (
+        res.estado === 'Asiste' ||
+        res.estado === 'En espera' ||
         res.estado === 'Cancelado' ||
         res.estado === 'No asiste' ||
         res.estado === 'Completado' ||
-        res.estado === 'Venta completada'
+        res.estado === 'Venta completada' ||
+        String(res.pago_estado || '').toLowerCase() === 'pagado' ||
+        String(res.pago_estado || '').toLowerCase() === 'paid'
       ) {
         return false;
       }
@@ -551,6 +603,7 @@ export function OverdueNotificationsPopover({
     return reservations.filter((res) => {
       if (res.fecha !== todayStr) return false;
       if (res.estado && taggedStatuses.includes(res.estado)) return false;
+      if (isPaidOrCompletedReservation(res)) return false;
 
       if (!res.hora_inicio || typeof res.hora_inicio !== 'string') return false;
       const parts = res.hora_inicio.split(':');
@@ -569,11 +622,21 @@ export function OverdueNotificationsPopover({
     whatsappReminderReservations.length +
     overdueReservations.length;
 
-  // Autoexpandir al centro y reproducir alerta sonora de alta penetración al recibir un nuevo aviso
-  const prevCountRef = useRef(totalCount);
+  // Autoexpandir al centro y reproducir alerta sonora únicamente cuando aparece un aviso NUEVO (una vez por aviso)
+  const alertedNoticeKeysRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (isStaff) return;
-    if (totalCount > prevCountRef.current && totalCount > 0) {
+
+    const currentKeys: string[] = [
+      ...allOnlineReservations.map((r) => `online_${r.id}`),
+      ...whatsappReminderReservations.map((r) => `rem_${r.id}`),
+      ...overdueReservations.map((r) => `over_${r.id}`),
+    ];
+
+    const hasBrandNewNotice = currentKeys.some((k) => !alertedNoticeKeysRef.current.has(k));
+    currentKeys.forEach((k) => alertedNoticeKeysRef.current.add(k));
+
+    if (hasBrandNewNotice && totalCount > 0) {
       const hasOtherOpenDialog =
         typeof document !== 'undefined' &&
         Boolean(
@@ -588,8 +651,7 @@ export function OverdueNotificationsPopover({
       }
       playStrongNotificationAlert();
     }
-    prevCountRef.current = totalCount;
-  }, [totalCount, isStaff]);
+  }, [allOnlineReservations, whatsappReminderReservations, overdueReservations, totalCount, isStaff]);
 
   // Acción: Enviar confirmación por WhatsApp a cita en línea
   const handleSendOnlineConfirmation = async (res: Reservation, e: React.MouseEvent) => {

@@ -69,7 +69,7 @@ export function SendConfirmationModal({
   );
 
   const [whatsappAnticipoTemplate, setWhatsappAnticipoTemplate] = useState<string>(
-    '¡Hola *{nombre}*! 👋\n\nTu cita ha sido agendada con éxito:\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n⚠️ *Anticipo requerido para confirmar:*\nPara apartar y asegurar tu lugar en la agenda, es necesario realizar tu anticipo de *${monto_anticipo} MXN*.\n\n💳 *Paga fácilmente con Transferencia SPEI o Tarjeta aquí:*\n{link_pago}\n\nℹ️ _Instrucciones SPEI:_ Al abrir el enlace y elegir "Transferencia", Mercado Pago te generará una CLABE interbancaria única de 18 dígitos para transferir desde tu banca móvil. Tu cita se confirmará en automático al recibir tu pago.\n\n¡Te esperamos en Vatos Alfa!'
+    '¡Hola *{nombre}*! 👋\n\n💈 *Cita:* {servicios} con {profesional}\n📅 *Fecha:* {fecha} a las {hora}\n\nPara confirmar tu espacio, realiza tu anticipo de *${monto_anticipo} MXN* (SPEI o tarjeta) aquí:\n{link_pago}'
   );
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
@@ -242,6 +242,10 @@ export function SendConfirmationModal({
 
     if (isDepositRequired) {
       const activeLink = paymentLink || (isGeneratingLink ? '[Generando enlace de pago SPEI...]' : '');
+      const formattedDeposit = Number(depositAmount || 0).toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
       return whatsappAnticipoTemplate
         .replace(/{nombre}/g, clientName)
         .replace(/{servicios}/g, servicesText)
@@ -249,7 +253,7 @@ export function SendConfirmationModal({
         .replace(/{hora}/g, reservation.hora_inicio || '')
         .replace(/{profesional}/g, allProfessionalNames)
         .replace(/{ubicacion}/g, locationStr)
-        .replace(/{monto_anticipo}/g, String(depositAmount))
+        .replace(/{monto_anticipo}/g, formattedDeposit)
         .replace(/{link_pago}/g, activeLink);
     }
 
@@ -423,7 +427,7 @@ export function SendConfirmationModal({
                   </div>
                   <div>
                     <p className="font-bold text-xs text-foreground">
-                      Anticipo Requerido: <span className="text-blue-400 font-extrabold">${depositAmount} MXN</span>
+                      Anticipo Requerido: <span className="text-blue-400 font-extrabold">${Number(depositAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       Transferencia SPEI (18 dígitos) o Tarjeta

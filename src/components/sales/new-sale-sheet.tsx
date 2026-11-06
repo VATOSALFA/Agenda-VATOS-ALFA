@@ -3421,6 +3421,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         estado: 'Asiste',
                         monto_pagado: grandTotal,
                         saldo_pendiente: 0,
+                        whatsappConfirmationSent: true,
+                        whatsappReminderSent: true,
+                        whatsappReminderNotNeeded: true,
                         items: reservationItems,
                         precio: subtotal - totalDiscount,
                         servicio: reservationItems.map((i: any) => i.nombre).join(', ')

@@ -39,9 +39,13 @@ interface AjustesSettings {
 
   whatsappMessageTemplate: string;
   whatsappReminderTemplate: string;
+  whatsappAnticipoTemplate: string;
   whatsappConfirmationAnimation: boolean;
   whatsappReminderAnimation: boolean;
 }
+
+const DEFAULT_ANTICIPO_TEMPLATE =
+  '¡Hola *{nombre}*! 👋\n\n💈 *Cita:* {servicios} con {profesional}\n📅 *Fecha:* {fecha} a las {hora}\n\nPara confirmar tu espacio, realiza tu anticipo de *${monto_anticipo} MXN* (SPEI o tarjeta) aquí:\n{link_pago}';
 
 export default function AjustesPage() {
   const { toast } = useToast();
@@ -63,6 +67,7 @@ export default function AjustesPage() {
       }, {} as Record<string, { use: boolean; required: boolean }>),
       whatsappMessageTemplate: '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
       whatsappReminderTemplate: '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_',
+      whatsappAnticipoTemplate: DEFAULT_ANTICIPO_TEMPLATE,
       whatsappConfirmationAnimation: true,
       whatsappReminderAnimation: true,
     }
@@ -98,6 +103,7 @@ export default function AjustesPage() {
           }, {} as Record<string, { use: boolean; required: boolean }>),
           whatsappMessageTemplate: whatsappData.whatsappMessageTemplate || '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._',
           whatsappReminderTemplate: whatsappData.whatsappReminderTemplate || '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_',
+          whatsappAnticipoTemplate: whatsappData.whatsappAnticipoTemplate || DEFAULT_ANTICIPO_TEMPLATE,
           whatsappConfirmationAnimation: whatsappData.whatsappConfirmationAnimation ?? true,
           whatsappReminderAnimation: whatsappData.whatsappReminderAnimation ?? true,
         });
@@ -177,6 +183,7 @@ export default function AjustesPage() {
       await setDoc(whatsappRef, {
         whatsappMessageTemplate: data.whatsappMessageTemplate || '',
         whatsappReminderTemplate: data.whatsappReminderTemplate || '',
+        whatsappAnticipoTemplate: data.whatsappAnticipoTemplate || DEFAULT_ANTICIPO_TEMPLATE,
         whatsappConfirmationAnimation: data.whatsappConfirmationAnimation ?? true,
         whatsappReminderAnimation: data.whatsappReminderAnimation ?? true
       }, { merge: true });
@@ -437,6 +444,90 @@ export default function AjustesPage() {
                         }}
                       />
                       <span className="text-[9px] text-slate-400 block text-right mt-1">09:00</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Solicitud de Anticipo (Link de Pago) */}
+              <div className="space-y-3 pt-4 border-t border-border/40">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs sm:text-sm font-semibold text-foreground">Mensaje de Solicitud de Anticipo (con Link de Pago)</h4>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 p-3 text-xs border-2 border-blue-500 rounded-xl bg-card shadow-xl">
+                        Plantilla corta y directa para enviar el enlace de anticipo (SPEI o tarjeta). Tanto el texto del enlace como el botón inferior de WhatsApp ("Abrir link de pago") abren exactamente la misma página segura de pago.
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => form.setValue('whatsappAnticipoTemplate', DEFAULT_ANTICIPO_TEMPLATE)}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold transition-colors"
+                  >
+                    Restaurar plantilla corta recomendada
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium text-muted-foreground">Plantilla del mensaje</Label>
+                    <Controller
+                      name="whatsappAnticipoTemplate"
+                      control={form.control}
+                      render={({ field }) => (
+                        <Textarea
+                          {...field}
+                          rows={6}
+                          className="font-sans text-xs bg-background border-border/60 leading-relaxed"
+                        />
+                      )}
+                    />
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className="text-[10px] text-muted-foreground w-full">Variables disponibles (haz clic para insertar):</span>
+                      {['{nombre}', '{servicios}', '{fecha}', '{hora}', '{profesional}', '{ubicacion}', '{monto_anticipo}', '{link_pago}'].map(tag => (
+                        <Badge
+                          key={tag}
+                          variant="outline"
+                          className="cursor-pointer border-border/60 hover:border-blue-500/50 hover:bg-blue-500/10 text-[10px] py-0 px-2 h-5 font-mono"
+                          onClick={() => {
+                            const val = form.getValues('whatsappAnticipoTemplate') || '';
+                            form.setValue('whatsappAnticipoTemplate', val + tag);
+                          }}
+                        >
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#1e2428] p-3.5 rounded-xl border border-border/60 flex flex-col justify-between">
+                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider text-center mb-2">Vista Previa Link de Anticipo</div>
+                    <div className="bg-[#054740] text-slate-100 p-2.5 rounded-lg shadow max-w-[95%] self-end">
+                      <div
+                        className="text-xs whitespace-pre-wrap font-sans leading-relaxed break-words"
+                        dangerouslySetInnerHTML={{
+                          __html: (form.watch('whatsappAnticipoTemplate') || '')
+                            .replace(/{nombre}/g, 'Guadalupe Rojo')
+                            .replace(/{servicios}/g, '4 El alfa superior')
+                            .replace(/{fecha}/g, 'Viernes, 06 de noviembre')
+                            .replace(/{hora}/g, '17:00')
+                            .replace(/{profesional}/g, 'Eduardo')
+                            .replace(/{ubicacion}/g, 'Suc. Sombrerete')
+                            .replace(/{monto_anticipo}/g, '210.00')
+                            .replace(/{link_pago}/g, '<span class="text-blue-300 underline">https://mpago.la/vatos-alfa</span>')
+                            .replace(/\*(.*?)\*/g, '<strong>$1</strong>')
+                            .replace(/_(.*?)_/g, '<em>$1</em>')
+                            .replace(/~(.*?)~/g, '<del>$1</del>')
+                        }}
+                      />
+                      <span className="text-[9px] text-slate-400 block text-right mt-1">18:42</span>
                     </div>
                   </div>
                 </div>

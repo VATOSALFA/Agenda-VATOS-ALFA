@@ -527,7 +527,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 .map((b) => b.titulo.trim())
                 .filter(Boolean);
 
-            // Sincronizar en los 3 documentos
+            // Sincronizar en los 3 documentos (usando objeto anidado pase_alfa para actualizar el mapa interno de app_movil)
             await Promise.all([
                 setDoc(doc(db, 'configuracion', 'pase_alfa'), {
                     beneficios: activeTitles,
@@ -535,8 +535,10 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
-                    'pase_alfa.beneficios': activeTitles,
-                    'pase_alfa.beneficios_detallados': updatedList,
+                    pase_alfa: {
+                        beneficios: activeTitles,
+                        beneficios_detallados: updatedList,
+                    },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {
@@ -588,8 +590,10 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
-                    'pase_alfa.beneficios': activeTitles,
-                    'pase_alfa.beneficios_detallados': updatedList,
+                    pase_alfa: {
+                        beneficios: activeTitles,
+                        beneficios_detallados: updatedList,
+                    },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {
@@ -631,8 +635,10 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
-                    'pase_alfa.beneficios': activeTitles,
-                    'pase_alfa.beneficios_detallados': updatedList,
+                    pase_alfa: {
+                        beneficios: activeTitles,
+                        beneficios_detallados: updatedList,
+                    },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {

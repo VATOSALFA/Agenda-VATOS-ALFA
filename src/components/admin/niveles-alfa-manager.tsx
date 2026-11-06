@@ -96,7 +96,7 @@ export const DEFAULT_NIVELES_CONFIG: NivelesClubConfig = {
             'Toalla caliente y vapor de ozono en cada corte regular',
             '10% de descuento en ceras, pomadas y aceites para barba',
             'Arreglo de barba express o delineado a navaja gratis en tu cumpleaños',
-            '15 minutos de tolerancia preferencial en tus citas agendadas',
+            'Atención prioritaria en recepción y bebida de cortesía especial',
         ],
     },
     vip: {

@@ -11,8 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag } from "lucide-react";
+import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag, Maximize2, FileText, X } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,29 @@ export default function SitioWebPage() {
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState('general');
+
+    const [expandedEditor, setExpandedEditor] = useState<{
+        open: boolean;
+        title: string;
+        description: string;
+        field: 'privacyText' | 'termsText';
+    }>({
+        open: false,
+        title: '',
+        description: '',
+        field: 'termsText',
+    });
+    const [expandedText, setExpandedText] = useState('');
+
+    const openExpandedEditor = (title: string, description: string, field: 'privacyText' | 'termsText') => {
+        setExpandedText(form.getValues(field) || '');
+        setExpandedEditor({
+            open: true,
+            title,
+            description,
+            field,
+        });
+    };
 
     const form = useForm({
         defaultValues: {
@@ -121,10 +146,14 @@ export default function SitioWebPage() {
                 delete saveData[field.id];
             });
 
-            await setDoc(doc(db, 'settings', 'website'), saveData);
+            await setDoc(doc(db, 'settings', 'website'), saveData, { merge: true });
+            await setDoc(doc(db, 'configuracion', 'app_movil'), {
+                terminos_generales: saveData.termsText || '',
+                aviso_privacidad: saveData.privacyText || '',
+            }, { merge: true });
             toast({
                 title: "Configuración guardada",
-                description: "Los cambios en tu sitio web de reservas han sido actualizados."
+                description: "Los términos, políticas y ajustes se han sincronizado en el Sitio Web y la App Móvil."
             });
         } catch (error) {
             console.error("Error saving settings:", error);
@@ -344,55 +373,90 @@ export default function SitioWebPage() {
                                 </CardDescription>
                             </CardHeader>
 
-                            {form.watch('privacyPolicyEnabled') && (
-                                <CardContent className="p-3 sm:p-5 space-y-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
-                                        {/* Aviso de Privacidad */}
-                                        <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
+                            <CardContent className="p-3 sm:p-5 space-y-4">
+                                {!form.watch('privacyPolicyEnabled') && (
+                                    <div className="p-2.5 rounded-lg border border-border/60 bg-muted/20 text-xs text-muted-foreground">
+                                        La casilla de aceptación obligatoria al reservar está desactivada, pero los textos de abajo siguen visibles públicamente en <strong>/terminos</strong> y <strong>/privacidad</strong>.
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+                                    {/* Aviso de Privacidad */}
+                                    <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
+                                        <div className="flex items-center justify-between gap-2">
                                             <h4 className="text-xs font-semibold text-foreground">Aviso de Privacidad</h4>
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
-                                                <Input
-                                                    placeholder="https://vatosalfa.com/privacidad"
-                                                    className="h-8 text-xs font-sans"
-                                                    {...form.register('privacyUrl')}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">O redacta el texto</Label>
-                                                <Textarea
-                                                    placeholder="Escribe aquí tu aviso de privacidad..."
-                                                    rows={3}
-                                                    className="text-xs resize-none"
-                                                    {...form.register('privacyText')}
-                                                />
-                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    'Aviso de Privacidad Integral',
+                                                    'Este texto se actualiza en tiempo real en /privacidad, en el modal de reserva y en la App Móvil.',
+                                                    'privacyText'
+                                                )}
+                                                className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3 h-3" />
+                                                Maximizar
+                                            </Button>
                                         </div>
-
-                                        {/* Términos y Condiciones */}
-                                        <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
-                                            <h4 className="text-xs font-semibold text-foreground">Términos y Condiciones</h4>
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
-                                                <Input
-                                                    placeholder="https://vatosalfa.com/terminos"
-                                                    className="h-8 text-xs font-sans"
-                                                    {...form.register('termsUrl')}
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">O redacta el texto</Label>
-                                                <Textarea
-                                                    placeholder="Escribe aquí tus términos y condiciones..."
-                                                    rows={3}
-                                                    className="text-xs resize-none"
-                                                    {...form.register('termsText')}
-                                                />
-                                            </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
+                                            <Input
+                                                placeholder="https://vatosalfa.com/privacidad"
+                                                className="h-8 text-xs font-sans"
+                                                {...form.register('privacyUrl')}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-muted-foreground">Texto Oficial del Aviso de Privacidad</Label>
+                                            <Textarea
+                                                placeholder="Escribe aquí tu aviso de privacidad..."
+                                                rows={8}
+                                                className="text-xs resize-y font-sans leading-relaxed"
+                                                {...form.register('privacyText')}
+                                            />
                                         </div>
                                     </div>
-                                </CardContent>
-                            )}
+
+                                    {/* Términos y Condiciones */}
+                                    <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <h4 className="text-xs font-semibold text-foreground">Términos y Condiciones Generales</h4>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    'Términos y Condiciones Generales de Servicio',
+                                                    'Este texto se actualiza en tiempo real en /terminos, en el modal de reserva y en la App Móvil.',
+                                                    'termsText'
+                                                )}
+                                                className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3 h-3" />
+                                                Maximizar
+                                            </Button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
+                                            <Input
+                                                placeholder="https://vatosalfa.com/terminos"
+                                                className="h-8 text-xs font-sans"
+                                                {...form.register('termsUrl')}
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[11px] text-muted-foreground">Texto Oficial de Términos y Condiciones</Label>
+                                            <Textarea
+                                                placeholder="Escribe aquí tus términos y condiciones..."
+                                                rows={8}
+                                                className="text-xs resize-y font-sans leading-relaxed"
+                                                {...form.register('termsText')}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
                         </Card>
                     </TabsContent>
 
@@ -433,6 +497,95 @@ export default function SitioWebPage() {
                     </div>
                 )}
             </form>
+
+            {/* MODAL MAXIMIZADO DE EDICIÓN DE POLÍTICAS Y TÉRMINOS GENERALES */}
+            <Dialog
+                open={expandedEditor.open}
+                onOpenChange={(open) => !open && setExpandedEditor((prev) => ({ ...prev, open: false }))}
+            >
+                <DialogContent
+                    hideCloseButton={true}
+                    className="p-0 overflow-hidden max-w-3xl w-[95vw] max-h-[90vh] flex flex-col rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+                >
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800 shrink-0">
+                        <div className="header-light-beam" aria-hidden="true" />
+                        <div className="relative z-10 flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <FileText className="h-4 w-4 text-slate-300 shrink-0" />
+                                <div>
+                                    <DialogTitle className="text-sm font-bold text-white tracking-tight">
+                                        {expandedEditor.title}
+                                    </DialogTitle>
+                                    <DialogDescription className="text-xs text-slate-300">
+                                        {expandedEditor.description}
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="hidden sm:flex items-center gap-1.5">
+                                    <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
+                                        {expandedText.trim().split(/\s+/).filter(Boolean).length} palabras
+                                    </Badge>
+                                    <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
+                                        {expandedText.length} caracteres
+                                    </Badge>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setExpandedEditor((prev) => ({ ...prev, open: false }))}
+                                    className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10 ml-2"
+                                    aria-label="Cerrar modal"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 flex flex-col min-h-0 space-y-2 p-4 sm:p-5 overflow-y-auto">
+                        <Textarea
+                            value={expandedText}
+                            onChange={(e) => setExpandedText(e.target.value)}
+                            placeholder="Escribe aquí el documento legal completo..."
+                            className="flex-1 min-h-[320px] sm:min-h-[420px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500"
+                        />
+                    </div>
+
+                    <div className="p-3 sm:p-4 bg-muted/15 border-t border-border/50 flex items-center justify-between gap-3 shrink-0">
+                        <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                            Haz clic en &quot;Aplicar y Guardar Ahora&quot; para publicar directamente en el Sitio Web y la App.
+                        </span>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setExpandedEditor((prev) => ({ ...prev, open: false }))}
+                                className="h-8 text-xs cursor-pointer"
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="alfa"
+                                size="sm"
+                                disabled={isSubmitting}
+                                onClick={async () => {
+                                    form.setValue(expandedEditor.field, expandedText, { shouldDirty: true });
+                                    setExpandedEditor((prev) => ({ ...prev, open: false }));
+                                    await onSubmit({
+                                        ...form.getValues(),
+                                        [expandedEditor.field]: expandedText,
+                                    });
+                                }}
+                                className="h-8 text-xs font-semibold cursor-pointer"
+                            >
+                                Aplicar y Guardar Ahora
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

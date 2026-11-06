@@ -406,11 +406,69 @@ async function resolveServiceForGerencia(
   servSnap.forEach((d: any) => allServices.push({ id: d.id, ...d.data() }));
 
   const q = normalizeName(query || 'corte');
+  const qClean = q.replace(/\b(paquete|numero|num|no|el|la|los|las|de|un|una|por|favor|servicio)\b/g, ' ').replace(/\s+/g, ' ').trim();
 
   // 1. Coincidencia exacta de nombre
-  let matched = allServices.find((s) => normalizeName(s.name) === q);
+  let matched = allServices.find((s) => normalizeName(s.name) === q || normalizeName(s.name) === qClean);
 
-  // 2. Coincidencia por palabras clave
+  // 2. Coincidencia por número de paquete (1 al 5) o nombre de paquete
+  if (!matched) {
+    const numMatch = q.match(/\b([1-5])\b/);
+    const wordToNum: Record<string, string> = {
+      uno: '1', primero: '1', primer: '1',
+      dos: '2', segundo: '2',
+      tres: '3', tercero: '3', tercer: '3',
+      cuatro: '4', cuarto: '4',
+      cinco: '5', quinto: '5',
+    };
+    let pkgNumber = numMatch ? numMatch[1] : '';
+    if (!pkgNumber) {
+      for (const [word, digit] of Object.entries(wordToNum)) {
+        if (new RegExp(`\\b${word}\\b`).test(q)) {
+          pkgNumber = digit;
+          break;
+        }
+      }
+    }
+
+    if (pkgNumber) {
+      matched = allServices.find((s) => normalizeName(s.name).startsWith(`${pkgNumber} `) || normalizeName(s.name).includes(`${pkgNumber} `));
+    }
+
+    if (!matched) {
+      if (q.includes('alfa superior') || q.includes('superior')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('alfa superior') || normalizeName(s.name).startsWith('4 '));
+      } else if (q.includes('renovacion')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('renovacion') || normalizeName(s.name).startsWith('2 '));
+      } else if (q.includes('heroe') || q.includes('descanso')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('heroe') || normalizeName(s.name).startsWith('3 '));
+      } else if (q.includes('campeon') || q.includes('todo para el')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('campeon') || normalizeName(s.name).startsWith('5 '));
+      } else if (q.includes('caballero alfa')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('caballero alfa') || normalizeName(s.name).startsWith('1 '));
+      } else if (q.includes('tinte')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('tinte'));
+      } else if (q.includes('bigote')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('bigote'));
+      } else if (q.includes('lavado')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('lavado'));
+      } else if (q.includes('nasal') || q.includes('nariz')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('nasal'));
+      } else if (q.includes('dama') || q.includes('mujer')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('dama'));
+      } else if (q.includes('diseno de barba') || q.includes('diseno barba')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('diseno de barba'));
+      } else if (q.includes('toalla caliente') || q.includes('afeitado clasico')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('toalla caliente') || normalizeName(s.name).includes('afeitado clasico'));
+      } else if (q.includes('cera caliente') || (q.includes('depilacion') && q.includes('ceja'))) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('depilacion de ceja'));
+      } else if (q.includes('depilacion facial')) {
+        matched = allServices.find((s) => normalizeName(s.name).includes('depilacion facial'));
+      }
+    }
+  }
+
+  // 3. Coincidencia general por palabras clave o subcadena
   if (!matched) {
     if (q.includes('corte') && (q.includes('barba') || q.includes('combo') || q.includes('completo'))) {
       matched =
@@ -434,6 +492,11 @@ async function resolveServiceForGerencia(
       matched = allServices.find((s) => s.name?.toLowerCase().includes('decolor'));
     } else if (q.includes('rizado')) {
       matched = allServices.find((s) => s.name?.toLowerCase().includes('rizado'));
+    } else if (qClean.length >= 3) {
+      matched = allServices.find((s) => {
+        const sNorm = normalizeName(s.name);
+        return sNorm.includes(qClean) || qClean.includes(sNorm);
+      });
     }
   }
 
@@ -863,7 +926,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
       servicioNombre: z
         .string()
         .optional()
-        .describe('Nombre del servicio (ej. "Corte de cabello", "Arreglo de barba", "Corte y barba", "1 El Caballero alfa", etc.). Por defecto "Corte de cabello" ($140.00 MXN, 40 min).'),
+        .describe('Nombre del servicio, paquete o lista de servicios separados por coma (ej. "Corte de cabello", "Paquete 4", "4 El alfa superior", "Corte de cabello, Arreglo de barba expres", "1 El Caballero alfa", etc.). Por defecto "Corte de cabello" ($140.00 MXN, 40 min).'),
       notas: z
         .string()
         .optional()
@@ -933,15 +996,60 @@ export const agendarCitaSucursalTool = ai.defineTool(
       numeroCliente
     );
 
-    // 3. Resolver servicio y duración considerando la duración personalizada por barbero (durationPorProfesional) y notas de cliente
-    const service = await resolveServiceForGerencia(
-      db,
-      servicioNombre,
-      prof.id,
-      client?.notas,
-      barberDisplayName
-    );
+    // 3. Resolver servicio(s) y duración considerando la duración personalizada por barbero (durationPorProfesional) y notas de cliente
+    const rawServStr = (servicioNombre && servicioNombre.trim()) ? servicioNombre.trim() : 'Corte de cabello';
+    const serviceParts = rawServStr
+      .split(/,|(?:\s+\+\s+)/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const startMins = timeToMinutes(horaInicio);
+    let cursorMins = startMins;
+    let totalDuration = 0;
+    let totalPrice = 0;
+    const serviceNamesArr: string[] = [];
+    const serviceIdsArr: string[] = [];
+    const combinedItems: any[] = [];
+
+    for (const part of serviceParts) {
+      const resolved = await resolveServiceForGerencia(
+        db,
+        part,
+        prof.id,
+        client?.notas,
+        barberDisplayName
+      );
+      const itemStart = minutesToTime(cursorMins);
+      const itemEnd = minutesToTime(cursorMins + resolved.duration);
+      cursorMins += resolved.duration;
+
+      totalDuration += resolved.duration;
+      totalPrice += resolved.price;
+      serviceNamesArr.push(resolved.name);
+      serviceIdsArr.push(resolved.id);
+
+      combinedItems.push({
+        id: resolved.id,
+        nombre: resolved.name,
+        servicio: resolved.name,
+        tipo: 'servicio',
+        barbero_id: prof.id,
+        precio: resolved.price,
+        duracion: resolved.duration,
+        cantidad: 1,
+        professional_lock: true,
+        hora_inicio: itemStart,
+        hora_fin: itemEnd,
+      });
+    }
+
+    const service = {
+      name: serviceNamesArr.join(', '),
+      duration: totalDuration || 40,
+      price: totalPrice || 140,
+      serviceIds: serviceIdsArr,
+      items: combinedItems,
+    };
     const endMins = startMins + service.duration;
     const horaFin = minutesToTime(endMins);
 
@@ -1087,12 +1195,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
       duracion: service.duration,
       servicio: service.name,
       servicios: service.serviceIds,
-      items: service.items.map((it) => ({
-        ...it,
-        barbero_id: prof.id,
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
-      })),
+      items: service.items,
       precio: service.price,
       total: service.price,
       saldo_pendiente: service.price,
@@ -1176,102 +1279,146 @@ export const agendarCitaSucursalTool = ai.defineTool(
 );
 
 // ============================================================================
-// 3. REAGENDAR O MOVER CITA EN LA AGENDA
+// 3. EDITAR, REAGENDAR O MODIFICAR SERVICIO/HORARIO/BARBERO DE UNA CITA EN LA AGENDA
 // ============================================================================
 export const reagendarCitaSucursalTool = ai.defineTool(
   {
     name: 'reagendar_cita_sucursal',
     description:
-      'Permite a Beatriz (Administradora Local) mover o cambiar la fecha, hora o barbero de una cita existente en la agenda cuando un cliente o recepción lo solicita.',
+      'Permite a Beatriz (Administradora Local) o al Administrador General editar una cita existente en la agenda tal como se hace con el botón de lápiz "Editar Reserva" en el detalle de la cita: permite cambiar el SERVICIO o paquete (ej. cambiar de "Corte de cabello" a "Paquete 4 / 4 El alfa superior" o agregar varios servicios en un solo bloque), cambiar la HORA, cambiar la FECHA o cambiar el BARBERO, sin necesidad de cancelar la cita. Todos los parámetros de cambio son opcionales: si solo se pide cambiar el servicio, mantiene la misma fecha, hora de inicio y barbero originales y recalcula automáticamente la duración y el total.',
     inputSchema: z.object({
       nombreClienteOId: z
         .string()
-        .describe('Nombre del cliente o ID exacto de la cita a reagendar.'),
+        .describe('Nombre del cliente, celular o ID exacto de la cita a editar/reagendar (ej. "Guadalupe Rojo", "4461244864").'),
       fechaActual: z
         .string()
         .optional()
-        .describe('Fecha actual de la cita (por defecto hoy en Querétaro).'),
+        .describe('Fecha en la que está agendada la cita (formato YYYY-MM-DD, ej. hoy o mañana). Si se omite, el sistema la busca hoy y en citas próximas.'),
+      nuevoServicioNombre: z
+        .string()
+        .optional()
+        .describe('Opcional: nuevo servicio, paquete o lista de servicios separados por coma si se desea cambiar el servicio de la cita (ej. "Paquete 4", "4 El alfa superior", "Corte de cabello, Arreglo de barba expres"). Si se omite, conserva el servicio actual.'),
       nuevaFecha: z
         .string()
-        .describe('Nueva fecha para la cita en formato YYYY-MM-DD.'),
+        .optional()
+        .describe('Opcional: nueva fecha para la cita en formato YYYY-MM-DD si se desea cambiar de día. Si se omite, conserva la fecha actual de la cita.'),
       nuevaHora: z
         .string()
-        .describe('Nueva hora de inicio para la cita (ej. "17:00", "5:00 PM").'),
+        .optional()
+        .describe('Opcional: nueva hora de inicio para la cita (ej. "17:00", "5:00 PM") si se desea cambiar de hora. Si se omite, conserva la hora de inicio actual de la cita.'),
       nuevoBarberoNombre: z
         .string()
         .optional()
         .describe('Opcional: nombre o apodo del barbero si también se desea cambiar de barbero.'),
+      notas: z
+        .string()
+        .optional()
+        .describe('Opcional: notas adicionales para actualizar en la cita.'),
+      forzarSobrecupo: z
+        .boolean()
+        .optional()
+        .describe('Si es true, permite guardar la edición aunque el nuevo servicio se extienda más allá del cierre habitual o se empalme, cuando la administración lo indica.'),
       motivo: z
         .string()
         .optional()
-        .describe('Motivo del cambio de horario o día.'),
+        .describe('Motivo de la edición o cambio.'),
       quienSolicita: z
         .string()
         .optional()
         .describe(
-          'Nombre de quien solicita mover o reagendar la cita (ej. "Alejandro Pacheco", "Beatriz"). Si se omite, se usa el operador autenticado en la sesión.'
+          'Nombre de quien solicita editar o reagendar la cita (ej. "Alejandro Pacheco", "Beatriz"). Si se omite, se usa el operador autenticado en la sesión.'
         ),
     }),
   },
   async ({
     nombreClienteOId,
     fechaActual,
+    nuevoServicioNombre,
     nuevaFecha,
     nuevaHora,
     nuevoBarberoNombre,
+    notas,
+    forzarSobrecupo,
     motivo,
     quienSolicita,
   }) => {
     const caller = getCallerInfo(quienSolicita);
     const db = getDb();
-    const { todayIso } = getMexicoDateInfo();
-    const targetDateCurrent = (fechaActual && /^\d{4}-\d{2}-\d{2}$/.test(fechaActual.trim()))
-      ? fechaActual.trim()
-      : todayIso;
+    const { todayIso, tomorrowIso } = getMexicoDateInfo();
 
-    const parsedHour = parseTimeToHHmm(nuevaHora);
-    if (!parsedHour) {
-      return {
-        ok: false,
-        mensaje: `La nueva hora "${nuevaHora}" no tiene un formato válido (ej. "17:00" o "5:00 PM").`,
-      };
-    }
-
-    // 1. Buscar la cita existente
-    const resSnap = await db.collection('reservas').where('fecha', '==', targetDateCurrent).get();
     const queryNorm = normalizeName(nombreClienteOId);
-    let matchedDoc: any = null;
+    const queryDigits = nombreClienteOId.replace(/\D/g, '');
 
-    resSnap.forEach((doc) => {
-      if (matchedDoc) return;
-      if (doc.id === nombreClienteOId.trim()) {
-        matchedDoc = doc;
-        return;
-      }
+    const matchesReservationDoc = (doc: any) => {
+      if (doc.id === nombreClienteOId.trim()) return true;
       const data = doc.data();
-      if (data.estado === 'Cancelado' || data.estado === 'No asiste') return;
+      if (data.estado === 'Cancelado' || data.estado === 'No asiste') return false;
       const clientName = normalizeName(data.cliente_nombre || data.customer?.nombre || '');
       const clientPhoneDigits = String(data.cliente_telefono || data.customer?.telefono || '').replace(/\D/g, '');
-      const queryDigits = nombreClienteOId.replace(/\D/g, '');
-
+      if (!clientName && !clientPhoneDigits) return false;
       if (
-        clientName === queryNorm ||
-        clientName.includes(queryNorm) ||
-        queryNorm.includes(clientName) ||
+        (queryNorm && (clientName === queryNorm || clientName.includes(queryNorm) || queryNorm.includes(clientName))) ||
         (queryDigits.length >= 7 && (clientPhoneDigits === queryDigits || clientPhoneDigits.endsWith(queryDigits)))
       ) {
-        matchedDoc = doc;
+        return true;
       }
-    });
+      return false;
+    };
+
+    let matchedDoc: any = null;
+
+    // 1. Buscar primero en fechaActual si se proporcionó
+    if (fechaActual && /^\d{4}-\d{2}-\d{2}$/.test(fechaActual.trim())) {
+      const resSnap = await db.collection('reservas').where('fecha', '==', fechaActual.trim()).get();
+      resSnap.forEach((doc) => {
+        if (!matchedDoc && matchesReservationDoc(doc)) matchedDoc = doc;
+      });
+    }
+
+    // 2. Si no se encontró (o no se dio fechaActual), buscar en hoy y mañana, y luego en citas futuras (>= hoy)
+    if (!matchedDoc) {
+      const datesToTry = [todayIso, tomorrowIso];
+      for (const dStr of datesToTry) {
+        const snap = await db.collection('reservas').where('fecha', '==', dStr).get();
+        snap.forEach((doc) => {
+          if (!matchedDoc && matchesReservationDoc(doc)) matchedDoc = doc;
+        });
+        if (matchedDoc) break;
+      }
+    }
+
+    if (!matchedDoc) {
+      const futureSnap = await db.collection('reservas').where('fecha', '>=', todayIso).get();
+      futureSnap.forEach((doc) => {
+        if (!matchedDoc && matchesReservationDoc(doc)) matchedDoc = doc;
+      });
+    }
 
     if (!matchedDoc) {
       return {
         ok: false,
-        mensaje: `No encontré una cita activa para "${nombreClienteOId}" en la fecha ${targetDateCurrent}. Verifica el nombre del cliente o la fecha.`,
+        mensaje: `No encontré una cita activa para "${nombreClienteOId}"${fechaActual ? ` en la fecha ${fechaActual}` : ' en la agenda a partir de hoy'}. Verifica el nombre del cliente o la fecha.`,
       };
     }
 
     const resData = matchedDoc.data();
+    const effectiveFecha =
+      nuevaFecha && /^\d{4}-\d{2}-\d{2}$/.test(nuevaFecha.trim())
+        ? nuevaFecha.trim()
+        : resData.fecha || todayIso;
+
+    let effectiveHoraInicio = resData.hora_inicio || '10:00';
+    if (nuevaHora && nuevaHora.trim()) {
+      const parsedHour = parseTimeToHHmm(nuevaHora);
+      if (!parsedHour) {
+        return {
+          ok: false,
+          mensaje: `La hora "${nuevaHora}" no tiene un formato válido (ej. "17:00" o "5:00 PM").`,
+        };
+      }
+      effectiveHoraInicio = parsedHour;
+    }
+
     const profSnap = await db.collection('profesionales').get();
     const activeProfessionals: any[] = [];
     profSnap.forEach((d) => {
@@ -1279,7 +1426,7 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       if (!p.deleted && p.active !== false) activeProfessionals.push({ id: d.id, ...p });
     });
 
-    // 2. Determinar barbero (nuevo o actual)
+    // 3. Determinar barbero (nuevo o actual)
     let targetProf = activeProfessionals.find((p) => p.id === resData.barbero_id);
     if (nuevoBarberoNombre && nuevoBarberoNombre.trim()) {
       const found = findBarber(nuevoBarberoNombre, activeProfessionals);
@@ -1289,99 +1436,234 @@ export const reagendarCitaSucursalTool = ai.defineTool(
     if (!targetProf) {
       return {
         ok: false,
-        mensaje: 'No pude determinar el profesional asignado para reagendar la cita.',
+        mensaje: 'No pude determinar el profesional asignado para editar la cita.',
       };
     }
 
     const barberDisplayName = targetProf.publicName || targetProf.name || 'Barbero';
 
-    // Determinar la duración considerando la duración personalizada por barbero (durationPorProfesional)
+    // 4. Determinar servicio(s), duración y precio (si se pidió cambiar el servicio o mantener el actual)
     let durationMins = Number(resData.duracion || 40);
-    const serviceName = resData.servicio || resData.items?.[0]?.nombre || resData.items?.[0]?.servicio;
+    let finalServiceName = resData.servicio || resData.items?.[0]?.nombre || 'Corte de cabello';
+    let finalServiceIds: string[] = Array.isArray(resData.servicios) ? resData.servicios : [];
+    let finalPrice = Number(resData.total ?? resData.precio ?? 140);
+    let resolvedItemsList: any[] = [];
 
-    if (serviceName) {
-      try {
-        const resolvedServ = await resolveServiceForGerencia(
+    if (nuevoServicioNombre && nuevoServicioNombre.trim()) {
+      // Soportar uno o varios servicios separados por coma o " y " cuando se trate de múltiples servicios
+      const parts = nuevoServicioNombre
+        .split(/,|(?:\s+\+\s+)/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      let sumDuration = 0;
+      let sumPrice = 0;
+      const namesArr: string[] = [];
+      const idsArr: string[] = [];
+      let cursorMins = timeToMinutes(effectiveHoraInicio);
+
+      for (const part of parts) {
+        const resolved = await resolveServiceForGerencia(
           db,
-          serviceName,
+          part,
           targetProf.id,
           resData.customer?.notas || resData.notas,
           barberDisplayName
         );
-        if (resolvedServ?.duration && resolvedServ.duration > 0) {
-          durationMins = resolvedServ.duration;
+        const itemStart = minutesToTime(cursorMins);
+        const itemEnd = minutesToTime(cursorMins + resolved.duration);
+        cursorMins += resolved.duration;
+
+        sumDuration += resolved.duration;
+        sumPrice += resolved.price;
+        namesArr.push(resolved.name);
+        idsArr.push(resolved.id);
+
+        resolvedItemsList.push({
+          id: resolved.id,
+          nombre: resolved.name,
+          servicio: resolved.name,
+          tipo: 'servicio',
+          barbero_id: targetProf.id,
+          precio: resolved.price,
+          duracion: resolved.duration,
+          cantidad: 1,
+          professional_lock: true,
+          hora_inicio: itemStart,
+          hora_fin: itemEnd,
+        });
+      }
+
+      if (resolvedItemsList.length > 0) {
+        durationMins = sumDuration;
+        finalPrice = sumPrice;
+        finalServiceName = namesArr.join(', ');
+        finalServiceIds = idsArr;
+      }
+    } else {
+      // Si no se cambió el servicio, recalcular duración si cambió de barbero
+      const currentServName = resData.servicio || resData.items?.[0]?.nombre || resData.items?.[0]?.servicio;
+      if (currentServName && (!Array.isArray(resData.items) || resData.items.length <= 1)) {
+        try {
+          const resolvedServ = await resolveServiceForGerencia(
+            db,
+            currentServName,
+            targetProf.id,
+            resData.customer?.notas || resData.notas,
+            barberDisplayName
+          );
+          if (resolvedServ?.duration && resolvedServ.duration > 0) {
+            durationMins = resolvedServ.duration;
+          }
+        } catch (err) {
+          console.warn('Error resolviendo duración en edición de cita:', err);
         }
-      } catch (err) {
-        console.warn('Error resolviendo duración en reagendación:', err);
       }
     }
 
-    const startMins = timeToMinutes(parsedHour);
+    const startMins = timeToMinutes(effectiveHoraInicio);
     const endMins = startMins + durationMins;
     const nuevaHoraFin = minutesToTime(endMins);
 
-    // 3. Validar disponibilidad del barbero en la nueva fecha y hora
+    // 5. Validar disponibilidad del barbero en la fecha y hora
     const barberSchedule = await getBarberScheduleForDay({
       db,
       barber: targetProf,
-      dateStr: nuevaFecha,
+      dateStr: effectiveFecha,
       localId: targetProf.local_id || 'rkbEgvwP67JliXQ1Qeyj',
     });
 
-    if (!barberSchedule.isWorkingDay) {
-      return {
-        ok: false,
-        mensaje: `**${barberDisplayName}** no labora los ${barberSchedule.diaSemana}s (figura como día libre en la agenda). No se puede mover a esa fecha con ese barbero.`,
-      };
+    if (!forzarSobrecupo) {
+      if (!barberSchedule.isWorkingDay) {
+        return {
+          ok: false,
+          mensaje: `**${barberDisplayName}** no labora los ${barberSchedule.diaSemana}s (figura como día libre en la agenda). No se puede asignar en esa fecha con ese barbero.`,
+        };
+      }
+
+      const bloqConflict = barberSchedule.existingBlocks.find(
+        (blk) => blk.type !== 'available' && effectiveHoraInicio < blk.hora_fin && nuevaHoraFin > blk.hora_inicio
+      );
+      if (bloqConflict) {
+        return {
+          ok: false,
+          mensaje: `No se puede guardar de ${effectiveHoraInicio} a ${nuevaHoraFin} porque **${barberDisplayName}** tiene un bloqueo registrado de **${bloqConflict.hora_inicio} a ${bloqConflict.hora_fin}** (motivo: "${bloqConflict.motivo}").`,
+        };
+      }
+
+      const resConflict = barberSchedule.activeReservations.find(
+        (r) => r.id !== matchedDoc.id && effectiveHoraInicio < r.hora_fin && nuevaHoraFin > r.hora_inicio
+      );
+      if (resConflict) {
+        return {
+          ok: false,
+          mensaje: `En el horario de ${effectiveHoraInicio} a ${nuevaHoraFin}, **${barberDisplayName}** ya tiene agendado a **${resConflict.cliente}** de **${resConflict.hora_inicio} a ${resConflict.hora_fin}** (${resConflict.servicio}).`,
+        };
+      }
     }
 
-    const bloqConflict = barberSchedule.existingBlocks.find(
-      (blk) => blk.type !== 'available' && parsedHour < blk.hora_fin && nuevaHoraFin > blk.hora_inicio
-    );
-    if (bloqConflict) {
-      return {
-        ok: false,
-        mensaje: `No se puede mover a las ${parsedHour} porque **${barberDisplayName}** tiene un bloqueo registrado de **${bloqConflict.hora_inicio} a ${bloqConflict.hora_fin}** (motivo: "${bloqConflict.motivo}").`,
-      };
+    // 6. Construir los items actualizados
+    let updatedItems: any[] = [];
+    if (resolvedItemsList.length > 0) {
+      updatedItems = resolvedItemsList;
+    } else if (Array.isArray(resData.items) && resData.items.length > 0) {
+      let cursor = startMins;
+      updatedItems = resData.items.map((item: any, idx: number) => {
+        const itemDur = resData.items.length === 1 ? durationMins : Number(item.duracion || durationMins);
+        const iStart = minutesToTime(cursor);
+        const iEnd = minutesToTime(cursor + itemDur);
+        cursor += itemDur;
+        return {
+          ...item,
+          barbero_id: targetProf.id,
+          duracion: itemDur,
+          hora_inicio: idx === 0 ? effectiveHoraInicio : iStart,
+          hora_fin: resData.items.length === 1 ? nuevaHoraFin : iEnd,
+        };
+      });
     }
 
-    const resConflict = barberSchedule.activeReservations.find(
-      (r) => r.id !== matchedDoc.id && parsedHour < r.hora_fin && nuevaHoraFin > r.hora_inicio
-    );
-    if (resConflict) {
-      return {
-        ok: false,
-        mensaje: `A esa hora (${parsedHour} a ${nuevaHoraFin}) **${barberDisplayName}** ya tiene agendado a **${resConflict.cliente}** de **${resConflict.hora_inicio} a ${resConflict.hora_fin}**.`,
-      };
+    // Recalcular saldo pendiente respetando cualquier anticipo ya pagado
+    const anticipoPagado = Number(resData.anticipo_pagado ?? resData.anticipoPagado ?? 0);
+    const nuevoSaldoPendiente = Math.max(0, finalPrice - anticipoPagado);
+
+    // Evaluar si al subir el precio/cambiar servicio u horario requiere anticipo (salvo que ya tenga anticipo pagado o esté exento)
+    const isAlreadyExempt = Boolean(resData.exento_anticipo === true);
+    let clientExemptInDb = false;
+    let clientNoShows = 0;
+    if (resData.cliente_id) {
+      try {
+        const cSnap = await db.collection('clientes').doc(resData.cliente_id).get();
+        if (cSnap.exists) {
+          const cd = cSnap.data() || {};
+          clientExemptInDb = Boolean(cd.exento_anticipo === true && (Number(cd.faltas_desde_exencion) || 0) < 2);
+          clientNoShows = Number(cd.citas_no_asistidas) || 0;
+        }
+      } catch (_) {}
     }
 
-    // 4. Actualizar la reserva
-    const updatedItems = (Array.isArray(resData.items) ? resData.items : []).map((item: any) => ({
-      ...item,
-      barbero_id: targetProf.id,
-      duracion: durationMins,
-      hora_inicio: parsedHour,
-      hora_fin: nuevaHoraFin,
-    }));
+    const isOpeningSlot = startMins >= 600 && startMins <= 630;
+    const isHighAmount = finalPrice >= 190;
+    const isNoShowPenalized = clientNoShows >= 2;
+    const rawNeedsDeposit = isOpeningSlot || isHighAmount || isNoShowPenalized;
+    const expectedDeposit = Math.ceil(finalPrice * 0.5);
 
-    await matchedDoc.ref.update({
-      fecha: nuevaFecha,
-      hora_inicio: parsedHour,
+    let nextEstado = resData.estado || 'Reservado';
+    let nextPagoEstado = resData.pago_estado || 'Pendiente';
+    let nextRequiereAnticipo = Boolean(resData.requiere_anticipo);
+    let nextAnticipoEsperado = Number(resData.anticipo_esperado ?? resData.monto_anticipo ?? 0);
+
+    if (isAlreadyExempt || clientExemptInDb || anticipoPagado > 0) {
+      nextRequiereAnticipo = false;
+      if (nextEstado === 'Pendiente de pago') nextEstado = 'Confirmado';
+    } else if (rawNeedsDeposit) {
+      nextRequiereAnticipo = true;
+      nextAnticipoEsperado = expectedDeposit;
+      nextEstado = 'Pendiente de pago';
+      nextPagoEstado = 'pendiente_anticipo';
+    } else {
+      nextRequiereAnticipo = false;
+      nextAnticipoEsperado = 0;
+      if (nextEstado === 'Pendiente de pago') nextEstado = 'Reservado';
+      if (nextPagoEstado === 'pendiente_anticipo') nextPagoEstado = 'Pendiente';
+    }
+
+    const updatePayload: Record<string, any> = {
+      fecha: effectiveFecha,
+      hora_inicio: effectiveHoraInicio,
       hora_fin: nuevaHoraFin,
       duracion: durationMins,
       barbero_id: targetProf.id,
       professionalNames: barberDisplayName,
+      servicio: finalServiceName,
+      servicios: finalServiceIds,
+      precio: finalPrice,
+      total: finalPrice,
+      saldo_pendiente: nuevoSaldoPendiente,
+      requiere_anticipo: nextRequiereAnticipo,
+      anticipo_esperado: nextAnticipoEsperado,
+      monto_anticipo: nextAnticipoEsperado,
+      estado: nextEstado,
+      pago_estado: nextPagoEstado,
       items: updatedItems.length > 0 ? updatedItems : resData.items,
       whatsappConfirmationSent: false,
       reagendada_en: Timestamp.now(),
       reagendada_por: caller.creatorDisplay,
-      motivo_reagendacion: motivo || `Solicitado por ${caller.operatorName}`,
-    });
+      motivo_reagendacion: motivo || `Editada por ${caller.operatorName}`,
+    };
 
-    // 5. Auditoría
+    if (notas !== undefined) {
+      updatePayload.notas = notas;
+    }
+
+    await matchedDoc.ref.update(updatePayload);
+
+    // 7. Auditoría
+    const prevService = resData.servicio || 'Servicio';
+    const serviceChanged = prevService !== finalServiceName;
     await db.collection('audit_logs').add({
-      action: `Reagendar Cita (${caller.assistantName})`,
-      details: `Cita de ${resData.cliente_nombre} movida al ${nuevaFecha} a las ${parsedHour} con ${barberDisplayName}. Motivo: ${motivo || 'Recepción'}`,
+      action: serviceChanged ? `Editar Reserva (${caller.assistantName})` : `Reagendar Cita (${caller.assistantName})`,
+      details: `Cita de ${resData.cliente_nombre} editada: ${serviceChanged ? `Servicio cambiado de "${prevService}" a "${finalServiceName}" ($${finalPrice.toFixed(2)} MXN, ${durationMins} min). ` : ''}Fecha: ${effectiveFecha} de ${effectiveHoraInicio} a ${nuevaHoraFin} con ${barberDisplayName}. Motivo: ${motivo || 'Edición en agenda'}`,
       userId: caller.auditUserId,
       userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
       userRole: caller.auditUserRole,
@@ -1392,15 +1674,24 @@ export const reagendarCitaSucursalTool = ai.defineTool(
     });
 
     const saludoOperador = caller.operatorName.includes('Alejandro') ? 'Alejandro' : 'Bety';
+    const avisoAnticipo = nextRequiereAnticipo
+      ? `\n\n⚠️ **Aviso de Anticipo:** Como el nuevo importe es de **$${finalPrice.toFixed(2)} MXN**, el sistema solicita un anticipo de **$${nextAnticipoEsperado.toFixed(2)} MXN** (30 min de tolerancia). ¿Deseas que le ponga un código de exención por esta ocasión o que marque al cliente como exento permanente?`
+      : '';
 
     return {
       ok: true,
       reservaId: matchedDoc.id,
       cliente: resData.cliente_nombre,
-      nuevaFecha,
-      nuevoHorario: `${parsedHour} a ${nuevaHoraFin}`,
+      servicioAnterior: prevService,
+      nuevoServicio: finalServiceName,
+      nuevaFecha: effectiveFecha,
+      nuevoHorario: `${effectiveHoraInicio} a ${nuevaHoraFin}`,
+      duracionMinutos: durationMins,
+      total: finalPrice,
       barbero: barberDisplayName,
-      mensaje: `¡Listo ${saludoOperador}! La cita de **${resData.cliente_nombre}** ha sido reagendada con éxito:\n\n• **Nueva Fecha:** ${nuevaFecha}\n• **Nuevo Horario:** ${parsedHour} a ${nuevaHoraFin}\n• **Barbero:** ${barberDisplayName}\n\nYa quedó actualizada en la agenda.`,
+      requiereAnticipo: nextRequiereAnticipo,
+      montoAnticipoRequerido: nextRequiereAnticipo ? nextAnticipoEsperado : 0,
+      mensaje: `¡Listo ${saludoOperador}! La cita de **${resData.cliente_nombre}** ya quedó editada y guardada directamente en la agenda (sin necesidad de cancelarla):\n\n• **Servicio:** ${finalServiceName}${serviceChanged ? ` *(antes: ${prevService})*` : ''}\n• **Fecha:** ${effectiveFecha}\n• **Horario:** ${effectiveHoraInicio} a ${nuevaHoraFin} (${durationMins} min)\n• **Barbero:** ${barberDisplayName}\n• **Total:** $${finalPrice.toFixed(2)} MXN${avisoAnticipo}`,
     };
   }
 );

@@ -206,7 +206,7 @@ export async function processCeoAgentMessage({
       const db = getDb();
       const { friendlyToday, todayIso, localTime } = getMexicoDateInfo();
 
-  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash para máxima precisión
+  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 3.5 Flash-Lite para máxima precisión
   let transcribedAudioText = '';
   if (audioDataUrl && audioDataUrl.startsWith('data:')) {
     const match = audioDataUrl.match(/^data:([^,]+),(.+)$/);
@@ -221,7 +221,8 @@ export async function processCeoAgentMessage({
       const cleanAudioUrl = `data:${normMime};base64,${match[2]}`;
       try {
         const transRes = await ai.generate({
-          model: 'googleai/gemini-2.5-flash',
+          model: 'googleai/gemini-3.5-flash-lite',
+          config: { thinkingLevel: 'MINIMAL' },
           prompt: [
             {
               text: 'Escucha atentamente esta nota de voz enviada por el Administrador General (Dueño) de la barbería VATOS ALFA a su asistente ejecutiva Janet CEO. Transcribe exactamente en español lo que dice (incluyendo términos como Estado de Resultados, utilidad, comisiones, auditoría, código 1234, nombres como Beatriz/Bety, Lalo, Alfredo, Ivon, Lupita, Erika, inventario, insumos o sucursales). Si el audio está en silencio, contiene solo estática, no hay voz audible, o el micrófono estaba apagado, responde EXACTAMENTE la palabra: SILENCIO. Devuelve ÚNICAMENTE el texto transcrito en español o la palabra SILENCIO sin comillas ni comentarios adicionales.',
@@ -455,10 +456,10 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
 
   const tools = getCeoAgentTools();
   const preferredModel =
-    modelChoice === 'flash' ? 'googleai/gemini-2.5-flash' : 'googleai/gemini-2.5-pro';
+    modelChoice === 'flash' ? 'googleai/gemini-3.5-flash-lite' : 'googleai/gemini-2.5-pro';
 
   let responseText = '';
-  let usedModelName = preferredModel === 'googleai/gemini-2.5-pro' ? 'Gemini 2.5 Pro (CEO)' : 'Gemini 2.5 Flash';
+  let usedModelName = preferredModel === 'googleai/gemini-2.5-pro' ? 'Gemini 2.5 Pro (CEO)' : 'Gemini 3.5 Flash-Lite';
   const subagentsInvoked: string[] = [];
   let propuestaGenerada: {
     id: string;
@@ -496,6 +497,9 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
   try {
     const result = await ai.generate({
       model: preferredModel,
+      ...(preferredModel === 'googleai/gemini-3.5-flash-lite'
+        ? { config: { thinkingLevel: 'MEDIUM' } }
+        : {}),
       system: systemPrompt,
       prompt: promptParts,
       tools,
@@ -505,11 +509,12 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
     responseText = result.text || 'Análisis completado.';
     extractResultMetadata(result);
   } catch (errPro: any) {
-    console.warn('Janet CEO fallback a Gemini 2.5 Flash por disponibilidad:', errPro?.message);
-    usedModelName = 'Gemini 2.5 Flash (Alta Disponibilidad)';
+    console.warn('Janet CEO fallback a Gemini 3.5 Flash-Lite por disponibilidad:', errPro?.message);
+    usedModelName = 'Gemini 3.5 Flash-Lite (Alta Disponibilidad)';
     try {
       const fallbackResult = await ai.generate({
-        model: 'googleai/gemini-2.5-flash',
+        model: 'googleai/gemini-3.5-flash-lite',
+        config: { thinkingLevel: 'MEDIUM' },
         system: systemPrompt,
         prompt: promptParts,
         tools,

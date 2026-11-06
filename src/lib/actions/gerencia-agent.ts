@@ -247,7 +247,7 @@ export async function processGerenciaAgentMessage({
       const db = getDb();
       const { friendlyToday, todayIso, tomorrowIso, localTime } = getMexicoDateInfo();
 
-  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 2.5 Flash
+  // Si viene nota de voz (audioDataUrl), transcribir con Gemini 3.5 Flash-Lite
   let transcribedAudioText = '';
   const isVoiceNote = Boolean(audioDataUrl);
   if (audioDataUrl && audioDataUrl.startsWith('data:')) {
@@ -263,7 +263,8 @@ export async function processGerenciaAgentMessage({
       const cleanAudioUrl = `data:${normMime};base64,${match[2]}`;
       try {
         const transRes = await ai.generate({
-          model: 'googleai/gemini-2.5-flash',
+          model: 'googleai/gemini-3.5-flash-lite',
+          config: { thinkingLevel: 'MINIMAL' },
           prompt: [
             {
               text: 'Escucha atentamente esta nota de voz enviada por la Administradora del Local (Beatriz/Bety) o Dirección de la barbería VATOS ALFA a su asistente operativa Janet Gerencia. Transcribe exactamente en español lo que dice (incluyendo nombres de barberos como Lalo, Alfredo, Bety, Ivon, Lupita, horarios, bloqueos, citas, ventas, inventario, insumos o recordatorios). Si el audio está en silencio, solo contiene estática, no hay voz audible, o el micrófono estaba apagado, responde EXACTAMENTE la palabra: SILENCIO. Devuelve ÚNICAMENTE el texto transcrito en español o la palabra SILENCIO sin comillas ni comentarios adicionales.',
@@ -640,7 +641,8 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
 
   try {
     const result = await ai.generate({
-      model: 'googleai/gemini-2.5-flash',
+      model: 'googleai/gemini-3.5-flash-lite',
+      config: { thinkingLevel: 'MEDIUM' },
       system: systemPrompt,
       prompt: promptParts,
       tools,

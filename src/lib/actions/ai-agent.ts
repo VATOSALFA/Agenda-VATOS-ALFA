@@ -121,6 +121,8 @@ export async function processAgentMessage({
       if (resolvedAudioMedia) {
         try {
           const transRes = await ai.generate({
+            model: 'googleai/gemini-3.5-flash-lite',
+            config: { thinkingLevel: 'MINIMAL' },
             prompt: [
               {
                 text: 'Escucha atentamente esta nota de voz enviada por un cliente a la barbería VATOS ALFA en Querétaro, México. Transcribe exactamente en español lo que dice el cliente (incluyendo servicios como corte de cabello, barba, ceja, facial, nombres de barberos como Lalo, Alfredo, Bety, Ivon, Lupita, horarios, fechas, dudas de Pase Alfa o AlfaCoins). Devuelve ÚNICAMENTE el texto transcrito en español, sin comillas ni comentarios adicionales.',
@@ -777,21 +779,23 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
             try {
               const resolvedImg = await resolveMediaForGenkit(imageUrl, 'image/jpeg');
               return await ai.generate({
+                model: 'googleai/gemini-3.5-flash-lite',
                 system: systemPrompt,
                 prompt: [
                   { text: fullPromptText },
                   { media: resolvedImg || { url: imageUrl } },
                 ],
                 tools: availableTools,
-                config: { temperature: 0.15 },
+                config: { thinkingLevel: 'MEDIUM' },
               });
             } catch (visionErr: any) {
               console.warn('Multimodal vision failed, retrying text-only prompt:', visionErr?.message);
               return await ai.generate({
+                model: 'googleai/gemini-3.5-flash-lite',
                 system: systemPrompt,
                 prompt: fullPromptText,
                 tools: availableTools,
-                config: { temperature: 0.15 },
+                config: { thinkingLevel: 'MEDIUM' },
               });
             }
           }
@@ -799,30 +803,33 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
           if (resolvedAudioMedia) {
             try {
               return await ai.generate({
+                model: 'googleai/gemini-3.5-flash-lite',
                 system: systemPrompt,
                 prompt: [
                   { text: fullPromptText },
                   { media: resolvedAudioMedia },
                 ],
                 tools: availableTools,
-                config: { temperature: 0.15 },
+                config: { thinkingLevel: 'MEDIUM' },
               });
             } catch (audioGenErr: any) {
               console.warn('Multimodal audio generation with tools failed, retrying with transcribed text prompt:', audioGenErr?.message);
               return await ai.generate({
+                model: 'googleai/gemini-3.5-flash-lite',
                 system: systemPrompt,
                 prompt: fullPromptText,
                 tools: availableTools,
-                config: { temperature: 0.15 },
+                config: { thinkingLevel: 'MEDIUM' },
               });
             }
           }
 
           return await ai.generate({
+            model: 'googleai/gemini-3.5-flash-lite',
             system: systemPrompt,
             prompt: fullPromptText,
             tools: availableTools,
-            config: { temperature: 0.15 },
+            config: { thinkingLevel: 'MEDIUM' },
           });
         }
       );

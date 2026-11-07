@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment, deleteField, serverTimestamp } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment, deleteField, serverTimestamp
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment, deleteField, serverTimestamp, FieldValue } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment, deleteField, serverTimestamp, FieldValue
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -90,15 +90,27 @@ const WhatsAppIcon = ({ className }: { className?: string }) => (
 
 
 // Helper to strip undefined values from objects before saving to Firestore
+function isFirestoreAtomicValue(val: any): boolean {
+    if (!val || typeof val !== 'object') return false;
+    return (
+        val instanceof Date ||
+        val instanceof Timestamp ||
+        val instanceof FieldValue ||
+        val instanceof DocumentReference ||
+        typeof val.toDate === 'function' ||
+        typeof val._methodName === 'string'
+    );
+}
+
 function removeUndefinedFields(obj: any): any {
     if (obj === null || obj === undefined) return null;
     if (typeof obj !== 'object') return obj;
-    if (obj instanceof Date || (obj && typeof obj.toDate === 'function')) return obj;
+    if (isFirestoreAtomicValue(obj)) return obj;
     if (Array.isArray(obj)) return obj.map(removeUndefinedFields);
     const cleaned: any = {};
     for (const [key, value] of Object.entries(obj)) {
         if (value !== undefined) {
-            cleaned[key] = typeof value === 'object' && value !== null && !(value instanceof Date) && !(value && typeof (value as any).toDate === 'function')
+            cleaned[key] = typeof value === 'object' && value !== null && !isFirestoreAtomicValue(value)
                 ? removeUndefinedFields(value)
                 : value;
         }

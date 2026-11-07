@@ -732,9 +732,18 @@ export default function AgendaView() {
     effectiveReservations.forEach((res) => {
       if (!res?.id || res.estado === 'Cancelado') return;
       if ((res as any).anticipo_en_sucursal === true || (res as any).tolerancia_anticipo_extendida === true || (res as any).exento_anticipo === true) return;
+      if (
+        res.pago_estado === 'Pagado' ||
+        res.pago_estado === 'deposit_paid' ||
+        res.pago_estado === 'anticipo_pagado' ||
+        Number(res.anticipo_pagado || (res as any).anticipoPagado || (res as any).monto_pagado_real || (res as any).monto_pagado || 0) > 0 ||
+        Boolean((res as any).deposit_paid_at || (res as any).deposit_payment_id || (res as any).fecha_pago || (res as any).mercado_pago_id)
+      ) {
+        return;
+      }
       const clientObj = clients?.find(c => c.id === res.cliente_id);
       if (clientObj?.exento_anticipo === true && Number(clientObj?.faltas_desde_exencion || 0) < 2) return;
-      if (res.estado === 'Asiste' || res.estado === 'Completado') return;
+      if (res.estado === 'Asiste' || res.estado === 'Completado' || res.estado === 'Venta completada' || res.estado === 'En espera') return;
       if (autoCancellingIdsRef.current.has(res.id)) return;
 
       if (isExpiredPendingDepositReservation(res, nowMs, 30)) {
@@ -1204,6 +1213,18 @@ export default function AgendaView() {
         };
 
         await updateDoc(resRef, updateData);
+
+        if (!isSandboxRes && selectedReservation.cliente_id && (selectedReservation.estado === 'Cancelado' || Boolean((selectedReservation as any).cancelada_automaticamente))) {
+          try {
+            const clientRef = doc(db, 'clientes', selectedReservation.cliente_id);
+            const cSnap = await getDoc(clientRef);
+            if (cSnap.exists() && Number(cSnap.data()?.citas_canceladas || 0) > 0) {
+              await updateDoc(clientRef, { citas_canceladas: increment(-1) });
+            }
+          } catch (cErr) {
+            console.warn('Error decrementando citas_canceladas al registrar anticipo:', cErr);
+          }
+        }
 
         setSelectedReservation({
           ...selectedReservation,

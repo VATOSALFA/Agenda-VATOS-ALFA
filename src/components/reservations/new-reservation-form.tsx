@@ -698,10 +698,10 @@ export function NewReservationForm({
 
     const nowMs = Date.now();
 
-    if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
+      if (agendaSettings && !agendaSettings.simultaneousReservations && values.cliente_id) {
       const clientConflict = allReservations.some(r => {
         if (r.estado === 'Cancelado' || r.estado === 'No asiste' || r.cliente_id !== values.cliente_id || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
-        if (isExpiredPendingDepositReservation(r, nowMs, 20)) return false;
+        if (isExpiredPendingDepositReservation(r, nowMs, 30)) return false;
         return hora_inicio < r.hora_fin && hora_fin > r.hora_inicio;
       });
       if (clientConflict) {
@@ -848,22 +848,7 @@ export function NewReservationForm({
       if (!agendaSettings?.overlappingReservations) {
         const reservationConflict = allReservations.some(r => {
           if (r.estado === 'Cancelado' || r.estado === 'No asiste' || !r.items || r.fecha !== formattedDate || (isEditMode && r.id === initialData?.id)) return false;
-          if (isExpiredPendingDepositReservation(r, nowMs, 20)) {
-            if (db && r.id) {
-              const isSandbox = Boolean((r as any).isSandbox);
-              const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
-              updateDoc(doc(db, targetCol, r.id), {
-                estado: 'Cancelado',
-                motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 20 minutos de tolerancia.',
-                cancelada_automaticamente: true,
-                cancelado_en: Timestamp.now(),
-              }).catch(() => {});
-              if (!isSandbox && r.cliente_id) {
-                updateDoc(doc(db, 'clientes', r.cliente_id), {
-                  citas_canceladas: increment(1)
-                }).catch(() => {});
-              }
-            }
+          if (isExpiredPendingDepositReservation(r, nowMs, 30)) {
             return false;
           }
           const profItems = r.items.filter(i => i.barbero_id === item.barbero_id);
@@ -1382,14 +1367,23 @@ export function NewReservationForm({
 
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
-      const isInitialAlreadyPaid = isEditMode && (initialData?.pago_estado === 'Pagado' || initialData?.pago_estado === 'deposit_paid');
+      const existingDepositPaidAmount = isEditMode
+        ? Number((initialData as any)?.anticipo_pagado || (initialData as any)?.anticipoPagado || (initialData as any)?.monto_anticipo || (initialData as any)?.monto_pagado_real || 0)
+        : 0;
+      const isInitialAlreadyPaid = isEditMode && (
+        initialData?.pago_estado === 'Pagado' ||
+        initialData?.pago_estado === 'deposit_paid' ||
+        initialData?.pago_estado === 'anticipo_pagado' ||
+        existingDepositPaidAmount > 0 ||
+        Boolean((initialData as any)?.deposit_paid_at || (initialData as any)?.deposit_payment_id)
+      );
       const rawEffectiveDepositPaid = data._depositPaidOverride !== undefined
         ? data._depositPaidOverride
         : (depositPaid || isInitialAlreadyPaid);
       const totalPrecioNum = Number(data.precio) || 0;
       const targetDepositAmount = isAnyAnticipoActive
-        ? effectiveDepositAmount
-        : (Number((data as any).monto_anticipo || (initialData as any)?.anticipo_pagado || (initialData as any)?.monto_pagado_real || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
+        ? (existingDepositPaidAmount > 0 && !depositPaid ? existingDepositPaidAmount : effectiveDepositAmount)
+        : (Number((data as any).monto_anticipo || existingDepositPaidAmount || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
       const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);

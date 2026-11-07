@@ -67,12 +67,12 @@ export function useAgendaEvents(
                     (res as any).monto_pagado ||
                     0
                 );
+                const isFullyPaid = res.pago_estado === 'Pagado' || (res as any).pago_estado === 'pagado';
                 const isDepositPaid = Boolean(
-                    (rawEventDepositPaid > 0 || res.pago_estado === 'deposit_paid' || res.pago_estado === 'anticipo_pagado') &&
-                    res.pago_estado !== 'pendiente_anticipo' &&
-                    res.pago_estado !== 'pending_payment' &&
-                    res.pago_estado !== 'Pendiente' &&
-                    res.pago_estado !== 'pendiente'
+                    rawEventDepositPaid > 0 ||
+                    res.pago_estado === 'deposit_paid' ||
+                    res.pago_estado === 'anticipo_pagado' ||
+                    Boolean((res as any).deposit_paid_at || (res as any).deposit_payment_id)
                 );
 
                 const isClientExempt = Boolean(
@@ -84,15 +84,22 @@ export function useAgendaEvents(
                     nowMs,
                     30
                 );
-                const isPendingDeposit = timing.isPendingDeposit && !timing.depositExpired;
+                const isPendingDeposit = !isFullyPaid && !isDepositPaid && timing.isPendingDeposit && !timing.depositExpired;
                 const depositMinutesRemaining = timing.depositMinutesRemaining;
-                const depositExpired = timing.depositExpired;
+                const depositExpired = !isFullyPaid && !isDepositPaid && timing.depositExpired;
+
+                const isFalseAutoCancelledWithPayment =
+                    res.estado === 'Cancelado' &&
+                    Boolean((res as any).cancelada_automaticamente) &&
+                    (isFullyPaid || isDepositPaid || isClientExempt || Boolean((res as any).exento_anticipo));
 
                 const effectiveStatus = depositExpired
                     ? 'Cancelado'
-                    : (isDepositPaid && (!res.estado || res.estado === 'Reservado' || res.estado === 'Pendiente de pago' || res.estado === 'Pendiente de Pago'))
-                        ? 'Confirmado'
-                        : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
+                    : isFalseAutoCancelledWithPayment
+                        ? (isFullyPaid ? 'Asiste' : 'Confirmado')
+                        : (isDepositPaid && (!res.estado || res.estado === 'Reservado' || res.estado === 'Pendiente de pago' || res.estado === 'Pendiente de Pago'))
+                            ? 'Confirmado'
+                            : (isPendingDeposit ? 'Pendiente de pago' : (res.estado || 'Reservado'));
 
                 const isOnlineOrigin = Boolean(
                     res.canal_reserva?.startsWith('web_publica') ||

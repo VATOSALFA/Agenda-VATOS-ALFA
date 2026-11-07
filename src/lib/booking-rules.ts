@@ -161,7 +161,8 @@ export function isPendingDepositReservation(res: any): boolean {
   if (
     res.anticipo_en_sucursal === true ||
     res.tolerancia_anticipo_extendida === true ||
-    res.exento_anticipo === true
+    res.exento_anticipo === true ||
+    Boolean(res.exento_codigo || res.exento_por || res.exento_en)
   ) {
     return false;
   }
@@ -176,8 +177,45 @@ export function isPendingDepositReservation(res: any): boolean {
     estado === 'Completado' ||
     estado === 'Venta completada' ||
     estado === 'Asiste' ||
-    estado === 'En espera'
+    estado === 'En espera' ||
+    estado === 'Pagado'
   ) {
+    return false;
+  }
+
+  if (
+    pagoEstado === 'Pagado' ||
+    pagoEstado === 'pagado' ||
+    pagoEstado === 'deposit_paid' ||
+    pagoEstado === 'anticipo_pagado'
+  ) {
+    return false;
+  }
+
+  // Si ya existe cualquier monto de anticipo o pago registrado, o comprobante de anticipo/cobro, NUNCA está pendiente de anticipo
+  const paidAmount = Number(
+    res.anticipo_pagado ||
+      res.anticipoPagado ||
+      res.monto_pagado_real ||
+      res.monto_pagado ||
+      0
+  );
+  if (
+    paidAmount > 0 ||
+    Boolean(
+      res.deposit_paid_at ||
+        res.deposit_payment_id ||
+        res.fecha_pago ||
+        res.mercado_pago_id ||
+        res.cobrado_en ||
+        res.paid_at
+    )
+  ) {
+    return false;
+  }
+
+  const totalAmount = Number(res.total ?? res.precio ?? 0);
+  if (totalAmount > 0 && res.saldo_pendiente !== undefined && res.saldo_pendiente !== null && Number(res.saldo_pendiente) <= 0) {
     return false;
   }
 
@@ -189,28 +227,6 @@ export function isPendingDepositReservation(res: any): boolean {
   ) {
     return false;
   }
-
-  if (pagoEstado === 'Pagado') return false;
-
-  const isExplicitlyUnpaid =
-    pagoEstado === 'pendiente_anticipo' ||
-    pagoEstado === 'pending_payment' ||
-    pagoEstado === 'Pendiente' ||
-    pagoEstado === 'pendiente';
-
-  const isDepositPaid =
-    pagoEstado === 'deposit_paid' ||
-    pagoEstado === 'anticipo_pagado' ||
-    (!isExplicitlyUnpaid &&
-      Number(
-        res.anticipo_pagado ||
-          res.anticipoPagado ||
-          res.monto_pagado_real ||
-          res.monto_pagado ||
-          0
-      ) > 0);
-
-  if (isDepositPaid) return false;
 
   return Boolean(
     res.requiere_pago_anticipado === true ||

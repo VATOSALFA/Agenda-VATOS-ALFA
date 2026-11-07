@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment, deleteField } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment, deleteField
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -2688,6 +2688,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         pago_estado: 'Pagado',
                                         estado: 'Asiste',
                                         saldo_pendiente: 0,
+                                        whatsappConfirmationSent: true,
+                                        whatsappReminderSent: true,
+                                        whatsappReminderNotNeeded: true,
+                                        motivo_cancelacion: deleteField(),
+                                        cancelada_automaticamente: deleteField(),
+                                        cancelado_en: deleteField(),
                                         items: reservationItems,
                                         precio: subtotal - totalDiscount,
                                         servicio: reservationItems.map((i: any) => i.nombre).join(', ')
@@ -3420,10 +3426,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         pago_estado: 'Pagado',
                         estado: 'Asiste',
                         monto_pagado: grandTotal,
+                        monto_pagado_real: grandTotal,
                         saldo_pendiente: 0,
                         whatsappConfirmationSent: true,
                         whatsappReminderSent: true,
                         whatsappReminderNotNeeded: true,
+                        motivo_cancelacion: deleteField(),
+                        cancelada_automaticamente: deleteField(),
+                        cancelado_en: deleteField(),
                         items: reservationItems,
                         precio: subtotal - totalDiscount,
                         servicio: reservationItems.map((i: any) => i.nombre).join(', ')
@@ -4383,6 +4393,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                                     await updateDoc(resRef, { 
                                                                                         pago_estado: 'Pagado',
                                                                                         estado: 'Asiste',
+                                                                                        saldo_pendiente: 0,
+                                                                                        whatsappConfirmationSent: true,
+                                                                                        whatsappReminderSent: true,
+                                                                                        whatsappReminderNotNeeded: true,
+                                                                                        motivo_cancelacion: deleteField(),
+                                                                                        cancelada_automaticamente: deleteField(),
+                                                                                        cancelado_en: deleteField(),
                                                                                         items: reservationItems,
                                                                                         precio: subtotal - totalDiscount,
                                                                                         servicio: reservationItems.map((i: any) => i.nombre).join(', ')

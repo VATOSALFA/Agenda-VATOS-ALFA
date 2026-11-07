@@ -614,7 +614,10 @@ exports.mercadoPagoWebhook = onRequest(
                 monto_pagado_real: montoPagado,
                 metodo_pago_anticipo: 'mercadopago',
                 deposit_payment_id: String(paymentInfo.id),
-                deposit_paid_at: new Date()
+                deposit_paid_at: new Date(),
+                motivo_cancelacion: admin.firestore.FieldValue.delete(),
+                cancelada_automaticamente: admin.firestore.FieldValue.delete(),
+                cancelado_en: admin.firestore.FieldValue.delete()
               });
             } else {
               t.update(reservaRef, {
@@ -622,7 +625,10 @@ exports.mercadoPagoWebhook = onRequest(
                 estado: isFullPay ? 'Asiste' : 'Confirmado',
                 saldo_pendiente: saldoPendiente,
                 monto_pagado: isFullPay ? montoOriginal : (anticipoPrevio + montoVentaSinPropina),
-                monto_pagado_real: isFullPay ? montoOriginal : (anticipoPrevio + montoVentaSinPropina)
+                monto_pagado_real: isFullPay ? montoOriginal : (anticipoPrevio + montoVentaSinPropina),
+                motivo_cancelacion: admin.firestore.FieldValue.delete(),
+                cancelada_automaticamente: admin.firestore.FieldValue.delete(),
+                cancelado_en: admin.firestore.FieldValue.delete()
               });
             }
           }

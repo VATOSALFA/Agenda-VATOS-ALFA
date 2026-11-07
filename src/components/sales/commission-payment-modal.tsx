@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '../ui/scroll-area';
-import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnapshot, query } from 'firebase/firestore';
+import { where, Timestamp, writeBatch, collection, doc, getDocs, getDoc, onSnapshot, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
@@ -354,8 +354,15 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setIsProcessing(true);
         try {
             const batch = writeBatch(db);
-            const now = Timestamp.now();
-            const formattedDate = format(now.toDate(), "dd/MM/yyyy HH:mm", { locale: es });
+            const formattedDate = new Intl.DateTimeFormat('es-MX', {
+                timeZone: 'America/Mexico_City',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+            }).format(new Date()).replace(',', '');
 
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
             const tipsToUpdate = new Map<string, Set<string>>();
@@ -368,7 +375,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     // Create expense record
                     const egresoRef = doc(collection(db, 'egresos'));
                     batch.set(egresoRef, {
-                        fecha: now,
+                        fecha: serverTimestamp(),
                         monto: totalPayment,
                         concepto: 'Pago de Comisión y Propinas',
                         aQuien: comm.professionalId,

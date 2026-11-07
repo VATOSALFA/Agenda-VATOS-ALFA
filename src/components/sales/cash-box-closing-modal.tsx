@@ -7,7 +7,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { collection, addDoc, Timestamp, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
@@ -159,7 +159,7 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
     try {
       const montoNetoEntregado = totalContado - fondoBase;
       await addDoc(collection(db, 'cortes_caja'), {
-        fecha_corte: Timestamp.now(),
+        fecha_corte: serverTimestamp(),
         persona_entrega_id: user?.uid,
         persona_entrega_nombre: user?.displayName,
         persona_recibe: data.persona_recibe,

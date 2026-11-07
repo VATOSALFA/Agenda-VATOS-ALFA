@@ -31,7 +31,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Loader2, Calendar as CalendarIcon, DollarSign, MessageSquare, Edit, Tag, Store, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
-import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, Timestamp, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { IngresoManual, User, Local } from '@/lib/types';
 import { useLocal } from '@/contexts/local-context';
@@ -165,9 +165,11 @@ export function AddIngresoModal({ isOpen, onOpenChange, onFormSubmit, ingreso, l
       finalConcepto = data.concepto_otro || 'Otro';
     }
 
+    const isSameDayAsNow = data.fecha.toDateString() === new Date().toDateString();
+
     const dataToSave = {
       ...data,
-      fecha: Timestamp.fromDate(data.fecha),
+      fecha: (!isEditMode && isSameDayAsNow) ? serverTimestamp() : Timestamp.fromDate(data.fecha),
       concepto: finalConcepto,
     };
     delete (dataToSave as any).concepto_otro;

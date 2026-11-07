@@ -33,7 +33,7 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Profesional, Local, Egreso, User as AppUser } from '@/lib/types';
-import { addDoc, collection, Timestamp, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, Timestamp, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -288,8 +288,10 @@ export function AddEgresoModal({ isOpen, onOpenChange, onFormSubmit, egreso, sou
 
         const aQuienValue = destinatarioSeleccionado ? destinatarioSeleccionado.name : 'Desconocido';
 
+        const isSameDayAsNow = data.fecha.toDateString() === new Date().toDateString();
+
         const dataToSave: any = {
-            fecha: Timestamp.fromDate(data.fecha),
+            fecha: (!isEditMode && isSameDayAsNow) ? serverTimestamp() : Timestamp.fromDate(data.fecha),
             monto: data.monto,
             concepto: finalConcepto,
             aQuien: aQuienValue, // Guardamos el nombre

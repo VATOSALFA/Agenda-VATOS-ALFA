@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment, deleteField } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment, deleteField
+import { collection, addDoc, Timestamp, doc, updateDoc, runTransaction, DocumentReference, getDoc, getDocs, deleteDoc, onSnapshot, where, setDoc, query, increment, deleteField, serverTimestamp } from 'firebase/firestore'; // <--- AGREGADO setDoc, increment, deleteField, serverTimestamp
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -2501,7 +2501,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     descuento_alfacoins: pointsDiscount || 0,
                     alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
                     total: subtotal - totalDiscount,
-                    fecha_hora_venta: Timestamp.now(),
+                    fecha_hora_venta: serverTimestamp(),
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pendiente', // <--- IMPORTANTE: Nace como pendiente
@@ -3229,12 +3229,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     total: grandTotal, // Save the full value, not just the remainder
                     propina: propinaToSave,
                     ...(propinaDetalles.length > 0 ? { propina_detalles: propinaDetalles } : {}),
-                    fecha_hora_venta: Timestamp.now(),
-                    fecha_pago: Timestamp.now(),
+                    fecha_hora_venta: serverTimestamp(),
+                    fecha_pago: serverTimestamp(),
                     creado_por_id: user?.uid,
                     creado_por_nombre: user?.displayName || user?.email,
                     pago_estado: 'Pagado',
-                    creado_en: Timestamp.now(),
+                    creado_en: serverTimestamp(),
                     anticipoPagado: anticipoPagado || (depositSaleData ? Number(depositSaleData.monto_pagado_real || depositSaleData.monto_anticipo || depositSaleData.anticipoPagado || 0) : 0),
                     // monto_pagado_real SIEMPRE representa el ingreso de venta SIN propina
                     monto_pagado_real: isDepositLiquidation

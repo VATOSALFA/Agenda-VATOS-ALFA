@@ -20,7 +20,11 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
     const lastCut = lastCuts?.[0];
 
     const liveStartDate = useMemo(() => {
-        if (lastCut) return lastCut.fecha_corte.toDate();
+        if (lastCut?.fecha_corte) {
+            return typeof lastCut.fecha_corte.toDate === 'function'
+                ? lastCut.fecha_corte.toDate()
+                : new Date(lastCut.fecha_corte as any);
+        }
         // Si nunca han hecho un corte, asumimos que el turno empezó hoy. 
         // Esto evita que Firebase descargue todo el historial histórico desde 1970.
         return startOfDay(new Date());
@@ -72,8 +76,13 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
 
     // 3. Calculate Live Cash
     const liveCashInBox = useMemo(() => {
-        const isAfterCut = (date: Date | Timestamp) => {
-            const d = date instanceof Timestamp ? date.toDate() : date;
+        const isAfterCut = (date: Date | Timestamp | undefined | null) => {
+            if (!date) return false;
+            const d = date instanceof Timestamp
+                ? date.toDate()
+                : typeof (date as any).toDate === 'function'
+                    ? (date as any).toDate()
+                    : new Date(date as any);
             return d > liveStartDate;
         };
 

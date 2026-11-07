@@ -69,7 +69,7 @@ import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
-import { isExpiredPendingDepositReservation } from '@/lib/booking-rules';
+import { isExpiredPendingDepositReservation, isPendingDepositReservation } from '@/lib/booking-rules';
 import { getNormalizedDayOfWeek, getEffectiveBarberDaySchedule } from '@/lib/scheduling/schedule-engine';
 import { checkAndSendPendingChatReminders } from '@/lib/actions/conversation-actions';
 
@@ -1286,6 +1286,26 @@ export default function AgendaView() {
           resData?.pago_estado !== 'Pendiente' &&
           resData?.pago_estado !== 'pendiente' &&
           (Number(resData?.anticipo_pagado) > 0 || Number(resData?.monto_pagado_real) > 0));
+
+      const clientForStatus = clients?.find(c => c.id === resData?.cliente_id);
+      const isClientExemptForStatus = Boolean(
+        clientForStatus?.exento_anticipo === true &&
+        Number(clientForStatus?.faltas_desde_exencion || 0) < 2
+      );
+      if (
+        (newStatus === 'Confirmado' || newStatus === 'En espera' || newStatus === 'Asiste' || newStatus === 'Completado') &&
+        !isResDepositPaid &&
+        resData?.pago_estado !== 'Pagado' &&
+        !isClientExemptForStatus &&
+        isPendingDepositReservation(resData)
+      ) {
+        toast({
+          variant: 'destructive',
+          title: 'Anticipo Pendiente',
+          description: 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza un código de autorización.',
+        });
+        return;
+      }
 
       // Retained Deposit logic for "No asistió" (No asiste)
       if (newStatus === 'No asiste' && !isSandboxRes && isResDepositPaid) {

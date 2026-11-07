@@ -1628,11 +1628,11 @@ export function ReservationDetailModal({
                                 handleCancelClick();
                               } else if (reservation.estado === 'Cancelado') {
                                 handleReactivateReservation(status);
-                              } else if (status === 'Confirmado' && isAnticipoRequired && !isDepositPaid && !isReservationExempt) {
+                              } else if ((status === 'Confirmado' || status === 'En espera' || status === 'Asiste') && isAnticipoRequired && !isDepositPaid && !isReservationExempt) {
                                 toast({
                                   variant: 'destructive',
                                   title: 'Anticipo Pendiente',
-                                  description: 'Para confirmar formalmente esta cita al 100%, primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
+                                  description: 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
                                 });
                                 setShowExemptBox(true);
                               } else {
@@ -1647,7 +1647,8 @@ export function ReservationDetailModal({
                               isSelected
                                 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
                                 : (isConcluded ? 'opacity-35' : 'opacity-80 hover:opacity-100'),
-                              (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40'
+                              (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40',
+                              ((status === 'Confirmado' || status === 'En espera' || status === 'Asiste') && isAnticipoRequired && !isDepositPaid && !isReservationExempt && !isConcluded) && 'cursor-not-allowed opacity-45'
                             )}
                           >
                             <span

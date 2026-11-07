@@ -19,7 +19,7 @@ import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 // UI Components
@@ -287,6 +287,31 @@ Con gusto te apoyamos avisando con al menos 2 horas de anticipación para reprog
 };
 
 const DEFAULT_QUICK_REPLIES = getQuickReplies();
+
+function parseMessageDate(ts: any): Date | null {
+  if (!ts) return null;
+  if (typeof ts?.toDate === 'function') return ts.toDate();
+  if (ts instanceof Date) return isNaN(ts.getTime()) ? null : ts;
+  if (typeof ts === 'object' && typeof ts.seconds === 'number') {
+    return new Date(ts.seconds * 1000);
+  }
+  const d = new Date(ts);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function getMessageDayKey(ts: any): string {
+  const d = parseMessageDate(ts);
+  if (!d) return '';
+  return format(d, 'yyyy-MM-dd');
+}
+
+function formatChatDateSeparator(ts: any): string {
+  const d = parseMessageDate(ts);
+  if (!d) return '';
+  if (isToday(d)) return 'Hoy';
+  if (isYesterday(d)) return 'Ayer';
+  return format(d, "d 'de' MMM yyyy", { locale: es }).replace('.', '');
+}
 
 function playNotificationChime() {
   if (typeof window === 'undefined') return;
@@ -3889,48 +3914,70 @@ export default function ConversationsDashboardPage() {
 
                       // Format timestamp
                       let timeStr = '';
-                      if (msg.timestamp) {
-                        const date = msg.timestamp?.toDate
-                          ? msg.timestamp.toDate()
-                          : new Date(msg.timestamp);
-                        timeStr = format(date, 'HH:mm', { locale: es });
+                      const parsedMsgDate = parseMessageDate(msg.timestamp);
+                      if (parsedMsgDate) {
+                        timeStr = format(parsedMsgDate, 'HH:mm', { locale: es });
                       }
+
+                      const prevMsg = index > 0 ? messages[index - 1] : null;
+                      const currentDayKey = getMessageDayKey(msg.timestamp);
+                      const prevDayKey = prevMsg ? getMessageDayKey(prevMsg.timestamp) : '';
+                      const showDateSeparator = Boolean(currentDayKey && currentDayKey !== prevDayKey);
+                      const dateSeparatorLabel = showDateSeparator ? formatChatDateSeparator(msg.timestamp) : '';
+
+                      const dateSeparatorNode = showDateSeparator && dateSeparatorLabel ? (
+                        <div className="flex items-center justify-center my-3 select-none">
+                          <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-muted/60 text-muted-foreground border border-border/60 shadow-2xs">
+                            {dateSeparatorLabel}
+                          </span>
+                        </div>
+                      ) : null;
 
                       if (isSystem) {
                         return (
-                          <div key={msg.id} className="flex justify-center my-2">
-                            <span className="text-[11px] bg-muted/70 text-muted-foreground px-3 py-1 rounded-full border border-border/40">
-                              {msg.texto}
-                            </span>
-                          </div>
+                          <React.Fragment key={msg.id}>
+                            {dateSeparatorNode}
+                            <div className="flex justify-center my-2">
+                              <span className="text-[11px] bg-muted/70 text-muted-foreground px-3 py-1 rounded-full border border-border/40">
+                                {msg.texto}
+                              </span>
+                            </div>
+                          </React.Fragment>
                         );
                       }
 
                       // Internal staff note (Private team note)
                       if (isInternalNote) {
                         return (
-                          <div key={msg.id} className="flex justify-center my-2 w-full">
-                            <div className="w-full max-w-lg rounded-xl p-3 bg-muted/40 border border-border/70 text-xs text-foreground shadow-sm space-y-1.5">
-                              <div className="flex items-center justify-between border-b border-border/50 pb-1 font-semibold text-[11px]">
-                                <span className="flex items-center gap-1.5 text-blue-400">
-                                  <Lock className="w-3.5 h-3.5 text-slate-400" />
-                                  Nota Interna • {msg.metadata?.staffName || 'Recepción'}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground font-normal">{timeStr}</span>
-                              </div>
-                              <p className="whitespace-pre-wrap text-foreground/90 font-medium">{msg.texto}</p>
-                              <div className="flex items-center justify-between pt-0.5 text-[10px] text-muted-foreground">
-                                <span className="flex items-center gap-1 text-slate-400">
-                                  <EyeOff className="w-3 h-3 text-slate-400" /> Privado: el cliente no ve esta nota
-                                </span>
+                          <React.Fragment key={msg.id}>
+                            {dateSeparatorNode}
+                            <div className="flex justify-center my-2 w-full">
+                              <div className="w-full max-w-lg rounded-xl p-3 bg-muted/40 border border-border/70 text-xs text-foreground shadow-sm space-y-1.5">
+                                <div className="flex items-center justify-between border-b border-border/50 pb-1 font-semibold text-[11px]">
+                                  <span className="flex items-center gap-1.5 text-blue-400">
+                                    <Lock className="w-3.5 h-3.5 text-slate-400" />
+                                    Nota Interna • {msg.metadata?.staffName || 'Recepción'}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground font-normal">{timeStr}</span>
+                                </div>
+                                <p className="whitespace-pre-wrap text-foreground/90 font-medium">{msg.texto}</p>
+                                <div className="flex items-center justify-between pt-0.5 text-[10px] text-muted-foreground">
+                                  <span className="flex items-center gap-1 text-slate-400">
+                                    <EyeOff className="w-3 h-3 text-slate-400" /> Privado: el cliente no ve esta nota
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
+                          </React.Fragment>
                         );
                       }
 
-                      const prevMsg = index > 0 ? messages[index - 1] : null;
-                      const isSameSender = prevMsg && prevMsg.de === msg.de && prevMsg.tipo !== 'nota_interna' && msg.tipo !== 'nota_interna';
+                      const isSameSender =
+                        !showDateSeparator &&
+                        prevMsg &&
+                        prevMsg.de === msg.de &&
+                        prevMsg.tipo !== 'nota_interna' &&
+                        msg.tipo !== 'nota_interna';
 
                       const isVoiceNote =
                         msg.tipo === 'audio' ||
@@ -3942,12 +3989,13 @@ export default function ConversationsDashboardPage() {
                         (Boolean(msg.metadata?.fileName) && !isVoiceNote);
 
                       return (
-                        <div
-                          key={msg.id}
-                          className={`flex flex-col ${
-                            isClient ? 'items-start' : 'items-end'
-                          } ${isSameSender ? 'mt-1' : 'mt-2.5'}`}
-                        >
+                        <React.Fragment key={msg.id}>
+                          {dateSeparatorNode}
+                          <div
+                            className={`flex flex-col ${
+                              isClient ? 'items-start' : 'items-end'
+                            } ${isSameSender ? 'mt-1' : 'mt-2.5'}`}
+                          >
                           {/* Modern WhatsApp-Style Clean Bubble with User Customization */}
                           <div
                             className={`max-w-[85%] md:max-w-[72%] rounded-2xl px-3.5 py-2 shadow-xs whitespace-pre-wrap transition-all relative ${fontSizeCls} ${
@@ -4125,6 +4173,7 @@ export default function ConversationsDashboardPage() {
                             </div>
                           </div>
                         </div>
+                        </React.Fragment>
                       );
                     })}
 
@@ -4806,7 +4855,7 @@ export default function ConversationsDashboardPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {simMessages.map((msg) => {
+                {simMessages.map((msg, simIdx) => {
                   const isClient = msg.de === 'cliente';
                   const fontSizeCls = getFontSizeClass(chatPrefs.fontSize);
                   const isVoiceNote =
@@ -4818,13 +4867,26 @@ export default function ConversationsDashboardPage() {
                     msg.mediaUrl?.includes('chat_files') ||
                     (Boolean(msg.metadata?.fileName) && !isVoiceNote);
 
+                  const prevSimMsg = simIdx > 0 ? simMessages[simIdx - 1] : null;
+                  const simDayKey = getMessageDayKey(msg.timestamp);
+                  const prevSimDayKey = prevSimMsg ? getMessageDayKey(prevSimMsg.timestamp) : '';
+                  const showSimDateSeparator = Boolean(simDayKey && simDayKey !== prevSimDayKey);
+                  const simDateSeparatorLabel = showSimDateSeparator ? formatChatDateSeparator(msg.timestamp) : '';
+
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${
-                        isClient ? 'items-end' : 'items-start'
-                      }`}
-                    >
+                    <React.Fragment key={msg.id}>
+                      {showSimDateSeparator && simDateSeparatorLabel && (
+                        <div className="flex items-center justify-center my-2.5 select-none">
+                          <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-muted/60 text-muted-foreground border border-border/60 shadow-2xs">
+                            {simDateSeparatorLabel}
+                          </span>
+                        </div>
+                      )}
+                      <div
+                        className={`flex flex-col ${
+                          isClient ? 'items-end' : 'items-start'
+                        }`}
+                      >
                       <span className="text-[10px] text-muted-foreground mb-0.5 px-1 font-medium">
                         {isClient ? simName : `💈 ${assistantName} • VATOS ALFA`}
                       </span>
@@ -4986,6 +5048,7 @@ export default function ConversationsDashboardPage() {
                         )}
                       </div>
                     </div>
+                    </React.Fragment>
                   );
                 })}
                 {isSimProcessing && (

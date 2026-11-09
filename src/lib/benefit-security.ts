@@ -7,6 +7,13 @@ export const MONTH_NAMES_ES = [
 
 export const VATOS_BENEFIT_SIGN_SALT = 'VA_SECURE_TOKEN_SALT_2026_VATOS_ALFA_SECURITY_KEY';
 
+/**
+ * Requisito mínimo de antigüedad para desbloquear el Regalo de Cumpleaños:
+ * Al menos 5 visitas válidas pagadas cuyo consumo individual en servicio sea igual o mayor
+ * a la tarifa vigente del corte de cabello en ese momento.
+ */
+export const MIN_BIRTHDAY_ELIGIBLE_VISITS = 5;
+
 export interface BirthdayValidationResult {
   hasBirthday: boolean;
   isBirthdayMonth: boolean;
@@ -15,25 +22,38 @@ export interface BirthdayValidationResult {
   currentMonthNum: number;
   currentMonthName: string;
   birthDateFormatted?: string;
+  isoDate?: string;
   isEligible: boolean;
   rejectionReason?: string;
 }
 
-export function parseBirthMonthAndDay(birthVal: any): { month: number; day: number; year?: number; formatted: string } | null {
+export function parseBirthMonthAndDay(
+  birthVal: any
+): { month: number; day: number; year?: number; formatted: string; iso?: string } | null {
   if (!birthVal) return null;
 
   // If Firestore Timestamp or Date object
   if (typeof birthVal === 'object') {
-    const d = birthVal.toDate ? birthVal.toDate() : (birthVal instanceof Date ? birthVal : null);
+    const d = birthVal.toDate
+      ? birthVal.toDate()
+      : birthVal._seconds
+      ? new Date(birthVal._seconds * 1000)
+      : birthVal.seconds
+      ? new Date(birthVal.seconds * 1000)
+      : birthVal instanceof Date
+      ? birthVal
+      : null;
     if (d && !isNaN(d.getTime())) {
       const month = d.getMonth() + 1;
       const day = d.getDate();
       const year = d.getFullYear();
+      const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       return {
         month,
         day,
         year,
         formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${year ? ` de ${year}` : ''}`,
+        iso,
       };
     }
   }
@@ -42,57 +62,205 @@ export function parseBirthMonthAndDay(birthVal: any): { month: number; day: numb
   const trimmed = birthVal.trim();
   if (!trimmed) return null;
 
-  // Format: "15 de Mayo de 1998" or "15 de Mayo"
+  // Format: "7 de Febrero de 1985" or "15 de Mayo"
   if (trimmed.toLowerCase().includes(' de ')) {
     const parts = trimmed.split(/\s+de\s+/i);
     const day = parseInt(parts[0], 10);
     const monthStr = (parts[1] || '').trim().toLowerCase();
     const monthIndex = MONTH_NAMES_ES.findIndex(m => m.toLowerCase() === monthStr);
     const year = parts[2] ? parseInt(parts[2], 10) : undefined;
-    if (monthIndex >= 0 && !isNaN(day)) {
+    if (monthIndex >= 0 && !isNaN(day) && day >= 1 && day <= 31) {
       const month = monthIndex + 1;
+      const iso = year
+        ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        : undefined;
       return {
         month,
         day,
         year,
         formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${year ? ` de ${year}` : ''}`,
+        iso,
       };
     }
   }
 
-  // Format: YYYY-MM-DD or DD/MM/YYYY or DD-MM-YYYY
-  const parts = trimmed.split(/[-/]/);
+  // Format: YYYY-MM-DD (ISO canónico) or DD/MM/YYYY or DD-MM-YYYY
+  const cleanDatePart = trimmed.includes('T') ? trimmed.split('T')[0] : trimmed;
+  const parts = cleanDatePart.split(/[-/]/);
   if (parts.length >= 2) {
     if (parts[0].length === 4) {
       // YYYY-MM-DD
       const year = parseInt(parts[0], 10);
       const month = parseInt(parts[1], 10);
       const day = parseInt(parts[2] || '1', 10);
-      if (month >= 1 && month <= 12) {
+      if (month >= 1 && month <= 12 && !isNaN(day) && day >= 1 && day <= 31) {
+        const iso = !isNaN(year)
+          ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+          : undefined;
         return {
           month,
-          day: isNaN(day) ? 1 : day,
-          year,
-          formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${year ? ` de ${year}` : ''}`,
+          day,
+          year: isNaN(year) ? undefined : year,
+          formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${!isNaN(year) ? ` de ${year}` : ''}`,
+          iso,
         };
       }
     } else {
-      // DD/MM/YYYY or DD-MM-YYYY
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10);
+      // DD/MM/YYYY or DD-MM-YYYY (con respaldo si p1 > 12 en formato MM/DD/YYYY)
+      const p0 = parseInt(parts[0], 10);
+      const p1 = parseInt(parts[1], 10);
       const year = parts[2] ? parseInt(parts[2], 10) : undefined;
-      if (month >= 1 && month <= 12) {
+
+      let day = p0;
+      let month = p1;
+      if (p1 > 12 && p0 >= 1 && p0 <= 12) {
+        month = p0;
+        day = p1;
+      }
+
+      if (month >= 1 && month <= 12 && !isNaN(day) && day >= 1 && day <= 31) {
+        const iso =
+          year && !isNaN(year)
+            ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+            : undefined;
         return {
           month,
-          day: isNaN(day) ? 1 : day,
-          year,
-          formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${year ? ` de ${year}` : ''}`,
+          day,
+          year: year && !isNaN(year) ? year : undefined,
+          formatted: `${day} de ${MONTH_NAMES_ES[month - 1]}${year && !isNaN(year) ? ` de ${year}` : ''}`,
+          iso,
         };
       }
     }
   }
 
   return null;
+}
+
+/**
+ * Normaliza cualquier fecha válida a formato ISO canónico 'YYYY-MM-DD' para sincronizar App y Agenda Web.
+ */
+export function normalizeBirthdayToISO(birthVal: any): string | null {
+  const parsed = parseBirthMonthAndDay(birthVal);
+  if (!parsed || !parsed.year) return null;
+  return `${parsed.year}-${String(parsed.month).padStart(2, '0')}-${String(parsed.day).padStart(2, '0')}`;
+}
+
+/**
+ * Devuelve la fecha en español claro e inequívoco (ej. "7 de febrero de 1985").
+ */
+export function formatBirthdaySpanish(birthVal: any): string {
+  const parsed = parseBirthMonthAndDay(birthVal);
+  if (!parsed) return '';
+  const monthLower = MONTH_NAMES_ES[parsed.month - 1].toLowerCase();
+  return `${parsed.day} de ${monthLower}${parsed.year ? ` de ${parsed.year}` : ''}`;
+}
+
+/**
+ * Calcula cuántas visitas elegibles pagadas acumula un cliente para desbloquear el Regalo de Cumpleaños:
+ * - Solo ventas pagadas (no canceladas ni pendientes ni anticipos).
+ * - Deben incluir al menos un servicio (excluye compras de puros productos como ceras o lociones).
+ * - El importe real pagado en servicios debe ser >= al costo del corte de cabello en ese momento
+ *   (`sale.tarifa_corte_aplicada` si existe; para ventas históricas previas a ajustes tarifarios se respeta $140 MXN).
+ * - Se contabiliza máximo 1 visita elegible por día calendario.
+ */
+export function countEligibleHaircutVisitsFromSales(
+  salesDataList: any[],
+  currentHaircutPrice: number = 140,
+  clientData?: any
+): number {
+  const eligibleDays = new Set<string>();
+  const activePrice = currentHaircutPrice > 0 ? currentHaircutPrice : 140;
+
+  for (let idx = 0; idx < (salesDataList || []).length; idx++) {
+    const s = salesDataList[idx];
+    if (!s) continue;
+    const st = String(s.pago_estado || '').toLowerCase();
+    if (
+      st === 'cancelado' ||
+      st === 'anulado' ||
+      st === 'pendiente' ||
+      st === 'pending_payment' ||
+      st === 'pendiente_anticipo'
+    ) {
+      continue;
+    }
+    if (s.absorbed_in_sale_id || s.tipo_venta === 'anticipo') {
+      continue;
+    }
+
+    const recordedTariff = Number(s.tarifa_corte_aplicada || 0);
+    const requiredMinAtMoment =
+      recordedTariff > 0 ? recordedTariff : Math.min(activePrice, 140);
+
+    const saleTotal = Number(s.total ?? s.monto_pagado_real ?? 0);
+    const coinsDisc = Number(s.descuento_alfacoins ?? 0);
+    const realPaidTotal = Math.max(0, saleTotal - coinsDisc);
+    if (realPaidTotal + 0.01 < requiredMinAtMoment) {
+      continue;
+    }
+
+    const items = Array.isArray(s.items) ? s.items : [];
+    let hasEligibleService = false;
+
+    if (items.length === 0) {
+      hasEligibleService = realPaidTotal + 0.01 >= requiredMinAtMoment;
+    } else {
+      for (const it of items) {
+        const tipo = String(it?.tipo || 'servicio').toLowerCase();
+        const nombreLower = String(it?.nombre || '').toLowerCase();
+        const isProduct =
+          tipo === 'producto' ||
+          /\b(cera|pomada|shampoo|aceite|b[aá]lsamo|locion|loci[oó]n|after\s*shave|gel|polvo|peine|cepillo)\b/i.test(
+            nombreLower
+          );
+        if (isProduct) continue;
+
+        const qty = Math.max(1, Number(it?.cantidad || 1));
+        const unitGross = Number(it?.precio_unitario ?? it?.precio ?? 0);
+        let totalItemDiscount = 0;
+        if (it?.descuento && typeof it.descuento === 'object') {
+          totalItemDiscount = Number(it.descuento.monto || 0);
+        }
+        const netUnit = Math.max(0, (unitGross * qty - totalItemDiscount) / qty);
+        if (netUnit + 0.01 >= requiredMinAtMoment) {
+          hasEligibleService = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasEligibleService) continue;
+
+    const dt = s.fecha_hora_venta?.toDate
+      ? s.fecha_hora_venta.toDate()
+      : s.fecha_hora_venta?.seconds
+      ? new Date(s.fecha_hora_venta.seconds * 1000)
+      : s.creado_en?.toDate
+      ? s.creado_en.toDate()
+      : s.creado_en?.seconds
+      ? new Date(s.creado_en.seconds * 1000)
+      : typeof s.fecha_hora_venta === 'string'
+      ? new Date(s.fecha_hora_venta)
+      : null;
+
+    const dayKey =
+      dt && !isNaN(dt.getTime())
+        ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+        : `sale_${s.id || idx}`;
+
+    eligibleDays.add(dayKey);
+  }
+
+  const fromSales = eligibleDays.size;
+  const fromHistoricalField = Number(
+    clientData?.visitas_elegibles_historicas ?? clientData?.visitasElegiblesHistoricas ?? 0
+  );
+  const fromCurrentStamps = Number(
+    clientData?.cortes_acumulados ?? clientData?.cortesAcumulados ?? 0
+  );
+
+  return Math.max(fromSales, fromHistoricalField, fromCurrentStamps);
 }
 
 export function validateClientBirthdayForBenefit(clientData: any): BirthdayValidationResult {
@@ -161,7 +329,19 @@ export async function verifyBenefitSignature(
 ): Promise<boolean> {
   if (!signature) return false;
 
-  const candidates = Array.from(new Set([benefitId, fallbackBenefitId, 'juntos_es_mejor', 'invita_amigo', 'beneficio_alfa'].filter(Boolean))) as string[];
+  const candidates = Array.from(
+    new Set(
+      [
+        benefitId,
+        fallbackBenefitId,
+        'regalo_cumpleanos',
+        'decimo_corte',
+        'juntos_es_mejor',
+        'invita_amigo',
+        'beneficio_alfa',
+      ].filter(Boolean)
+    )
+  ) as string[];
 
   for (const candidateId of candidates) {
     try {
@@ -192,7 +372,58 @@ export async function verifyBenefitSignature(
 
 export const REFERRAL_DISCOUNT_PERCENT = 20;
 export const REFERRAL_HOST_REWARD_COINS = 500;
-export const REFERRAL_MIN_PURCHASE_MXN = 160;
+/** @deprecated Usa calculateReferralMinNetPurchase(currentHaircutPrice) para cálculo dinámico */
+export const REFERRAL_MIN_PURCHASE_MXN = 112;
+
+/**
+ * Calcula el pago neto mínimo esperado (tras aplicar el 20% de descuento de bienvenida)
+ * equivalente al consumo de un Corte de cabello vigente.
+ * Ej: Corte $140 -> $112 MXN netos; Corte $160 -> $128 MXN netos.
+ */
+export function calculateReferralMinNetPurchase(haircutPrice: number = 140): number {
+  const safePrice = haircutPrice > 0 ? haircutPrice : 140;
+  return Math.round(safePrice * (1 - REFERRAL_DISCOUNT_PERCENT / 100) * 100) / 100;
+}
+
+export interface ReferralPurchaseEligibilityResult {
+  isEligible: boolean;
+  requiredGrossService: number;
+  requiredNetPaid: number;
+  grossServicesInCart: number;
+}
+
+/**
+ * Evalúa dinámicamente si la compra del amigo invitado acredita los +500 Alfa Coins al anfitrión:
+ * 1. El valor regular (antes del descuento) de los servicios consumidos debe ser >= al precio vigente de 1 Corte de cabello.
+ * 2. El dinero real efectivamente pagado (total en caja + anticipo pagado) debe ser >= al corte con el 20% de descuento aplicado.
+ */
+export function evaluateReferralPurchaseEligibility(params: {
+  subtotal: number;
+  realMoneyPaid: number;
+  currentHaircutPrice?: number;
+  cart?: Array<{ tipo?: string; precio?: number; cantidad?: number }>;
+}): ReferralPurchaseEligibilityResult {
+  const requiredGrossService = Number(params.currentHaircutPrice) > 0 ? Number(params.currentHaircutPrice) : 140;
+  const requiredNetPaid = calculateReferralMinNetPurchase(requiredGrossService);
+
+  const grossServicesInCart = Array.isArray(params.cart) && params.cart.length > 0
+    ? params.cart.reduce((acc, it) => {
+        if (it?.tipo && it.tipo !== 'servicio') return acc;
+        return acc + Number(it?.precio || 0) * Math.max(1, Number(it?.cantidad || 1));
+      }, 0)
+    : Number(params.subtotal || 0);
+
+  const effectiveGross = Math.max(grossServicesInCart, Array.isArray(params.cart) ? 0 : Number(params.subtotal || 0));
+  const isGrossMet = effectiveGross + 0.01 >= requiredGrossService;
+  const isNetMet = Number(params.realMoneyPaid || 0) + 0.01 >= requiredNetPaid;
+
+  return {
+    isEligible: isGrossMet && isNetMet,
+    requiredGrossService,
+    requiredNetPaid,
+    grossServicesInCart: Math.round(effectiveGross * 100) / 100,
+  };
+}
 
 export const JUNTOS_REWARD_COINS_PER_PERSON = 400;
 
@@ -730,5 +961,234 @@ export function evaluateClientAlfaTier(
     faltaGasto,
   };
 }
+
+// ============================================================================
+// REGLAS AUTOMÁTICAS DE ACREDITACIÓN DE SELLOS — "LA DÉCIMA VA POR LA CASA"
+// ============================================================================
+
+export const MAX_PASE_ALFA_STAMPS_PER_TICKET = 2;
+
+export interface PaseAlfaStampCartItem {
+  tipo?: 'producto' | 'servicio' | string;
+  precio?: number;
+  cantidad?: number;
+  discountValue?: string | number;
+  discountType?: 'fixed' | 'percentage';
+}
+
+export interface PaseAlfaStampEvaluation {
+  stampsToAward: number;
+  qualifyingServiceUnits: number;
+  minServicePrice: number;
+  alreadyStampedToday: boolean;
+  isFreeCutRedemption: boolean;
+  cappedByTicketLimit: boolean;
+  cappedByGoalLimit: boolean;
+  statusLabel: string;
+  reason: string;
+}
+
+/**
+ * Calcula de forma 100% determinista cuántos sellos de "La Décima va por la Casa"
+ * corresponden a una venta en Caja bajo las reglas oficiales blindadas (Opción B):
+ * 1. Exclusivo para clientes con la App Móvil instalada (`hasAppDownloaded`).
+ * 2. Tarifa mínima dinámica por servicio individual igual o superior al precio regular
+ *    vigente del "Corte de cabello" (`currentHaircutPrice`, p. ej. $140 MXN; se ajusta solo al subir precios).
+ *    - Servicios menores (ej. ceja $30) o sumas de servicios menores NO generan sello.
+ *    - Productos de tienda (ceras, pomadas, etc.) NUNCA generan sello.
+ * 3. Respaldo en dinero real efectivamente pagado (`realMoneySpent`, excluyendo AlfaCoins).
+ * 4. Tope familiar/acompañante de máximo 2 sellos por ticket cuando se liquidan 2 o más servicios elegibles.
+ * 5. Máximo 1 acreditación de sellos por día hábil operativo de la barbería (`ultimo_sello_fecha === todayStr`).
+ */
+export function evaluatePaseAlfaStampsForSale(params: {
+  client: any | null | undefined;
+  hasAppDownloaded: boolean;
+  cart: PaseAlfaStampCartItem[];
+  realMoneySpent: number;
+  currentHaircutPrice: number;
+  targetStamps?: number;
+  todayStr: string;
+  appliedBenefit?: any | null;
+}): PaseAlfaStampEvaluation {
+  const {
+    client,
+    hasAppDownloaded,
+    cart,
+    realMoneySpent,
+    currentHaircutPrice,
+    targetStamps = 9,
+    todayStr,
+    appliedBenefit,
+  } = params;
+
+  const minServicePrice =
+    Number(currentHaircutPrice) > 0 ? Math.round(Number(currentHaircutPrice) * 100) / 100 : 140;
+
+  const isFreeCutRedemption = Boolean(
+    appliedBenefit?.benefitId === 'decimo_corte' ||
+      appliedBenefit?.benefitId === 'corte_gratis' ||
+      appliedBenefit?.folio?.startsWith('VA-CORTE')
+  );
+
+  if (!hasAppDownloaded) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: '0 SELLOS',
+      reason: 'Exclusivo para clientes con la App oficial instalada.',
+    };
+  }
+
+  if (isFreeCutRedemption) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption: true,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: 'CANJE 10.° CORTE',
+      reason: 'Canje de corte de cortesía activo (reinicia tarjeta a 0 sellos).',
+    };
+  }
+
+  const currStamps = Number(client?.cortes_acumulados ?? client?.cortesAcumulados ?? 0);
+  const goalStamps = Math.max(1, Number(targetStamps) || 9);
+
+  if (currStamps >= goalStamps) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption: false,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: true,
+      statusLabel: 'META COMPLETA (9/9)',
+      reason: 'El cliente ya tiene su corte gratis desbloqueado pendiente de canjear.',
+    };
+  }
+
+  // Verificar candado de 1 acreditación por día hábil operativo.
+  // Si `ultimo_sello_fecha` existe (incluso vacío ''), usamos ese campo exacto para no bloquear
+  // a quien solo compró un producto o ceja ($30) temprano y regresa más tarde por su corte.
+  const hasExplicitStampDateField =
+    client && typeof client.ultimo_sello_fecha === 'string';
+  const alreadyStampedToday = hasExplicitStampDateField
+    ? client.ultimo_sello_fecha === todayStr
+    : Boolean(client?.ultima_visita_fecha === todayStr && currStamps > 0);
+
+  if (alreadyStampedToday) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: true,
+      isFreeCutRedemption: false,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: '0 SELLOS (YA ABONADO HOY)',
+      reason: 'Ya recibió sello(s) en la jornada hábil de hoy. Próximo sello disponible mañana.',
+    };
+  }
+
+  const serviceItems = (Array.isArray(cart) ? cart : []).filter(
+    (it) => it && it.tipo === 'servicio' && (Number(it.cantidad) || 0) > 0
+  );
+
+  if (serviceItems.length === 0) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption: false,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: '0 SELLOS (SOLO PRODUCTOS)',
+      reason: 'La compra de productos no genera sellos de visita (sí suma AlfaCoins).',
+    };
+  }
+
+  let qualifyingServiceUnits = 0;
+  for (const item of serviceItems) {
+    const qty = Math.max(0, Math.floor(Number(item.cantidad) || 0));
+    if (qty <= 0) continue;
+    const grossLine = (Number(item.precio) || 0) * qty;
+    const discVal = Number(item.discountValue) || 0;
+    const lineDiscount =
+      item.discountType === 'percentage' ? (grossLine * discVal) / 100 : discVal;
+    const netLine = Math.max(0, Math.round((grossLine - lineDiscount) * 100) / 100);
+    const netUnitPrice = netLine / qty;
+
+    if (netUnitPrice + 0.005 >= minServicePrice) {
+      qualifyingServiceUnits += qty;
+    }
+  }
+
+  if (qualifyingServiceUnits <= 0) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits: 0,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption: false,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: `0 SELLOS (MÍN. $${minServicePrice} POR SERVICIO)`,
+      reason: `Ningún servicio individual alcanza la tarifa mínima de corte ($${minServicePrice} MXN). Servicios menores no son acumulables para sello.`,
+    };
+  }
+
+  const unitsBackedByRealMoney = Math.floor(
+    (Math.max(0, Number(realMoneySpent) || 0) + 0.005) / minServicePrice
+  );
+
+  if (unitsBackedByRealMoney <= 0) {
+    return {
+      stampsToAward: 0,
+      qualifyingServiceUnits,
+      minServicePrice,
+      alreadyStampedToday: false,
+      isFreeCutRedemption: false,
+      cappedByTicketLimit: false,
+      cappedByGoalLimit: false,
+      statusLabel: '0 SELLOS (PAGO CON MONEDERO)',
+      reason: `Para acreditar sello se requiere cubrir al menos $${minServicePrice} MXN con dinero real (efectivo, tarjeta o transferencia).`,
+    };
+  }
+
+  const eligibleBeforeCaps = Math.min(qualifyingServiceUnits, unitsBackedByRealMoney);
+  const afterTicketCap = Math.min(MAX_PASE_ALFA_STAMPS_PER_TICKET, eligibleBeforeCaps);
+  const remainingToGoal = Math.max(0, goalStamps - currStamps);
+  const stampsToAward = Math.min(afterTicketCap, remainingToGoal);
+
+  const cappedByTicketLimit = eligibleBeforeCaps > MAX_PASE_ALFA_STAMPS_PER_TICKET;
+  const cappedByGoalLimit = afterTicketCap > remainingToGoal;
+
+  return {
+    stampsToAward,
+    qualifyingServiceUnits,
+    minServicePrice,
+    alreadyStampedToday: false,
+    isFreeCutRedemption: false,
+    cappedByTicketLimit,
+    cappedByGoalLimit,
+    statusLabel: stampsToAward === 1 ? '+1 SELLO PASE ALFA' : `+${stampsToAward} SELLOS PASE ALFA`,
+    reason:
+      stampsToAward === 2
+        ? `2 servicios elegibles (>= $${minServicePrice} MXN c/u) en la misma visita familiar (máx. 2 por día hábil).`
+        : cappedByGoalLimit
+        ? `Completa su meta de ${goalStamps}/${goalStamps} sellos y desbloquea su 10.° corte gratis.`
+        : `1 servicio elegible (>= $${minServicePrice} MXN) acreditado automáticamente hoy.`,
+  };
+}
+
 
 

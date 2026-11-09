@@ -14,7 +14,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, X, Share2, Info, ShieldCheck, Phone, Mail } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, ArrowRight, X, Share2, Info, ShieldCheck, Phone, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig, checkClientBookingEligibility } from '@/lib/actions/booking';
@@ -145,6 +145,9 @@ export default function BookingPage() {
     const [configStep, setConfigStep] = useState(1);
     const [loadingSlots, setLoadingSlots] = useState(false);
     const [noCapablePros, setNoCapablePros] = useState(false);
+    const [loadingAlternatives, setLoadingAlternatives] = useState(false);
+    const [nextProSlot, setNextProSlot] = useState<{ date: string; displayDate: string; time: string } | null>(null);
+    const [otherProsWithSlots, setOtherProsWithSlots] = useState<{ pro: any; earliestSlot: string; slotsCount: number }[]>([]);
     const [clientDetails, setClientDetails] = useState({
         name: '',
         lastName: '',
@@ -753,6 +756,107 @@ export default function BookingPage() {
                     const availableTimes = Object.keys(newMap).sort();
                     setTempAvailableSlots(availableTimes);
                     setTempSlotMap(newMap);
+
+                    const targetProId = preSelectedProId || (capablePros.length === 1 ? capablePros[0].id : null);
+                    const targetPro = professionals.find(p => p.id === targetProId);
+                    if (availableTimes.length === 0 && targetProId && targetPro) {
+                        setLoadingAlternatives(true);
+                        setNextProSlot(null);
+                        setOtherProsWithSlots([]);
+
+                        (async () => {
+                            try {
+                                // 1. Otros barberos con turnos HOY en dateStr
+                                const otherCapable = professionals.filter(p =>
+                                    p.active &&
+                                    p.id !== targetProId &&
+                                    requiredServiceIds.every(sId => (p.services || []).includes(sId))
+                                );
+
+                                const otherPromises = otherCapable.map(async p => {
+                                    let pDur = 0;
+                                    if (activeConfigId === 'combined') {
+                                        pDur = cart.reduce((acc, item) => {
+                                            const customDur = item.service.durationPorProfesional?.[p.id];
+                                            return acc + Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                                        }, 0);
+                                    } else {
+                                        const item = cart.find(c => c.uniqueId === activeConfigId);
+                                        if (item) {
+                                            const customDur = item.service.durationPorProfesional?.[p.id];
+                                            pDur = Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                                        }
+                                    }
+                                    if (pDur === 0) pDur = 30;
+                                    const res = await getAvailableSlots({ date: dateStr, professionalId: p.id, durationMinutes: pDur }).catch(() => null);
+                                    const slots = (res && 'slots' in res && Array.isArray(res.slots)) ? res.slots : [];
+                                    return { pro: p, slots };
+                                });
+
+                                const otherRes = await Promise.all(otherPromises);
+                                const availableOthers = otherRes
+                                    .filter(r => r.slots && r.slots.length > 0)
+                                    .map(r => ({
+                                        pro: r.pro,
+                                        earliestSlot: r.slots[0],
+                                        slotsCount: r.slots.length
+                                    }));
+                                setOtherProsWithSlots(availableOthers);
+
+                                // 2. Horario más próximo con targetPro (próximos 10 días)
+                                let foundNext: { date: string; displayDate: string; time: string } | null = null;
+                                let tDur = 0;
+                                if (activeConfigId === 'combined') {
+                                    tDur = cart.reduce((acc, item) => {
+                                        const customDur = item.service.durationPorProfesional?.[targetProId];
+                                        return acc + Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                                    }, 0);
+                                } else {
+                                    const item = cart.find(c => c.uniqueId === activeConfigId);
+                                    if (item) {
+                                        const customDur = item.service.durationPorProfesional?.[targetProId];
+                                        tDur = Number(customDur !== undefined ? customDur : (item.service.duration || 0));
+                                    }
+                                }
+                                if (tDur === 0) tDur = 30;
+
+                                const baseDate = tempDate || new Date();
+                                const dayNames = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+                                for (let offset = 1; offset <= 10; offset++) {
+                                    const nextDateObj = addDays(baseDate, offset);
+                                    const nextDateStr = format(nextDateObj, 'yyyy-MM-dd');
+                                    const dayName = dayNames[nextDateObj.getDay()];
+
+                                    if (targetPro.schedule && targetPro.schedule[dayName]?.enabled === false) {
+                                        continue;
+                                    }
+
+                                    const nextRes = await getAvailableSlots({ date: nextDateStr, professionalId: targetProId, durationMinutes: tDur }).catch(() => null);
+                                    if (nextRes && 'slots' in nextRes && Array.isArray(nextRes.slots) && nextRes.slots.length > 0) {
+                                        const isTomorrow = offset === 1;
+                                        const dateFormatted = isTomorrow
+                                            ? 'Mañana'
+                                            : format(nextDateObj, "EEEE d 'de' MMMM", { locale: es }).replace(/^\w/, c => c.toUpperCase());
+                                        foundNext = {
+                                            date: nextDateStr,
+                                            displayDate: dateFormatted,
+                                            time: nextRes.slots[0],
+                                        };
+                                        break;
+                                    }
+                                }
+                                setNextProSlot(foundNext);
+                            } catch (altErr) {
+                                console.warn('Error loading smart alternatives:', altErr);
+                            } finally {
+                                setLoadingAlternatives(false);
+                            }
+                        })();
+                    } else {
+                        setLoadingAlternatives(false);
+                        setNextProSlot(null);
+                        setOtherProsWithSlots([]);
+                    }
 
                     if (availableTimes.length === 0 && errorFound) {
                         // Handle Server Action mismatch (deployment) errors
@@ -1486,7 +1590,7 @@ export default function BookingPage() {
                                     <h2 id="productos" className="text-xl font-bold tracking-tight text-foreground mb-3 mt-8 pt-4 border-t border-border/60 scroll-mt-24">Selecciona tus productos</h2>
                                     <div className="grid grid-cols-1 gap-3.5 sm:gap-4 mb-4">
                                         {productsData && productsData.length > 0 ? (
-                                            productsData.filter((p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false).map((product: any) => {
+                                            productsData.filter((p: any) => p.active && Number(p.stock) > 0 && p.visible_en_web !== false).map((product: any) => {
                                                 const count = getProductCount(product.id);
                                                 return (
                                                     <Card key={product.id} className={cn("rounded-2xl border transition-all duration-200 hover:shadow-md", count > 0 ? "border-blue-500 bg-blue-500/5 shadow-xs" : "border-border/70 hover:border-blue-500/50")}>
@@ -1969,9 +2073,84 @@ export default function BookingPage() {
                                                 </div>
                                             </div>
                                         ) : tempAvailableSlots.length === 0 ? (
-                                            <div className="text-center p-8 border border-dashed rounded-2xl bg-muted/10 border-border/60">
+                                            <div className="text-center p-6 border border-dashed rounded-2xl bg-muted/10 border-border/60">
                                                 <p className="text-muted-foreground text-sm">No hay horarios disponibles para esta fecha.</p>
-                                                <Button variant="link" className="text-blue-500 font-semibold cursor-pointer mt-2" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
+                                                <Button variant="link" className="text-blue-500 font-semibold cursor-pointer mt-1" onClick={() => setConfigStep(0)}>Cambiar Fecha</Button>
+
+                                                {/* Alternativas inteligentes */}
+                                                {loadingAlternatives ? (
+                                                    <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
+                                                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                                        <span>Buscando mejores opciones de horario...</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-4 space-y-3 text-left">
+                                                        {/* Opción A: Próximo horario con el profesional actual */}
+                                                        {nextProSlot && (
+                                                            <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100">
+                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">
+                                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                                    <span>Horario más próximo con {professionals.find(p => p.id === preSelectedProId)?.publicName || professionals.find(p => p.id === preSelectedProId)?.name || 'tu barbero'}:</span>
+                                                                </div>
+                                                                <p className="text-sm font-bold my-1 text-foreground">
+                                                                    {nextProSlot.displayDate} a las {nextProSlot.time} hrs
+                                                                </p>
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs h-8 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                    onClick={() => {
+                                                                        const [y, m, d] = nextProSlot.date.split('-').map(Number);
+                                                                        const parsedDate = new Date(y, m - 1, d);
+                                                                        setTempDate(parsedDate);
+                                                                        setTempTime(nextProSlot.time);
+                                                                        if (preSelectedProId) {
+                                                                            handleProSelected(preSelectedProId, nextProSlot.time, true);
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <span>Agendar en este horario</span>
+                                                                    <ArrowRight className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Opción B: Otros barberos con turnos HOY */}
+                                                        {otherProsWithSlots.length > 0 && (
+                                                            <div className="pt-2">
+                                                                <p className="text-xs font-bold text-foreground mb-2">Para el día de hoy tenemos espacio con:</p>
+                                                                <div className="space-y-2">
+                                                                    {otherProsWithSlots.map(({ pro, earliestSlot, slotsCount }) => (
+                                                                        <div key={pro.id} className="p-2.5 rounded-xl border border-border/70 bg-card flex items-center justify-between gap-2">
+                                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                                <div className="h-8 w-8 rounded-full overflow-hidden bg-muted border border-border shrink-0 flex items-center justify-center">
+                                                                                    {pro.avatarUrl ? (
+                                                                                        <img src={pro.avatarUrl} alt={pro.publicName || pro.name} className="h-full w-full object-cover" />
+                                                                                    ) : (
+                                                                                        <User className="w-4 h-4 text-muted-foreground" />
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <p className="text-xs font-bold truncate text-foreground">{pro.publicName || pro.name}</p>
+                                                                                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Disponible hoy desde {earliestSlot} hrs ({slotsCount} {slotsCount === 1 ? 'turno' : 'turnos'})</p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <Button
+                                                                                size="sm"
+                                                                                variant="outline"
+                                                                                className="h-7 text-xs px-2.5 rounded-lg border-blue-500/50 text-blue-600 hover:bg-blue-500/10 cursor-pointer shrink-0 font-medium"
+                                                                                onClick={() => {
+                                                                                    setPreSelectedProId(pro.id);
+                                                                                }}
+                                                                            >
+                                                                                Elegir a {pro.publicName || pro.name}
+                                                                            </Button>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
                                             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 sm:gap-3 overflow-y-auto max-h-[320px] p-1">

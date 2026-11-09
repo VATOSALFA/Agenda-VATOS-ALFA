@@ -21,6 +21,7 @@ import {
   Bell,
   Pencil,
   Scissors,
+  ShoppingBag,
   Calendar as CalendarIcon,
   Tag,
   Clock,
@@ -1373,59 +1374,110 @@ export function ReservationDetailModal({
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-xl border bg-card space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
-                    <Scissors className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Servicios ({reservation.items?.length || 1})
-                  </p>
-                  <span className="text-xs font-bold text-foreground font-sans">
-                    ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
-                  </span>
-                </div>
-                <ul className="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
-                  {reservation.items && reservation.items.length > 0 ? (() => {
-                    let runningStart = reservation.hora_inicio || '';
-                    return reservation.items.map((i, idx) => {
-                      const prof = professionals?.find(p => p.id === i.barbero_id);
-                      const dur = Number((i as any).duracion) || 60;
-                      const itemStart = (i as any).hora_inicio || runningStart || reservation.hora_inicio || '';
-                      const itemEnd = (i as any).hora_fin || (reservation.items!.length === 1 && reservation.hora_fin ? reservation.hora_fin : addMinutesToTimeStr(itemStart, dur));
-                      runningStart = itemEnd || runningStart;
+              {(() => {
+                const rawItems = reservation.items || [];
+                const serviceItems = rawItems.filter(i => (i as any).tipo !== 'producto');
+                const productItemsFromItems = rawItems.filter(i => (i as any).tipo === 'producto');
+                const fallbackProducts = (reservation as any).productos || [];
+                const finalProductItems = productItemsFromItems.length > 0 ? productItemsFromItems : fallbackProducts;
 
-                      return (
-                        <li key={idx} className="flex justify-between items-start py-1 border-b last:border-b-0 border-border/50">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium text-foreground">{i.nombre || i.servicio}</span>
-                            {itemStart && (
+                const servicesSubtotal = serviceItems.reduce((sum: number, s: any) => sum + (Number((s as any).precio || (s as any).subtotal) || 0), 0);
+                const productsSubtotal = finalProductItems.reduce((sum: number, p: any) => sum + ((Number((p as any).precio || (p as any).public_price) || 0) * (Number((p as any).cantidad) || 1)), 0);
+
+                return (
+                  <div className="space-y-3">
+                    {/* SERVICIOS */}
+                    <div className="p-3.5 rounded-xl border bg-card space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
+                          <Scissors className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Servicios ({serviceItems.length > 0 ? serviceItems.length : 1})
+                        </p>
+                        <span className="text-xs font-bold text-foreground font-sans">
+                          ${Number(finalProductItems.length > 0 && servicesSubtotal > 0 ? servicesSubtotal : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                        </span>
+                      </div>
+                      <ul className="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
+                        {serviceItems.length > 0 ? (() => {
+                          let runningStart = reservation.hora_inicio || '';
+                          return serviceItems.map((i, idx) => {
+                            const prof = professionals?.find(p => p.id === i.barbero_id) || professionals?.find(p => p.id === reservation.barbero_id);
+                            const dur = Number((i as any).duracion) || 30;
+                            const itemStart = (i as any).hora_inicio || runningStart || reservation.hora_inicio || '';
+                            const itemEnd = (i as any).hora_fin || (serviceItems.length === 1 && reservation.hora_fin ? reservation.hora_fin : addMinutesToTimeStr(itemStart, dur));
+                            runningStart = itemEnd || runningStart;
+
+                            return (
+                              <li key={idx} className="flex justify-between items-start py-1 border-b last:border-b-0 border-border/50">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium text-foreground">{i.nombre || (i as any).servicio}</span>
+                                  {itemStart && (
+                                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>
+                                        {itemStart} - {itemEnd} ({dur} min)
+                                      </span>
+                                    </span>
+                                  )}
+                                </div>
+                                {prof && (
+                                  <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                                    {prof.publicName || prof.name}
+                                  </span>
+                                )}
+                              </li>
+                            );
+                          });
+                        })() : (
+                          <li className="flex flex-col gap-0.5 py-1">
+                            <span className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</span>
+                            {reservation.hora_inicio && (
                               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span>
-                                  {itemStart} - {itemEnd}
-                                </span>
+                                <span>{reservation.hora_inicio} - {reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, (reservation as any).duracion || reservation.duration || 30)}</span>
                               </span>
                             )}
-                          </div>
-                          {prof && (
-                            <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded ml-2 shrink-0">
-                              {prof.publicName || prof.name}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    });
-                  })() : (
-                    <li className="flex flex-col gap-0.5 py-1">
-                      <span className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</span>
-                      {reservation.hora_inicio && (
-                        <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                          <span>{reservation.hora_inicio} - {reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, 60)}</span>
-                        </span>
-                      )}
-                    </li>
-                  )}
-                </ul>
-              </div>
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+
+                    {/* PRODUCTOS SEPARADOS */}
+                    {finalProductItems.length > 0 && (
+                      <div className="p-3.5 rounded-xl border bg-card space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
+                            <ShoppingBag className="w-4 h-4 text-amber-500" /> Productos Agregados ({finalProductItems.length})
+                          </p>
+                          <span className="text-xs font-bold text-foreground font-sans">
+                            ${Number(productsSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                          </span>
+                        </div>
+                        <ul className="space-y-1.5 text-xs max-h-32 overflow-y-auto pr-1">
+                          {finalProductItems.map((p: any, idx: number) => {
+                            const qty = Number(p.cantidad) || 1;
+                            const unitPrice = Number(p.precio || p.public_price || 0);
+                            return (
+                              <li key={idx} className="flex justify-between items-center py-1 border-b last:border-b-0 border-border/50">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium text-foreground">
+                                    {qty > 1 ? `${qty}x ` : ''}{p.nombre || p.name || 'Producto'}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">
+                                    Entrega al finalizar cita en sucursal
+                                  </span>
+                                </div>
+                                <span className="text-xs font-semibold text-foreground">
+                                  ${(unitPrice * qty).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 4. DESGLOSE FINANCIERO / ANTICIPO */}

@@ -107,7 +107,7 @@ export function AlfaProductsSection({
   className,
 }: AlfaProductsSectionProps) {
   const visibleProducts = products.filter(
-    (p: any) => p.active && (p.stock > 0 || p.stock === undefined) && p.visible_en_web !== false
+    (p: any) => p.active && Number(p.stock) > 0 && p.visible_en_web !== false
   );
 
   if (visibleProducts.length === 0) return null;

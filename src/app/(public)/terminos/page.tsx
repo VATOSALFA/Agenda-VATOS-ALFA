@@ -29,9 +29,9 @@ export default function TerminosPage() {
         <LegalPageShell
             activeTab="terminos"
             title="Términos y Condiciones de Servicio"
-            subtitle="Lineamientos claros sobre nuestra política de puntualidad, anticipos para apartado de agenda, cancelaciones y garantías de calidad en todas nuestras citas."
+            subtitle="Lineamientos claros sobre nuestra política de puntualidad, anticipos para apartado de agenda, cancelaciones, programa de lealtad Pase Alfa y garantías de calidad."
             badgeText="TÉRMINOS Y CONDICIONES • VIGENCIA 2026"
-            lastUpdated="Octubre 2026"
+            lastUpdated="Noviembre 2026"
             companyName={companyName}
             companyEmail={companyEmail}
             companyPhone={companyPhone}
@@ -89,6 +89,32 @@ export default function TerminosPage() {
                             </li>
                             <li>
                                 <strong>Cancelaciones tardías o No Show:</strong> Las cancelaciones solicitadas con menos de 2 horas o la inasistencia causarán la pérdida del anticipo como compensación por el tiempo reservado del profesional.
+                            </li>
+                        </ul>
+                    </section>
+
+                    <section className="space-y-3 p-5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-border">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                            5. PROGRAMA DE LEALTAD &ldquo;PASE ALFA CLUB&rdquo; Y REGLAS DE SELLOS
+                        </h3>
+                        <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                            <li>
+                                <strong>Exclusivo en App Móvil Oficial:</strong> La acumulación de sellos de visita (&ldquo;La Décima va por la Casa&rdquo;) y AlfaCoins es exclusiva para clientes con cuenta activa e instalada en la aplicación móvil oficial de {companyName}. El portal web es informativo y de agendamiento.
+                            </li>
+                            <li>
+                                <strong>Acreditación Automática al Liquidar en Caja:</strong> Los sellos y AlfaCoins no se registran por escaneo previo ni de forma manual; se acreditan únicamente de manera automática por el sistema en el instante en que recepción confirma el pago efectivo del servicio en Caja.
+                            </li>
+                            <li>
+                                <strong>Tarifa Mínima Dinámica por Servicio Individual:</strong> Para generar un (1) sello válido, el cliente deberá liquidar con dinero real un servicio individual de barbería cuyo importe neto sea igual o superior a la tarifa regular vigente del servicio de <em>Corte de cabello</em> al momento de la visita. Servicios menores (ej. arreglo de ceja), sumas de servicios menores que individualmente no alcancen dicha tarifa, o la compra de productos de tienda no generan sellos de visita.
+                            </li>
+                            <li>
+                                <strong>Visitas con Hijos o Acompañantes (Máximo 2 Sellos por Ticket):</strong> Cuando el titular acuda con su hijo o acompañante en la misma visita y liquide en un mismo ticket dos (2) o más servicios individuales que cumplan cada uno con la tarifa mínima vigente de corte de cabello, el sistema acreditará hasta un máximo de dos (2) sellos en esa operación. Si solo uno de los servicios cumple la tarifa mínima (ej. corte de cabello + arreglo de ceja), se acreditará únicamente un (1) sello; si ninguno la alcanza individualmente, no se generarán sellos.
+                            </li>
+                            <li>
+                                <strong>Una Acreditación por Día Hábil Operativo:</strong> Cada cuenta podrá recibir una (1) sola acreditación de sellos por jornada hábil operativa de la barbería (de apertura a cierre del establecimiento). Nuevas acreditaciones de sellos estarán disponibles a partir del siguiente día hábil operativo.
+                            </li>
+                            <li>
+                                <strong>Regalo de Cumpleaños (Antigüedad Mínima de 5 Visitas Válidas):</strong> Para desbloquear y canjear el beneficio de Regalo de Cumpleaños durante el mes calendario de nacimiento registrado en su perfil, el titular deberá contar con al menos cinco (5) visitas válidas previas pagadas cuyo consumo individual en servicio haya sido igual o superior a la tarifa regular vigente del <em>Corte de cabello</em> al momento de cada visita (excluyendo servicios menores como arreglo de ceja o compras de puros productos). Se otorga un máximo de un (1) regalo por cliente por año calendario mediante escaneo de código QR oficial en recepción, no siendo retroactivo para clientes recién registrados ni transferible a meses posteriores.
                             </li>
                         </ul>
                     </section>

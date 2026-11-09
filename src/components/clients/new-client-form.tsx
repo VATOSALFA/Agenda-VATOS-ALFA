@@ -41,6 +41,7 @@ import {
   handlePhoneInputChange,
   isValidPhoneNumber,
 } from '@/lib/phone-utils';
+import { normalizeBirthdayToISO } from '@/lib/benefit-security';
 
 interface ClientSettings {
   autoClientNumber?: boolean;
@@ -259,11 +260,16 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
   useEffect(() => {
     if (isEditMode && client) {
       let birthDate: Date | null = null;
-      if (client.fecha_nacimiento) {
-        if (typeof client.fecha_nacimiento === 'string') {
-          birthDate = parseISO(client.fecha_nacimiento);
-        } else if ((client.fecha_nacimiento as any).seconds) {
-          birthDate = new Date((client.fecha_nacimiento as any).seconds * 1000);
+      const rawBday = client.fecha_nacimiento || (client as any).cumpleanos || null;
+      if (rawBday) {
+        const normalizedIso = normalizeBirthdayToISO(rawBday);
+        if (normalizedIso) {
+          birthDate = parseISO(normalizedIso);
+        } else if (typeof rawBday === 'string') {
+          const parsed = parseISO(rawBday);
+          if (isValid(parsed)) birthDate = parsed;
+        } else if ((rawBday as any).seconds) {
+          birthDate = new Date((rawBday as any).seconds * 1000);
         }
       }
       const parsedPhone = parseStoredPhone(client.telefono);
@@ -321,13 +327,15 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     }
 
 
-    const dataToSave: Partial<Client> = {
+    const isoBirthStr = data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null;
+    const dataToSave: Partial<Client> & Record<string, any> = {
       nombre: data.nombre,
       apellido: data.apellido,
       telefono: (isEditMode && !canViewPhone && client) ? (client.telefono || '') : data.telefono,
       correo: data.correo,
       notas: data.notas,
-      fecha_nacimiento: data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null,
+      fecha_nacimiento: isoBirthStr,
+      cumpleanos: isoBirthStr,
     };
 
     if (isEditMode && client) {

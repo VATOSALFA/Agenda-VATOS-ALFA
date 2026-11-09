@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { PlusCircle, Search, Upload, Combine, Download, ChevronDown, AlertTriangle, Edit, ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, User, UserPlus, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Mail, MessageCircle, SlidersHorizontal, ShieldAlert, ShieldCheck, Filter, Loader2, Smartphone, Check } from "lucide-react";
 import { validateAndConsumeAuthCode } from "@/lib/auth-code-validator";
 import { isClientWithApp, isClientActiveInApp, getClientLastAppAccess, getClientAppInfo } from "@/lib/client-app-helper";
+import { parseBirthMonthAndDay } from "@/lib/benefit-security";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useFirestoreQuery } from "@/hooks/use-firestore";
 import type { Client, Local, Reservation, Sale, Profesional } from "@/lib/types";
@@ -908,12 +909,11 @@ export default function ClientsPage() {
       if (activeFilters.birthdayMonth !== 'todos') {
         const monthToFilter = parseInt(activeFilters.birthdayMonth, 10);
         filtered = filtered.filter(client => {
-          if (!client.fecha_nacimiento) return false;
-          // Optimization: Check type once (most clients follow same pattern)
-          const birthDate = typeof client.fecha_nacimiento === 'string'
-            ? parseISO(client.fecha_nacimiento)
-            : new Date((client.fecha_nacimiento as Timestamp).seconds * 1000);
-          return getMonth(birthDate) === monthToFilter;
+          const rawBday = client.fecha_nacimiento || (client as any).cumpleanos;
+          if (!rawBday) return false;
+          const parsed = parseBirthMonthAndDay(rawBday);
+          if (!parsed) return false;
+          return parsed.month - 1 === monthToFilter;
         });
       }
 

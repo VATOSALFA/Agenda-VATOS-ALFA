@@ -68,13 +68,15 @@ import {
     validateInvitedClientEligibility,
     REFERRAL_DISCOUNT_PERCENT,
     REFERRAL_HOST_REWARD_COINS,
-    REFERRAL_MIN_PURCHASE_MXN,
+    calculateReferralMinNetPurchase,
+    evaluateReferralPurchaseEligibility,
     validateJuntosSchedule,
     getCurrentHaircutPrice,
     calculateJuntosMinPurchase,
     calculateJuntosRewardCoins,
     JUNTOS_REWARD_COINS_PER_PERSON,
     evaluateClientAlfaTier,
+    evaluatePaseAlfaStampsForSale,
 } from '@/lib/benefit-security';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { useLocal } from '@/contexts/local-context';
@@ -220,9 +222,22 @@ const ResumenCarrito = ({
     serviceSellers, productSellers, client, hasAppDownloaded, redeemPoints, setRedeemPoints,
     pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins,
     propina, appliedBenefit, onApplyReferralCode, onRemoveBenefit, alfaCoinUnitValue, clientLevelInfo,
-    juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140,
+    juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140, targetStampsConfig = 9,
 }: any) => {
     const [referralInput, setReferralInput] = useState('');
+    const nowPreview = new Date();
+    const todayPreviewStr = `${nowPreview.getFullYear()}-${String(nowPreview.getMonth() + 1).padStart(2, '0')}-${String(nowPreview.getDate()).padStart(2, '0')}`;
+    const realMoneyPreview = Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100);
+    const stampPreview = evaluatePaseAlfaStampsForSale({
+        client,
+        hasAppDownloaded: Boolean(hasAppDownloaded),
+        cart,
+        realMoneySpent: realMoneyPreview,
+        currentHaircutPrice,
+        targetStamps: targetStampsConfig,
+        todayStr: todayPreviewStr,
+        appliedBenefit,
+    });
     return (
     <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-auto md:h-full md:min-h-0 shrink-0 md:shrink overflow-hidden">
         {/* Cabecera del Ticket */}
@@ -320,11 +335,11 @@ const ResumenCarrito = ({
                                         <Select onValueChange={(value) => updateItemProfessional(item.uniqueId, value)} value={item.barbero_id}>
                                             <SelectTrigger className={cn(
                                                 "h-7 text-xs rounded-lg bg-muted/20 border-border/60",
-                                                !item.barbero_id && "border-red-500/70 text-red-400 font-semibold shadow-2xs"
+                                                !item.barbero_id && item.tipo === 'servicio' && "border-red-500/70 text-red-400 font-semibold shadow-2xs"
                                             )}>
                                                 <div className="flex items-center gap-1.5 truncate">
                                                     <UserIcon className="h-3 w-3 text-slate-400 shrink-0" />
-                                                    <SelectValue placeholder="Asignar barbero *" />
+                                                    <SelectValue placeholder={item.tipo === 'producto' ? "Vendedor (opcional)" : "Asignar barbero *"} />
                                                 </div>
                                             </SelectTrigger>
                                             <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
@@ -380,16 +395,31 @@ const ResumenCarrito = ({
 
                         {/* Tarjeta de Lealtad y Operación */}
                         {hasAppDownloaded ? (
-                            <div className="p-3 rounded-xl border border-border/50 bg-muted/20 space-y-1.5 text-xs">
-                                <div className="flex items-center justify-between text-foreground font-semibold">
+                            <div className="p-3 rounded-xl border border-border/50 bg-muted/20 space-y-2 text-xs">
+                                <div className="flex items-center justify-between text-foreground font-semibold gap-2">
                                     <span className="flex items-center gap-1.5">
                                         <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
                                     </span>
-                                    <span className="text-[#C5A880] font-bold">+{Math.max(1, Math.floor(total))} ALFA COINS</span>
+                                    <span className="text-[#C5A880] font-bold">+{total > 0 ? Math.floor(total) : 0} ALFA COINS</span>
                                 </div>
-                                <p className="text-[11px] text-muted-foreground leading-snug">
-                                    Registra comisión directa al profesional asignado y acredita puntos de lealtad en la App del cliente.
-                                </p>
+                                <div className="pt-1.5 border-t border-border/40 flex flex-col gap-1">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                                            <Scissors className="h-3 w-3 text-blue-400" /> La Décima va por la Casa:
+                                        </span>
+                                        <span className={cn(
+                                            "text-[10px] font-bold px-2 py-0.5 rounded-md border font-sans",
+                                            stampPreview.stampsToAward > 0
+                                                ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                                                : "bg-slate-500/15 text-slate-300 border-slate-500/30"
+                                        )}>
+                                            {stampPreview.statusLabel}
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground leading-snug">
+                                        {stampPreview.reason}
+                                    </p>
+                                </div>
                             </div>
                         ) : null}
                     </>
@@ -470,9 +500,17 @@ const ResumenCarrito = ({
                                         Anfitrión: <span className="text-foreground font-semibold">{appliedBenefit.referrerName}</span> {appliedBenefit.referralCode ? `(${appliedBenefit.referralCode})` : ''}
                                     </p>
                                     <p className="text-[10px] text-blue-400 font-medium font-sans">
-                                        {total >= REFERRAL_MIN_PURCHASE_MXN
-                                            ? `✓ Compra >= $${formatMoney(REFERRAL_MIN_PURCHASE_MXN)}: Anfitrión recibirá +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`
-                                            : `⚠️ Requiere total >= $${formatMoney(REFERRAL_MIN_PURCHASE_MXN)} MXN para acreditar +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`}
+                                        {(() => {
+                                            const refPreview = evaluateReferralPurchaseEligibility({
+                                                subtotal: Number(subtotal || 0),
+                                                realMoneyPaid: realMoneyPreview,
+                                                currentHaircutPrice,
+                                                cart,
+                                            });
+                                            return refPreview.isEligible
+                                                ? `✓ Consumo >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)}): Anfitrión recibirá +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`
+                                                : `⚠️ Requiere consumo en servicios >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)} MXN antes de desc.) para acreditar +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`;
+                                        })()}
                                     </p>
                                 </div>
                             ) : appliedBenefit.isJuntosBenefit ? (
@@ -1534,7 +1572,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 referrerPhone: hostClient.telefono || '',
                 discount: REFERRAL_DISCOUNT_PERCENT,
                 rewardCoins: REFERRAL_HOST_REWARD_COINS,
-                minPurchase: REFERRAL_MIN_PURCHASE_MXN,
+                minPurchase: calculateReferralMinNetPurchase(currentHaircutPrice),
                 isReferralBlocked: false,
             });
 
@@ -1543,7 +1581,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 description: `Anfitrión: ${hostFullName}. Se aplicó ${REFERRAL_DISCOUNT_PERCENT}% de descuento en los servicios del nuevo cliente.`,
             });
         },
-        [clients, selectedClient, toast]
+        [clients, selectedClient, currentHaircutPrice, toast]
     );
 
     // Auto-detectar si el cliente seleccionado tiene un registro grupal pre-verificado de "Juntos es Mejor" (Tickets Separados) hoy
@@ -2034,14 +2072,71 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         updatePayload.puntos_lealtad = increment(deltaCoins);
                     }
 
+                    const currStamps = Number(targetClient.cortes_acumulados ?? targetClient.cortesAcumulados ?? 0);
+                    let nextStamps = currStamps;
+                    let stampAdded = false;
+
+                    const stampEvaluation = evaluatePaseAlfaStampsForSale({
+                        client: targetClient,
+                        hasAppDownloaded: true,
+                        cart,
+                        realMoneySpent,
+                        currentHaircutPrice,
+                        targetStamps: targetStampsConfig,
+                        todayStr,
+                        appliedBenefit,
+                    });
+                    const stampsToAward = stampEvaluation.stampsToAward;
+
                     if (isFreeCutRedemption) {
                         updatePayload.cortes_acumulados = 0;
                         updatePayload.corte_gratis_disponible = false;
-                    } else if (visitDelta > 0 && realMoneySpent > 0) {
-                        const currStamps = Number(targetClient.cortes_acumulados ?? targetClient.cortesAcumulados ?? 0);
-                        const nextStamps = currStamps + 1;
+                        updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
+                        nextStamps = 0;
+                    } else if (stampsToAward > 0) {
+                        nextStamps = Math.min(targetStampsConfig, currStamps + stampsToAward);
                         updatePayload.cortes_acumulados = nextStamps;
                         updatePayload.corte_gratis_disponible = nextStamps >= targetStampsConfig;
+                        updatePayload.ultimo_sello_fecha = todayStr;
+                        updatePayload.visitas_elegibles_historicas = increment(1);
+                        stampAdded = true;
+                    } else {
+                        if (
+                            stampEvaluation.qualifyingServiceUnits > 0 &&
+                            !stampEvaluation.alreadyStampedToday &&
+                            realMoneySpent + 0.01 >= stampEvaluation.minServicePrice
+                        ) {
+                            updatePayload.visitas_elegibles_historicas = increment(1);
+                        }
+                        // Preservar explícitamente el campo ('' si nunca ha acreditado sello hoy)
+                        // para que un servicio menor (ej. ceja $30) o compra de producto no bloquee
+                        // un corte elegible más tarde ese mismo día.
+                        updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
+                    }
+
+                    if (stampAdded || pointsEarned > 0) {
+                        const prevCoins = Number(
+                            targetClient.alfaCoins ??
+                            targetClient.alfa_coins ??
+                            targetClient.puntos_lealtad ??
+                            targetClient.puntosLealtad ??
+                            targetClient.puntos ??
+                            0
+                        );
+                        const newCoinsTotal = Math.max(0, prevCoins + deltaCoins);
+                        updatePayload.recompensa_pendiente = {
+                            id: `reward_${Date.now()}`,
+                            sello_agregado: stampAdded,
+                            sellos_ganados: stampsToAward,
+                            sellos_anteriores: currStamps,
+                            sellos_actuales: nextStamps,
+                            meta_sellos: targetStampsConfig,
+                            corte_gratis_desbloqueado: nextStamps >= targetStampsConfig,
+                            coins_ganadas: pointsEarned,
+                            coins_anteriores: prevCoins,
+                            coins_actuales: newCoinsTotal,
+                            fecha: new Date().toISOString(),
+                        };
                     }
                 }
 
@@ -2197,20 +2292,43 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             }
         }
 
-        if (appliedBenefit?.folio && db && !appliedBenefit?.isReferralBlocked && !appliedBenefit?.isJuntosBenefit) {
+        if (appliedBenefit?.folio && db && !appliedBenefit?.isReferralBlocked && !appliedBenefit?.isJuntosBenefit && !appliedBenefit?.isBlocked) {
             try {
+                const currentYear = new Date().getFullYear();
+                const targetClientIdForBenefit = clientId || selectedClient?.id || null;
+                const isBirthdayApplied = Boolean(
+                    appliedBenefit.isBirthdayBenefit ||
+                    appliedBenefit.benefitId === 'regalo_cumpleanos' ||
+                    String(appliedBenefit.folio || '').includes('CUMPLE') ||
+                    String(appliedBenefit.benefitTitle || '').toLowerCase().includes('cumple')
+                );
+                const invitedFriendName = selectedClient
+                    ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim()
+                    : '';
+                const referralEval = evaluateReferralPurchaseEligibility({
+                    subtotal: Number(subtotal || 0),
+                    realMoneyPaid: Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100),
+                    currentHaircutPrice,
+                    cart,
+                });
                 const isEligibleReferralReward =
                     Boolean(appliedBenefit.isReferralBenefit) &&
                     Boolean(appliedBenefit.referrerId) &&
                     appliedBenefit.referrerId !== clientId &&
-                    total >= REFERRAL_MIN_PURCHASE_MXN;
+                    referralEval.isEligible;
 
                 await setDoc(doc(db, 'canjes_beneficios', appliedBenefit.folio), {
+                    folio: appliedBenefit.folio,
+                    benefitId: isBirthdayApplied ? 'regalo_cumpleanos' : (appliedBenefit.benefitId || 'beneficio_alfa'),
+                    benefitTitle: appliedBenefit.benefitTitle || 'Beneficio Pase Alfa',
                     estado: 'canjeado',
+                    anio: currentYear,
                     utilizado_en_venta: true,
+                    canjeadoEn: Timestamp.now(),
+                    fechaCanje: Timestamp.now(),
                     fecha_aplicacion: Timestamp.now(),
-                    clienteId: clientId || selectedClient?.id || null,
-                    clienteNombre: selectedClient ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim() : null,
+                    clienteId: targetClientIdForBenefit,
+                    clienteNombre: invitedFriendName || null,
                     totalVenta: total,
                     ...(appliedBenefit.isReferralBenefit ? {
                         isReferralBenefit: true,
@@ -2218,10 +2336,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         referrerId: appliedBenefit.referrerId || null,
                         referrerName: appliedBenefit.referrerName || null,
                         discountPercentApplied: REFERRAL_DISCOUNT_PERCENT,
+                        haircutPriceApplied: referralEval.requiredGrossService,
+                        requiredMinNetPaid: referralEval.requiredNetPaid,
                         rewardCoins: isEligibleReferralReward ? REFERRAL_HOST_REWARD_COINS : 0,
                         recompensaAcreditada: isEligibleReferralReward,
                     } : {})
                 }, { merge: true });
+
+                // Si es beneficio de cumpleaños aplicado en Caja, bloquear en el perfil del cliente hasta el siguiente año calendario
+                if (isBirthdayApplied && targetClientIdForBenefit) {
+                    await updateDoc(doc(db, 'clientes', targetClientIdForBenefit), {
+                        ultimo_canje_cumpleanos_anio: currentYear,
+                        ultimo_canje_cumpleanos_folio: appliedBenefit.folio,
+                        fecha_ultimo_canje_cumpleanos: Timestamp.now(),
+                        actualizado_en: Timestamp.now(),
+                    });
+                }
 
                 // Marcar al cliente nuevo como referido para impedir que vuelva a usar otro código en el futuro
                 if (appliedBenefit.isReferralBenefit && clientId) {
@@ -2234,9 +2364,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     });
                 }
 
-                // Si es un beneficio de referido válido y la venta cumple el mínimo ($160 MXN), acreditar 500 Alfa Coins al anfitrión
+                // Si es un beneficio de referido válido y la compra cumple el equivalente a 1 Corte vigente,
+                // acreditar 500 Alfa Coins al anfitrión y registrar su notificación + animación en la App Móvil
                 if (isEligibleReferralReward) {
                     const referrerRef = doc(db, 'clientes', appliedBenefit.referrerId);
+                    const referrerSnap = await getDoc(referrerRef);
+                    const hostData = referrerSnap.exists() ? referrerSnap.data() : {};
+                    const prevHostCoins = Number(
+                        hostData?.alfaCoins ??
+                        hostData?.alfa_coins ??
+                        hostData?.puntos_lealtad ??
+                        hostData?.puntosLealtad ??
+                        hostData?.puntos ??
+                        0
+                    );
+                    const hostCurrStamps = Number(
+                        hostData?.cortes_acumulados ?? hostData?.cortesAcumulados ?? 0
+                    );
+
                     await updateDoc(referrerRef, {
                         puntos: increment(REFERRAL_HOST_REWARD_COINS),
                         alfaCoins: increment(REFERRAL_HOST_REWARD_COINS),
@@ -2244,10 +2389,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         puntosLealtad: increment(REFERRAL_HOST_REWARD_COINS),
                         puntos_lealtad: increment(REFERRAL_HOST_REWARD_COINS),
                         amigos_referidos: increment(1),
+                        recompensa_pendiente: {
+                            id: `reward_ref_${Date.now()}`,
+                            tipo_recompensa: 'referido',
+                            ...(invitedFriendName ? { amigo_referido_nombre: invitedFriendName } : {}),
+                            sello_agregado: false,
+                            sellos_ganados: 0,
+                            sellos_anteriores: hostCurrStamps,
+                            sellos_actuales: hostCurrStamps,
+                            meta_sellos: targetStampsConfig,
+                            corte_gratis_desbloqueado: Boolean(hostData?.corte_gratis_disponible),
+                            coins_ganadas: REFERRAL_HOST_REWARD_COINS,
+                            coins_anteriores: prevHostCoins,
+                            coins_actuales: prevHostCoins + REFERRAL_HOST_REWARD_COINS,
+                            fecha: new Date().toISOString(),
+                        },
                     });
                     toast({
                         title: '🪙 ¡500 Alfa Coins Acreditados al Anfitrión!',
-                        description: `Se abonaron automáticamente ${REFERRAL_HOST_REWARD_COINS} Alfa Coins a la cuenta de ${appliedBenefit.referrerName}.`,
+                        description: `Se abonaron automáticamente ${REFERRAL_HOST_REWARD_COINS} Alfa Coins y notificación en App a ${appliedBenefit.referrerName}.`,
                     });
                 }
             } catch (e) {
@@ -2512,6 +2672,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     },
                     descuento_alfacoins: pointsDiscount || 0,
                     alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
+                    tarifa_corte_aplicada: currentHaircutPrice || 140,
                     total: subtotal - totalDiscount,
                     fecha_hora_venta: serverTimestamp(),
                     creado_por_id: user?.uid,
@@ -3238,6 +3399,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     },
                     descuento_alfacoins: pointsDiscount || 0,
                     alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
+                    tarifa_corte_aplicada: currentHaircutPrice || 140,
                     total: grandTotal, // Save the full value, not just the remainder
                     propina: propinaToSave,
                     ...(propinaDetalles.length > 0 ? { propina_detalles: propinaDetalles } : {}),
@@ -3888,6 +4050,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         juntosMinorsCount={juntosMinorsCount}
                                         setJuntosMinorsCount={setJuntosMinorsCount}
                                         currentHaircutPrice={currentHaircutPrice}
+                                        targetStampsConfig={targetStampsConfig}
                                     />
                                 </div>
 
@@ -4781,6 +4944,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         juntosMinorsCount={juntosMinorsCount}
                                         setJuntosMinorsCount={setJuntosMinorsCount}
                                         currentHaircutPrice={currentHaircutPrice}
+                                        targetStampsConfig={targetStampsConfig}
                                     />
                                 </div>
                                 <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">
@@ -4796,7 +4960,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         type="submit"
                                         variant="alfa"
                                         className="h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl flex-1 sm:flex-initial"
-                                        disabled={isSubmitting || isStepTransitioning || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
+                                        disabled={isSubmitting || isStepTransitioning || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => item.tipo === 'servicio' && !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
                                         onClick={(e) => {
                                             if (isStepTransitioning) {
                                                 e.preventDefault();
@@ -4816,12 +4980,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 }
                                             }
 
-                                            if (cart.some(item => !item.barbero_id)) {
+                                            if (cart.some(item => item.tipo === 'servicio' && !item.barbero_id)) {
                                                 e.preventDefault();
                                                 toast({
                                                     variant: 'destructive',
                                                     title: 'Faltan datos',
-                                                    description: 'Asigna un vendedor a todos los items del carrito para finalizar.'
+                                                    description: 'Asigna un barbero a todos los servicios del carrito para finalizar.'
                                                 });
                                                 return;
                                             }
@@ -4881,7 +5045,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     variant="alfa"
                                     className="h-10 px-4 sm:px-5 text-xs font-semibold rounded-xl"
                                     onClick={handleNextStep}
-                                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => !item.barbero_id)}
+                                    disabled={cart.length === 0 || !selectedClientId || cart.some(item => item.tipo === 'servicio' && !item.barbero_id)}
                                 >
                                     Continuar
                                 </Button>

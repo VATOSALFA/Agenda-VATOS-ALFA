@@ -67,11 +67,13 @@ import {
   findMatchingReferrerClient,
   REFERRAL_DISCOUNT_PERCENT,
   REFERRAL_HOST_REWARD_COINS,
-  REFERRAL_MIN_PURCHASE_MXN,
+  calculateReferralMinNetPurchase,
   validateJuntosSchedule,
   JUNTOS_REWARD_COINS_PER_PERSON,
   getCurrentHaircutPrice,
   evaluateClientAlfaTier,
+  MIN_BIRTHDAY_ELIGIBLE_VISITS,
+  countEligibleHaircutVisitsFromSales,
 } from '@/lib/benefit-security';
 
 interface QRScannerModalProps {
@@ -278,7 +280,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                 isJuntosBenefit: isJuntosQR,
                 referralCode: parsed.referralCode || '',
                 rewardCoins: isRefQR ? REFERRAL_HOST_REWARD_COINS : isJuntosQR ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
-                minPurchase: isRefQR ? REFERRAL_MIN_PURCHASE_MXN : undefined,
+                minPurchase: isRefQR ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
                 terminos: parsed.terminos || parsed.terms || '',
                 descripcion: parsed.descripcion || parsed.description || '',
                 fechaLimite: parsed.fechaLimite || parsed.expiresAt || null,
@@ -317,13 +319,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
               isJuntosBenefit: isJuntosFolio,
               discount: isRefFolio ? REFERRAL_DISCOUNT_PERCENT : isJuntosFolio ? 0 : 100,
               rewardCoins: isRefFolio ? REFERRAL_HOST_REWARD_COINS : isJuntosFolio ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
-              minPurchase: isRefFolio ? REFERRAL_MIN_PURCHASE_MXN : undefined,
+              minPurchase: isRefFolio ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
               isScheduleValid: schedJuntos.isValid,
               scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
               minorsCount: 0,
               ...(isRefFolio ? {
                 isBlocked: true,
-                blockReason: '⛔ FOLIO INCOMPLETO: Para aplicar el beneficio "Invita a un Amigo", escanea el código QR desde la app o ingresa el código oficial ALFA-NOMBRE-XXXX para identificar al anfitrión.',
+                blockReason: '⛔ FOLIO INCOMPLETO: Para aplicar el beneficio "Invita a un Amigo", ingresa el código oficial ALFA-NOMBRE-XXXX para identificar al anfitrión.',
               } : {}),
             };
           } else if (clean.length === 10 && /^\d+$/.test(clean)) {
@@ -357,6 +359,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             const hostFullName = hostClient
               ? `${hostClient.nombre} ${hostClient.apellido || ''}`.trim()
               : '';
+            const dynamicMinNet = calculateReferralMinNetPurchase(currentHaircutPrice);
 
             detectedBenefit = {
               folio: `VA-REF-${suffixPart}-${Date.now().toString().slice(-4)}`,
@@ -369,13 +372,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
               referrerPhone: hostClient?.telefono || '',
               discount: REFERRAL_DISCOUNT_PERCENT,
               rewardCoins: REFERRAL_HOST_REWARD_COINS,
-              minPurchase: REFERRAL_MIN_PURCHASE_MXN,
+              minPurchase: dynamicMinNet,
               isBlocked: !hostClient,
               blockReason: !hostClient
                 ? (referralError || '⛔ CÓDIGO INVÁLIDO: No existe ningún cliente titular con este código de invitación.')
                 : undefined,
               descripcion: hostClient
-                ? `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse la compra ($${REFERRAL_MIN_PURCHASE_MXN} MXN o más).`
+                ? `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse una compra equivalente a un Corte de cabello vigente ($${formatMoney(currentHaircutPrice)} MXN regular / $${formatMoney(dynamicMinNet)} MXN con descuento).`
                 : `Código no válido (${clean.toUpperCase()}).`,
             };
           } else {
@@ -708,11 +711,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             detectedBenefit.folio?.startsWith('VA-REF');
 
           if (isReferral) {
+            const dynamicMinNet = calculateReferralMinNetPurchase(currentHaircutPrice);
             detectedBenefit.isReferralBenefit = true;
             detectedBenefit.benefitId = 'invita_amigo';
             detectedBenefit.discount = REFERRAL_DISCOUNT_PERCENT;
             detectedBenefit.rewardCoins = REFERRAL_HOST_REWARD_COINS;
-            detectedBenefit.minPurchase = REFERRAL_MIN_PURCHASE_MXN;
+            detectedBenefit.minPurchase = dynamicMinNet;
 
             // Si se escaneó el QR de invitación del anfitrión, foundClient es el anfitrión (quien invita), NO el cliente nuevo
             if (!detectedBenefit.referrerId && foundClient) {
@@ -720,7 +724,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
               detectedBenefit.referrerId = foundClient.id;
               detectedBenefit.referrerName = hostFullName;
               detectedBenefit.referrerPhone = foundClient.telefono || '';
-              detectedBenefit.descripcion = `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse la compra ($${REFERRAL_MIN_PURCHASE_MXN} MXN o más).`;
+              detectedBenefit.descripcion = `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse una compra equivalente a un Corte de cabello vigente ($${formatMoney(currentHaircutPrice)} MXN regular / $${formatMoney(dynamicMinNet)} MXN con descuento).`;
             }
 
             // Limpiar foundClient para que en Caja se seleccione o registre al AMIGO NUEVO, no al anfitrión
@@ -743,6 +747,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
           if (isBirthday) {
             detectedBenefit.isBirthdayBenefit = true;
+            detectedBenefit.benefitId = 'regalo_cumpleanos';
 
             // 1. Exigir QR oficial firmado desde la App y cliente existente en la base de datos oficial
             if (!detectedBenefit.signature || !detectedBenefit.clientId) {
@@ -760,40 +765,81 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                 detectedBenefit.isBlocked = true;
                 detectedBenefit.blockReason = bdayResult.rejectionReason;
               } else {
-                // 3. Validar que no haya sido canjeado en este año (Anti-Replay / 1 cortesía por año)
-                const currentYear = new Date().getFullYear();
-                const clientLastYear = Number((foundClient as any).ultimo_canje_cumpleanos_anio || 0);
+                // 3. Validar requisito anti-abuso: mínimo 5 visitas válidas pagadas con consumo >= corte vigente
+                let eligibleVisits = 0;
+                try {
+                  const qClientSales = query(
+                    collection(db, 'ventas'),
+                    where('cliente_id', '==', foundClient.id)
+                  );
+                  const snapSales = await getDocs(qClientSales);
+                  const salesDocs = snapSales.docs.map(sDoc => ({
+                    id: sDoc.id,
+                    ...sDoc.data(),
+                  }));
+                  eligibleVisits = countEligibleHaircutVisitsFromSales(
+                    salesDocs,
+                    currentHaircutPrice,
+                    foundClient
+                  );
+                } catch (_) {
+                  eligibleVisits = countEligibleHaircutVisitsFromSales(
+                    [],
+                    currentHaircutPrice,
+                    foundClient
+                  );
+                }
 
-                if (clientLastYear === currentYear) {
+                if (eligibleVisits < MIN_BIRTHDAY_ELIGIBLE_VISITS) {
+                  const missing = Math.max(1, MIN_BIRTHDAY_ELIGIBLE_VISITS - eligibleVisits);
                   detectedBenefit.isBlocked = true;
-                  detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Este cliente ya utilizó su cortesía de cumpleaños correspondiente al año ${currentYear}. Solo se permite 1 regalo por año.`;
+                  detectedBenefit.blockReason = `⛔ ANTIGÜEDAD MÍNIMA NO CUMPLIDA: Para canjear el Regalo de Cumpleaños se requieren al menos ${MIN_BIRTHDAY_ELIGIBLE_VISITS} visitas válidas pagadas (con consumo mínimo individual equivalente al corte de cabello vigente: $${formatMoney(currentHaircutPrice)} MXN). Este cliente registra ${eligibleVisits} de ${MIN_BIRTHDAY_ELIGIBLE_VISITS} visitas válidas (le ${missing === 1 ? 'falta 1 visita válida' : `faltan ${missing} visitas válidas`}).`;
                 } else {
-                  try {
-                    const qCanjes = query(
-                      collection(db, 'canjes_beneficios'),
-                      where('clienteId', '==', foundClient.id),
-                      where('anio', '==', currentYear)
-                    );
-                    const snapCanjes = await getDocs(qCanjes);
-                    const alreadyRedeemed = snapCanjes.docs.some(dSnap => {
-                      const d = dSnap.data();
-                      return (
-                        d.estado === 'canjeado' &&
-                        (d.benefitId === 'regalo_cumpleanos' ||
-                          d.folio?.includes('CUMPLE') ||
-                          d.benefitTitle?.toLowerCase().includes('cumple'))
+                  // 4. Validar que no haya sido canjeado en este año (Anti-Replay / 1 cortesía por año calendario)
+                  const currentYear = new Date().getFullYear();
+                  const clientLastYear = Number((foundClient as any).ultimo_canje_cumpleanos_anio || 0);
+
+                  if (clientLastYear === currentYear) {
+                    detectedBenefit.isBlocked = true;
+                    detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Este cliente ya utilizó su Regalo de Cumpleaños correspondiente al año ${currentYear}. Su próximo regalo estará disponible hasta ${bdayResult.birthMonthName || 'su mes de cumpleaños'} de ${currentYear + 1}.`;
+                  } else {
+                    try {
+                      // Consulta de un solo campo (sin depender de índice compuesto) para máxima fiabilidad
+                      const qCanjes = query(
+                        collection(db, 'canjes_beneficios'),
+                        where('clienteId', '==', foundClient.id)
                       );
-                    });
-                    if (alreadyRedeemed) {
-                      detectedBenefit.isBlocked = true;
-                      detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Se encontró un canje de regalo de cumpleaños registrado para este año (${currentYear}).`;
-                    } else {
+                      const snapCanjes = await getDocs(qCanjes);
+                      const alreadyRedeemed = snapCanjes.docs.some(dSnap => {
+                        const d = dSnap.data();
+                        if (d.estado !== 'canjeado') return false;
+                        const isBdayDoc =
+                          d.benefitId === 'regalo_cumpleanos' ||
+                          String(d.folio || '').includes('CUMPLE') ||
+                          String(d.benefitTitle || '').toLowerCase().includes('cumple');
+                        if (!isBdayDoc) return false;
+                        if (Number(d.anio || 0) === currentYear) return true;
+                        const ts = d.canjeadoEn || d.fechaCanje || d.fecha_aplicacion;
+                        const dt = ts?.toDate
+                          ? ts.toDate()
+                          : ts?.seconds
+                          ? new Date(ts.seconds * 1000)
+                          : null;
+                        return Boolean(dt && dt.getFullYear() === currentYear);
+                      });
+
+                      if (alreadyRedeemed) {
+                        detectedBenefit.isBlocked = true;
+                        detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Se encontró un canje de Regalo de Cumpleaños ya registrado en ${currentYear}. El siguiente canje estará disponible hasta ${currentYear + 1}.`;
+                      } else {
+                        detectedBenefit.isEligible = true;
+                        detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños y Antigüedad Confirmados! (${bdayResult.birthDateFormatted} • ${eligibleVisits} visitas válidas ✓)`;
+                      }
+                    } catch (errCanjes) {
+                      console.error('Error verificando historial de canjes de cumpleaños:', errCanjes);
                       detectedBenefit.isEligible = true;
-                      detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños Confirmado! (${bdayResult.birthDateFormatted})`;
+                      detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños y Antigüedad Confirmados! (${bdayResult.birthDateFormatted} • ${eligibleVisits} visitas válidas ✓)`;
                     }
-                  } catch (_) {
-                    detectedBenefit.isEligible = true;
-                    detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños Confirmado! (${bdayResult.birthDateFormatted})`;
                   }
                 }
               }
@@ -1329,7 +1375,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
       await setDoc(doc(db, 'canjes_beneficios', folio), {
         folio,
-        benefitId: scannedBenefit.benefitId || 'beneficio_alfa',
+        benefitId: isBirthday ? 'regalo_cumpleanos' : (scannedBenefit.benefitId || 'beneficio_alfa'),
         benefitTitle: scannedBenefit.benefitTitle || 'Beneficio Pase Alfa',
         clienteId: clientId,
         clienteNombre: clientName,
@@ -1350,10 +1396,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
         } : {}),
       }, { merge: true });
 
-      // Si es beneficio de cumpleaños, registrar año en el perfil del cliente para evitar doble canje
+      // Si es beneficio de cumpleaños, registrar año en el perfil del cliente para evitar doble canje hasta el siguiente año
       if (isBirthday && clientId) {
         await updateDoc(doc(db, 'clientes', clientId), {
           ultimo_canje_cumpleanos_anio: currentYear,
+          ultimo_canje_cumpleanos_folio: folio,
           fecha_ultimo_canje_cumpleanos: serverTimestamp(),
           actualizado_en: serverTimestamp(),
         });
@@ -1417,11 +1464,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       onClientSelectedForSale(scannedClient);
     } else {
       // Disparar evento para abrir NewSaleSheet automáticamente con el cliente precargado
+      // Seguridad: NUNCA reenviar a Caja un beneficio que haya sido bloqueado por reglas antifraude
+      const safeBenefitToPass =
+        scannedBenefit && !scannedBenefit.isBlocked && !scannedBenefit.isRedeemed
+          ? scannedBenefit
+          : undefined;
       document.dispatchEvent(
         new CustomEvent('new-sale', {
           detail: {
             client: scannedClient || undefined,
-            benefitRedeemed: scannedBenefit || undefined,
+            benefitRedeemed: safeBenefitToPass,
             items: [],
           },
         })
@@ -1713,7 +1765,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                             🎁 Amigo Invitado (Cliente Nuevo): 20% de Descuento automático en su primer servicio.
                           </p>
                           <p className="text-[10px] text-gray-300">
-                            🪙 Recompensa al Anfitrión: Al cobrarse la primera compra ($160.00 MXN o más), su anfitrión recibirá 500 Alfa Coins en automático.
+                            🪙 Recompensa al Anfitrión: Al cobrarse la primera visita equivalente a 1 Corte de cabello vigente (${formatMoney(currentHaircutPrice)} MXN antes de desc. / ${formatMoney(calculateReferralMinNetPurchase(currentHaircutPrice))} MXN neto), su anfitrión recibirá 500 Alfa Coins y notificación en su App.
                           </p>
                         </div>
                       </div>
@@ -2147,30 +2199,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                         </div>
                         <Button
                           size="sm"
-                          disabled={isUpdatingStamp}
-                          onClick={handleRedeemFreeCut}
+                          onClick={handleOpenInCashbox}
                           className="bg-[#C5A880] hover:bg-[#b0936b] text-black text-xs font-bold shadow-md"
                         >
-                          {isUpdatingStamp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Canjear Ahora'}
+                          Aplicar en Caja
                         </Button>
                       </div>
                     ) : (
                       <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
-                        <span>Faltan {Math.max(0, totalSlots - clientStamps)} visitas para su corte de cortesía.</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={isUpdatingStamp}
-                          onClick={handleAddStamp}
-                          className="h-7 text-xs border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/20"
-                        >
-                          {isUpdatingStamp ? (
-                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                          ) : (
-                            <Plus className="h-3 w-3 mr-1" />
-                          )}
-                          Sumar 1 Sello
-                        </Button>
+                        <span>
+                          Faltan {Math.max(0, totalSlots - clientStamps)} visitas para su corte de cortesía. (Se acredita automáticamente al cobrar en Caja).
+                        </span>
                       </div>
                     )}
                   </div>

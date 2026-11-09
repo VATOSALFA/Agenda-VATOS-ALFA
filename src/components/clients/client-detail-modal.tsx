@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { ArrowUpDown } from 'lucide-react';
 import { NewClientForm } from './new-client-form';
 import { getClientAppInfo, isClientWithApp } from '@/lib/client-app-helper';
+import { parseBirthMonthAndDay, formatBirthdaySpanish } from '@/lib/benefit-security';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -159,24 +160,23 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const stamps = hasAppLinked ? Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0) : 0;
   const freeCutReady = hasAppLinked && Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
 
+  const rawClientBirthday =
+    liveClient.fecha_nacimiento ||
+    (liveClient as any).cumpleanos ||
+    (liveClient as any).fechaNacimiento ||
+    null;
+
+  const formattedClientBirthday = useMemo(() => {
+    if (!rawClientBirthday) return '';
+    return formatBirthdaySpanish(rawClientBirthday);
+  }, [rawClientBirthday]);
+
   const isBirthdayMonth = useMemo(() => {
-    if (!liveClient.fecha_nacimiento) return false;
-    try {
-      const currentMonth = new Date().getMonth() + 1;
-      let birthMonth: number | null = null;
-      if (typeof liveClient.fecha_nacimiento === 'string') {
-        const parts = liveClient.fecha_nacimiento.split(/[-/]/);
-        if (parts.length >= 2) {
-          birthMonth = parseInt(parts[1], 10);
-        }
-      } else if ((liveClient.fecha_nacimiento as any)?.toDate) {
-        birthMonth = (liveClient.fecha_nacimiento as any).toDate().getMonth() + 1;
-      }
-      return birthMonth === currentMonth;
-    } catch {
-      return false;
-    }
-  }, [liveClient.fecha_nacimiento]);
+    const parsed = parseBirthMonthAndDay(rawClientBirthday);
+    if (!parsed) return false;
+    const currentMonth = new Date().getMonth() + 1;
+    return parsed.month === currentMonth;
+  }, [rawClientBirthday]);
 
   const { user } = useAuth();
   const { toast } = useToast();
@@ -660,9 +660,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <Cake className="h-3.5 w-3.5 text-muted-foreground/70" /> Cumpleaños
                   </span>
                   <span className="font-medium text-foreground text-right">
-                    {liveClient.fecha_nacimiento ? (
+                    {formattedClientBirthday ? (
                       <span className="flex items-center gap-1">
-                        {formatDate(liveClient.fecha_nacimiento)}
+                        {formattedClientBirthday}
                         {isBirthdayMonth && <span title="¡Mes de cumpleaños!">🎉</span>}
                       </span>
                     ) : (

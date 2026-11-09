@@ -782,7 +782,7 @@ export function ReservationDetailModal({
 
   const currentLocal = locales?.find(l => l.id === reservation.local_id);
   const totalAmount = reservation.precio ?? (reservation as any).total ?? 0;
-  const expectedDepositAmount = Number((reservation as any).anticipo_esperado || reservation.monto_anticipo || 0);
+  const rawExpectedDepositAmount = Number((reservation as any).anticipo_esperado || reservation.monto_anticipo || 0);
   const rawDepositPaid = Number(
     reservation.anticipo_pagado ||
     reservation.anticipoPagado ||
@@ -819,10 +819,16 @@ export function ReservationDetailModal({
     hasUnattendedAlert ||
     reservation.requiere_anticipo ||
     reservation.pago_estado === 'pendiente_anticipo' ||
-    (expectedDepositAmount > 0 && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
+    (rawExpectedDepositAmount > 0 && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
     (bookingRules.anticipo_horario_apertura_activo !== false && isOpeningHourTime(reservation.hora_inicio, bookingRules.anticipo_horario_apertura_hora || '10:00', bookingRules.anticipo_horario_apertura_hora_fin || '10:30') && reservation.pago_estado !== 'Pagado' && !isDepositPaid) ||
     (bookingRules.anticipo_monto_minimo_activo !== false && totalAmount >= (Number(bookingRules.anticipo_monto_minimo) || 190) && reservation.pago_estado !== 'Pagado' && !isDepositPaid)
   );
+  const fallbackDepositPct = hasUnattendedAlert
+    ? (Number(bookingRules.penalizacion_anticipo_porcentaje) || 50)
+    : (Number(bookingRules.anticipo_porcentaje_defecto) || 50);
+  const expectedDepositAmount = rawExpectedDepositAmount > 0
+    ? rawExpectedDepositAmount
+    : (isAnticipoRequired && totalAmount > 0 ? Math.round(totalAmount * (fallbackDepositPct / 100)) : 0);
 
   // Tolerancia de 30 minutos para anticipo
   const rawTol = Number(bookingRules.tolerancia_anticipo_minutos) || 30;

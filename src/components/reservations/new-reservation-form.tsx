@@ -454,18 +454,28 @@ export function NewReservationForm({
     return clientStats.totalCitas === 0;
   }, [selectedClient, clientStats.totalCitas]);
 
+  const watchedPrice = form.watch('precio');
+
   const currentTotal = useMemo(() => {
-    const rawPrice = form.watch('precio');
-    if (rawPrice !== undefined && Number(rawPrice) > 0) return Number(rawPrice);
-    let sum = 0;
+    let itemsSum = 0;
     (watchedItems || []).forEach(item => {
       if (item.servicio) {
         const s = servicesMap.get(item.servicio);
-        if (s && s.price) sum += Number(s.price);
+        if (s && s.price) {
+          itemsSum += Number(s.price);
+        } else {
+          const p = products?.find(prod => prod.id === item.servicio);
+          if (p && p.public_price) itemsSum += Number(p.public_price);
+        }
       }
     });
-    return sum;
-  }, [form, watchedItems, servicesMap]);
+    const rawPriceNum = Number(watchedPrice) || 0;
+    // Si la suma de los servicios seleccionados es mayor al campo precio (ej. al cambiar un servicio en modo edición o antes de que se sincronice el watch), usar siempre la suma real
+    if (itemsSum > 0 && (rawPriceNum <= 0 || itemsSum !== rawPriceNum)) {
+      return itemsSum;
+    }
+    return rawPriceNum > 0 ? rawPriceNum : itemsSum;
+  }, [watchedPrice, watchedItems, servicesMap, products]);
 
   const isAnticipoRequiredDueToOpeningHour = !isClientExempt && isOpeningHourRuleActive && isOpeningHourSelected;
   const isAnticipoRequiredDueToAmount = !isClientExempt && isMontoMinimoActive && montoMinimoThreshold > 0 && currentTotal >= montoMinimoThreshold;
@@ -1179,10 +1189,10 @@ export function NewReservationForm({
           { totalPrice: 0, maxDuration: 0, durations: {} as Record<string, number> }
         );
 
-        // Only auto-update price if not in edit mode OR if a service-related field specifically changed
-        // This prevents manual overrides from being lost when re-opening for edit or changing date
+        // Auto-update price whenever services change or if current price is out of sync with service sum
         const isServiceChange = name && (name.startsWith('items') && (name.endsWith('.servicio') || name === 'items'));
-        if (!isEditMode || isServiceChange) {
+        const currentPriceVal = Number(form.getValues('precio')) || 0;
+        if (!isEditMode || isServiceChange || currentPriceVal !== totalPrice) {
           form.setValue('precio', totalPrice, { shouldValidate: true });
         }
 
@@ -1278,7 +1288,9 @@ export function NewReservationForm({
         if (service) {
           id = service.id;
           name = service.name;
-          precio = data.items.length === 1 ? (data.precio || 0) : (service.price || 0);
+          precio = data.items.length === 1
+            ? ((Number(data.precio) > 0 && Number(data.precio) >= (service.price || 0)) ? Number(data.precio) : (service.price || 0))
+            : (service.price || 0);
           const customDur = service.durationPorProfesional?.[item.barbero_id || ''];
           duracion = item.duracion !== undefined ? item.duracion : (customDur !== undefined ? customDur : (service.duration || 0));
         } else {
@@ -1287,7 +1299,9 @@ export function NewReservationForm({
           if (product) {
             id = product.id;
             name = product.nombre;
-            precio = data.items.length === 1 ? (data.precio || 0) : (product.public_price || 0);
+            precio = data.items.length === 1
+              ? ((Number(data.precio) > 0 && Number(data.precio) >= (product.public_price || 0)) ? Number(data.precio) : (product.public_price || 0))
+              : (product.public_price || 0);
             duracion = item.duracion !== undefined ? item.duracion : 0;
             tipo = 'producto';
           } else {
@@ -1380,11 +1394,8 @@ export function NewReservationForm({
       const rawEffectiveDepositPaid = data._depositPaidOverride !== undefined
         ? data._depositPaidOverride
         : (depositPaid || isInitialAlreadyPaid);
-      const totalPrecioNum = Number(data.precio) || 0;
-      const targetDepositAmount = isAnyAnticipoActive
-        ? (existingDepositPaidAmount > 0 && !depositPaid ? existingDepositPaidAmount : effectiveDepositAmount)
-        : (Number((data as any).monto_anticipo || existingDepositPaidAmount || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
-      const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
+      const itemsSumTotal = itemsToSave.reduce((acc: number, it: any) => acc + (Number(it.precio) || 0), 0);
+      const totalPrecioNum = Math.max(Number(data.precio) || 0, itemsSumTotal);
 
       const selectedClient = clients.find(c => c.id === data.cliente_id);
       const isSelectedClientExempt = Boolean(
@@ -1397,6 +1408,29 @@ export function NewReservationForm({
         (isEditMode && initialData?.exento_anticipo === true)
       );
 
+      const isSaveOpeningHour = isOpeningHourRuleActive && (
+        isOpeningHourTime(hora_inicio, openingHourTarget, openingHourTargetEnd) ||
+        itemsToSave.some((it: any) => it.hora_inicio && isOpeningHourTime(it.hora_inicio, openingHourTarget, openingHourTargetEnd))
+      );
+      const isSaveAmountRequired = isMontoMinimoActive && montoMinimoThreshold > 0 && totalPrecioNum >= montoMinimoThreshold;
+      const isSaveAnticipoRequired = !isExemptFromDeposit && (isAnticipoRequiredDueToHistory || isSaveOpeningHour || isSaveAmountRequired);
+      const isSaveAnyAnticipoActive = Boolean(isAnyAnticipoActive || isSaveAnticipoRequired || manualDepositEnabled);
+
+      const savePct = isAnticipoRequiredDueToHistory
+        ? penalizacionPorcentaje
+        : isSaveOpeningHour
+        ? openingHourPorcentaje
+        : anticipoPorcentajeDefecto;
+      const saveCalculatedDeposit = Math.round(totalPrecioNum * (savePct / 100));
+      const saveEffectiveDeposit = manualDepositAmount !== ''
+        ? Math.max(0, Number(manualDepositAmount) || 0)
+        : (effectiveDepositAmount > 0 ? effectiveDepositAmount : saveCalculatedDeposit);
+
+      const targetDepositAmount = isSaveAnyAnticipoActive
+        ? (existingDepositPaidAmount > 0 && !depositPaid ? existingDepositPaidAmount : saveEffectiveDeposit)
+        : (Number((data as any).monto_anticipo || existingDepositPaidAmount || (isInitialAlreadyPaid ? totalPrecioNum : 0)) || 0);
+      const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
+
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
       const preservedStatuses = effectiveDepositPaid
         ? ['Asiste', 'En espera', 'Completado', 'Venta completada']
@@ -1404,14 +1438,14 @@ export function NewReservationForm({
       const cleanInitialEstado =
         data.estado === 'Pendiente de pago' ||
         data.estado === 'Pendiente de Pago' ||
-        (data.estado === 'Confirmado' && isAnyAnticipoActive && !effectiveDepositPaid && !isExemptFromDeposit)
+        (data.estado === 'Confirmado' && isSaveAnyAnticipoActive && !effectiveDepositPaid && !isExemptFromDeposit)
           ? 'Reservado'
           : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
         ? data.estado
         : (effectiveDepositPaid || isExemptFromDeposit
             ? 'Confirmado'
-            : (isAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
+            : (isSaveAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
@@ -1433,15 +1467,15 @@ export function NewReservationForm({
         duracion: latestEnd - earliestStart,
         duracionMinutos: latestEnd - earliestStart,
         estado: resolvedEstado,
-        precio: data.precio,
+        precio: totalPrecioNum,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
         local_id: data.local_id,
         professional_lock: itemsToSave.some((i: any) => i.professional_lock === true),
-        requiere_anticipo: Boolean(isAnyAnticipoActive && !isExemptFromDeposit),
+        requiere_anticipo: Boolean(isSaveAnyAnticipoActive && !isExemptFromDeposit),
         manual_deposit: Boolean(manualDepositEnabled),
-        anticipo_esperado: (!isExemptFromDeposit && (isAnyAnticipoActive || effectiveDepositPaid)) ? targetDepositAmount : 0,
+        anticipo_esperado: (!isExemptFromDeposit && (isSaveAnyAnticipoActive || effectiveDepositPaid)) ? targetDepositAmount : 0,
         ...(isExemptFromDeposit
           ? {
               exento_anticipo: true,
@@ -1474,7 +1508,7 @@ export function NewReservationForm({
           deposit_paid_at: paidTimestamp,
           anticipo_en_sucursal: true,
         } : {
-          pago_estado: (isAnyAnticipoActive && !isExemptFromDeposit) ? 'pendiente_anticipo' : 'Pendiente',
+          pago_estado: (isSaveAnyAnticipoActive && !isExemptFromDeposit) ? 'pendiente_anticipo' : 'Pendiente',
           monto_anticipo: 0,
           monto_pagado: 0,
           monto_pagado_real: 0,

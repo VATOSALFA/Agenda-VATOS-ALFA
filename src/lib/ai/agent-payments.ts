@@ -132,12 +132,14 @@ export async function crearPreferenciaMercadoPagoChat({
   amount,
   clientName,
   clientPhone,
+  isFullPayment = false,
 }: {
   reservationId: string;
   title: string;
   amount: number;
   clientName?: string;
   clientPhone?: string;
+  isFullPayment?: boolean;
 }): Promise<{ id: string; initPoint: string } | null> {
   try {
     let accessToken = '';
@@ -191,9 +193,9 @@ export async function crearPreferenciaMercadoPagoChat({
     const bodyData = {
       items: [
         {
-          id: 'deposit',
-          title: `Anticipo: ${title}`.substring(0, 250),
-          description: `Anticipo para reserva en VATOS ALFA Barber Shop (${title})`.substring(0, 250),
+          id: isFullPayment ? 'full_payment' : 'deposit',
+          title: `${isFullPayment ? 'Pago Total Cita' : 'Anticipo'}: ${title}`.substring(0, 250),
+          description: `${isFullPayment ? 'Pago total (100%)' : 'Anticipo'} para reserva en VATOS ALFA Barber Shop (${title})`.substring(0, 250),
           category_id: 'services',
           quantity: 1,
           currency_id: 'MXN',

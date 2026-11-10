@@ -173,7 +173,7 @@ const getQuickReplies = (sofiaCfg?: any) => {
   const bankHolder = sofiaCfg?.bankAccountHolder || 'Jose Alejandro Pacheco';
   const bankClabe = sofiaCfg?.bankClabe || '722969013328430098';
   const address = sofiaCfg?.addressReferences || 'Av. Cerro Sombrerete 1001, Col. Cipreses, Santiago de Querétaro, Qro.';
-  const tolerance = sofiaCfg?.punctualityToleranceMinutes || 10;
+  const tolerance = sofiaCfg?.punctualityToleranceMinutes || 5;
 
   return [
     {

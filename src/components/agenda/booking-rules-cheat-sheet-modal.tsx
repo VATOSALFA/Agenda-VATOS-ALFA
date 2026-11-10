@@ -39,6 +39,10 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
           setRules({
             ...DEFAULT_BOOKING_RULES,
             ...data,
+            tolerancia_puntualidad_minutos:
+              !data.tolerancia_puntualidad_minutos || Number(data.tolerancia_puntualidad_minutos) === 10
+                ? 5
+                : Number(data.tolerancia_puntualidad_minutos),
             tolerancia_anticipo_minutos:
               !data.tolerancia_anticipo_minutos || Number(data.tolerancia_anticipo_minutos) === 20
                 ? 30
@@ -116,18 +120,18 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
                   1. Tolerancia y Puntualidad
                 </span>
                 <Badge variant="secondary" className="font-bold text-[11px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
-                  {rules.tolerancia_puntualidad_minutos || 10} min máx.
+                  {rules.tolerancia_puntualidad_minutos || 5} min máx.
                 </Badge>
               </div>
               <ul className="list-disc pl-4 space-y-1 text-muted-foreground leading-relaxed">
                 <li>
-                  <strong className="text-foreground">Tolerancia máxima estricta:</strong> Se otorgan {rules.tolerancia_puntualidad_minutos || 10} minutos de cortesía a partir de la hora de la cita.
+                  <strong className="text-foreground">Tolerancia máxima estricta:</strong> Se otorgan {rules.tolerancia_puntualidad_minutos || 5} minutos de cortesía a partir de la hora de la cita.
                 </li>
                 <li>
-                  <strong className="text-foreground">Llegada con retraso (5 a 10 min):</strong> El barbero evalúa si puede dar el servicio completo o adaptarlo al tiempo restante para no retrasar la siguiente cita. Se cobra la tarifa completa.
+                  <strong className="text-foreground">Llegada dentro de tolerancia (hasta {rules.tolerancia_puntualidad_minutos || 5} min):</strong> El barbero evalúa si puede dar el servicio completo o adaptarlo al tiempo restante para no retrasar la siguiente cita. Se cobra la tarifa completa.
                 </li>
                 <li>
-                  <strong className="text-foreground">Más de {rules.tolerancia_puntualidad_minutos || 10} minutos sin aviso:</strong> Se considera inasistencia (<em>No-Show</em>). La cita se cancela en agenda y el barbero queda libre para atender a otro cliente.
+                  <strong className="text-foreground">Más de {rules.tolerancia_puntualidad_minutos || 5} minutos sin aviso:</strong> Se considera inasistencia (<em>No-Show</em>). La cita se cancela en agenda y el barbero queda libre para atender a otro cliente.
                 </li>
               </ul>
             </div>
@@ -227,7 +231,7 @@ export function BookingRulesCheatSheetModal({ isOpen, onClose }: BookingRulesChe
                   <strong className="text-foreground">Citas de último momento (sin recordatorio):</strong> Si una cita se crea con <span className="font-semibold text-foreground">{whatsappRule?.omitir_si_creada_en_minutos || 45} minutos o menos</span> de anticipación (ej. reservó por llamada telefónica para venir de inmediato), el sistema <span className="font-semibold text-foreground">omite el recordatorio automáticamente</span> para no duplicar la confirmación verbal.
                 </li>
                 <li>
-                  <strong className="text-foreground">Citas atrasadas sin asistencia registrada:</strong> Si una cita inició hace más de <span className="font-semibold text-foreground">{atrasadaRule?.tolerancia_retraso_minutos || rules.tolerancia_puntualidad_minutos || 10} minutos</span> de cortesía y aún no se ha marcado si el cliente asistió o faltó, aparece en la campana en color rojo para que recepción la resuelva y mantenga la agenda al día.
+                  <strong className="text-foreground">Citas atrasadas sin asistencia registrada:</strong> Si una cita inició hace más de <span className="font-semibold text-foreground">{atrasadaRule?.tolerancia_retraso_minutos || rules.tolerancia_puntualidad_minutos || 5} minutos</span> de cortesía y aún no se ha marcado si el cliente asistió o faltó, aparece en la campana en color rojo para que recepción la resuelva y mantenga la agenda al día.
                 </li>
                 {otrasReglasAvisos.map(aviso => (
                   <li key={aviso.id}>

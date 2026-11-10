@@ -214,7 +214,7 @@ export async function executeFallbackLogic({
     if (text.includes('privacidad') || text.includes('datos') || text.includes('correo') || text.includes('informaci')) {
       return '¡Sí, con mucho gusto! En VATOS ALFA cuidamos con estricta confidencialidad tus datos personales. Tu nombre, teléfono y correo se utilizan únicamente para la gestión de tus citas y recordatorios, y jamás se comparten ni venden a terceros. Puedes consultar el Aviso de Privacidad completo en: https://vatosalfa.com/privacidad. ¿Hay algo en lo que te pueda apoyar hoy?';
     }
-    return '¡Sí, por supuesto! Tengo acceso completo a los Términos y Condiciones de VATOS ALFA. En resumen: contamos con tolerancia estricta de 10 minutos; las cancelaciones o cambios con al menos 2 horas de anticipación conservan el 100% de tu anticipo como saldo a favor por 30 días (con menos de 2 horas o inasistencia se pierde por el tiempo apartado del barbero). Puedes consultar los términos completos en https://vatosalfa.com/terminos y nuestro aviso de privacidad en https://vatosalfa.com/privacidad. ¿Tienes alguna duda en específico?';
+    return '¡Sí, por supuesto! Tengo acceso completo a los Términos y Condiciones de VATOS ALFA. En resumen: contamos con tolerancia estricta de 5 minutos; las cancelaciones o cambios con al menos 2 horas de anticipación conservan el 100% de tu anticipo como saldo a favor por 30 días (con menos de 2 horas o inasistencia se pierde por el tiempo apartado del barbero). Puedes consultar los términos completos en https://vatosalfa.com/terminos y nuestro aviso de privacidad en https://vatosalfa.com/privacidad. ¿Tienes alguna duda en específico?';
   }
 
   // CASO 0.9: Envío de comprobante de pago o confirmación de transferencia

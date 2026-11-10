@@ -529,7 +529,7 @@ export function OverdueNotificationsPopover({
   const omitirCreacionMinutos = Number(whatsappRule?.omitir_si_creada_en_minutos) || 45;
 
   const isAtrasadaActive = atrasadaRule ? atrasadaRule.activa !== false : true;
-  const toleranciaAtrasadaMinutos = Number(atrasadaRule?.tolerancia_retraso_minutos) || 10;
+  const toleranciaAtrasadaMinutos = Number(atrasadaRule?.tolerancia_retraso_minutos) || 5;
 
   // 1. Citas que requieren Recordatorio Preventivo por WhatsApp (2h / 1h antes)
   const whatsappReminderReservations = useMemo(() => {
@@ -584,7 +584,7 @@ export function OverdueNotificationsPopover({
     dismissedReminderIds,
   ]);
 
-  // 2. Citas atrasadas sin registrar asistencia (> 10 min de cortesía)
+  // 2. Citas atrasadas sin registrar asistencia (> 5 min de cortesía)
   const overdueReservations = useMemo(() => {
     if (isStaff || !todayStr || !reservations || reservations.length === 0 || !isAtrasadaActive) {
       return [];

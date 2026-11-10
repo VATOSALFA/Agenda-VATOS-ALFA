@@ -59,7 +59,7 @@ export interface ReglaAvisoAgenda {
   tipo: TipoAvisoAgenda;
   tiempo_anticipacion_minutos?: number; // ej. 120 (2 horas antes)
   tiempo_urgente_minutos?: number;       // ej. 60 (1 hora antes)
-  tolerancia_retraso_minutos?: number;   // ej. 10 (10 min tras hora de inicio)
+  tolerancia_retraso_minutos?: number;   // ej. 5 (5 min tras hora de inicio)
   omitir_si_creada_en_minutos?: number;  // ej. 45 (si se creó con <= 45 min antes, omitir recordatorio)
   canal?: 'whatsapp' | 'pantalla' | 'ambos';
   es_sistema?: boolean; // Para las reglas nativas (WhatsApp y Atrasadas)
@@ -84,10 +84,10 @@ export const DEFAULT_AVISOS_AGENDA_RULES: ReglaAvisoAgenda[] = [
     id: 'aviso_cita_atrasada',
     nombre: 'Alerta de Citas Atrasadas sin Registrar Asistencia',
     descripcion:
-      'Alerta al recepcionista cuando una cita inició hace más de 10 minutos de cortesía y aún no se ha marcado si el cliente Asistió, No Asistió o Canceló, evitando citas olvidadas.',
+      'Alerta al recepcionista cuando una cita inició hace más de 5 minutos de cortesía y aún no se ha marcado si el cliente Asistió, No Asistió o Canceló, evitando citas olvidadas.',
     activa: true,
     tipo: 'cita_atrasada_asistencia',
-    tolerancia_retraso_minutos: 10,   // 10 min de tolerancia
+    tolerancia_retraso_minutos: 5,    // 5 min de tolerancia
     canal: 'pantalla',
     es_sistema: true,
   },
@@ -381,7 +381,7 @@ export const DEFAULT_BOOKING_RULES: ReglasReservasConfig = {
 
   tiempo_minimo_anticipacion_minutos: 30,
   dias_maximos_futuro: 14,
-  tolerancia_puntualidad_minutos: 10,
+  tolerancia_puntualidad_minutos: 5,
   tolerancia_anticipo_minutos: 30,
   intervalo_horarios_minutos: 30,
 

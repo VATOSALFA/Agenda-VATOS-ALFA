@@ -627,6 +627,7 @@ export const crearCitaTool = ai.defineTool(
       correoCliente: z.string().optional().describe('Correo electrónico del cliente (ej. cliente@gmail.com). REQUISITO OBLIGATORIO para agendar y registrar al cliente en la base de datos.'),
       notas: z.string().optional().describe('Notas o peticiones especiales'),
       duracionMinutos: z.number().int().positive().max(720).optional().describe('Duración total en minutos calculada para la cita (incluyendo duraciones personalizadas de notas de cliente o cabello difícil si aplica)'),
+      liquidarTotalEnLinea: z.boolean().optional().describe('Poner en true ÚNICAMENTE si el cliente pidió explícitamente pagar el 100% / total completo de su cita en línea de una vez.'),
     }),
     outputSchema: z.object({
       exito: z.boolean(),
@@ -640,7 +641,7 @@ export const crearCitaTool = ai.defineTool(
       detalles: z.string().optional(),
     }),
   },
-  async ({ fecha, hora, profesionalId, barberoNombre, servicioIds, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, correoCliente, notas, duracionMinutos }) => {
+  async ({ fecha, hora, profesionalId, barberoNombre, servicioIds, servicioNombre, serviciosNombres, productoNombre, productosNombres, nombreCliente, telefonoCliente, correoCliente, notas, duracionMinutos, liquidarTotalEnLinea }) => {
     try {
       const db = getDb();
       const targetFecha = (fecha || '').trim();
@@ -813,10 +814,10 @@ export const crearCitaTool = ai.defineTool(
         origin: isSimulation ? 'simulador' : 'chatbot',
         canal_reserva: isSimulation ? 'chatbot_sandbox' : 'chatbot',
         isSandbox: isSimulation,
-        status: anticipoCalc.requiereAnticipo ? 'Pendiente de pago' : 'Reservado',
-        amountDue: anticipoCalc.montoAnticipo,
+        status: (anticipoCalc.requiereAnticipo || liquidarTotalEnLinea) ? 'Pendiente de pago' : 'Reservado',
+        amountDue: (liquidarTotalEnLinea && anticipoCalc.montoTotal > 0) ? anticipoCalc.montoTotal : anticipoCalc.montoAnticipo,
         totalAmount: anticipoCalc.montoTotal,
-        paymentStatus: anticipoCalc.requiereAnticipo ? 'pending_payment' : 'pendiente',
+        paymentStatus: (anticipoCalc.requiereAnticipo || liquidarTotalEnLinea) ? 'pending_payment' : 'pendiente',
         productItems: resolvedProducts,
       });
 
@@ -880,7 +881,11 @@ export const crearCitaTool = ai.defineTool(
         } catch (_) {}
       }
 
-      if (anticipoCalc.requiereAnticipo) {
+      if (anticipoCalc.requiereAnticipo || (liquidarTotalEnLinea === true && anticipoCalc.montoTotal > 0)) {
+        const cobraTotalCompleto = Boolean(liquidarTotalEnLinea) || anticipoCalc.montoAnticipo >= anticipoCalc.montoTotal - 0.01;
+        const montoACobrarEnLink = cobraTotalCompleto ? anticipoCalc.montoTotal : anticipoCalc.montoAnticipo;
+        const saldoALiquidarEnSucursal = cobraTotalCompleto ? 0 : anticipoCalc.saldoPendiente;
+
         const fullTitle = resolvedProducts.length > 0
           ? `${finalServName} + ${resolvedProducts.map((p) => p.nombre).join(', ')} (${targetFecha} ${time12h})`
           : `${finalServName} (${targetFecha} ${time12h})`;
@@ -888,9 +893,10 @@ export const crearCitaTool = ai.defineTool(
         const pref = await crearPreferenciaMercadoPagoChat({
           reservationId,
           title: fullTitle,
-          amount: anticipoCalc.montoAnticipo,
+          amount: montoACobrarEnLink,
           clientName: nombreCliente,
           clientPhone: telefonoCliente,
+          isFullPayment: cobraTotalCompleto,
         });
 
         const linkPago = pref?.initPoint || '';
@@ -900,6 +906,7 @@ export const crearCitaTool = ai.defineTool(
           await db.collection(targetCol).doc(reservationId).set(
             {
               link_pago_anticipo: linkPago,
+              ...(cobraTotalCompleto ? { mercado_pago_link_total: linkPago } : { mercado_pago_link: linkPago }),
               updated_at: new Date(),
             },
             { merge: true }
@@ -918,11 +925,15 @@ export const crearCitaTool = ai.defineTool(
           citaId: reservationId,
           requiereAnticipo: true,
           montoTotal: anticipoCalc.montoTotal,
-          montoAnticipo: anticipoCalc.montoAnticipo,
-          saldoPendiente: anticipoCalc.saldoPendiente,
+          montoAnticipo: montoACobrarEnLink,
+          saldoPendiente: saldoALiquidarEnSucursal,
           linkPago,
-          mensaje: `Cita pre-apartada. Se requiere un anticipo de $${anticipoCalc.montoAnticipo} MXN para confirmar.`,
-          detalles: `Cita pre-apartada para ${targetFecha} a las ${time12h} con ${finalBarberName} para ${finalServName}${productosTexto}. Total: $${anticipoCalc.montoTotal} MXN. Anticipo requerido: $${anticipoCalc.montoAnticipo} MXN. Saldo a liquidar en sucursal: $${anticipoCalc.saldoPendiente} MXN.\n\nEnlace de pago seguro de Mercado Pago:\n${linkPago}\n\nDEBES compartirle este enlace al cliente en su propia línea para que realice su anticipo. IMPORTANTE: Escribe tu respuesta en texto completamente limpio, SIN asteriscos y SIN paréntesis alrededor de los precios o fechas.`,
+          mensaje: cobraTotalCompleto
+            ? `Cita pre-apartada. Se generó el enlace por el pago total de $${montoACobrarEnLink} MXN.`
+            : `Cita pre-apartada. Se requiere un anticipo de $${anticipoCalc.montoAnticipo} MXN para confirmar.`,
+          detalles: cobraTotalCompleto
+            ? `Cita pre-apartada para ${targetFecha} a las ${time12h} con ${finalBarberName} para ${finalServName}${productosTexto}. Total a liquidar hoy en línea (100%): $${montoACobrarEnLink} MXN. Saldo pendiente en sucursal: $0 MXN.\n\nEnlace de pago seguro de Mercado Pago:\n${linkPago}\n\nDEBES compartirle este enlace al cliente en su propia línea para que liquide el total de su cita. IMPORTANTE: Escribe tu respuesta en texto completamente limpio, SIN asteriscos y SIN paréntesis alrededor de los precios o fechas.`
+            : `Cita pre-apartada para ${targetFecha} a las ${time12h} con ${finalBarberName} para ${finalServName}${productosTexto}. Total: $${anticipoCalc.montoTotal} MXN. Anticipo requerido: $${anticipoCalc.montoAnticipo} MXN. Saldo a liquidar en sucursal: $${anticipoCalc.saldoPendiente} MXN.\n\nEnlace de pago seguro de Mercado Pago:\n${linkPago}\n\nDEBES compartirle este enlace al cliente en su propia línea para que realice su anticipo (y si el cliente te llega a pedir pagar de una vez el total completo de $${anticipoCalc.montoTotal} MXN, puedes usar la herramienta generar_enlace_pago_cita con modalidad "total"). IMPORTANTE: Escribe tu respuesta en texto completamente limpio, SIN asteriscos y SIN paréntesis alrededor de los precios o fechas.`,
         };
       }
 
@@ -1464,6 +1475,138 @@ export const solicitarRecepcionTool = ai.defineTool(
   }
 );
 
+export const generarEnlacePagoCitaTool = ai.defineTool(
+  {
+    name: 'generar_enlace_pago_cita',
+    description:
+      'Genera o regenera el enlace de pago de Mercado Pago para una cita ya creada del cliente, permitiendo elegir entre pagar solo el anticipo ("anticipo") o liquidar el total completo al 100% ("total"). Úsala cuando el cliente ya tiene su cita registrada y pide pagar el total completo en línea de una vez (ej. "¿puedo pagar todo de una vez?", "mándame el link por el total completo"), o si necesita que le reenvíes su liga de anticipo. NUNCA crees una cita duplicada solo para cambiar el monto del enlace.',
+    inputSchema: z.object({
+      citaId: z.string().optional().describe('ID opcional de la cita del cliente'),
+      telefonoCliente: z.string().optional().describe('Teléfono del cliente (10 dígitos)'),
+      modalidad: z
+        .enum(['anticipo', 'total'])
+        .describe('"total" si el cliente quiere pagar el 100% de la cita hoy, o "anticipo" si quiere pagar únicamente el anticipo.'),
+    }),
+    outputSchema: z.object({
+      exito: z.boolean(),
+      citaId: z.string().optional(),
+      modalidad: z.string().optional(),
+      montoEnlace: z.number().optional(),
+      montoTotalCita: z.number().optional(),
+      saldoRestanteSucursal: z.number().optional(),
+      linkPago: z.string().optional(),
+      mensaje: z.string(),
+    }),
+  },
+  async ({ citaId, telefonoCliente, modalidad }) => {
+    try {
+      const db = getDb();
+      const resDoc = await getClientReservation(citaId, telefonoCliente);
+      const targetCitaId = resDoc.id;
+      const resData = resDoc.data() || {};
+
+      const pagoEstadoClean = cleanSearchStr(resData.pago_estado || '');
+      if (pagoEstadoClean === 'pagado' || pagoEstadoClean === 'paid') {
+        return {
+          exito: false,
+          citaId: targetCitaId,
+          mensaje: 'Esta cita ya se encuentra liquidada al 100%, no requiere ningún pago adicional.',
+        };
+      }
+
+      const itemsSum = Array.isArray(resData.items)
+        ? resData.items.reduce(
+            (acc: number, it: any) => acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1),
+            0
+          )
+        : 0;
+      const totalCita = Number(resData.total || resData.precio || resData.totalAmount || itemsSum || 0);
+      if (totalCita <= 0) {
+        return {
+          exito: false,
+          citaId: targetCitaId,
+          mensaje: 'No se pudo determinar el total de la cita. Solicita apoyo de recepción.',
+        };
+      }
+
+      const alreadyPaidDeposit =
+        (pagoEstadoClean === 'deposit_paid' || pagoEstadoClean === 'anticipo_pagado')
+          ? Number(resData.anticipo_pagado || resData.monto_pagado_real || resData.monto_pagado || 0)
+          : 0;
+
+      const rawAnticipoEsperado = Number(resData.anticipo_esperado || resData.monto_anticipo || 0);
+      const anticipoAmount = rawAnticipoEsperado > 0 ? rawAnticipoEsperado : Math.round(totalCita * 0.5);
+
+      const isFullMode = modalidad === 'total';
+      const targetChargeAmount = isFullMode
+        ? Math.max(0, Math.round((totalCita - alreadyPaidDeposit) * 100) / 100)
+        : anticipoAmount;
+
+      if (targetChargeAmount <= 0) {
+        return {
+          exito: false,
+          citaId: targetCitaId,
+          mensaje: 'Esta cita ya no tiene saldo pendiente por cubrir.',
+        };
+      }
+
+      const servTitle =
+        resData.servicio ||
+        (Array.isArray(resData.items) && resData.items.length > 0
+          ? resData.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ')
+          : 'Servicio de Barbería');
+      const time12h = resData.hora_inicio ? formatTime12h(resData.hora_inicio) : '';
+      const fullTitle = `${servTitle}${resData.fecha ? ` (${resData.fecha} ${time12h})` : ''}`.trim();
+
+      const pref = await crearPreferenciaMercadoPagoChat({
+        reservationId: targetCitaId,
+        title: fullTitle,
+        amount: targetChargeAmount,
+        clientName: resData.cliente_nombre || resData.client?.name || 'Cliente',
+        clientPhone: resData.cliente_telefono || resData.client?.phone || telefonoCliente || '',
+        isFullPayment: isFullMode && alreadyPaidDeposit === 0,
+      });
+
+      if (!pref?.initPoint) {
+        return {
+          exito: false,
+          citaId: targetCitaId,
+          mensaje: 'No fue posible generar el enlace de Mercado Pago en este momento. Solicita apoyo de recepción.',
+        };
+      }
+
+      await resDoc.ref.set(
+        {
+          link_pago_anticipo: pref.initPoint,
+          ...(isFullMode
+            ? { mercado_pago_link_total: pref.initPoint }
+            : { mercado_pago_link: pref.initPoint }),
+          updated_at: new Date(),
+        },
+        { merge: true }
+      );
+
+      const saldoRestante = isFullMode ? 0 : Math.max(0, totalCita - targetChargeAmount);
+
+      return {
+        exito: true,
+        citaId: targetCitaId,
+        modalidad,
+        montoEnlace: targetChargeAmount,
+        montoTotalCita: totalCita,
+        saldoRestanteSucursal: saldoRestante,
+        linkPago: pref.initPoint,
+        mensaje: isFullMode
+          ? `Enlace generado para liquidar el total de $${targetChargeAmount} MXN (resta $0 MXN en sucursal). Comparte este enlace completo en su propia línea:\n${pref.initPoint}`
+          : `Enlace generado para el anticipo de $${targetChargeAmount} MXN (resta $${saldoRestante} MXN en sucursal). Comparte este enlace completo en su propia línea:\n${pref.initPoint}`,
+      };
+    } catch (e: any) {
+      console.error('Error in generar_enlace_pago_cita:', e);
+      return { exito: false, mensaje: e.message || 'No se pudo generar el enlace de pago.' };
+    }
+  }
+);
+
 export function getAgentTools({ userPickingSlot }: { userPickingSlot?: boolean } = {}) {
   return [
     verificarORegistrarClienteTool,
@@ -1472,6 +1615,7 @@ export function getAgentTools({ userPickingSlot }: { userPickingSlot?: boolean }
     consultarBarberosTool,
     consultarDisponibilidadTool,
     ...(userPickingSlot ? [] : [crearCitaTool]),
+    generarEnlacePagoCitaTool,
     agregarProductoACitaTool,
     reagendarCitaTool,
     consultarCitasClienteTool,

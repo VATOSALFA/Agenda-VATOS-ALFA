@@ -450,7 +450,7 @@ export const consultarPoliticasYTerminosTool = ai.defineTool(
       const urlPrivacidad = 'https://vatosalfa.com/privacidad';
 
       const resumenTerminos =
-        '1. Tolerancia máxima de 10 minutos para iniciar la cita. Tras 10 min sin presencia ni aviso previo, se marca como "No Show" y se libera el espacio.\n' +
+        '1. Tolerancia máxima de 5 minutos para iniciar la cita. Tras 5 min sin presencia ni aviso previo, se marca como "No Show" y se libera el espacio.\n' +
         '2. Anticipos de garantía: Aplican para citas iguales o mayores a $190 MXN (o servicios específicos). Se abonan en línea por Mercado Pago o transferencia y se descuentan del total en recepción.\n' +
         '3. Cancelaciones y Reagendaciones: Si se notifica con al menos 2 horas de anticipación, el 100% del anticipo se guarda como saldo a favor válido por 30 días. Cancelaciones con menos de 2 horas o No-Show causan la pérdida del anticipo.\n' +
         '4. Si la barbería debe cancelar por causas de fuerza mayor, el cliente recibe reagendación prioritaria o el reembolso del 100% de su anticipo.\n' +
@@ -458,7 +458,7 @@ export const consultarPoliticasYTerminosTool = ai.defineTool(
 
       const politicaCancelacionYAnticipos =
         '• Con aviso de 2 horas o más: Tu anticipo queda 100% respaldado como saldo a favor en tu cuenta para reagendar en los siguientes 30 días.\n' +
-        '• Con menos de 2 horas o inasistencia (No Show tras 10 min de tolerancia): Se pierde el anticipo por concepto de apartado y tiempo reservado del barbero.\n' +
+        '• Con menos de 2 horas o inasistencia (No Show tras 5 min de tolerancia): Se pierde el anticipo por concepto de apartado y tiempo reservado del barbero.\n' +
         '• Por causas imputables a la barbería: Reagendación prioritaria inmediata o devolución del 100% del anticipo pagado.';
 
       const resumenPrivacidad =
@@ -489,7 +489,7 @@ export const consultarPoliticasYTerminosTool = ai.defineTool(
       return {
         urlTerminos: 'https://vatosalfa.com/terminos',
         urlPrivacidad: 'https://vatosalfa.com/privacidad',
-        resumenTerminos: 'Tolerancia de 10 minutos, cancelaciones con 2 horas de anticipación conservan saldo por 30 días.',
+        resumenTerminos: 'Tolerancia de 5 minutos, cancelaciones con 2 horas de anticipación conservan saldo por 30 días.',
         resumenPrivacidad: 'Datos usados exclusivamente para citas y recordatorios, no se comparten con terceros.',
         politicaCancelacionYAnticipos: 'Avisando con 2h se conserva el saldo a favor; menos de 2h o inasistencia se pierde el anticipo.',
       };

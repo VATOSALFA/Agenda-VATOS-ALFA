@@ -1159,7 +1159,7 @@ export async function getPublicServiciosConfig() {
                 penalizacion_anticipo_porcentaje: 50,
                 tiempo_minimo_anticipacion_minutos: 30,
                 dias_maximos_futuro: 14,
-                tolerancia_puntualidad_minutos: 10,
+                tolerancia_puntualidad_minutos: 5,
             };
         }
 
@@ -1180,7 +1180,7 @@ export async function getPublicServiciosConfig() {
                 penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
                 tiempo_minimo_anticipacion_minutos: Number(data.tiempo_minimo_anticipacion_minutos) || 30,
                 dias_maximos_futuro: Number(data.dias_maximos_futuro) || 14,
-                tolerancia_puntualidad_minutos: Number(data.tolerancia_puntualidad_minutos) || 10,
+                tolerancia_puntualidad_minutos: Number(data.tolerancia_puntualidad_minutos) || 5,
                 reglas_personalizadas: Array.isArray(data.reglas_personalizadas) ? data.reglas_personalizadas : [],
             };
         }
@@ -1202,7 +1202,7 @@ export async function getPublicServiciosConfig() {
                 penalizacion_anticipo_porcentaje: Number(data.penalizacion_anticipo_porcentaje) > 0 ? Number(data.penalizacion_anticipo_porcentaje) : 50,
                 tiempo_minimo_anticipacion_minutos: 30,
                 dias_maximos_futuro: 14,
-                tolerancia_puntualidad_minutos: 10,
+                tolerancia_puntualidad_minutos: 5,
             };
         }
     } catch (e) {
@@ -1222,7 +1222,7 @@ export async function getPublicServiciosConfig() {
         penalizacion_anticipo_porcentaje: 50,
         tiempo_minimo_anticipacion_minutos: 30,
         dias_maximos_futuro: 14,
-        tolerancia_puntualidad_minutos: 10,
+        tolerancia_puntualidad_minutos: 5,
     };
 }
 

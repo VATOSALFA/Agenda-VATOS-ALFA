@@ -1159,8 +1159,8 @@ export function ReservationDetailModal({
                   >
                     {reservation.estado === 'Cancelado' ? 'Cancelada' :
                       (reservation.pago_estado === 'pending_payment' || reservation.pago_estado === 'pending' || reservation.pago_estado === 'pendiente_anticipo') ? 'Pendiente Anticipo' :
-                        isDepositPaid ? 'Anticipo Pagado' :
-                          reservation.pago_estado === 'Pagado' ? 'Pagada Completa' :
+                        reservation.pago_estado === 'Pagado' ? 'Pagada Completa' :
+                          isDepositPaid ? 'Anticipo Pagado' :
                             reservation.pago_estado || 'Sin Pago'}
                   </Badge>
                 </div>
@@ -1493,7 +1493,11 @@ export function ReservationDetailModal({
                   <DollarSign className="w-4 h-4 text-blue-400" />
                   <div>
                     <span className="font-semibold text-foreground">Total Cita: ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
-                    {depositAmount > 0 ? (
+                    {reservation.pago_estado === 'Pagado' ? (
+                      <span className="text-muted-foreground ml-2">
+                        (Liquidada al 100%: <strong className="text-blue-400">${Number(depositAmount > 0 ? depositAmount : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
+                      </span>
+                    ) : depositAmount > 0 ? (
                       <span className="text-muted-foreground ml-2">
                         (Anticipo pagado: <strong className="text-blue-400">${Number(depositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
                       </span>

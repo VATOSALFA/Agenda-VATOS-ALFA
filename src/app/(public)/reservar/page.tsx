@@ -14,7 +14,7 @@ import { CustomLoader } from '@/components/ui/custom-loader';
 import { format, isBefore, startOfToday, parse, set, addMinutes, isAfter, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, ArrowRight, X, Share2, Info, ShieldCheck, Phone, Mail } from 'lucide-react';
+import { Check, CheckCircle, ChevronLeft, ChevronRight, Clock, User, Scissors, Users, Trash2, Plus, Minus, CalendarDays, Layers, UserCheck, Edit2, ShoppingBag, Loader2, Sparkles, ArrowRight, X, Share2, Info, ShieldCheck, Phone, Mail, CreditCard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { createPublicReservation, getAvailableSlots, getPublicServiciosConfig, checkClientBookingEligibility } from '@/lib/actions/booking';
@@ -528,6 +528,19 @@ export default function BookingPage() {
             isSameDayDepositApplied: sameDayApplied
         };
     }, [cart, productCart, configs, tempTime, serviciosConfig, historyRequiresDeposit, historyPenaltyPercent, sameDayRequiresDeposit, sameDayDepositPercent]);
+
+    const [payFullAmountOnline, setPayFullAmountOnline] = useState(false);
+
+    useEffect(() => {
+        if (upfrontTotal <= 0 || upfrontTotal >= totalPrice - 0.01) {
+            setPayFullAmountOnline(false);
+        }
+    }, [upfrontTotal, totalPrice]);
+
+    const canChooseFullPayment = upfrontTotal > 0 && upfrontTotal < (totalPrice - 0.01);
+    const isPayingFullToday = upfrontTotal > 0 && (payFullAmountOnline || upfrontTotal >= (totalPrice - 0.01));
+    const effectiveAmountToPayToday = isPayingFullToday ? totalPrice : upfrontTotal;
+
     const totalDuration = useMemo(() => cart.reduce((acc, item) => acc + Number(item.service.duration || 0), 0), [cart]);
 
     // --- SORTED SERVICES ---
@@ -1000,9 +1013,9 @@ export default function BookingPage() {
                     endTime: endTime,
                     duration: actualTotalDuration,
                     locationId: cfg.professional.local_id || locales?.[0]?.id || 'default',
-                    amountDue: upfrontTotal,
+                    amountDue: effectiveAmountToPayToday,
                     totalAmount: totalPrice,
-                    paymentType: upfrontTotal < (totalPrice - 0.01) ? 'deposit' : 'full',
+                    paymentType: effectiveAmountToPayToday < (totalPrice - 0.01) ? 'deposit' : 'full',
                     // recaptchaToken: token
                 });
             } else {
@@ -1022,6 +1035,9 @@ export default function BookingPage() {
                                     ? ((Number(serviciosConfig?.anticipo_horario_apertura_porcentaje) || Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100)
                                     : ((Number(serviciosConfig?.anticipo_porcentaje_defecto) || 50) / 100)));
                         itemUpfront = itemPrice * pct;
+                    }
+                    if (isPayingFullToday && itemUpfront > 0) {
+                        itemUpfront = itemPrice;
                     }
 
                     const customDur = item.service.durationPorProfesional?.[cfg.professionalId || ''];
@@ -1062,9 +1078,14 @@ export default function BookingPage() {
                 }
             }
 
-            if (upfrontTotal > 0 && !isSandboxMode) {
+            if (effectiveAmountToPayToday > 0 && !isSandboxMode) {
                 // PAYMENT FLOW - DO NOT CREATE RESERVATION YET
                 try {
+                    const servicesSummaryTitle = [
+                        ...cart.map(c => c.service.name),
+                        ...productCart.map(p => p.nombre)
+                    ].filter(Boolean).join(', ');
+
                     const response = await fetch('/api/mercadopago/preference', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1073,13 +1094,13 @@ export default function BookingPage() {
                             bookingData: bookingsPayload,
                             items: [
                                 {
-                                    id: 'deposit',
-                                    title: `Anticipo: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
-                                    description: `Pago de anticipo para reserva de: ${cart.map(c => c.service.name).join(', ')}`.substring(0, 250),
+                                    id: isPayingFullToday ? 'full_payment' : 'deposit',
+                                    title: `${isPayingFullToday ? 'Pago Total Cita' : 'Anticipo'}: ${servicesSummaryTitle}`.substring(0, 250),
+                                    description: `${isPayingFullToday ? 'Pago total (100%)' : 'Pago de anticipo'} para reserva de: ${servicesSummaryTitle}`.substring(0, 250),
                                     category_id: 'services',
                                     quantity: 1,
                                     currency_id: 'MXN',
-                                    unit_price: upfrontTotal
+                                    unit_price: effectiveAmountToPayToday
                                 }
                             ],
                             payer: clientDetails
@@ -1119,7 +1140,9 @@ export default function BookingPage() {
                 for (const booking of bookingsPayload) {
                     const res = await createPublicReservation({
                         ...booking,
-                        paymentStatus: (upfrontTotal > 0 && isSandboxMode) ? 'deposit_paid' : 'pending',
+                        paymentStatus: (effectiveAmountToPayToday > 0 && isSandboxMode)
+                            ? (isPayingFullToday ? 'Pagado' : 'deposit_paid')
+                            : 'pending',
                         isSandbox: isSandboxMode,
                         recaptchaToken: token
                     });
@@ -2641,11 +2664,73 @@ export default function BookingPage() {
                                                     </div>
                                                     <div className="flex justify-between text-muted-foreground text-[11px] sm:text-xs">
                                                         <span>Resta por liquidar en barbería:</span>
-                                                        <span className="font-sans font-medium text-foreground">{formatPrice(totalPrice - upfrontTotal)}</span>
+                                                        <span className="font-sans font-medium text-foreground">{formatPrice(Math.max(0, totalPrice - effectiveAmountToPayToday))}</span>
                                                     </div>
                                                 </div>
 
-                                                {/* BLOQUE DESTACADO: MONTO A PAGAR HOY (ANTICIPO) */}
+                                                {/* SELECTOR DE MODALIDAD DE PAGO EN LÍNEA: ANTICIPO VS LIQUIDAR TOTAL */}
+                                                {canChooseFullPayment && (
+                                                    <div className="space-y-1.5 pt-1">
+                                                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                            ¿Cuánto deseas cubrir hoy?
+                                                        </p>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPayFullAmountOnline(false)}
+                                                                className={cn(
+                                                                    "text-left p-3 rounded-xl transition-all cursor-pointer flex items-start justify-between gap-2",
+                                                                    !payFullAmountOnline
+                                                                        ? "border-2 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-[0_4px_16px_rgba(59,130,246,0.14)]"
+                                                                        : "border border-border/70 bg-background hover:border-blue-500/50"
+                                                                )}
+                                                            >
+                                                                <div className="space-y-0.5 min-w-0">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <CreditCard className={cn("h-3.5 w-3.5 shrink-0", !payFullAmountOnline ? "text-blue-500" : "text-slate-400")} />
+                                                                        <span className="text-xs font-bold text-foreground">
+                                                                            Pagar Anticipo ({Math.round((upfrontTotal / totalPrice) * 100)}%)
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">
+                                                                        Resta {formatPrice(totalPrice - upfrontTotal)} el día de tu cita.
+                                                                    </p>
+                                                                </div>
+                                                                <span className="font-sans text-sm font-black text-foreground shrink-0">
+                                                                    {formatPrice(upfrontTotal)}
+                                                                </span>
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPayFullAmountOnline(true)}
+                                                                className={cn(
+                                                                    "text-left p-3 rounded-xl transition-all cursor-pointer flex items-start justify-between gap-2",
+                                                                    payFullAmountOnline
+                                                                        ? "border-2 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-[0_4px_16px_rgba(59,130,246,0.14)]"
+                                                                        : "border border-border/70 bg-background hover:border-blue-500/50"
+                                                                )}
+                                                            >
+                                                                <div className="space-y-0.5 min-w-0">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <CheckCircle className={cn("h-3.5 w-3.5 shrink-0", payFullAmountOnline ? "text-blue-500" : "text-slate-400")} />
+                                                                        <span className="text-xs font-bold text-foreground">
+                                                                            Liquidar Total (100%)
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-[11px] text-muted-foreground leading-snug">
+                                                                        Deja tu cita 100% pagada hoy.
+                                                                    </p>
+                                                                </div>
+                                                                <span className="font-sans text-sm font-black text-foreground shrink-0">
+                                                                    {formatPrice(totalPrice)}
+                                                                </span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* BLOQUE DESTACADO: MONTO A PAGAR HOY */}
                                                 <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 shadow-[0_4px_20px_rgba(59,130,246,0.12)] flex items-center justify-between gap-3">
                                                     <div className="space-y-1 min-w-0">
                                                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -2653,16 +2738,20 @@ export default function BookingPage() {
                                                                 Pagar hoy
                                                             </span>
                                                             <span className="font-bold text-xs sm:text-sm text-blue-950 dark:text-blue-200">
-                                                                Anticipo en línea ({Math.round((upfrontTotal / totalPrice) * 100)}%)
+                                                                {isPayingFullToday
+                                                                    ? "Pago Total en línea (100%)"
+                                                                    : `Anticipo en línea (${Math.round((upfrontTotal / totalPrice) * 100)}%)`}
                                                             </span>
                                                         </div>
                                                         <p className="text-[11px] text-muted-foreground leading-tight">
-                                                            Solo pagas este anticipo para asegurar tu cita. El restante se liquida el día de tu cita.
+                                                            {isPayingFullToday
+                                                                ? "Tu cita quedará liquidada por completo hoy. Solo llega directo a tu servicio."
+                                                                : "Solo pagas este anticipo para asegurar tu cita. El restante se liquida el día de tu cita."}
                                                         </p>
                                                     </div>
                                                     <div className="text-right shrink-0">
                                                         <span className="block text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 font-sans tracking-tight">
-                                                            {formatPrice(upfrontTotal)}
+                                                            {formatPrice(effectiveAmountToPayToday)}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -2731,7 +2820,11 @@ export default function BookingPage() {
                                                     <Loader2 className="h-5 w-5 animate-spin" />
                                                     <span>{pendingPaymentReservationId ? "Esperando confirmación de Mercado Pago..." : "Procesando..."}</span>
                                                 </div>
-                                            ) : (upfrontTotal > 0 ? `Proceder al Pago (${formatPrice(upfrontTotal)})` : "Confirmar Reserva")}
+                                            ) : (effectiveAmountToPayToday > 0
+                                                ? (isPayingFullToday
+                                                    ? `Liquidar Total (${formatPrice(effectiveAmountToPayToday)})`
+                                                    : `Proceder al Pago (${formatPrice(effectiveAmountToPayToday)})`)
+                                                : "Confirmar Reserva")}
                                         </Button>
                                         {pendingPaymentReservationId && (
                                             <div className="mt-3 p-3 rounded-xl border border-blue-500/40 bg-blue-500/10 text-center space-y-2">

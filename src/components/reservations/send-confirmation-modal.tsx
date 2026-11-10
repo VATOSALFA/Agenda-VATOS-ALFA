@@ -60,7 +60,8 @@ export function SendConfirmationModal({
   const { toast } = useToast();
   const { db } = useAuth();
   const [whatsappSent, setWhatsappSent] = useState(false);
-  const [paymentLink, setPaymentLink] = useState<string>('');
+  const [linkMode, setLinkMode] = useState<'deposit' | 'full'>('deposit');
+  const [paymentLinksCache, setPaymentLinksCache] = useState<{ deposit?: string; full?: string }>({});
   const [isGeneratingLink, setIsGeneratingLink] = useState<boolean>(false);
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
 
@@ -89,6 +90,14 @@ export function SendConfirmationModal({
     return false;
   }, [reservation, forceAnticipoMode]);
 
+  const totalReservationAmount = useMemo(() => {
+    if (!reservation) return 0;
+    const itemsSum = Array.isArray(reservation.items)
+      ? reservation.items.reduce((acc, it: any) => acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1), 0)
+      : 0;
+    return Number(reservation.total || reservation.precio || itemsSum || 0);
+  }, [reservation]);
+
   const depositAmount = useMemo(() => {
     if (!reservation) return 0;
     if ((reservation as any).anticipo_esperado && (reservation as any).anticipo_esperado > 0) {
@@ -97,9 +106,22 @@ export function SendConfirmationModal({
     if (reservation.monto_anticipo && reservation.monto_anticipo > 0) {
       return Number(reservation.monto_anticipo);
     }
-    const total = Number(reservation.total || reservation.precio || 0);
-    return Math.round(total * 0.5) || 200;
-  }, [reservation]);
+    return Math.round(totalReservationAmount * 0.5) || 200;
+  }, [reservation, totalReservationAmount]);
+
+  const canSwitchToFullLink = isDepositRequired && totalReservationAmount > depositAmount + 0.01;
+  const activeChargeAmount = (linkMode === 'full' && canSwitchToFullLink) ? totalReservationAmount : depositAmount;
+  const paymentLink = linkMode === 'full' ? (paymentLinksCache.full || '') : (paymentLinksCache.deposit || '');
+
+  useEffect(() => {
+    if (isOpen) {
+      setLinkMode('deposit');
+      setPaymentLinksCache({
+        deposit: reservation?.mercado_pago_link || (reservation as any)?.link_pago_anticipo || undefined,
+        full: (reservation as any)?.mercado_pago_link_total || undefined,
+      });
+    }
+  }, [isOpen, reservation?.id]);
 
   useEffect(() => {
     if (isOpen && db) {
@@ -125,10 +147,9 @@ export function SendConfirmationModal({
   useEffect(() => {
     if (!isOpen || !reservation || !isDepositRequired) return;
 
-    if (reservation.mercado_pago_link) {
-      setPaymentLink(reservation.mercado_pago_link);
-      return;
-    }
+    const currentMode = (linkMode === 'full' && canSwitchToFullLink) ? 'full' : 'deposit';
+    if (currentMode === 'deposit' && paymentLinksCache.deposit) return;
+    if (currentMode === 'full' && paymentLinksCache.full) return;
 
     let isMounted = true;
     const generateLink = async () => {
@@ -145,6 +166,7 @@ export function SendConfirmationModal({
         const clientLastName = reservation.customer?.apellido || '';
         const clientEmail = reservation.customer?.correo || (reservation as any).cliente_email || '';
         const clientPhone = reservation.customer?.telefono || (reservation as any).cliente_telefono || '';
+        const targetAmount = currentMode === 'full' ? totalReservationAmount : depositAmount;
 
         const res = await fetch('/api/mercadopago/preference', {
           method: 'POST',
@@ -153,9 +175,10 @@ export function SendConfirmationModal({
             reservationId: reservation.id,
             items: [
               {
-                title: `Anticipo Cita - ${servicesText}`,
+                id: currentMode === 'full' ? 'full_payment' : 'deposit',
+                title: `${currentMode === 'full' ? 'Pago Total Cita' : 'Anticipo Cita'} - ${servicesText}`,
                 quantity: 1,
-                unit_price: depositAmount,
+                unit_price: targetAmount,
               },
             ],
             payer: {
@@ -170,11 +193,21 @@ export function SendConfirmationModal({
         const data = await res.json();
         if (isMounted) {
           if (data.init_point) {
-            setPaymentLink(data.init_point);
+            setPaymentLinksCache((prev) => ({
+              ...prev,
+              [currentMode]: data.init_point,
+            }));
             if (db && reservation.id) {
               await updateDoc(doc(db, 'reservas', reservation.id), {
-                mercado_pago_link: data.init_point,
-                mercado_pago_preference_id: data.id,
+                ...(currentMode === 'full'
+                  ? {
+                      mercado_pago_link_total: data.init_point,
+                      mercado_pago_preference_id_total: data.id,
+                    }
+                  : {
+                      mercado_pago_link: data.init_point,
+                      mercado_pago_preference_id: data.id,
+                    }),
                 anticipo_esperado: depositAmount,
                 requiere_anticipo: true,
               }).catch(console.error);
@@ -200,7 +233,7 @@ export function SendConfirmationModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, reservation, isDepositRequired, depositAmount, db, toast]);
+  }, [isOpen, reservation, isDepositRequired, depositAmount, totalReservationAmount, linkMode, canSwitchToFullLink, paymentLinksCache.deposit, paymentLinksCache.full, db, toast]);
 
   const allProfessionalNames = useMemo(() => {
     if (!reservation?.items || !professionals) return reservation?.professionalNames || 'Profesional';
@@ -242,19 +275,24 @@ export function SendConfirmationModal({
 
     if (isDepositRequired) {
       const activeLink = paymentLink || (isGeneratingLink ? '[Generando enlace de pago SPEI...]' : '');
-      const formattedDeposit = Number(depositAmount || 0).toLocaleString('es-MX', {
+      const formattedAmount = Number(activeChargeAmount || 0).toLocaleString('es-MX', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
-      return whatsappAnticipoTemplate
+      let msg = whatsappAnticipoTemplate
         .replace(/{nombre}/g, clientName)
         .replace(/{servicios}/g, servicesText)
         .replace(/{fecha}/g, dateStr)
         .replace(/{hora}/g, reservation.hora_inicio || '')
         .replace(/{profesional}/g, allProfessionalNames)
         .replace(/{ubicacion}/g, locationStr)
-        .replace(/{monto_anticipo}/g, formattedDeposit)
+        .replace(/{monto_anticipo}/g, formattedAmount)
         .replace(/{link_pago}/g, activeLink);
+
+      if (linkMode === 'full' && canSwitchToFullLink) {
+        msg = msg.replace(/tu anticipo de/gi, 'tu pago total de');
+      }
+      return msg;
     }
 
     return whatsappTemplate
@@ -420,24 +458,54 @@ export function SendConfirmationModal({
           {/* DEDICATED MERCADO PAGO / SPEI BOX IF DEPOSIT REQUIRED */}
           {isDepositRequired && (
             <div className="bg-gradient-to-br from-[#10172b]/50 via-[#1c2847]/30 to-[#10172b]/50 border-2 border-blue-500/30 rounded-xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 font-bold shrink-0">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
+                  <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
                   <div>
-                    <p className="font-bold text-xs text-foreground">
-                      Anticipo Requerido: <span className="text-blue-400 font-extrabold">${Number(depositAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                    <p className="font-bold text-xs text-foreground font-sans">
+                      {linkMode === 'full' && canSwitchToFullLink ? 'Liquidar Total:' : 'Anticipo Requerido:'}{' '}
+                      <span className="text-blue-400 font-extrabold">
+                        ${Number(activeChargeAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                      </span>
                     </p>
                     <p className="text-[10px] text-muted-foreground">
                       Transferencia SPEI (18 dígitos) o Tarjeta
                     </p>
                   </div>
                 </div>
-                <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-mono text-[10px] tracking-wide">
+                <Badge className="bg-blue-600 hover:bg-blue-700 text-white font-sans text-[10px] tracking-wide">
                   Mercado Pago
                 </Badge>
               </div>
+
+              {canSwitchToFullLink && (
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-lg bg-background/60 border border-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setLinkMode('deposit')}
+                    className={cn(
+                      'py-1.5 px-2 rounded-md text-[11px] font-semibold font-sans transition-all cursor-pointer',
+                      linkMode === 'deposit'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Anticipo (${Number(depositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkMode('full')}
+                    className={cn(
+                      'py-1.5 px-2 rounded-md text-[11px] font-semibold font-sans transition-all cursor-pointer',
+                      linkMode === 'full'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Liquidar Total (${Number(totalReservationAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                  </button>
+                </div>
+              )}
 
               {/* Payment Link Display & Copy Actions */}
               <div className="flex items-center gap-2">

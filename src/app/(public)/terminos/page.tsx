@@ -56,10 +56,10 @@ export default function TerminosPage() {
                         </h3>
                         <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                             <li>
-                                <strong>Tolerancia máxima de 10 minutos:</strong> Con el fin de salvaguardar el tiempo de todos los clientes y la agenda del profesional, se otorga una tolerancia máxima de 10 minutos.
+                                <strong>Tolerancia máxima de 5 minutos:</strong> Con el fin de salvaguardar el tiempo de todos los clientes y la agenda del profesional, se otorga una tolerancia máxima de 5 minutos.
                             </li>
                             <li>
-                                <strong>Inasistencia por retraso (No Show):</strong> Transcurridos los 10 minutos de tolerancia sin previo aviso, la cita se considerará cancelada por inasistencia.
+                                <strong>Inasistencia por retraso (No Show):</strong> Transcurridos los 5 minutos de tolerancia sin previo aviso, la cita se considerará cancelada por inasistencia.
                             </li>
                             <li>
                                 <strong>Llegada anticipada:</strong> Se sugiere presentarse en la sucursal de 5 a 10 minutos antes de la hora reservada.

@@ -198,7 +198,7 @@ export async function processAgentMessage({
     const bankClabe = sofiaConfig?.bankClabe || '';
     const depositInstructions = sofiaConfig?.depositInstructions || 'El enlace seguro de Mercado Pago te permite pagar con tarjeta o mediante transferencia SPEI directa con confirmación automática instantánea.';
     const takeoverKeywordsStr = sofiaConfig?.takeoverKeywords || 'humano, humana, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor, operador, atencion humana, persona real';
-    const punctualityTolerance = sofiaConfig?.punctualityToleranceMinutes ?? 10;
+    const punctualityTolerance = sofiaConfig?.punctualityToleranceMinutes ?? 5;
     const minChildAge = sofiaConfig?.minChildAge ?? 3;
     const addressReferences = sofiaConfig?.addressReferences || 'Sobre Av. Cerro Sombrerete, Col. Cipreses. Contamos con cajones de estacionamiento al frente para clientes.';
 
@@ -722,7 +722,10 @@ ${alreadyOfferedUpsellToday
 
 ANTICIPOS Y PAGOS:
 - Los montos, porcentajes y necesidad de anticipo son los devueltos por las herramientas, nunca un ejemplo fijo.
-- Si requiere anticipo, explica con claridad que la cita queda en estado "Pendiente de pago". Comparte únicamente el linkPago real, completo y en su propia línea. Advierte amablemente al cliente que cuenta con 20 minutos de tolerancia para liquidar su anticipo o la cita se cancelará automáticamente para liberar el espacio.
+- Si la cita NO requiere anticipo, confírmala limpio para liquidar directo en sucursal (sin enviar pasarela de pago, salvo que el cliente pida explícitamente pagar todo en línea por adelantado).
+- Si la cita SÍ requiere anticipo, explica con claridad que queda en estado "Pendiente de pago" y comparte únicamente el linkPago real, completo y en su propia línea. Advierte amablemente al cliente que cuenta con 30 minutos de tolerancia para realizar su pago o la cita se cancelará automáticamente para liberar el espacio.
+- OPCIÓN DE LIQUIDAR EL 100% EN LÍNEA: Si al momento de agendar el cliente indica que prefiere pagar el total completo de una vez (ej. "quiero dejar pagado el total", "mándame liga por todo"), pasa liquidarTotalEnLinea: true en crear_cita. Si la cita ya fue registrada y el cliente después te pide pagar el 100% en vez de solo el anticipo (ej. "mejor mándame el link por los 140 completos"), NUNCA crees otra cita duplicada: llama a generar_enlace_pago_cita con modalidad: "total" y envíale la nueva liga.
+- CERO PROPINAS EN LÍNEA: Jamás pidas ni agregues propina en anticipos o pagos en línea; las propinas solo se manejan opcionalmente en sucursal al concluir el servicio.
 - Una captura o "ya pagué" no confirma fondos. El comprobante queda en el chat; la validación corresponde al sistema de pagos o a recepción. Si necesita revisión, usa solicitar_recepcion sin pedir que pague dos veces.
 - Confirmar asistencia no confirma el pago ni elimina un anticipo pendiente.
 - Datos configurados para transferencia: banco ${bankName}, titular ${bankAccountHolder}, CLABE ${bankClabe || 'no configurada; no inventes una'}.

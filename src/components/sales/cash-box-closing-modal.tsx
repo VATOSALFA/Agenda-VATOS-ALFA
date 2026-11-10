@@ -270,11 +270,11 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                         <button
                           type="button"
                           onClick={() => setDenominationCounts(initialDenominations)}
-                          className="text-xs text-slate-400 hover:text-white transition-colors p-1 flex items-center gap-1"
+                          className="text-xs text-slate-400 hover:text-white transition-colors p-1 flex items-center gap-1 cursor-pointer"
                           title="Limpiar conteo"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline text-[11px]">Limpiar</span>
+                          <span className="text-[11px]">Limpiar</span>
                         </button>
                         <button
                           type="button"
@@ -323,15 +323,6 @@ export function CashBoxClosingModal({ isOpen, onOpenChange, onFormSubmit, initia
                             </div>
                           );
                         })}
-                        {/* 12th card: Limpiar conteo */}
-                        <button
-                          type="button"
-                          onClick={() => setDenominationCounts(initialDenominations)}
-                          className="flex items-center justify-center gap-1 p-2 rounded-xl border border-dashed border-border/60 bg-muted/10 text-muted-foreground hover:text-white hover:bg-muted/20 transition-colors text-xs font-medium cursor-pointer"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          <span>Limpiar todo</span>
-                        </button>
                       </div>
                     )}
                   </div>

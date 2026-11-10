@@ -144,7 +144,7 @@ export default function BookingRulesPage() {
   const [formAvisoAnticipacionMinutos, setFormAvisoAnticipacionMinutos] = useState<number>(120);
   const [formAvisoUrgenteMinutos, setFormAvisoUrgenteMinutos] = useState<number>(60);
   const [formAvisoOmitirMinutos, setFormAvisoOmitirMinutos] = useState<number>(45);
-  const [formAvisoToleranciaMinutos, setFormAvisoToleranciaMinutos] = useState<number>(10);
+  const [formAvisoToleranciaMinutos, setFormAvisoToleranciaMinutos] = useState<number>(5);
   const [formAvisoCanal, setFormAvisoCanal] = useState<'whatsapp' | 'pantalla' | 'ambos'>('whatsapp');
 
   const toggleSection = (
@@ -231,6 +231,10 @@ export default function BookingRulesPage() {
         if (reglasSnap.exists()) {
           const rData = reglasSnap.data() as Partial<ReglasReservasConfig>;
           Object.assign(currentRules, rData);
+          if (!rData.tolerancia_puntualidad_minutos || Number(rData.tolerancia_puntualidad_minutos) === 10) {
+            currentRules.tolerancia_puntualidad_minutos = 5;
+            setDoc(reglasRef, { tolerancia_puntualidad_minutos: 5 }, { merge: true }).catch(() => {});
+          }
           if (!rData.tolerancia_anticipo_minutos || Number(rData.tolerancia_anticipo_minutos) === 20) {
             currentRules.tolerancia_anticipo_minutos = 30;
             setDoc(reglasRef, { tolerancia_anticipo_minutos: 30 }, { merge: true }).catch(() => {});
@@ -312,7 +316,7 @@ export default function BookingRulesPage() {
         cancelacion_politica_descripcion: rules.cancelacion_politica_descripcion || '',
         tiempo_minimo_anticipacion_minutos: Number(rules.tiempo_minimo_anticipacion_minutos) || 30,
         dias_maximos_futuro: Number(rules.dias_maximos_futuro) || 14,
-        tolerancia_puntualidad_minutos: Number(rules.tolerancia_puntualidad_minutos) || 10,
+        tolerancia_puntualidad_minutos: Number(rules.tolerancia_puntualidad_minutos) || 5,
         tolerancia_anticipo_minutos: Number(rules.tolerancia_anticipo_minutos) || 30,
         intervalo_horarios_minutos: Number(rules.intervalo_horarios_minutos) || 30,
         reglas_personalizadas: rules.reglas_personalizadas || [],
@@ -399,7 +403,7 @@ export default function BookingRulesPage() {
     setFormAvisoAnticipacionMinutos(120);
     setFormAvisoUrgenteMinutos(60);
     setFormAvisoOmitirMinutos(45);
-    setFormAvisoToleranciaMinutos(10);
+    setFormAvisoToleranciaMinutos(5);
     setFormAvisoCanal('whatsapp');
     setIsAvisoModalOpen(true);
   };
@@ -413,7 +417,7 @@ export default function BookingRulesPage() {
     setFormAvisoAnticipacionMinutos(aviso.tiempo_anticipacion_minutos ?? 120);
     setFormAvisoUrgenteMinutos(aviso.tiempo_urgente_minutos ?? 60);
     setFormAvisoOmitirMinutos(aviso.omitir_si_creada_en_minutos ?? 45);
-    setFormAvisoToleranciaMinutos(aviso.tolerancia_retraso_minutos ?? 10);
+    setFormAvisoToleranciaMinutos(aviso.tolerancia_retraso_minutos ?? 5);
     setFormAvisoCanal(aviso.canal || (aviso.tipo === 'recordatorio_whatsapp' ? 'whatsapp' : 'pantalla'));
     setIsAvisoModalOpen(true);
   };
@@ -457,7 +461,7 @@ export default function BookingRulesPage() {
           : undefined,
       tolerancia_retraso_minutos:
         formAvisoTipo === 'cita_atrasada_asistencia'
-          ? Number(formAvisoToleranciaMinutos) || 10
+          ? Number(formAvisoToleranciaMinutos) || 5
           : undefined,
       canal: formAvisoCanal,
       es_sistema: editingAvisoRuleId === 'aviso_recordatorio_whatsapp' || editingAvisoRuleId === 'aviso_cita_atrasada',
@@ -1450,12 +1454,12 @@ export default function BookingRulesPage() {
                   onChange={(e) =>
                     setRules((prev) => ({
                       ...prev,
-                      tolerancia_puntualidad_minutos: Number(e.target.value) || 10,
+                      tolerancia_puntualidad_minutos: Number(e.target.value) || 5,
                     }))
                   }
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Minutos de espera antes de marcar retraso o liberar la silla (ej. 10 min).
+                  Minutos de espera antes de marcar retraso o liberar la silla (ej. 5 min).
                 </p>
               </div>
 
@@ -1698,7 +1702,7 @@ export default function BookingRulesPage() {
                             max="60"
                             step="5"
                             className="h-8 font-medium text-xs max-w-[140px]"
-                            value={aviso.tolerancia_retraso_minutos ?? 10}
+                            value={aviso.tolerancia_retraso_minutos ?? 5}
                             onChange={(e) =>
                               updateAvisoRule(aviso.id, {
                                 tolerancia_retraso_minutos: Number(e.target.value) || 0,
@@ -1706,7 +1710,7 @@ export default function BookingRulesPage() {
                             }
                           />
                           <p className="text-[10px] text-muted-foreground">
-                            Tras cumplirse {aviso.tolerancia_retraso_minutos ?? 10} min sin marcar asistencia, la cita aparece para clasificar si asistió o faltó.
+                            Tras cumplirse {aviso.tolerancia_retraso_minutos ?? 5} min sin marcar asistencia, la cita aparece para clasificar si asistió o faltó.
                           </p>
                         </div>
                       )}
@@ -2540,7 +2544,7 @@ export default function BookingRulesPage() {
                     onChange={(e) => setFormAvisoToleranciaMinutos(Number(e.target.value) || 0)}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Tiempo de espera antes de exigir marcar si asistió o no (ej. 10 minutos).
+                    Tiempo de espera antes de exigir marcar si asistió o no (ej. 5 minutos).
                   </p>
                 </div>
               )}

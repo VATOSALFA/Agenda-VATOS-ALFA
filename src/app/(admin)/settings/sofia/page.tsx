@@ -90,7 +90,7 @@ const defaultSofiaSettings: SofiaSettings = {
   botActive: true,
   responseSchedule: '24_7',
   takeoverKeywords: 'humano, humana, persona, recepcionista, recepcion, gerente, queja, hablar con alguien, asesor, operador, atencion humana, persona real',
-  punctualityToleranceMinutes: 10,
+  punctualityToleranceMinutes: 5,
   minChildAge: 3,
   addressReferences: 'Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro. Contamos con cajones de estacionamiento al frente.',
 
@@ -738,7 +738,7 @@ export default function SofiaSettingsPage() {
                       min={0}
                       max={60}
                       value={settings.punctualityToleranceMinutes}
-                      onChange={(e) => handleChange('punctualityToleranceMinutes', Number(e.target.value) || 10)}
+                      onChange={(e) => handleChange('punctualityToleranceMinutes', Number(e.target.value) || 5)}
                       className="h-8 text-xs sm:text-sm font-sans"
                     />
                     <p className="text-[11px] text-muted-foreground">

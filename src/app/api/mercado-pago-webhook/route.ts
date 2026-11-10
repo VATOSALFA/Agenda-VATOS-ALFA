@@ -383,6 +383,7 @@ async function processApprovedPayment(
                     pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : 'deposit_paid',
                     tipo: 'anticipo',
                     tipo_venta: 'anticipo',
+                    modalidad_pago_online: newPaymentStatus === 'Pagado' ? 'pago_total' : 'anticipo',
                     origen: backfillFields.origen,
                     mercado_pago_id: String(paymentInfo.id),
                     mercado_pago_status: 'approved',
@@ -429,14 +430,33 @@ async function processApprovedPayment(
         if (bookingRefsAndDocs.length > 0) {
             console.log(`[Next.js] Creating/updating reservation(s) from metadata for Ref ${external_reference}`);
             const paidAmount = paid;
+            let remainingToDistribute = paidAmount;
 
-            for (let i = 0; i < bookingRefsAndDocs.length; i++) {
-                const { booking, targetId, resRef, resDoc } = bookingRefsAndDocs[i];
+            const bookingTotals = bookingRefsAndDocs.map(({ booking }) => {
                 const itemsSum = Array.isArray(booking.items)
                     ? booking.items.reduce((acc: number, it: any) => acc + (Number(it.precio || it.price || 0) * (Number(it.cantidad) || 1)), 0)
                     : 0;
-                const bTotal = Number(booking.totalAmount || booking.total || booking.precio || itemsSum || paidAmount || 0);
-                const bPaid = (i === 0) ? paidAmount : 0;
+                return Number(booking.totalAmount || booking.total || booking.precio || itemsSum || 0);
+            });
+            const sumAllBookingsTotal = bookingTotals.reduce((acc, v) => acc + v, 0);
+            const isFullMultiPayment = sumAllBookingsTotal > 0 && paidAmount >= sumAllBookingsTotal * 0.99;
+
+            for (let i = 0; i < bookingRefsAndDocs.length; i++) {
+                const { booking, targetId, resRef, resDoc } = bookingRefsAndDocs[i];
+                const bTotal = bookingTotals[i] || (i === 0 ? paidAmount : 0);
+                let bPaid = 0;
+                if (bookingRefsAndDocs.length === 1) {
+                    bPaid = paidAmount;
+                } else if (isFullMultiPayment) {
+                    bPaid = bTotal;
+                } else if (i === bookingRefsAndDocs.length - 1) {
+                    bPaid = Math.max(0, remainingToDistribute);
+                } else {
+                    const expectedItemDue = Number(booking.amountDue || 0);
+                    const targetAlloc = expectedItemDue > 0 ? expectedItemDue : Math.min(bTotal, remainingToDistribute);
+                    bPaid = Math.max(0, Math.min(remainingToDistribute, targetAlloc));
+                }
+                remainingToDistribute = Math.max(0, Math.round((remainingToDistribute - bPaid) * 100) / 100);
                 const bSaldo = Math.max(0, bTotal - bPaid);
 
                 const agendaFields = buildAgendaReservationFields(booking, targetId, bTotal, bPaid, bSaldo);
@@ -466,9 +486,11 @@ async function processApprovedPayment(
 
             const allItems = parsedBookingsArray.flatMap((b: any) => {
                 if (Array.isArray(b.items) && b.items.length > 0) {
-                    return b.items.map((it: any) => ({
+                    return b.items.map((it: any, idx: number) => ({
+                        id: it.id || it.servicio_id || b.serviceIds?.[idx] || `srv_${idx}`,
                         nombre: it.nombre || it.servicio || 'Servicio',
                         precio: Number(it.precio || it.price || 0),
+                        precio_unitario: Number(it.precio || it.price || 0),
                         cantidad: Number(it.cantidad || 1),
                         subtotal: Number(it.precio || it.price || 0) * Number(it.cantidad || 1),
                         tipo: it.tipo || 'servicio',
@@ -478,8 +500,10 @@ async function processApprovedPayment(
                 return (b.serviceNames || []).map((name: string, idx: number) => {
                     const price = Number(b.servicePrices?.[idx] || 0);
                     return {
+                        id: b.serviceIds?.[idx] || `srv_${idx}`,
                         nombre: name,
                         precio: price,
+                        precio_unitario: price,
                         cantidad: 1,
                         subtotal: price,
                         tipo: 'servicio',
@@ -525,6 +549,7 @@ async function processApprovedPayment(
                     pago_estado: pagoEstado,
                     tipo: 'anticipo',
                     tipo_venta: 'anticipo',
+                    modalidad_pago_online: pagoEstado === 'Pagado' ? 'pago_total' : 'anticipo',
                     origen: 'web_publica',
                     mercado_pago_id: String(paymentInfo.id),
                     mercado_pago_status: 'approved',

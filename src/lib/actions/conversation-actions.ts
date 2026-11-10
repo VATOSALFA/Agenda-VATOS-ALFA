@@ -79,6 +79,9 @@ export async function sendStaffMessage({
     const updatePayload: Record<string, any> = {
       ultimo_mensaje: messageText,
       fecha_ultimo_mensaje: now,
+      ultima_respuesta_recepcion: now,
+      esperando_respuesta_recepcion_desde: null,
+      inicio_espera_recepcion: null,
       mensajes_no_leidos: 0,
       updated_at: now,
     };
@@ -110,31 +113,72 @@ export async function toggleConversationMode({
   try {
     const db = getDb();
     const convRef = db.collection('conversaciones').doc(conversationId);
+    const convSnap = await convRef.get();
+    const convData = convSnap.exists ? convSnap.data() : {};
+    const rawClientName = convData?.cliente_nombre || '';
+    const firstName =
+      rawClientName && rawClientName !== 'Cliente'
+        ? String(rawClientName).trim().split(/\s+/)[0]
+        : '';
     const now = new Date();
+
+    const msgRef = convRef.collection('mensajes').doc();
+    const isReturningToBot = mode === 'bot_activo';
+
+    const notificationText =
+      mode === 'humano_al_mando'
+        ? '👤 La recepción tomó el control de la conversación (Janet en espera).'
+        : isReturningToBot
+        ? `¡Hola de nuevo${firstName ? `, ${firstName}` : ''}! 💈 Mis compañeros de recepción me devolvieron el mando de la conversación para seguir atendiéndote sin esperas. ✨\n\nCuéntame, ¿continuamos por aquí para ayudarte con lo que necesitas o prefieres que vuelva a notificar para que te atienda nuevamente una persona?`
+        : '⚠️ Marcado como: Requiere atención de recepción.';
 
     await convRef.set(
       {
         modo_atencion: mode,
+        ...(mode === 'humano_al_mando'
+          ? {
+              ultima_respuesta_recepcion: now,
+              esperando_respuesta_recepcion_desde: null,
+              inicio_espera_recepcion: null,
+            }
+          : {}),
+        ...(mode === 'requiere_atencion'
+          ? {
+              requiere_atencion_humana: true,
+              inicio_espera_recepcion: now,
+              esperando_respuesta_recepcion_desde: now,
+            }
+          : {}),
+        ...(isReturningToBot
+          ? {
+              requiere_atencion_humana: false,
+              motivo_atencion_humana: null,
+              inicio_espera_recepcion: null,
+              esperando_respuesta_recepcion_desde: null,
+              ultimo_mensaje: notificationText,
+              fecha_ultimo_mensaje: now,
+            }
+          : {}),
         updated_at: now,
       },
       { merge: true }
     );
 
-    const msgRef = convRef.collection('mensajes').doc();
-    const notificationText =
-      mode === 'humano_al_mando'
-        ? '👤 La recepción tomó el control de la conversación (Janet en espera).'
-        : mode === 'bot_activo'
-        ? '🤖 Janet reactivada.'
-        : '⚠️ Marcado como: Requiere atención de recepción.';
-
     await msgRef.set({
       id: msgRef.id,
       conversation_id: conversationId,
-      de: 'recepcion',
+      de: isReturningToBot ? 'bot' : 'recepcion',
       texto: notificationText,
       timestamp: now,
-      tipo: 'sistema',
+      tipo: isReturningToBot ? 'texto' : 'sistema',
+      ...(isReturningToBot
+        ? {
+            metadata: {
+              botName: 'Janet',
+              is_manual_reactivation: true,
+            },
+          }
+        : {}),
     });
 
     return { success: true, mode };
@@ -939,6 +983,9 @@ export async function sendAppointmentChatReminder({
 
 export async function checkAndSendPendingChatReminders() {
   try {
+    // Seguro de inactividad (10 minutos): reactivar automáticamente a Janet y avisar al cliente si recepción dejó de contestar
+    await autoReactivateInactiveConversations().catch(() => {});
+
     const db = getDb();
     const sofiaSnap = await db.collection('settings').doc('sofia').get();
     const sofiaConfig = sofiaSnap.exists ? sofiaSnap.data() : null;
@@ -1002,9 +1049,6 @@ export async function checkAndSendPendingChatReminders() {
       }
     }
 
-    // Seguro de inactividad: reactivar automáticamente a Janet en conversaciones con > 1 hora sin interacción
-    await autoReactivateInactiveConversations().catch(() => {});
-
     return { success: true, processed: processedCount };
   } catch (error: any) {
     console.error('Error in checkAndSendPendingChatReminders:', error);
@@ -1012,10 +1056,23 @@ export async function checkAndSendPendingChatReminders() {
   }
 }
 
+function parseTimestampMs(val: any): number {
+  if (!val) return 0;
+  if (typeof val?.toDate === 'function') {
+    const d = val.toDate();
+    return d instanceof Date ? d.getTime() : 0;
+  }
+  if (val instanceof Date) return val.getTime();
+  if (typeof val?.seconds === 'number') return val.seconds * 1000;
+  if (typeof val === 'number') return val;
+  return 0;
+}
+
 export async function autoReactivateInactiveConversations() {
   try {
     const db = getDb();
-    const ONE_HOUR_MS = 60 * 60 * 1000;
+    // 10 minutos + 15s de margen para coordinarse sin duplicados con la App Móvil
+    const HUMAN_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000 + 15000;
     const now = Date.now();
 
     const [snapHumano, snapRequiere] = await Promise.all([
@@ -1028,25 +1085,71 @@ export async function autoReactivateInactiveConversations() {
 
     for (const docSnap of docsToInspect) {
       const data = docSnap.data();
+      const modo = data.modo_atencion;
+      const esperandoDesde = parseTimestampMs(data.esperando_respuesta_recepcion_desde);
+      const inicioEspera = parseTimestampMs(data.inicio_espera_recepcion);
+      const ultimaRecepcion = parseTimestampMs(data.ultima_respuesta_recepcion);
       const lastActivity =
-        data.fecha_ultimo_mensaje?.toDate?.()?.getTime?.() ||
-        (data.fecha_ultimo_mensaje instanceof Date ? data.fecha_ultimo_mensaje.getTime() : 0) ||
-        (typeof data.fecha_ultimo_mensaje?.seconds === 'number' ? data.fecha_ultimo_mensaje.seconds * 1000 : 0) ||
-        data.updated_at?.toDate?.()?.getTime?.() ||
-        (data.updated_at instanceof Date ? data.updated_at.getTime() : 0) ||
-        (typeof data.updated_at?.seconds === 'number' ? data.updated_at.seconds * 1000 : 0) ||
+        parseTimestampMs(data.fecha_ultimo_mensaje) ||
+        parseTimestampMs(data.updated_at) ||
         0;
 
-      if (lastActivity > 0 && now - lastActivity >= ONE_HOUR_MS) {
+      const referenceTime =
+        esperandoDesde ||
+        (modo === 'requiere_atencion' ? inicioEspera : 0) ||
+        ultimaRecepcion ||
+        lastActivity;
+
+      if (referenceTime > 0 && now - referenceTime >= HUMAN_INACTIVITY_TIMEOUT_MS) {
+        const rawClientName = data.cliente_nombre || '';
+        const firstName =
+          rawClientName && rawClientName !== 'Cliente'
+            ? String(rawClientName).trim().split(/\s+/)[0]
+            : '';
+        const wasAlreadyTalkingToHuman = modo === 'humano_al_mando';
+
+        const resumeMessageText = wasAlreadyTalkingToHuman
+          ? `¡Hola${firstName ? `, ${firstName}` : ''}! 💈 Te pido una disculpa por la demora; parece que la persona de recepción que te estaba atendiendo se ocupó en sucursal y ya no pudo contestarte, así que retomo yo la plática para que nunca te quedes esperando. ✨\n\nCuéntame, ¿continuamos por aquí para ayudarte con lo que necesitas o prefieres que vuelva a notificar para que te atienda nuevamente una persona?`
+          : `¡Hola${firstName ? `, ${firstName}` : ''}! 💈 Te pido una disculpa por la espera; en este momento el equipo de recepción no pudo responder a tiempo por estar atendiendo en sucursal, así que retomo yo la plática para que nunca te quedes esperando. ✨\n\nCuéntame, ¿continuamos por aquí para ayudarte con lo que necesitas o prefieres que vuelva a notificar para que te atienda nuevamente una persona?`;
+
+        const deterministicMsgId = `auto_retome_${Math.floor(referenceTime / 60000)}`;
+        const nowDate = new Date();
+
         await docSnap.ref.set(
           {
             modo_atencion: 'bot_activo',
             requiere_atencion_humana: false,
             motivo_atencion_humana: null,
-            updated_at: new Date(),
+            inicio_espera_recepcion: null,
+            esperando_respuesta_recepcion_desde: null,
+            ultimo_auto_retome_at: nowDate,
+            ultimo_mensaje: resumeMessageText,
+            fecha_ultimo_mensaje: nowDate,
+            updated_at: nowDate,
           },
           { merge: true }
         );
+
+        await docSnap.ref
+          .collection('mensajes')
+          .doc(deterministicMsgId)
+          .set(
+            {
+              id: deterministicMsgId,
+              conversation_id: docSnap.id,
+              de: 'bot',
+              texto: resumeMessageText,
+              timestamp: nowDate,
+              tipo: 'texto',
+              metadata: {
+                botName: 'Janet',
+                is_auto_reactivation: true,
+                reactivation_reason: 'inactivity',
+              },
+            },
+            { merge: true }
+          );
+
         reactivated++;
       }
     }

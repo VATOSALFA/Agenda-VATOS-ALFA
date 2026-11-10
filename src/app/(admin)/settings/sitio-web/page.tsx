@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag, Maximize2, FileText, X } from "lucide-react";
+import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag, Maximize2, FileText, X, Star, ExternalLink } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +85,9 @@ export default function SitioWebPage() {
             professionalPreference: 'client_choice',
             reviewSystemEnabled: true,
             showReviews: 'all',
+            googleRating: 4.5,
+            googleReviewCount: 102,
+            googlePlaceId: 'ChIJxQ4hagBb04URwQM4y5UsX-U',
             customerFields: customerFields.reduce((acc, field) => {
                 acc[field.id] = { use: true, required: ['email', 'phone'].includes(field.id) };
                 return acc;
@@ -118,6 +121,9 @@ export default function SitioWebPage() {
                     form.reset({
                         ...form.getValues(),
                         ...data,
+                        googleRating: data.googleRating !== undefined ? data.googleRating : 4.5,
+                        googleReviewCount: data.googleReviewCount !== undefined ? data.googleReviewCount : 102,
+                        googlePlaceId: data.googlePlaceId || 'ChIJxQ4hagBb04URwQM4y5UsX-U',
                         heroDescription: data.heroDescription || '',
                         description: data.description || '',
                         slotInterval: data.slotInterval || 30,
@@ -137,6 +143,9 @@ export default function SitioWebPage() {
         try {
             const saveData: any = {
                 ...data,
+                googleRating: typeof data.googleRating === 'number' && !isNaN(data.googleRating) ? data.googleRating : 4.5,
+                googleReviewCount: typeof data.googleReviewCount === 'number' && !isNaN(data.googleReviewCount) ? data.googleReviewCount : 102,
+                googlePlaceId: data.googlePlaceId || 'ChIJxQ4hagBb04URwQM4y5UsX-U',
                 minReservationTime: Number(data.minReservationTime || 1),
                 maxFutureTime: Number(data.maxFutureTime || 14),
                 customerFields: data.customerFields
@@ -291,6 +300,81 @@ export default function SitioWebPage() {
                                     <p className="text-[11px] text-muted-foreground">
                                         Párrafo informativo que se muestra en la página web inmediatamente abajo del Hero. Máximo 450 caracteres.
                                     </p>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* 1.1 CALIFICACIÓN Y OPINIONES DE GOOGLE MAPS */}
+                        <Card className="border border-border/70 shadow-xs overflow-hidden">
+                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Star className="h-4 w-4 text-[#C5A880] shrink-0 fill-[#C5A880]" />
+                                        <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                            Calificación y Opiniones en Google Maps
+                                        </CardTitle>
+                                    </div>
+                                    <a
+                                        href="https://www.google.com/maps/place/?q=place_id:ChIJxQ4hagBb04URwQM4y5UsX-U"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1 font-medium"
+                                    >
+                                        Ver en Google Maps <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </div>
+                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
+                                    Configura las estrellas y el número de reseñas reales visibles en los chips de prueba social del sitio web.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-3 sm:p-5 space-y-3.5">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Calificación (Estrellas)
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            step="0.1"
+                                            min="1"
+                                            max="5"
+                                            placeholder="4.5"
+                                            className="h-8 text-xs sm:text-sm font-sans"
+                                            {...form.register('googleRating', { valueAsNumber: true })}
+                                        />
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Ej: 4.5 (se refleja en estrellas doradas).
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Total de Opiniones Reales
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            step="1"
+                                            min="0"
+                                            placeholder="102"
+                                            className="h-8 text-xs sm:text-sm font-sans"
+                                            {...form.register('googleReviewCount', { valueAsNumber: true })}
+                                        />
+                                        <p className="text-[10px] text-muted-foreground">
+                                            Ej: 102 opiniones en Google.
+                                        </p>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-xs font-semibold text-foreground">
+                                            Google Place ID
+                                        </Label>
+                                        <Input
+                                            placeholder="ChIJxQ4hagBb04URwQM4y5UsX-U"
+                                            className="h-8 text-xs sm:text-sm font-mono"
+                                            {...form.register('googlePlaceId')}
+                                        />
+                                        <p className="text-[10px] text-muted-foreground">
+                                            ID del negocio en Google Maps.
+                                        </p>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

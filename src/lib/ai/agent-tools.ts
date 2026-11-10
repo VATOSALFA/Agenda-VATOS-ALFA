@@ -1424,18 +1424,19 @@ export const solicitarRecepcionTool = ai.defineTool(
       const trustedId = context?.conversationId;
       if (context) context.humanHandoffRequested = true;
       if (!trustedId) throw new Error('Falta el contexto de la conversación.');
+      const now = new Date();
       await db.collection('conversaciones').doc(trustedId).set(
         {
           modo_atencion: 'requiere_atencion',
           requiere_atencion_humana: true,
           motivo_atencion_humana: motivo,
+          inicio_espera_recepcion: now,
+          esperando_respuesta_recepcion_desde: now,
           mensajes_no_leidos: FieldValue.increment(1),
-          updated_at: new Date(),
+          updated_at: now,
         },
         { merge: true }
       );
-
-      const now = new Date();
       const timeZone = 'America/Mexico_City';
       const dayStr = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(now);
       const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };

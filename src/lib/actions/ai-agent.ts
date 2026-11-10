@@ -177,6 +177,17 @@ export async function processAgentMessage({
       // Usar valores predeterminados
     }
 
+    // Cargar configuración de Garantías y Retoques desde Firestore
+    let garantiasConfig: any = null;
+    try {
+      const garantiasDoc = await db.collection('settings').doc('garantias').get();
+      if (garantiasDoc.exists) {
+        garantiasConfig = garantiasDoc.data();
+      }
+    } catch (e) {
+      // Usar valores predeterminados
+    }
+
     const botActive = sofiaConfig ? sofiaConfig.botActive !== false : true;
     const assistantName = sofiaConfig?.assistantName || 'Janet';
     const assistantRole = sofiaConfig?.assistantRole || 'Recepcionista Humana de Barbería';
@@ -191,6 +202,12 @@ export async function processAgentMessage({
     const minChildAge = sofiaConfig?.minChildAge ?? 3;
     const addressReferences = sofiaConfig?.addressReferences || 'Sobre Av. Cerro Sombrerete, Col. Cipreses. Contamos con cajones de estacionamiento al frente para clientes.';
 
+    // Palabras clave combinadas para traspaso humano (incluyendo alertas de garantías graves)
+    const garantiasKeywords = garantiasConfig?.escalamientoHumano?.activo !== false
+      ? (garantiasConfig?.escalamientoHumano?.palabrasClave || '')
+      : '';
+    const combinedTakeoverKeywords = [takeoverKeywordsStr, garantiasKeywords].filter(Boolean).join(', ');
+
     // Cargar configuración de WhatsApp (plantillas de confirmación y recordatorio)
     let whatsappConfig: any = null;
     try {
@@ -204,7 +221,7 @@ export async function processAgentMessage({
     const whatsappReminderTpl = whatsappConfig?.whatsappReminderTemplate || '¡Hola *{nombre}*, te recordamos tu cita 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n💈 *Servicio(s):* {servicios}\n📍 *Ubicación:* {ubicacion}\n\n⚠️ IMPORTANTE: Para mantener tu espacio reservado, por favor confirma respondiendo a este mensaje a más tardar 30 minutos antes de tu hora de cita. De lo contrario, la cita se cancelará automáticamente para liberar el turno.\nAgradecemos tu puntualidad. En caso de llegar con retraso y haber clientes en espera, la cita se reprogramará según disponibilidad.\n\nResponde este mensaje con:\n*Confirmar*\n*Reagendar*\n*Cancelar*\n\nvatosalfa.com';
 
     // Verificar si el mensaje del usuario contiene palabras clave de traspaso humano
-    const isTakeover = requestsHuman(effectiveUserMessage, takeoverKeywordsStr);
+    const isTakeover = requestsHuman(effectiveUserMessage, combinedTakeoverKeywords);
 
     const ONE_HOUR_MS = 60 * 60 * 1000;
     const lastActivityTime =
@@ -577,6 +594,35 @@ export async function processAgentMessage({
         toneDescription = 'estilo formal, conciso, sobrio y ejecutivo, yendo al grano de forma clara y respetuosa';
       }
 
+      const garantiasActive = garantiasConfig ? garantiasConfig.activa !== false : true;
+      const ventanaGarantia = Number(garantiasConfig?.ventanaHoras) || 48;
+      const duracionRetoque = Number(garantiasConfig?.duracionRetoqueMinutos) || 20;
+      const costoRetoqueStr = garantiasConfig?.costoRetoque || '100% Gratuito dentro de la ventana de garantía';
+      const criteriosAplicaList = Array.isArray(garantiasConfig?.criteriosAplica) && garantiasConfig.criteriosAplica.length > 0
+        ? garantiasConfig.criteriosAplica.join('; ')
+        : 'Ajuste de longitud o emparejar si el corte quedó más largo de lo solicitado; Corrección de asimetría o líneas en el perfilado de barba o patillas; Pulido de sombras o detalles en el desvanecido (fade); Revisión y ajuste de detalles que no hayan quedado a entera satisfacción al salir';
+      const criteriosNoAplicaList = Array.isArray(garantiasConfig?.criteriosNoAplica) && garantiasConfig.criteriosNoAplica.length > 0
+        ? garantiasConfig.criteriosNoAplica.join('; ')
+        : 'Cambio radical de estilo o diseño totalmente distinto al solicitado en la cita original; Cabello o barba recortada o intervenida por cuenta propia o en otra barbería; Reclamos o solicitudes después de la ventana de garantía (48 horas); Devoluciones o reembolsos en dinero en efectivo o transferencia bancaria';
+      const instruccionesJanetGarantia = garantiasConfig?.instruccionesJanet ||
+        'Cuando un cliente mencione que no le gustó su corte, que quedó chueco, disparejo o pida que se lo arreglen, responde siempre con empatía y calidez inmediata sin discutir ni culpar al cliente. Explícale que en VATOS ALFA cuenta con la Garantía de Satisfacción Alfa de 48 horas para retoques sin costo y ofrécele agendar un espacio de revisión con su barbero o en sucursal. Si el cliente está muy molesto o exige devolución de dinero, solicita atención de recepción humana de inmediato.';
+      const mensajeTransferenciaGarantia = garantiasConfig?.escalamientoHumano?.mensajeTransferencia ||
+        'Entiendo completamente tu situación y tu sentir. En este momento estoy transfiriendo tu caso con nuestro equipo de recepción y gerencia para brindarte una atención personalizada y prioritaria. En breve te contactarán directamente.';
+
+      const garantiasPromptSection = garantiasActive
+        ? `\nPOLÍTICA OFICIAL DE GARANTÍAS Y RETOQUES DE SATISFACCIÓN (VATOS ALFA):
+- Si el cliente expresa inconformidad con su corte o servicio reciente (por ejemplo: "no me gustó mi corte", "me lo pueden arreglar", "quedó chueco", "me trasquilaron", "no me gustó como me dejó", "quiero retoque", "quedó disparejo"):
+  1. EMPATÍA INMEDIATA: Nunca discutas, justifiques al barbero ni culpes al cliente. Responde con calidez humana reconociendo su sentir: tu prioridad absoluta es que quede 100% satisfecho con su imagen y estilo.
+  2. GARANTÍA DE SATISFACCIÓN ALFA: Infórmale que en VATOS ALFA cuenta con nuestra Garantía de Satisfacción oficial válida durante las primeras ${ventanaGarantia} horas posteriores a su servicio.
+  3. COSTO Y TIEMPO DEL RETOQUE: El ajuste es ${costoRetoqueStr} y contempla un espacio de aproximadamente ${duracionRetoque} minutos en agenda para revisar y perfeccionar los detalles.
+  4. QUÉ SÍ APLICA: ${criteriosAplicaList}.
+  5. QUÉ NO APLICA (EXCLUSIONES): ${criteriosNoAplicaList}.
+  6. DIRECTRIZ DE ATENCIÓN: ${instruccionesJanetGarantia}
+  7. ESCALAMIENTO HUMANO INMEDIATO (DISPUTAS O CASOS GRAVES):
+     * Si el cliente exige devolución de dinero en efectivo o transferencia, insulta, está sumamente molesto o reporta una lesión física/corte en la piel:
+     * NO polemices. Llama de inmediato a solicitar_recepcion indicando el motivo "Reclamo de garantía o inconformidad grave" y responde con respeto y serenidad: "${mensajeTransferenciaGarantia}".`
+        : '';
+
       const systemPrompt = `Eres ${assistantName}, nuestra Agente Inteligente y Recepcionista Oficial de VATOS ALFA Barber Shop en Querétaro, México.
 Atiendes a los clientes directamente desde el Chat Oficial integrado en la aplicación de VATOS ALFA.
 Tu función configurada es ${assistantRole}. Atiende con ${toneDescription}. Si te preguntan si eres una persona, explica con orgullo que eres ${assistantName}, la asistente inteligente de recepción de VATOS ALFA, y que también puedes comunicarlos con un compañero humano de recepción cuando lo deseen.
@@ -603,6 +649,7 @@ DOMINIO TOTAL DE VATOS ALFA: PASE ALFA CLUB, ALFA COINS Y PROMOCIONES:
      * ¿Cómo se canjean?: Los AlfaCoins acumulados se pueden utilizar como descuento directo en pesos mexicanos al pagar cualquier servicio o producto en la recepción de la barbería. No son canjeables por dinero en efectivo ni transferibles entre cuentas.
   3. PROMOCIONES Y TÉRMINOS Y CONDICIONES:
      * Para informar sobre promociones activas, paquetes o descuentos especiales y sus términos y condiciones exactos (vigencia, días aplicables, servicios incluidos y restricción de no acumulabilidad con otras promociones o corte gratis del Pase Alfa), llama siempre a consultar_pase_alfa_y_promociones. NUNCA inventes regalos de cumpleaños ni promociones que no estén activas en la base de datos.
+${garantiasPromptSection}
 
 REGLAS DE OPERACIÓN Y AGENDAMIENTO:
 - Consulta herramientas para servicios, precios, productos, profesionales, horarios, promociones y citas. Nunca inventes disponibilidad, precios, políticas ni resultados de una operación. Todos los precios deben provenir de las herramientas consultar_servicios y consultar_productos o del catálogo en tiempo real.

@@ -33,6 +33,7 @@ const sidebarNavItems = [
   { title: "Locales", href: "/settings/locales", icon: MapPin },
   { title: "Sitio Web", href: "/settings/sitio-web", icon: Globe },
   { title: "Reglas de Reservas", href: "/settings/booking-rules", icon: CalendarClock },
+  { title: "Garantías y Retoques", href: "/settings/garantias", icon: ShieldCheck },
   { title: "Asistente Janet", href: "/settings/sofia", icon: Bot },
   { title: "Pagos", href: "/settings/pagos", icon: CreditCard },
   { title: "Emails", href: "/settings/emails", icon: Mail },

@@ -115,6 +115,7 @@ const adminNavLinks = [
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
+  { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_ajustes' },
   { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
   { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
 ];

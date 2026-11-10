@@ -6,7 +6,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Button } from '@/components/ui/button';
 import { getBranchOperationalStatus } from '@/lib/branch-status';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone, Menu, BookOpen } from 'lucide-react';
+import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, StarHalf, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone, Menu, BookOpen } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -59,7 +59,6 @@ const AlfaGoldSmokeBurst = dynamic(() => import('@/components/ui/alfa-gold-smoke
 const VerticalSectionNavigator = dynamic(() => import('@/components/ui/vertical-section-navigator').then((m) => m.VerticalSectionNavigator), {
     ssr: false,
 });
-const FloatingMenu = dynamic(() => import('@/components/ui/floating-menu'), { ssr: false });
 const AppDownloadModal = dynamic(() => import('@/components/ui/app-download-modal').then((m) => m.AppDownloadModal), {
     ssr: false,
 });
@@ -360,9 +359,9 @@ export default function LandingPageClient() {
         userRatingCount: number | null;
         googleMapsUri: string;
     }>({
-        rating: Number(currentBranchObj?.googleRating || websiteSettings?.googleRating || 4.9),
-        userRatingCount: currentBranchObj?.googleReviewCount || websiteSettings?.googleReviewCount || null,
-        googleMapsUri: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro')}`,
+        rating: Number(currentBranchObj?.googleRating || websiteSettings?.googleRating || 4.5),
+        userRatingCount: currentBranchObj?.googleReviewCount || websiteSettings?.googleReviewCount || 102,
+        googleMapsUri: `https://www.google.com/maps/place/?q=place_id:ChIJxQ4hagBb04URwQM4y5UsX-U`,
     });
 
     useEffect(() => {
@@ -370,7 +369,7 @@ export default function LandingPageClient() {
         const branchQuery = currentBranchObj?.address
             ? `${companyName} ${currentBranchObj.address}`
             : 'VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro';
-        const branchPlaceId = currentBranchObj?.placeId || currentBranchObj?.google_place_id || websiteSettings?.googlePlaceId || '';
+        const branchPlaceId = currentBranchObj?.placeId || currentBranchObj?.google_place_id || websiteSettings?.googlePlaceId || 'ChIJxQ4hagBb04URwQM4y5UsX-U';
 
         fetch(`/api/google-rating?query=${encodeURIComponent(branchQuery)}${branchPlaceId ? `&placeId=${encodeURIComponent(branchPlaceId)}` : ''}`)
             .then(res => res.ok ? res.json() : null)
@@ -380,9 +379,9 @@ export default function LandingPageClient() {
                 setGoogleRatingData({
                     rating: (data.source !== 'fallback' && typeof data.rating === 'number')
                         ? data.rating
-                        : (!isNaN(customRating) && customRating > 0 ? customRating : (data.rating || 4.9)),
-                    userRatingCount: data.userRatingCount ?? currentBranchObj?.googleReviewCount ?? websiteSettings?.googleReviewCount ?? null,
-                    googleMapsUri: data.googleMapsUri || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(branchQuery)}`,
+                        : (!isNaN(customRating) && customRating > 0 ? customRating : (data.rating || 4.5)),
+                    userRatingCount: data.userRatingCount ?? currentBranchObj?.googleReviewCount ?? websiteSettings?.googleReviewCount ?? 102,
+                    googleMapsUri: data.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(branchPlaceId)}`,
                 });
             })
             .catch(() => {});
@@ -906,12 +905,23 @@ export default function LandingPageClient() {
                                 className="flex items-center gap-1.5 font-semibold hover:text-white transition-colors"
                                 title="Ver opiniones reales en Google Maps"
                             >
-                                <span className="text-[#C5A880] tracking-widest text-sm">★★★★★</span>
+                                <span className="inline-flex items-center gap-0.5 text-[#C5A880]">
+                                    {Array.from({ length: 4 }).map((_, i) => (
+                                        <Star key={`full-${i}`} className="w-3.5 h-3.5 fill-[#C5A880] text-[#C5A880]" />
+                                    ))}
+                                    {googleRatingData.rating >= 4.3 && googleRatingData.rating < 4.8 ? (
+                                        <StarHalf className="w-3.5 h-3.5 fill-[#C5A880] text-[#C5A880]" />
+                                    ) : googleRatingData.rating >= 4.8 ? (
+                                        <Star className="w-3.5 h-3.5 fill-[#C5A880] text-[#C5A880]" />
+                                    ) : (
+                                        <Star className="w-3.5 h-3.5 text-slate-600" />
+                                    )}
+                                </span>
                                 <span className="text-white font-bold">{googleRatingData.rating.toFixed(1)}</span>
                                 <span className="text-slate-400 text-xs">
                                     {googleRatingData.userRatingCount
                                         ? `(${googleRatingData.userRatingCount} opiniones en Google)`
-                                        : '(Google Reviews)'}
+                                        : '(102 opiniones en Google)'}
                                 </span>
                             </a>
                             <span className="hidden sm:inline text-slate-700">•</span>
@@ -1701,9 +1711,6 @@ export default function LandingPageClient() {
                     <Link href="/login" prefetch={false} className="mt-2 inline-block text-xs font-semibold text-slate-600 hover:text-slate-900 hover:underline transition-colors">Acceso Staff</Link>
                 </div>
             </footer>
-
-            {/* Floating Navigation Menu */}
-            <FloatingMenu totalItems={totalItems} hasActivePromotions={activePromotions && activePromotions.length > 0} />
 
             {/* Navegación Vertical Rápida (Bare icons subir al inicio / bajar por secciones) */}
             <VerticalSectionNavigator />

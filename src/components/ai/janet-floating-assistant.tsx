@@ -1640,32 +1640,126 @@ export function JanetFloatingAssistant() {
     }
   };
 
-  // Formateador de texto con soporte de **negritas** y viñetas limpias (idéntico al chat de clientes)
+  // Formateador de texto limpio, elegante y profesional (sin símbolos markdown crudos como ---, ### o ****)
   const renderFormattedMessageText = (rawText: string) => {
     if (!rawText) return null;
-    const lines = rawText.split('\n');
-    return lines.map((line, lineIdx) => {
-      const formattedLine = line
-        .replace(/^[\s]*[\*\-]\s+/, '• ')
-        .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '**$1**');
-      const segments = formattedLine.split(/(\*\*.*?\*\*)/g);
-      return (
-        <React.Fragment key={`line_${lineIdx}`}>
-          {lineIdx > 0 && <br />}
-          {segments.map((seg, segIdx) => {
-            if (seg.startsWith('**') && seg.endsWith('**') && seg.length >= 4) {
-              const boldContent = seg.slice(2, -2).replace(/\*/g, '');
-              return (
-                <strong key={`seg_${segIdx}`} className="font-bold">
-                  {boldContent}
-                </strong>
-              );
-            }
-            return <span key={`seg_${segIdx}`}>{seg.replace(/\*/g, '')}</span>;
-          })}
-        </React.Fragment>
-      );
-    });
+
+    // Pre-limpieza de artefactos markdown crudos y asteriscos repetidos
+    const cleaned = rawText
+      .replace(/\*{4,}/g, '**')
+      .replace(/\*\*\s*\*\*/g, '')
+      .replace(/\*{3}([^*]+)\*{3}/g, '**$1**');
+
+    const lines = cleaned.split('\n');
+
+    // Helper para renderizar negritas, código inline y texto normal dentro de una línea
+    const renderInline = (inlineText: string, keyPrefix: string) => {
+      // Regex para capturar backticks `código` y negritas **bold**
+      const inlineRegex = /(`[^`]+`|\*\*[^*]+?\*\*)/g;
+      const nodes: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = inlineRegex.exec(inlineText)) !== null) {
+        if (match.index > lastIndex) {
+          const normalText = inlineText.substring(lastIndex, match.index).replace(/\*/g, '');
+          if (normalText) {
+            nodes.push(<span key={`${keyPrefix}_t_${lastIndex}`}>{normalText}</span>);
+          }
+        }
+
+        const token = match[1];
+        if (token.startsWith('`') && token.endsWith('`') && token.length >= 2) {
+          const codeVal = token.slice(1, -1);
+          nodes.push(
+            <span
+              key={`${keyPrefix}_c_${match.index}`}
+              className="px-1.5 py-0.5 mx-0.5 rounded bg-black/25 dark:bg-white/10 text-blue-300 dark:text-blue-200 font-mono text-[11px] font-medium border border-white/10 inline-block align-baseline"
+            >
+              {codeVal}
+            </span>
+          );
+        } else if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
+          const boldVal = token.slice(2, -2).replace(/\*/g, '');
+          nodes.push(
+            <strong key={`${keyPrefix}_b_${match.index}`} className="font-bold text-inherit">
+              {boldVal}
+            </strong>
+          );
+        }
+
+        lastIndex = inlineRegex.lastIndex;
+      }
+
+      if (lastIndex < inlineText.length) {
+        const remaining = inlineText.substring(lastIndex).replace(/\*/g, '');
+        if (remaining) {
+          nodes.push(<span key={`${keyPrefix}_end`}>{remaining}</span>);
+        }
+      }
+
+      return nodes.length > 0 ? nodes : inlineText.replace(/\*/g, '');
+    };
+
+    return (
+      <div className="space-y-1">
+        {lines.map((rawLine, lineIdx) => {
+          const trimmed = rawLine.trim();
+
+          // 1. Línea vacía: espacio vertical sutil
+          if (!trimmed) {
+            return <div key={`empty_${lineIdx}`} className="h-1.5" />;
+          }
+
+          // 2. Línea divisoria tipo markdown (---, ----, ***, ___, –––, ———):
+          // En lugar de pintar los símbolos feos, renderizamos un separador ultra fino y sutil
+          if (/^[-*_—–]{2,}$/.test(trimmed)) {
+            return (
+              <div
+                key={`hr_${lineIdx}`}
+                className="my-2 border-t border-border/40 opacity-70"
+              />
+            );
+          }
+
+          // 3. Encabezados markdown (###, ##, #):
+          // Eliminamos los hashtags feos y renderizamos el título con tipografía elegante
+          const headingMatch = trimmed.match(/^#{1,6}\s*(.+)$/);
+          if (headingMatch) {
+            const headingContent = headingMatch[1].replace(/^\*\*|\*\*$/g, '').trim();
+            return (
+              <div
+                key={`h_${lineIdx}`}
+                className="font-bold text-foreground text-[13px] sm:text-[13.5px] mt-2 mb-1 tracking-tight"
+              >
+                {renderInline(headingContent, `h_${lineIdx}`)}
+              </div>
+            );
+          }
+
+          // 4. Viñetas limpias (•, -, *)
+          const bulletMatch = trimmed.match(/^([•\-\*])\s+(.+)$/);
+          if (bulletMatch) {
+            const bulletText = bulletMatch[2];
+            return (
+              <div key={`b_${lineIdx}`} className="flex items-start gap-2 pl-0.5 py-0.5">
+                <span className="text-blue-400 font-bold select-none text-xs mt-0.5 shrink-0">•</span>
+                <div className="flex-1 break-words leading-relaxed">
+                  {renderInline(bulletText, `b_${lineIdx}`)}
+                </div>
+              </div>
+            );
+          }
+
+          // 5. Texto regular de párrafo
+          return (
+            <div key={`line_${lineIdx}`} className="break-words leading-relaxed">
+              {renderInline(rawLine, `p_${lineIdx}`)}
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const formatMsgTime = (iso?: string) => {
@@ -1787,7 +1881,7 @@ export function JanetFloatingAssistant() {
           </div>
         ) : (
           /* 4. Texto Estándar Formateado */
-          <div className="whitespace-pre-wrap break-words">
+          <div className="break-words">
             {renderFormattedMessageText(msg.contenido)}
           </div>
         )}

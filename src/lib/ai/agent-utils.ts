@@ -387,22 +387,75 @@ export function sanitizeBotMessage(rawText: string): string {
   text = text.replace(/^\s*\{\s*"[a-zA-Z0-9_]+_response"\s*:[\s\S]*?\}\s*\}\s*$/gm, '');
   text = text.replace(/\{\s*"consultar_[a-zA-Z0-9_]+"\s*:[\s\S]*?\}\s*\}/g, '');
 
-  // 1. Normalizar viñetas a viñeta limpia '• '
+  // 1. Eliminar líneas divisorias crudas tipo markdown (---, ----, ***, ___, –––, ———)
+  text = text.replace(/^[\t ]*[-*_—–]{2,}[\t ]*$/gm, '');
+
+  // 2. Normalizar viñetas a viñeta limpia '• '
   text = text.replace(/^[\t ]*[-*•][\t ]+/gm, '• ');
 
-  // 2. Reestructurar paredes de texto de horarios en turnos visuales (☀️ Mañana, 🌤️ Tarde, 🌙 Noche)
+  // 3. Reestructurar paredes de texto de horarios en turnos visuales (☀️ Mañana, 🌤️ Tarde, 🌙 Noche)
   text = restructureAvailabilityWall(text);
 
-  // 3. Normalizar formato de negrita (convertir ** a * para WhatsApp y compatibilidad multiplataforma)
+  // 4. Convertir encabezados con hashtags (###, ##, #) a negritas limpias sin símbolos técnicos
+  text = text.replace(/^[\t ]*#{1,6}[\t ]+(.+)$/gm, (_match, heading) => {
+    const cleanHeading = heading.trim().replace(/^\*\*|\*\*$/g, '').trim();
+    return cleanHeading ? `*${cleanHeading}*` : '';
+  });
+
+  // 5. Normalizar formato de negrita (convertir ** a * para WhatsApp y compatibilidad multiplataforma)
+  text = text.replace(/\*{4,}/g, '*');
+  text = text.replace(/\*\*\s*\*\*/g, '');
   text = text.replace(/\*\*([^*\n]+)\*\*/g, '*$1*');
 
-  // 4. Eliminar paréntesis que encierran precios o montos
+  // 6. Eliminar paréntesis que encierran precios o montos
   text = text.replace(/\(\s*(\$\d+(?:\.\d{1,2})?(?:\s*MXN)?)\s*\)/gi, '$1');
   text = text.replace(/\(\s*(\d+%\s*(?:de\s*)?anticipo)\s*\)/gi, '$1');
 
-  // 5. Asegurar que los links de Mercado Pago y vatosalfa estén en su propia línea limpia
+  // 7. Asegurar que los links de Mercado Pago y vatosalfa estén en su propia línea limpia
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$2');
   text = text.replace(/https?:\/\/[^\s]+/g, (url) => `\n${url}\n`);
+  text = text.replace(/\n{3,}/g, '\n\n');
+
+  return text.trim();
+}
+
+/**
+ * Sanitiza las respuestas de los agentes ejecutivos (Janet CEO y Janet Gerencia)
+ * eliminando símbolos markdown crudos (---, ###, ****, comillas invertidas técnicas),
+ * preservando negritas limpias y viñetas ejecutivas.
+ */
+export function sanitizeExecutiveMessage(rawText: string): string {
+  if (!rawText) return '';
+  let text = rawText;
+
+  // 0. Eliminar bloques JSON o llamadas de herramientas filtradas accidentalmente
+  text = text.replace(/^\s*\{\s*"[a-zA-Z0-9_]+_response"\s*:[\s\S]*?\}\s*\}\s*$/gm, '');
+  text = text.replace(/\{\s*"(?:consultar|subagente|agendar|reagendar)_[a-zA-Z0-9_]+"\s*:[\s\S]*?\}\s*\}/g, '');
+
+  // 1. Eliminar líneas divisorias crudas tipo markdown (---, ----, ***, ___, –––, ———)
+  text = text.replace(/^[\t ]*[-*_—–]{2,}[\t ]*$/gm, '');
+
+  // 2. Convertir encabezados con hashtags (###, ##, #) a negritas limpias sin símbolos técnicos
+  text = text.replace(/^[\t ]*#{1,6}[\t ]+(.+)$/gm, (_match, heading) => {
+    const cleanHeading = heading.trim().replace(/^\*\*|\*\*$/g, '').trim();
+    return cleanHeading ? `**${cleanHeading}**` : '';
+  });
+
+  // 3. Limpiar asteriscos cuádruples, triples o vacíos (**** -> **, ***texto*** -> **texto**, **** -> vacio)
+  text = text.replace(/\*{4,}/g, '**');
+  text = text.replace(/\*\*\s*\*\*/g, '');
+  text = text.replace(/\*{3}([^*]+)\*{3}/g, '**$1**');
+
+  // 4. Normalizar viñetas a punto medio '• '
+  text = text.replace(/^[\t ]*[-*][\t ]+/gm, '• ');
+
+  // 5. Limpiar paréntesis innecesarios en precios ($140.00 MXN) -> $140.00 MXN
+  text = text.replace(/\(\s*(\$\d+(?:\.\d{1,2})?(?:\s*MXN)?)\s*\)/gi, '$1');
+
+  // 6. Limpiar backticks crudos alrededor de números o identificadores simples (`9389` -> 9389, `audit_logs` -> audit_logs)
+  text = text.replace(/`([a-zA-Z0-9_\-]+)`/g, '$1');
+
+  // 7. Colapsar saltos de línea excesivos a un máximo de 2
   text = text.replace(/\n{3,}/g, '\n\n');
 
   return text.trim();

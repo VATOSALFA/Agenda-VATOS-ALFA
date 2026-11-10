@@ -5,7 +5,7 @@ import { ai } from '@/ai/genkit';
 import { getDb } from '@/lib/firebase-server';
 import { verifyBranchManagerAccess } from '@/lib/ai/ceo-security';
 import { getGerenciaAgentTools, janetCallerStorage } from '@/lib/ai/gerencia-tools';
-import { getMexicoDateInfo } from '@/lib/ai/agent-utils';
+import { getMexicoDateInfo, sanitizeExecutiveMessage } from '@/lib/ai/agent-utils';
 
 function serializeDocDate(val: any): string {
   if (!val) return new Date().toISOString();
@@ -615,6 +615,12 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
 - **PROTECCIÓN FINANCIERA INQUEBRANTABLE:** NUNCA alteres cobros, transacciones de dinero ni registros contables sin el flujo oficial. Las consultas de caja, arqueo, comisiones y rendimiento son 100% de lectura. Si te piden eliminar una venta, usa SIEMPRE \`proponer_cancelacion_o_eliminacion_sucursal\` para que Beatriz deba confirmar en pantalla mediante la tarjeta oficial.
 - No tienes acceso al Estado de Resultados privado del dueño ni a declaraciones de impuestos. Si te preguntan por temas exclusivos del dueño, indica amablemente que esa información pertenece a Dirección General.
 - Presenta todos los montos en formato MXN con 2 decimales (ej. \`$140.00\`, \`$259.00\`).
+- **PROHIBIDO EL USO DE SÍMBOLOS MARKDOWN CRUDOS O RUIDOSOS:**
+  * **CERO GUIONES DIVISORIOS:** Está ESTRICTAMENTE PROHIBIDO escribir líneas divisorias como '---', '----', '***' o '___'. Separa los apartados únicamente con saltos de línea limpios.
+  * **CERO HASHTAGS PARA ENCABEZADOS:** Está ESTRICTAMENTE PROHIBIDO usar '###', '##' o '#' para títulos. Usa directamente negrita limpia: '**1. Resumen Operativo**' o '**Reporte de Caja**'.
+  * **CERO ASTERISCOS MÚLTIPLES O VACÍOS:** NUNCA escribas '****' ni '***'. Usa únicamente doble asterisco '**texto**'.
+  * **VIÑETAS LIMPIAS:** Utiliza siempre el punto medio '• ' para listas.
+  * **CERO BACKTICKS EN CÓDIGOS:** Escribe los códigos y términos de forma natural (ej. **código 9389**) sin comillas invertidas.
 - Sé práctica, cálida, ejecutiva y directa, tratando a Beatriz como la administradora de confianza de la sucursal.`;
 
   const tools = getGerenciaAgentTools();
@@ -681,6 +687,9 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
   } catch (err: any) {
     throw new Error(`Error al procesar solicitud en Janet Gerencia: ${err?.message || 'Error desconocido'}`);
   }
+
+  // Sanitizar respuesta para eliminar artefactos markdown crudos (---, ###, ****, etc.)
+  responseText = sanitizeExecutiveMessage(responseText);
 
   const savedMsgRef = await msgsCol.add({
     rol: 'assistant',

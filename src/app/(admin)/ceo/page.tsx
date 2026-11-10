@@ -706,6 +706,118 @@ export default function JanetCeoPage() {
     } catch (_) {}
   };
 
+  // Formateador de texto limpio, elegante y profesional (sin símbolos markdown crudos como ---, ### o ****)
+  const renderFormattedMessageText = (rawText: string) => {
+    if (!rawText) return null;
+
+    const cleaned = rawText
+      .replace(/\*{4,}/g, '**')
+      .replace(/\*\*\s*\*\*/g, '')
+      .replace(/\*{3}([^*]+)\*{3}/g, '**$1**');
+
+    const lines = cleaned.split('\n');
+
+    const renderInline = (inlineText: string, keyPrefix: string) => {
+      const inlineRegex = /(`[^`]+`|\*\*[^*]+?\*\*)/g;
+      const nodes: React.ReactNode[] = [];
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+
+      while ((match = inlineRegex.exec(inlineText)) !== null) {
+        if (match.index > lastIndex) {
+          const normalText = inlineText.substring(lastIndex, match.index).replace(/\*/g, '');
+          if (normalText) {
+            nodes.push(<span key={`${keyPrefix}_t_${lastIndex}`}>{normalText}</span>);
+          }
+        }
+
+        const token = match[1];
+        if (token.startsWith('`') && token.endsWith('`') && token.length >= 2) {
+          const codeVal = token.slice(1, -1);
+          nodes.push(
+            <span
+              key={`${keyPrefix}_c_${match.index}`}
+              className="px-1.5 py-0.5 mx-0.5 rounded bg-black/25 dark:bg-white/10 text-blue-300 dark:text-blue-200 font-mono text-[11px] font-medium border border-white/10 inline-block align-baseline"
+            >
+              {codeVal}
+            </span>
+          );
+        } else if (token.startsWith('**') && token.endsWith('**') && token.length >= 4) {
+          const boldVal = token.slice(2, -2).replace(/\*/g, '');
+          nodes.push(
+            <strong key={`${keyPrefix}_b_${match.index}`} className="font-bold text-inherit">
+              {boldVal}
+            </strong>
+          );
+        }
+
+        lastIndex = inlineRegex.lastIndex;
+      }
+
+      if (lastIndex < inlineText.length) {
+        const remaining = inlineText.substring(lastIndex).replace(/\*/g, '');
+        if (remaining) {
+          nodes.push(<span key={`${keyPrefix}_end`}>{remaining}</span>);
+        }
+      }
+
+      return nodes.length > 0 ? nodes : inlineText.replace(/\*/g, '');
+    };
+
+    return (
+      <div className="space-y-1">
+        {lines.map((rawLine, lineIdx) => {
+          const trimmed = rawLine.trim();
+
+          if (!trimmed) {
+            return <div key={`empty_${lineIdx}`} className="h-1.5" />;
+          }
+
+          if (/^[-*_—–]{2,}$/.test(trimmed)) {
+            return (
+              <div
+                key={`hr_${lineIdx}`}
+                className="my-2 border-t border-border/40 opacity-70"
+              />
+            );
+          }
+
+          const headingMatch = trimmed.match(/^#{1,6}\s*(.+)$/);
+          if (headingMatch) {
+            const headingContent = headingMatch[1].replace(/^\*\*|\*\*$/g, '').trim();
+            return (
+              <div
+                key={`h_${lineIdx}`}
+                className="font-bold text-foreground text-[13px] sm:text-[13.5px] mt-2 mb-1 tracking-tight"
+              >
+                {renderInline(headingContent, `h_${lineIdx}`)}
+              </div>
+            );
+          }
+
+          const bulletMatch = trimmed.match(/^([•\-\*])\s+(.+)$/);
+          if (bulletMatch) {
+            const bulletText = bulletMatch[2];
+            return (
+              <div key={`bullet_${lineIdx}`} className="flex items-start gap-2 pl-0.5 py-0.5">
+                <span className="text-blue-400 font-bold select-none text-xs mt-0.5 shrink-0">•</span>
+                <div className="flex-1 break-words leading-relaxed">
+                  {renderInline(bulletText, `b_${lineIdx}`)}
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={`line_${lineIdx}`} className="break-words leading-relaxed">
+              {renderInline(rawLine, `p_${lineIdx}`)}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (authLoading || !isAuthorizedGeneralAdmin) {
     return null;
   }
@@ -1121,8 +1233,8 @@ export default function JanetCeoPage() {
                           )}
 
                           {!msg.esAudio && (
-                            <div className="whitespace-pre-wrap break-words font-sans">
-                              {msg.contenido}
+                            <div className="break-words font-sans">
+                              {renderFormattedMessageText(msg.contenido)}
                             </div>
                           )}
 

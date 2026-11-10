@@ -352,7 +352,12 @@ const EMOJI_CATEGORIES = [
 function FormattedChatText({ text, className = 'text-sm' }: { text: string; className?: string }) {
   if (!text) return null;
 
-  const lines = text.split('\n');
+  const normalizedText = text
+    .replace(/\*{4,}/g, '**')
+    .replace(/\*\*\s*\*\*/g, '')
+    .replace(/\*{3}([^*]+)\*{3}/g, '**$1**');
+
+  const lines = normalizedText.split('\n');
 
   const formatInline = (content: string) => {
     // 1. Clean up prices enclosed in parentheses like ($159.50 MXN) or ($150)
@@ -534,6 +539,30 @@ function FormattedChatText({ text, className = 'text-sm' }: { text: string; clas
 
         if (!line) {
           return <div key={idx} className="h-1.5" />;
+        }
+
+        // 1. Línea divisoria tipo markdown (---, ----, ***, ___, –––, ———)
+        if (/^[-*_—–]{2,}$/.test(line)) {
+          return (
+            <div
+              key={`hr_${idx}`}
+              className="my-2 border-t border-border/40 opacity-70"
+            />
+          );
+        }
+
+        // 2. Encabezados markdown (###, ##, #)
+        const headingMatch = line.match(/^#{1,6}\s*(.+)$/);
+        if (headingMatch) {
+          const headingContent = headingMatch[1].replace(/^\*\*|\*\*$/g, '').trim();
+          return (
+            <div
+              key={`h_${idx}`}
+              className="font-bold text-foreground text-[13px] sm:text-sm mt-2 mb-1 tracking-tight"
+            >
+              {formatInline(headingContent)}
+            </div>
+          );
         }
 
         const isBullet = /^([*\-•])\s+(.+)$/.test(line);

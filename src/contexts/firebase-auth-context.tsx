@@ -147,7 +147,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
 
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname.startsWith('/reserva') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog');
+  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname.startsWith('/reserva') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog') || pathname.startsWith('/auth/mobile-google');
   const isAuthPage = pathname === '/login';
 
   const checkLocalSchedule = async (localId: string): Promise<boolean> => {

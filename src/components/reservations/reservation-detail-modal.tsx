@@ -133,8 +133,8 @@ export function ReservationDetailModal({
 
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   
-  const [whatsappTemplate, setWhatsappTemplate] = useState<string>('¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._');
-  const [whatsappReminderTemplate, setWhatsappReminderTemplate] = useState<string>('¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_');
+  const [whatsappTemplate, setWhatsappTemplate] = useState<string>('¡Hola *{nombre}*, tu cita está agendada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\nAgradecemos tu puntualidad y asistencia.\nEn caso de llegar después y tener clientes en espera, la cita podrá reprogramarse según disponibilidad.\n\n¡Te esperamos 💈!\nvatosalfa.com\n\nhttps://vatosalfa.com/terminos\nhttps://vatosalfa.com/privacidad');
+  const [whatsappReminderTemplate, setWhatsappReminderTemplate] = useState<string>('¡Hola *{nombre}*, te recordamos tu cita💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n💈 *Servicio(s):* {servicios}\n📍 *Ubicación:* {ubicacion}\n\n⚠️ IMPORTANTE: Para mantener tu espacio reservado, por favor confirma respondiendo a este mensaje a más tardar 30 minutos antes de tu hora de cita. De lo contrario, la cita se cancelará automáticamente para liberar el turno.\nAgradecemos tu puntualidad. En caso de llegar con retraso y haber clientes en espera, la cita se reprogramará según disponibilidad.\n\nResponde este mensaje con:\n*Confirmar*\n*Reagendar*\n*Cancelar*\n\nvatosalfa.com\nhttps://vatosalfa.com/terminos\nhttps://vatosalfa.com/privacidad');
 
   const { toast } = useToast();
   const { db, user } = useAuth();
@@ -161,7 +161,8 @@ export function ReservationDetailModal({
       getDoc(doc(db, 'configuracion', 'whatsapp')).then(snap => {
         if (snap.exists()) {
           const data = snap.data();
-          if (data.whatsappMessageTemplate) setWhatsappTemplate(data.whatsappMessageTemplate);
+          const confTpl = data.whatsappMessageTemplate || data.whatsappConfirmationTemplate || data.whatsappTemplate;
+          if (confTpl) setWhatsappTemplate(confTpl);
           if (data.whatsappReminderTemplate) setWhatsappReminderTemplate(data.whatsappReminderTemplate);
         }
       }).catch(console.error);
@@ -721,12 +722,17 @@ export function ReservationDetailModal({
     const locationStr = local ? `${local.name} (${local.address})` : 'VATOS ALFA Barber Shop';
 
     const message = whatsappTemplate
-        .replace(/{nombre}/g, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
-        .replace(/{servicios}/g, servicesText)
-        .replace(/{fecha}/g, dateStr)
-        .replace(/{hora}/g, reservation.hora_inicio || '')
-        .replace(/{profesional}/g, allProfessionalNames)
-        .replace(/{ubicacion}/g, locationStr);
+        .replace(/{nombre}/gi, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{cliente}/gi, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{servicios}/gi, servicesText)
+        .replace(/{servicio}/gi, servicesText)
+        .replace(/{fecha}/gi, dateStr)
+        .replace(/{hora}/gi, reservation.hora_inicio || '')
+        .replace(/{horario}/gi, reservation.hora_inicio || '')
+        .replace(/{profesional}/gi, allProfessionalNames)
+        .replace(/{barbero}/gi, allProfessionalNames)
+        .replace(/{ubicacion}/gi, locationStr)
+        .replace(/{sucursal}/gi, locationStr);
     
     return encodeURIComponent(message);
   };
@@ -735,7 +741,7 @@ export function ReservationDetailModal({
     if (!reservation.customer) return '';
     let dateStr = reservation.fecha;
     try {
-        dateStr = format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", { locale: es });
+        dateStr = format(parseISO(reservation.fecha + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: es });
         dateStr = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
     } catch(e) {}
     const local = locales?.find(l => l.id === reservation.local_id);
@@ -749,12 +755,17 @@ export function ReservationDetailModal({
     }
 
     const message = whatsappReminderTemplate
-        .replace(/{nombre}/g, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
-        .replace(/{servicios}/g, servicesText)
-        .replace(/{fecha}/g, dateStr)
-        .replace(/{hora}/g, reservation.hora_inicio || '')
-        .replace(/{profesional}/g, allProfessionalNames)
-        .replace(/{ubicacion}/g, locationStr);
+        .replace(/{nombre}/gi, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{cliente}/gi, formatClientName(reservation.customer.nombre, reservation.customer.apellido))
+        .replace(/{servicios}/gi, servicesText)
+        .replace(/{servicio}/gi, servicesText)
+        .replace(/{fecha}/gi, dateStr)
+        .replace(/{hora}/gi, reservation.hora_inicio || '')
+        .replace(/{horario}/gi, reservation.hora_inicio || '')
+        .replace(/{profesional}/gi, allProfessionalNames)
+        .replace(/{barbero}/gi, allProfessionalNames)
+        .replace(/{ubicacion}/gi, locationStr)
+        .replace(/{sucursal}/gi, locationStr);
     
     return encodeURIComponent(message);
   };

@@ -66,7 +66,7 @@ export function SendConfirmationModal({
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
 
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
-    '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 3 horas antes. Favor de llegar 5 minutos antes de tu cita._'
+    '¡Hola *{nombre}*, tu cita está agendada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\nAgradecemos tu puntualidad y asistencia.\nEn caso de llegar después y tener clientes en espera, la cita podrá reprogramarse según disponibilidad.\n\n¡Te esperamos 💈!\nvatosalfa.com\n\nhttps://vatosalfa.com/terminos\nhttps://vatosalfa.com/privacidad'
   );
 
   const [whatsappAnticipoTemplate, setWhatsappAnticipoTemplate] = useState<string>(
@@ -129,8 +129,9 @@ export function SendConfirmationModal({
         .then((snap) => {
           if (snap.exists()) {
             const data = snap.data();
-            if (data?.whatsappMessageTemplate) {
-              setWhatsappTemplate(data.whatsappMessageTemplate);
+            const confTpl = data?.whatsappMessageTemplate || data?.whatsappConfirmationTemplate || data?.whatsappTemplate;
+            if (confTpl) {
+              setWhatsappTemplate(confTpl);
             }
             if (data?.whatsappAnticipoTemplate) {
               setWhatsappAnticipoTemplate(data.whatsappAnticipoTemplate);
@@ -280,14 +281,19 @@ export function SendConfirmationModal({
         maximumFractionDigits: 2,
       });
       let msg = whatsappAnticipoTemplate
-        .replace(/{nombre}/g, clientName)
-        .replace(/{servicios}/g, servicesText)
-        .replace(/{fecha}/g, dateStr)
-        .replace(/{hora}/g, reservation.hora_inicio || '')
-        .replace(/{profesional}/g, allProfessionalNames)
-        .replace(/{ubicacion}/g, locationStr)
-        .replace(/{monto_anticipo}/g, formattedAmount)
-        .replace(/{link_pago}/g, activeLink);
+        .replace(/{nombre}/gi, clientName)
+        .replace(/{cliente}/gi, clientName)
+        .replace(/{servicios}/gi, servicesText)
+        .replace(/{servicio}/gi, servicesText)
+        .replace(/{fecha}/gi, dateStr)
+        .replace(/{hora}/gi, reservation.hora_inicio || '')
+        .replace(/{horario}/gi, reservation.hora_inicio || '')
+        .replace(/{profesional}/gi, allProfessionalNames)
+        .replace(/{barbero}/gi, allProfessionalNames)
+        .replace(/{ubicacion}/gi, locationStr)
+        .replace(/{sucursal}/gi, locationStr)
+        .replace(/{monto_anticipo}/gi, formattedAmount)
+        .replace(/{link_pago}/gi, activeLink);
 
       if (linkMode === 'full' && canSwitchToFullLink) {
         msg = msg.replace(/tu anticipo de/gi, 'tu pago total de');
@@ -296,12 +302,17 @@ export function SendConfirmationModal({
     }
 
     return whatsappTemplate
-      .replace(/{nombre}/g, clientName)
-      .replace(/{servicios}/g, servicesText)
-      .replace(/{fecha}/g, dateStr)
-      .replace(/{hora}/g, reservation.hora_inicio || '')
-      .replace(/{profesional}/g, allProfessionalNames)
-      .replace(/{ubicacion}/g, locationStr);
+      .replace(/{nombre}/gi, clientName)
+      .replace(/{cliente}/gi, clientName)
+      .replace(/{servicios}/gi, servicesText)
+      .replace(/{servicio}/gi, servicesText)
+      .replace(/{fecha}/gi, dateStr)
+      .replace(/{hora}/gi, reservation.hora_inicio || '')
+      .replace(/{horario}/gi, reservation.hora_inicio || '')
+      .replace(/{profesional}/gi, allProfessionalNames)
+      .replace(/{barbero}/gi, allProfessionalNames)
+      .replace(/{ubicacion}/gi, locationStr)
+      .replace(/{sucursal}/gi, locationStr);
   };
 
   const previewMessageText = generateMessage();

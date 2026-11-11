@@ -182,6 +182,8 @@ export default function AjustesPage() {
       const whatsappRef = doc(db, 'configuracion', 'whatsapp');
       await setDoc(whatsappRef, {
         whatsappMessageTemplate: data.whatsappMessageTemplate || '',
+        whatsappConfirmationTemplate: data.whatsappMessageTemplate || '',
+        whatsappTemplate: data.whatsappMessageTemplate || '',
         whatsappReminderTemplate: data.whatsappReminderTemplate || '',
         whatsappAnticipoTemplate: data.whatsappAnticipoTemplate || DEFAULT_ANTICIPO_TEMPLATE,
         whatsappConfirmationAnimation: data.whatsappConfirmationAnimation ?? true,

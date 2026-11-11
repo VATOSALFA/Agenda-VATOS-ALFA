@@ -23,7 +23,7 @@ import { formatClientName } from './agenda-utils';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { db } from '@/lib/firebase-client';
-import { collection, doc, onSnapshot, query, updateDoc, where, getDocs, documentId } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, updateDoc, where, getDocs, documentId } from 'firebase/firestore';
 import {
   DEFAULT_BOOKING_RULES,
   DEFAULT_AVISOS_AGENDA_RULES,
@@ -191,10 +191,10 @@ export function OverdueNotificationsPopover({
   // Reglas de reserva cargadas en tiempo real desde Firestore
   const [rules, setRules] = useState<ReglasReservasConfig>(DEFAULT_BOOKING_RULES);
   const [whatsappTemplate, setWhatsappTemplate] = useState<string>(
-    '¡Hola *{nombre}*, te recordamos tu cita para el día de hoy! 💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n📍 *Ubicación:* {ubicacion}\n\n_¡Te esperamos!_'
+    '¡Hola *{nombre}*, te recordamos tu cita💈\n\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n💈 *Servicio(s):* {servicios}\n📍 *Ubicación:* {ubicacion}\n\n⚠️ IMPORTANTE: Para mantener tu espacio reservado, por favor confirma respondiendo a este mensaje a más tardar 30 minutos antes de tu hora de cita. De lo contrario, la cita se cancelará automáticamente para liberar el turno.\nAgradecemos tu puntualidad. En caso de llegar con retraso y haber clientes en espera, la cita se reprogramará según disponibilidad.\n\nResponde este mensaje con:\n*Confirmar*\n*Reagendar*\n*Cancelar*\n\nvatosalfa.com\nhttps://vatosalfa.com/terminos\nhttps://vatosalfa.com/privacidad'
   );
   const [whatsappConfirmationTemplate, setWhatsappConfirmationTemplate] = useState<string>(
-    '¡Hola *{nombre}*, tu cita está confirmada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\n_Podrá cancelar hasta 2 horas antes. Favor de llegar 5 minutos antes de tu cita._'
+    '¡Hola *{nombre}*, tu cita está agendada! 🎉\n\n💈 *Servicio(s):* {servicios}\n📅 *Fecha:* {fecha}\n⏰ *Hora:* {hora}\n👤 *Profesional:* {profesional}\n📍 *Ubicación:* {ubicacion}\n\nAgradecemos tu puntualidad y asistencia.\nEn caso de llegar después y tener clientes en espera, la cita podrá reprogramarse según disponibilidad.\n\n¡Te esperamos 💈!\nvatosalfa.com\n\nhttps://vatosalfa.com/terminos\nhttps://vatosalfa.com/privacidad'
   );
 
   // Escuchar configuración de reglas de reserva y plantilla WhatsApp
@@ -224,8 +224,9 @@ export function OverdueNotificationsPopover({
           if (d.whatsappReminderTemplate) {
             setWhatsappTemplate(d.whatsappReminderTemplate);
           }
-          if (d.whatsappConfirmationTemplate || d.whatsappTemplate) {
-            setWhatsappConfirmationTemplate(d.whatsappConfirmationTemplate || d.whatsappTemplate);
+          const confTpl = d.whatsappMessageTemplate || d.whatsappConfirmationTemplate || d.whatsappTemplate;
+          if (confTpl) {
+            setWhatsappConfirmationTemplate(confTpl);
           }
         }
       },
@@ -676,17 +677,38 @@ export function OverdueNotificationsPopover({
 
     let datePretty = res.fecha;
     try {
-      datePretty = format(parseISO(res.fecha), "EEEE, dd 'de' MMMM", { locale: es });
+      datePretty = format(parseISO(res.fecha + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: es });
       datePretty = datePretty.charAt(0).toUpperCase() + datePretty.slice(1);
     } catch (_) {}
 
-    const message = whatsappConfirmationTemplate
-      .replace(/{nombre}/g, clientName)
-      .replace(/{servicios}/g, servicesText)
-      .replace(/{fecha}/g, datePretty)
-      .replace(/{hora}/g, res.hora_inicio || '')
-      .replace(/{profesional}/g, profName)
-      .replace(/{ubicacion}/g, locationStr);
+    // Asegurar obtención en vivo de la plantilla configurada en Administración / Ajustes
+    let activeTemplate = whatsappConfirmationTemplate;
+    if (db) {
+      try {
+        const snap = await getDoc(doc(db, 'configuracion', 'whatsapp'));
+        if (snap.exists()) {
+          const d = snap.data();
+          const confTpl = d.whatsappMessageTemplate || d.whatsappConfirmationTemplate || d.whatsappTemplate;
+          if (confTpl) {
+            activeTemplate = confTpl;
+            setWhatsappConfirmationTemplate(confTpl);
+          }
+        }
+      } catch (_) {}
+    }
+
+    const message = activeTemplate
+      .replace(/{nombre}/gi, clientName)
+      .replace(/{cliente}/gi, clientName)
+      .replace(/{servicios}/gi, servicesText)
+      .replace(/{servicio}/gi, servicesText)
+      .replace(/{fecha}/gi, datePretty)
+      .replace(/{hora}/gi, res.hora_inicio || '')
+      .replace(/{horario}/gi, res.hora_inicio || '')
+      .replace(/{profesional}/gi, profName)
+      .replace(/{barbero}/gi, profName)
+      .replace(/{ubicacion}/gi, locationStr)
+      .replace(/{sucursal}/gi, locationStr);
 
     if (formattedPhone) {
       window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');
@@ -750,13 +772,38 @@ export function OverdueNotificationsPopover({
     const clientName = getClientDisplayName(res);
     const locationStr = 'Suc. Sombrerete';
 
-    const message = whatsappTemplate
-      .replace(/{nombre}/g, clientName)
-      .replace(/{servicios}/g, servicesText)
-      .replace(/{fecha}/g, res.fecha)
-      .replace(/{hora}/g, res.hora_inicio || '')
-      .replace(/{profesional}/g, profName)
-      .replace(/{ubicacion}/g, locationStr);
+    let datePretty = res.fecha;
+    try {
+      datePretty = format(parseISO(res.fecha + 'T12:00:00'), "EEEE, dd 'de' MMMM", { locale: es });
+      datePretty = datePretty.charAt(0).toUpperCase() + datePretty.slice(1);
+    } catch (_) {}
+
+    let activeReminderTemplate = whatsappTemplate;
+    if (db) {
+      try {
+        const snap = await getDoc(doc(db, 'configuracion', 'whatsapp'));
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.whatsappReminderTemplate) {
+            activeReminderTemplate = d.whatsappReminderTemplate;
+            setWhatsappTemplate(d.whatsappReminderTemplate);
+          }
+        }
+      } catch (_) {}
+    }
+
+    const message = activeReminderTemplate
+      .replace(/{nombre}/gi, clientName)
+      .replace(/{cliente}/gi, clientName)
+      .replace(/{servicios}/gi, servicesText)
+      .replace(/{servicio}/gi, servicesText)
+      .replace(/{fecha}/gi, datePretty)
+      .replace(/{hora}/gi, res.hora_inicio || '')
+      .replace(/{horario}/gi, res.hora_inicio || '')
+      .replace(/{profesional}/gi, profName)
+      .replace(/{barbero}/gi, profName)
+      .replace(/{ubicacion}/gi, locationStr)
+      .replace(/{sucursal}/gi, locationStr);
 
     if (formattedPhone) {
       window.open(`https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`, '_blank');

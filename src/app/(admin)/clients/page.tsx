@@ -68,6 +68,7 @@ const availableYears = Array.from({ length: 6 }, (_, i) => currentCalendarYear -
 const FiltersSidebar = ({
   onApply,
   onReset,
+  onClose,
   dateRange, setDateRange,
   localFilter, setLocalFilter,
   birthdayMonthFilter, setBirthdayMonthFilter,
@@ -87,6 +88,7 @@ const FiltersSidebar = ({
 }: {
   onApply: () => void,
   onReset: () => void,
+  onClose?: () => void,
   dateRange: DateRange | undefined,
   setDateRange: (range: DateRange | undefined) => void,
   localFilter: string,
@@ -117,9 +119,21 @@ const FiltersSidebar = ({
 
   return (
     <div className="space-y-3 flex flex-col h-full text-xs">
-      <div className="flex items-center gap-2 pb-2 border-b border-border/50 text-foreground font-semibold">
-        <SlidersHorizontal className="h-4 w-4 text-slate-400 shrink-0" />
-        <span className="text-sm">Filtros avanzados</span>
+      <div className="flex items-center justify-between pb-2 border-b border-border/50 text-foreground font-semibold">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-slate-400 shrink-0" />
+          <span className="text-sm">Filtros avanzados</span>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-6 w-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-muted/40 transition-colors"
+            title="Ocultar filtros"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="space-y-2.5">
@@ -415,6 +429,7 @@ export default function ClientsPage() {
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [showDesktopSidebar, setShowDesktopSidebar] = useState(true);
   const [authCode, setAuthCode] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -1038,8 +1053,8 @@ export default function ClientsPage() {
           valB = Number(b.numero_cliente) || 0;
           break;
         case 'nombre':
-          valA = (a.nombre || '').toLowerCase();
-          valB = (b.nombre || '').toLowerCase();
+          valA = `${a.nombre || ''} ${a.apellido || ''}`.trim().toLowerCase();
+          valB = `${b.nombre || ''} ${b.apellido || ''}`.trim().toLowerCase();
           break;
         case 'apellido':
           valA = (a.apellido || '').toLowerCase();
@@ -1413,7 +1428,7 @@ export default function ClientsPage() {
 
   return (
     <>
-      <div className="flex-1 space-y-4 p-4 md:p-8 pt-6">
+      <div className="flex-1 space-y-4 p-3 sm:p-4 lg:p-6 pt-4 sm:pt-6">
         <div className="flex items-center justify-between space-y-2">
           <h2 className="text-3xl font-bold tracking-tight">Base de clientes</h2>
           <div className="flex items-center space-x-1">
@@ -1503,57 +1518,67 @@ export default function ClientsPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-5">
           {/* SIDEBAR DE FILTROS EN DESKTOP (fijo en columna izquierda) */}
-          <aside className="hidden lg:block lg:col-span-1">
-            <div className="rounded-2xl border border-border/60 bg-card p-3.5 shadow-sm sticky top-4">
-              <FiltersSidebar
-                onApply={handleApplyFilters}
-                onReset={handleResetFilters}
-                dateRange={dateRange} setDateRange={setDateRange}
-                localFilter={localFilter} setLocalFilter={setLocalFilter}
-                birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
-                newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
-                newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
-                professionalFilter={professionalFilter}
-                setProfessionalFilter={setProfessionalFilter}
-                inactiveTimeFilter={inactiveTimeFilter}
-                setInactiveTimeFilter={setInactiveTimeFilter}
-                topSpentFilter={topSpentFilter}
-                setTopSpentFilter={setTopSpentFilter}
-                appFilter={appFilter}
-                setAppFilter={setAppFilter}
-                depositExemptionFilter={depositExemptionFilter}
-                setDepositExemptionFilter={setDepositExemptionFilter}
-                professionals={professionals}
-                locales={locales}
-                isLoading={isLoading}
-                isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
-                logoUrl={logoUrl}
-                empresaLoading={empresaLoading}
-              />
-            </div>
-          </aside>
+          {showDesktopSidebar && (
+            <aside className="hidden lg:block w-56 xl:w-64 shrink-0">
+              <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-sm sticky top-4">
+                <FiltersSidebar
+                  onClose={() => setShowDesktopSidebar(false)}
+                  onApply={handleApplyFilters}
+                  onReset={handleResetFilters}
+                  dateRange={dateRange} setDateRange={setDateRange}
+                  localFilter={localFilter} setLocalFilter={setLocalFilter}
+                  birthdayMonthFilter={birthdayMonthFilter} setBirthdayMonthFilter={setBirthdayMonthFilter}
+                  newClientsMonthFilter={newClientsMonthFilter} setNewClientsMonthFilter={setNewClientsMonthFilter}
+                  newClientsYearFilter={newClientsYearFilter} setNewClientsYearFilter={setNewClientsYearFilter}
+                  professionalFilter={professionalFilter}
+                  setProfessionalFilter={setProfessionalFilter}
+                  inactiveTimeFilter={inactiveTimeFilter}
+                  setInactiveTimeFilter={setInactiveTimeFilter}
+                  topSpentFilter={topSpentFilter}
+                  setTopSpentFilter={setTopSpentFilter}
+                  appFilter={appFilter}
+                  setAppFilter={setAppFilter}
+                  depositExemptionFilter={depositExemptionFilter}
+                  setDepositExemptionFilter={setDepositExemptionFilter}
+                  professionals={professionals}
+                  locales={locales}
+                  isLoading={isLoading}
+                  isLocalAdmin={user?.role === 'Administrador local' || Boolean(user?.local_id)}
+                  logoUrl={logoUrl}
+                  empresaLoading={empresaLoading}
+                />
+              </div>
+            </aside>
+          )}
 
-          <main className="lg:col-span-3 space-y-3 sm:space-y-4">
+          <main className="flex-1 min-w-0 space-y-3 sm:space-y-4">
             {/* Barra de Búsqueda, Filtros, Ordenar y Acciones */}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2 sm:gap-3">
                 <div className="flex-1 flex items-center gap-2">
                   <ClientSearchBar onSearch={handleSearchChange} />
                   
-                  {/* Botón Filtros (visible en móvil y tablet < lg) */}
+                  {/* Botón Filtros (visible en móvil y tablet/desktop para alternar panel) */}
                   <Button
                     variant="outline"
                     size="sm"
                     type="button"
-                    onClick={() => setShowMobileFilters(true)}
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+                        setShowDesktopSidebar(prev => !prev);
+                      } else {
+                        setShowMobileFilters(true);
+                      }
+                    }}
                     className={cn(
-                      "lg:hidden h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-xl border-border/80 transition-colors",
-                      activeFilterCount > 0
+                      "h-9 px-2.5 text-xs flex items-center gap-1.5 shrink-0 rounded-xl border-border/80 transition-colors",
+                      (activeFilterCount > 0 || (showDesktopSidebar && typeof window !== 'undefined' && window.innerWidth >= 1024))
                         ? "border-blue-500 bg-blue-500/10 text-blue-500 font-semibold"
                         : "text-muted-foreground hover:text-foreground"
                     )}
+                    title={showDesktopSidebar ? "Ocultar panel de filtros" : "Mostrar panel de filtros"}
                   >
                     <SlidersHorizontal className="h-3.5 w-3.5 text-slate-400" />
                     <span>Filtros</span>
@@ -1991,48 +2016,44 @@ export default function ClientsPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="h-8 bg-muted/30">
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('numero_cliente')}>
-                        <span className="flex items-center">Nº Cliente <SortIcon field="numero_cliente" /></span>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors w-[65px] text-center" onClick={() => handleSort('numero_cliente')}>
+                        <span className="flex items-center justify-center">Nº <SortIcon field="numero_cliente" /></span>
                       </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('nombre')}>
-                        <span className="flex items-center">Nombre <SortIcon field="nombre" /></span>
+                      <TableHead className="py-1.5 px-2.5 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors min-w-[140px]" onClick={() => handleSort('nombre')}>
+                        <span className="flex items-center">Cliente <SortIcon field="nombre" /></span>
                       </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('apellido')}>
-                        <span className="flex items-center">Apellido <SortIcon field="apellido" /></span>
-                      </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8">Correo</TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8">Teléfono</TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-center w-[55px]" onClick={() => handleSort('app')}>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 hidden xl:table-cell max-w-[150px]">Correo</TableHead>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 w-[100px]">Teléfono</TableHead>
+                      <TableHead className="py-1.5 px-1 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-center w-[48px]" onClick={() => handleSort('app')}>
                         <span className="flex items-center justify-center">App <SortIcon field="app" /></span>
                       </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('creado_en')}>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors hidden 2xl:table-cell w-[105px]" onClick={() => handleSort('creado_en')}>
                         <span className="flex items-center">Cliente desde <SortIcon field="creado_en" /></span>
                       </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors" onClick={() => handleSort('ultima_visita')}>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors w-[100px]" onClick={() => handleSort('ultima_visita')}>
                         <span className="flex items-center">Última visita <SortIcon field="ultima_visita" /></span>
                       </TableHead>
-                      <TableHead className="py-1.5 px-3 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-right" onClick={() => handleSort('gasto_total')}>
+                      <TableHead className="py-1.5 px-2 text-xs h-8 cursor-pointer select-none hover:bg-muted/50 transition-colors text-right w-[95px]" onClick={() => handleSort('gasto_total')}>
                         <span className="flex items-center justify-end">Consumo <SortIcon field="gasto_total" /></span>
                       </TableHead>
-                      {enableMarketing && <TableHead className="py-1.5 px-3 text-xs h-8 w-[50px]">Contacto</TableHead>}
-                      <TableHead className="py-1.5 px-3 text-xs h-8 text-right">Opciones</TableHead>
+                      {enableMarketing && <TableHead className="py-1.5 px-1 text-xs h-8 w-[40px] text-center">Contacto</TableHead>}
+                      <TableHead className="py-1.5 px-2 text-xs h-8 text-right w-[125px] shrink-0">Opciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {isLoading ? (
                       Array.from({ length: itemsPerPage }).map((_, i) => (
                         <TableRow key={i} className="h-9">
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-12" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-24" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-32" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs text-center"><Skeleton className="h-4 w-4 mx-auto" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
-                          {enableMarketing && <TableCell className="py-1.5 px-3 text-xs"><Skeleton className="h-6 w-6" /></TableCell>}
-                          <TableCell className="py-1.5 px-3 text-xs text-right"><Skeleton className="h-6 w-16 ml-auto" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs text-center"><Skeleton className="h-4 w-10 mx-auto" /></TableCell>
+                          <TableCell className="py-1.5 px-2.5 text-xs"><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs hidden xl:table-cell"><Skeleton className="h-4 w-28" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-1 text-xs text-center"><Skeleton className="h-4 w-4 mx-auto" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs hidden 2xl:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs"><Skeleton className="h-4 w-20" /></TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
+                          {enableMarketing && <TableCell className="py-1.5 px-1 text-xs text-center"><Skeleton className="h-6 w-6 mx-auto" /></TableCell>}
+                          <TableCell className="py-1.5 px-2 text-xs text-right"><Skeleton className="h-6 w-16 ml-auto" /></TableCell>
                         </TableRow>
                       ))
                     ) : paginatedClients.map((client) => {
@@ -2041,30 +2062,53 @@ export default function ClientsPage() {
 
                       return (
                         <TableRow key={client.id} className="h-9 hover:bg-muted/30 transition-colors">
-                          <TableCell className="py-1.5 px-3 text-xs font-mono">{client.numero_cliente || 'N/A'}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs font-medium">
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-6 w-6 border border-primary/20 shrink-0">
+                          <TableCell className="py-1.5 px-2 text-xs font-mono text-center text-muted-foreground">{client.numero_cliente || 'N/A'}</TableCell>
+                          <TableCell className="py-1.5 px-2.5 text-xs font-medium">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar
+                                className="h-6 w-6 border border-primary/20 shrink-0 cursor-pointer"
+                                onClick={() => handleViewDetails(client)}
+                                title="Ver detalles"
+                              >
                                 <AvatarImage src={client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url} alt={client.nombre} className="object-cover" />
                                 <AvatarFallback className="text-[9px] font-bold bg-primary/10 text-primary">
                                   {client.nombre?.charAt(0)}{client.apellido?.charAt(0)}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="truncate max-w-[120px]">{client.nombre}</span>
-                              {clientAttendanceStatsMap.get(client.id)?.isExempt && (
-                                <span
-                                  className="text-[10px] font-semibold text-[#C5A880] bg-[#C5A880]/15 border border-[#C5A880]/40 px-1.5 py-0 rounded-full shrink-0"
-                                  title="Cliente Exento de Anticipo"
-                                >
-                                  ★ Exento
-                                </span>
-                              )}
+                              <div className="flex flex-col min-w-0">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewDetails(client)}
+                                    className="truncate text-foreground font-medium hover:underline text-left"
+                                    title="Ver ficha del cliente"
+                                  >
+                                    {client.nombre} {client.apellido}
+                                  </button>
+                                  {clientAttendanceStatsMap.get(client.id)?.isExempt && (
+                                    <span
+                                      className="text-[10px] font-semibold text-[#C5A880] bg-[#C5A880]/15 border border-[#C5A880]/40 px-1.5 py-0 rounded-full shrink-0"
+                                      title="Cliente Exento de Anticipo"
+                                    >
+                                      ★ Exento
+                                    </span>
+                                  )}
+                                </div>
+                                {client.correo && (
+                                  <span className="text-[11px] text-muted-foreground truncate max-w-[150px] xl:hidden" title={client.correo}>
+                                    {client.correo}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs truncate max-w-[120px]">{client.apellido}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs truncate max-w-[160px]">{client.correo}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{canViewPhone ? client.telefono : '****-****'}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs text-center">
+                          <TableCell className="py-1.5 px-2 text-xs truncate max-w-[150px] hidden xl:table-cell" title={client.correo || ''}>
+                            {client.correo || <span className="text-muted-foreground/30 text-[11px] select-none">—</span>}
+                          </TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs whitespace-nowrap">
+                            {hasPhone ? (canViewPhone ? client.telefono : '****-****') : <span className="text-muted-foreground/30 text-[11px] select-none">—</span>}
+                          </TableCell>
+                          <TableCell className="py-1.5 px-1 text-xs text-center w-[48px]">
                             {(() => {
                               const hasApp = isClientWithApp(client, appClientIdsFromReservations);
                               if (!hasApp) return <span className="text-muted-foreground/30 text-[11px] select-none">—</span>;
@@ -2074,13 +2118,15 @@ export default function ClientsPage() {
                                   className="flex items-center justify-center cursor-help"
                                   title={`App móvil activa\n• Último acceso: ${appInfo.lastAccessFormatted}${appInfo.relativeTime ? ` (${appInfo.relativeTime})` : ''}\n• Plataforma: ${appInfo.platformName}`}
                                 >
-                                  <Smartphone className="h-4 w-4 text-blue-500 shrink-0" />
+                                  <Smartphone className="h-4 w-4 text-blue-500 shrink-0 mx-auto" />
                                 </div>
                               );
                             })()}
                           </TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{formatDate(client.creado_en)}</TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">
+                          <TableCell className="py-1.5 px-2 text-xs whitespace-nowrap hidden 2xl:table-cell">
+                            {formatDate(client.creado_en)}
+                          </TableCell>
+                          <TableCell className="py-1.5 px-2 text-xs whitespace-nowrap">
                             {(() => {
                               const lv = clientLastVisitMap.get(client.id);
                               return lv ? (
@@ -2090,17 +2136,17 @@ export default function ClientsPage() {
                               );
                             })()}
                           </TableCell>
-                          <TableCell className="py-1.5 px-3 text-xs text-right font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                          <TableCell className="py-1.5 px-2 text-xs text-right font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap font-sans">
                             {(() => {
                               const spent = clientSpentMap.get(client.id) || 0;
                               return `$${spent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
                             })()}
                           </TableCell>
                           {enableMarketing && (
-                            <TableCell className="py-1 px-3">
+                            <TableCell className="py-1 px-1 text-center w-[40px]">
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-800 dark:hover:text-white">
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-800 dark:hover:text-white mx-auto">
                                     <MessageCircle className="h-3.5 w-3.5" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -2131,13 +2177,13 @@ export default function ClientsPage() {
                               </DropdownMenu>
                             </TableCell>
                           )}
-                          <TableCell className="py-1 px-3 text-right">
+                          <TableCell className="py-1 px-2 text-right w-[125px] shrink-0">
                             <div className="flex items-center justify-end gap-1">
                               {canManageExemption && (
                                 <button
                                   type="button"
                                   className={cn(
-                                    "h-7 w-7 flex items-center justify-center transition-colors",
+                                    "h-7 w-7 flex items-center justify-center transition-colors rounded-md",
                                     clientAttendanceStatsMap.get(client.id)?.isExempt
                                       ? "text-[#C5A880] hover:text-[#d8bc96]"
                                       : "text-slate-400 hover:text-[#C5A880]"
@@ -2154,7 +2200,7 @@ export default function ClientsPage() {
                               )}
                               <button
                                 type="button"
-                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-md"
                                 onClick={() => handleViewDetails(client)}
                                 title="Ver detalles"
                               >
@@ -2163,7 +2209,7 @@ export default function ClientsPage() {
                               {canEditClient && (
                                 <button
                                   type="button"
-                                  className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors"
+                                  className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-slate-800 dark:hover:text-white transition-colors rounded-md"
                                   onClick={() => handleOpenEditModal(client)}
                                   title="Editar"
                                 >
@@ -2172,7 +2218,7 @@ export default function ClientsPage() {
                               )}
                               <button
                                 type="button"
-                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-destructive transition-colors"
+                                className="h-7 w-7 flex items-center justify-center text-slate-400 hover:text-destructive transition-colors rounded-md"
                                 onClick={() => setClientToDelete(client)}
                                 title="Eliminar"
                               >

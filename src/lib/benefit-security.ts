@@ -1,3 +1,16 @@
+import {
+  collection,
+  deleteField,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  query,
+  Timestamp,
+  updateDoc,
+  where,
+  type Firestore,
+} from 'firebase/firestore';
 import { isClientWithApp } from './client-app-helper';
 
 export const MONTH_NAMES_ES = [
@@ -157,8 +170,146 @@ export function formatBirthdaySpanish(birthVal: any): string {
 }
 
 /**
+ * Convierte cualquier valor de fecha/Timestamp de Firestore o ISO a milisegundos epoch.
+ */
+export function extractTimestampMs(val: any): number | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.getTime();
+  }
+  if (typeof val.toDate === 'function') {
+    const d = val.toDate();
+    return d instanceof Date && !isNaN(d.getTime()) ? d.getTime() : null;
+  }
+  if (typeof val === 'object' && typeof val.seconds === 'number') {
+    return val.seconds * 1000 + Math.floor((Number(val.nanoseconds) || 0) / 1e6);
+  }
+  if (typeof val === 'string') {
+    const parsed = new Date(val).getTime();
+    return isNaN(parsed) ? null : parsed;
+  }
+  if (typeof val === 'number' && val > 0) {
+    return val < 1e12 ? val * 1000 : val;
+  }
+  return null;
+}
+
+/**
+ * Obtiene el timestamp exacto (ms) en que el cliente descargó y se registró/vinculó en la App Móvil.
+ * - Si tiene `fecha_registro_app` o `fecha_registro_app_iso`, usa esa fecha exacta.
+ * - Si su cuenta nació directamente en la app (`origen` contiene `app_movil` o `app_store_reviewer`),
+ *   usa `creado_en` o `cliente_desde`.
+ * - Si era cliente previo de la barbería (`migracion_excel`, `web_publica`, `agenda`, etc.) y no tiene
+ *   `fecha_registro_app`, devuelve `null` (solo contarán ventas con `lealtad_aplicada.aplicado === true`).
+ */
+export function getClientAppRegistrationMs(clientData: any): number | null {
+  if (!clientData) return null;
+  const explicitReg =
+    extractTimestampMs(clientData.fecha_registro_app) ??
+    extractTimestampMs(clientData.fecha_registro_app_iso);
+  if (explicitReg) return explicitReg;
+
+  const origen = String(clientData.origen || '').toLowerCase();
+  if (origen.includes('app_movil') || origen.includes('app_store_reviewer')) {
+    return (
+      extractTimestampMs(clientData.creado_en) ??
+      extractTimestampMs(clientData.cliente_desde) ??
+      null
+    );
+  }
+  return null;
+}
+
+/**
+ * Determina si una venta pagada cuenta para el Pase Alfa (niveles, sellos y visitas elegibles).
+ * Regla oficial: Todas las compras y visitas realizadas ANTES de que el cliente se registrara en la app
+ * forman parte de su historial general de la barbería, pero NO cuentan para el Pase Alfa.
+ */
+export function isSaleCountedForPaseAlfa(saleData: any, clientData: any): boolean {
+  if (!saleData) return false;
+  const st = String(saleData.pago_estado || '').toLowerCase();
+  if (
+    st === 'cancelado' ||
+    st === 'anulado' ||
+    st === 'pendiente' ||
+    st === 'pending_payment' ||
+    st === 'pendiente_anticipo'
+  ) {
+    return false;
+  }
+  if (saleData.absorbed_in_sale_id || saleData.tipo_venta === 'anticipo') {
+    return false;
+  }
+
+  // Si la venta fue procesada en Caja con lealtad Pase Alfa activa (y no revertida), cuenta siempre
+  if (saleData.lealtad_aplicada?.aplicado === true && !saleData.lealtad_aplicada?.revertido) {
+    return true;
+  }
+
+  if (!clientData) return false;
+
+  const appRegMs = getClientAppRegistrationMs(clientData);
+  if (!appRegMs) {
+    // Cliente previo de la barbería sin fecha_registro_app y venta antigua sin lealtad_aplicada
+    return false;
+  }
+
+  const saleMs =
+    extractTimestampMs(saleData.fecha_hora_venta) ??
+    extractTimestampMs(saleData.creado_en) ??
+    extractTimestampMs(saleData.fecha_pago);
+
+  if (!saleMs) return false;
+
+  // Tolerancia de 60 segundos por desfase de reloj al momento de vincular en recepción
+  return saleMs >= appRegMs - 60000;
+}
+
+/**
+ * Calcula las visitas con servicio pagado y el consumo real ($ MXN) acumulados
+ * EXCLUSIVAMENTE a partir de que el cliente se registró en la App Móvil (para Niveles Pase Alfa).
+ */
+export function calculatePaseAlfaStatsFromSales(
+  salesDataList: any[],
+  clientData: any
+): { visits: number; spend: number } {
+  let spend = 0;
+  const visitDays = new Set<string>();
+
+  for (let idx = 0; idx < (salesDataList || []).length; idx++) {
+    const s = salesDataList[idx];
+    if (!isSaleCountedForPaseAlfa(s, clientData)) continue;
+
+    const saleTotal = Number(s.total ?? s.monto_pagado_real ?? 0);
+    const coinsDisc = Number(s.descuento_alfacoins ?? 0);
+    const realPaid = Math.max(0, saleTotal - coinsDisc);
+    spend += realPaid;
+
+    const items = Array.isArray(s.items) ? s.items : [];
+    const hasService =
+      items.length === 0 || items.some((it: any) => it.tipo === 'servicio' || !it.tipo);
+    if (hasService && s.tipo_venta !== 'anticipo' && !String(s.id || '').startsWith('deposit_')) {
+      const ms =
+        extractTimestampMs(s.fecha_hora_venta) ??
+        extractTimestampMs(s.creado_en);
+      const dt = ms ? new Date(ms) : null;
+      const dayKey =
+        dt && !isNaN(dt.getTime())
+          ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+          : `sale_${s.id || idx}`;
+      visitDays.add(dayKey);
+    }
+  }
+
+  return {
+    visits: visitDays.size,
+    spend: Math.round(spend * 100) / 100,
+  };
+}
+
+/**
  * Calcula cuántas visitas elegibles pagadas acumula un cliente para desbloquear el Regalo de Cumpleaños:
- * - Solo ventas pagadas (no canceladas ni pendientes ni anticipos).
+ * - Solo ventas pagadas (no canceladas ni pendientes ni anticipos) posteriores a su registro en la App.
  * - Deben incluir al menos un servicio (excluye compras de puros productos como ceras o lociones).
  * - El importe real pagado en servicios debe ser >= al costo del corte de cabello en ese momento
  *   (`sale.tarifa_corte_aplicada` si existe; para ventas históricas previas a ajustes tarifarios se respeta $140 MXN).
@@ -186,6 +337,9 @@ export function countEligibleHaircutVisitsFromSales(
       continue;
     }
     if (s.absorbed_in_sale_id || s.tipo_venta === 'anticipo') {
+      continue;
+    }
+    if (clientData && !isSaleCountedForPaseAlfa(s, clientData)) {
       continue;
     }
 
@@ -778,8 +932,8 @@ export function evaluateClientAlfaTier(
       id: 'gold' as const,
       nombre: 'Alfa Gold',
       cashbackPct: 5,
-      visitasMin: 4,
-      gastoMin: 1500,
+      visitasMin: 12,
+      gastoMin: 2400,
       color: '#C5A880',
       colorTexto: '#0F172A',
       beneficios: [
@@ -791,8 +945,8 @@ export function evaluateClientAlfaTier(
       id: 'vip' as const,
       nombre: 'Alfa Black VIP',
       cashbackPct: 7,
-      visitasMin: 8,
-      gastoMin: 3500,
+      visitasMin: 24,
+      gastoMin: 4800,
       color: '#0F172A',
       colorTexto: '#F8FAFC',
       beneficios: [
@@ -809,36 +963,52 @@ export function evaluateClientAlfaTier(
   const criterio: 'visitas' | 'gasto' | 'ambos_opcional' =
     nivelesConfig?.criterio || 'ambos_opcional';
 
+  // Regla oficial Pase Alfa: Las compras y visitas previas al registro en la App Móvil NO cuentan
+  // para subir de nivel. Solo cuentan visitas_pase_alfa / cortes_acumulados y consumo_pase_alfa.
+  const isNativeAppOrigin = Boolean(
+    client &&
+      (String(client.origen || '').toLowerCase().includes('app_movil') ||
+        String(client.origen || '').toLowerCase().includes('app_store_reviewer'))
+  );
+
   const baseVisits = client
-    ? Math.max(
-        Number(client.citas_asistidas ?? 0),
-        Number(client.visitas_totales ?? 0),
-        Number(client.visitas ?? 0),
-        Number(client.total_visitas ?? 0),
-        Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0)
-      )
+    ? client.visitas_pase_alfa !== undefined
+      ? Math.max(
+          Number(client.visitas_pase_alfa ?? 0),
+          Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0)
+        )
+      : isNativeAppOrigin
+      ? Math.max(
+          Number(client.citas_asistidas ?? 0),
+          Number(client.visitas_totales ?? 0),
+          Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0)
+        )
+      : Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0)
     : 0;
 
   const baseSpend = client
-    ? Math.max(
-        Number(client.consumo_total ?? 0),
-        Number(client.gasto_total ?? 0),
-        Number(client.consumoTotal ?? 0),
-        Number(client.consumo ?? 0)
-      )
+    ? client.consumo_pase_alfa !== undefined
+      ? Number(client.consumo_pase_alfa ?? 0)
+      : isNativeAppOrigin
+      ? Math.max(
+          Number(client.consumo_total ?? 0),
+          Number(client.gasto_total ?? 0),
+          Number(client.consumoTotal ?? 0)
+        )
+      : 0
     : 0;
 
   const v = Math.max(
     0,
     options?.overrideVisits !== undefined
-      ? Math.max(baseVisits, options.overrideVisits)
+      ? options.overrideVisits
       : baseVisits + (options?.extraVisits || 0)
   );
   const g = Math.max(
     0,
     Math.round(
       ((options?.overrideSpend !== undefined
-        ? Math.max(baseSpend, options.overrideSpend)
+        ? options.overrideSpend
         : baseSpend) +
         (options?.extraSpend || 0)) *
         100
@@ -848,7 +1018,7 @@ export function evaluateClientAlfaTier(
   const hasApp = isClientWithApp(client, options?.appReservationClientIds);
 
   // Si no hay cliente seleccionado o el cliente NO tiene la app móvil instalada y usada:
-  // Los clientes sin app NO tienen nivel ni beneficios del Pase Alfa Club.
+  // Los clientes sin app NO tienen nivel ni beneficios del Pase Alfa.
   if (!client || !hasApp) {
     return {
       activo: false,
@@ -895,10 +1065,10 @@ export function evaluateClientAlfaTier(
     };
   }
 
-  const vipVisitasMin = Number(vip.visitasMin ?? 8);
-  const vipGastoMin = Number(vip.gastoMin ?? 3500);
-  const goldVisitasMin = Number(gold.visitasMin ?? 4);
-  const goldGastoMin = Number(gold.gastoMin ?? 1500);
+  const vipVisitasMin = Number(vip.visitasMin ?? 24);
+  const vipGastoMin = Number(vip.gastoMin ?? 4800);
+  const goldVisitasMin = Number(gold.visitasMin ?? 12);
+  const goldGastoMin = Number(gold.gastoMin ?? 2400);
 
   let isVip = false;
   let isGold = false;
@@ -1189,6 +1359,628 @@ export function evaluatePaseAlfaStampsForSale(params: {
         : `1 servicio elegible (>= $${minServicePrice} MXN) acreditado automáticamente hoy.`,
   };
 }
+
+// ============================================================================
+// MULTIPLICADOR DE ALFA COINS (DÍAS DOBLES 2x / TRIPLES 3x)
+// ============================================================================
+
+export interface MultiplicadorCoinsConfig {
+  activo: boolean;
+  multiplicador: 2 | 3;
+  dias_semana: number[]; // 0 = Domingo, 1 = Lunes, 2 = Martes, 3 = Miércoles, 4 = Jueves, 5 = Viernes, 6 = Sábado
+  fechas_especificas?: string[]; // ['yyyy-MM-dd'] opcional
+  mensaje_app?: string;
+  mensaje_promo?: string;
+}
+
+export const DAY_NAMES_ES = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+];
+
+export const DEFAULT_MULTIPLICADOR_COINS_CONFIG: MultiplicadorCoinsConfig = {
+  activo: false,
+  multiplicador: 2,
+  dias_semana: [],
+  fechas_especificas: [],
+  mensaje_app: '¡Hoy tus compras generan el DOBLE de Alfa Coins en cualquier sucursal de VATOS ALFA Barber Shop!',
+  mensaje_promo: '¡Hoy tus compras generan el DOBLE de Alfa Coins en cualquier sucursal de VATOS ALFA Barber Shop!',
+};
+
+export interface EvaluatedCoinsMultiplier {
+  isActive: boolean;
+  isActiveToday: boolean;
+  configEnabled: boolean;
+  multiplier: 1 | 2 | 3;
+  configuredMultiplier: 2 | 3;
+  activeDaysNames: string[];
+  label: string;
+  shortBadge: string;
+  promoMessage: string;
+}
+
+export function evaluateActiveCoinsMultiplier(
+  rawConfig?: Partial<MultiplicadorCoinsConfig> | null,
+  referenceDate: Date = new Date()
+): EvaluatedCoinsMultiplier {
+  const cfg: MultiplicadorCoinsConfig = {
+    ...DEFAULT_MULTIPLICADOR_COINS_CONFIG,
+    ...(rawConfig || {}),
+    multiplicador: Number(rawConfig?.multiplicador) === 3 ? 3 : 2,
+    dias_semana: Array.isArray(rawConfig?.dias_semana)
+      ? rawConfig!.dias_semana.map(Number).filter((n) => !isNaN(n) && n >= 0 && n <= 6)
+      : [],
+    fechas_especificas: Array.isArray(rawConfig?.fechas_especificas)
+      ? rawConfig!.fechas_especificas.map(String)
+      : [],
+  };
+
+  const activeDaysNames = cfg.dias_semana.map((d) => DAY_NAMES_ES[d]).filter(Boolean);
+  const multWord = cfg.multiplicador === 3 ? 'TRIPLE (3x)' : 'DOBLE (2x)';
+  const todayDayOfWeek = referenceDate.getDay();
+  const todayStr = `${referenceDate.getFullYear()}-${String(referenceDate.getMonth() + 1).padStart(2, '0')}-${String(referenceDate.getDate()).padStart(2, '0')}`;
+
+  const matchesDayOfWeek = cfg.dias_semana.includes(todayDayOfWeek);
+  const matchesSpecificDate = Boolean(cfg.fechas_especificas?.includes(todayStr));
+  const isTodayPromo = Boolean(cfg.activo && (matchesDayOfWeek || matchesSpecificDate));
+
+  const defaultMessage = isTodayPromo
+    ? `🔥 ¡Hoy es día de Alfa Coins al ${multWord}! Cada $1 MXN pagado te otorga ${cfg.multiplicador} Alfa Coins en cualquier sucursal.`
+    : activeDaysNames.length > 0
+    ? `Días de Alfa Coins al ${multWord}: ${activeDaysNames.join(', ')}.`
+    : '';
+
+  const customMsg = (cfg.mensaje_promo || cfg.mensaje_app || '').trim();
+
+  return {
+    isActive: isTodayPromo,
+    isActiveToday: isTodayPromo,
+    configEnabled: Boolean(cfg.activo),
+    multiplier: isTodayPromo ? cfg.multiplicador : 1,
+    configuredMultiplier: cfg.multiplicador,
+    activeDaysNames,
+    label: isTodayPromo
+      ? `Día de Alfa Coins al ${cfg.multiplicador === 3 ? 'Triple (3x)' : 'Doble (2x)'}`
+      : 'Acumulación Estándar (1x)',
+    shortBadge: isTodayPromo ? `${cfg.multiplicador}x ALFA COINS HOY` : '1x',
+    promoMessage: customMsg || defaultMessage,
+  };
+}
+
+// ============================================================================
+// REVERSIÓN AUTOMÁTICA DE LEALTAD, ALFA COINS, SELLOS Y BENEFICIOS AL ELIMINAR VENTA
+// ============================================================================
+
+export interface SaleLoyaltySnapshot {
+  aplicado: boolean;
+  revertido?: boolean;
+  cliente_id: string;
+  fecha_dia: string;
+  consumo_real_sumado: number;
+  visita_asistida_sumada: number;
+  prev_ultima_visita_fecha?: string;
+  visita_elegible_sumada: number;
+  alfa_coins_ganados: number;
+  alfa_coins_canjeados: number;
+  multiplicador_aplicado: number;
+  sellos_ganados: number;
+  corte_gratis_canjeado: boolean;
+  prev_cortes_acumulados: number;
+  prev_corte_gratis_disponible: boolean;
+  prev_ultimo_sello_fecha: string;
+  recompensa_pendiente_id?: string;
+  prev_nivel?: string;
+  new_nivel?: string;
+  // Beneficios adicionales aplicados en esta venta
+  beneficio_folio?: string;
+  beneficio_id?: string;
+  is_birthday_applied?: boolean;
+  cumpleanos_anio_marcado?: number;
+  is_referral_applied?: boolean;
+  referrer_id?: string;
+  referrer_coins_awarded?: number;
+  referrer_recompensa_pendiente_id?: string;
+  is_juntos_applied?: boolean;
+  juntos_mode?: string;
+  juntos_titular_coins_awarded?: number;
+  juntos_companions_awarded?: { id: string; coins: number; folio?: string }[];
+  prev_ultimo_canje_juntos_fecha?: string;
+}
+
+/**
+ * Revierte de forma segura e idempotente todos los efectos de lealtad (Alfa Coins ganados,
+ * Alfa Coins canjeados, sellos del Pase Alfa, 10.° corte gratis, visitas históricas,
+ * consumo acumulado, nivel del cliente y beneficios QR como Cumpleaños, Invita a un Amigo
+ * o Juntos es Mejor) cuando una venta pagada es eliminada en Caja o Ventas Facturadas.
+ */
+export async function revertSaleLoyaltyAndBenefits(
+  db: Firestore,
+  saleData: any,
+  saleId: string
+): Promise<{ reverted: boolean; summary: string[] }> {
+  const summary: string[] = [];
+  if (!db || !saleData) return { reverted: false, summary };
+
+  try {
+    // 1. Si esta venta liquidó un anticipo previo (deposit_sale_id), liberar el anticipo para que no se pierda
+    if (saleData.deposit_sale_id) {
+      try {
+        await updateDoc(doc(db, 'ventas', String(saleData.deposit_sale_id)), {
+          absorbed_in_sale_id: deleteField(),
+        });
+      } catch (_) {}
+    }
+
+    // Si la venta estaba Pendiente de cobro en terminal o es únicamente un registro de anticipo en línea,
+    // nunca sumó Alfa Coins ni sellos al perfil del cliente.
+    const rawStatus = String(saleData.pago_estado || '').toLowerCase();
+    const isPendingOrDepositOnly =
+      rawStatus === 'pendiente' ||
+      rawStatus === 'pending_payment' ||
+      rawStatus === 'pendiente_anticipo' ||
+      rawStatus === 'deposit_paid' ||
+      saleData.tipo_venta === 'anticipo' ||
+      String(saleId).startsWith('deposit_');
+
+    if (isPendingOrDepositOnly) {
+      return { reverted: false, summary };
+    }
+
+    const snap: SaleLoyaltySnapshot | undefined = saleData.lealtad_aplicada;
+    if (snap?.revertido) {
+      return { reverted: false, summary: ['La lealtad de esta venta ya había sido revertida previamente.'] };
+    }
+
+    const clientId = String(snap?.cliente_id || saleData.cliente_id || saleData.client?.id || '').trim();
+    if (!clientId) {
+      return { reverted: false, summary };
+    }
+
+    const [clientDocSnap, paseAlfaSnap, salesQuerySnap] = await Promise.all([
+      getDoc(doc(db, 'clientes', clientId)),
+      getDoc(doc(db, 'configuracion', 'pase_alfa')).catch(() => null),
+      getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', clientId))).catch(() => null),
+    ]);
+
+    if (!clientDocSnap.exists()) {
+      return { reverted: false, summary };
+    }
+
+    const clientData: any = { id: clientDocSnap.id, ...clientDocSnap.data() };
+    const paseAlfaData: any = paseAlfaSnap?.exists() ? paseAlfaSnap.data() : {};
+    const nivelesConfig = paseAlfaData?.niveles_config || null;
+    const rawSellosReq = Number(paseAlfaData?.sellosRequeridos || 10);
+    const targetStamps = rawSellosReq === 10 ? 9 : Math.max(1, rawSellosReq);
+
+    // Determinar fecha (yyyy-MM-dd) de la venta eliminada
+    const saleTs = saleData.fecha_hora_venta || saleData.creado_en || saleData.fecha_pago;
+    const saleDateObj = saleTs?.toDate
+      ? saleTs.toDate()
+      : saleTs?.seconds
+      ? new Date(saleTs.seconds * 1000)
+      : new Date();
+    const saleDayStr =
+      snap?.fecha_dia ||
+      `${saleDateObj.getFullYear()}-${String(saleDateObj.getMonth() + 1).padStart(2, '0')}-${String(saleDateObj.getDate()).padStart(2, '0')}`;
+
+    // Analizar las ventas válidas RESTANTES del cliente (excluyendo la venta que se está eliminando)
+    const remainingSales: any[] = [];
+    let remainingSpendFromSales = 0;
+    const remainingVisitDays = new Set<string>();
+    let latestRemainingVisitDay = '';
+    let latestRemainingStampDay = '';
+    const haircutPriceRef = Number(saleData.tarifa_corte_aplicada || 140);
+
+    if (salesQuerySnap) {
+      salesQuerySnap.docs.forEach((d) => {
+        if (d.id === saleId) return;
+        const s = d.data();
+        const st = String(s.pago_estado || '').toLowerCase();
+        if (
+          st === 'cancelado' ||
+          st === 'pendiente' ||
+          st === 'pending_payment' ||
+          st === 'pendiente_anticipo' ||
+          s.absorbed_in_sale_id
+        ) {
+          return;
+        }
+        remainingSales.push({ id: d.id, ...s });
+
+        const sTotal = Number(s.total ?? s.monto_pagado_real ?? 0);
+        const sCoinsDisc = Number(s.descuento_alfacoins ?? 0);
+        const sRealPaid = Math.max(0, sTotal - sCoinsDisc);
+        remainingSpendFromSales += sRealPaid;
+
+        const items = Array.isArray(s.items) ? s.items : [];
+        const hasService = items.length === 0 || items.some((it: any) => it.tipo === 'servicio' || !it.tipo);
+        if (hasService && s.tipo_venta !== 'anticipo' && !d.id.startsWith('deposit_')) {
+          const dt = s.fecha_hora_venta?.toDate
+            ? s.fecha_hora_venta.toDate()
+            : s.creado_en?.toDate
+            ? s.creado_en.toDate()
+            : null;
+          const dayKey = dt
+            ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+            : '';
+          if (dayKey) {
+            remainingVisitDays.add(dayKey);
+            if (dayKey > latestRemainingVisitDay) {
+              latestRemainingVisitDay = dayKey;
+            }
+            const sLoyalty: SaleLoyaltySnapshot | undefined = s.lealtad_aplicada;
+            const sEarnedStamp = sLoyalty
+              ? Number(sLoyalty.sellos_ganados || 0) > 0
+              : sRealPaid + 0.01 >= Number(s.tarifa_corte_aplicada || haircutPriceRef);
+            if (sEarnedStamp && dayKey > latestRemainingStampDay) {
+              latestRemainingStampDay = dayKey;
+            }
+          }
+        }
+      });
+    }
+
+    // Calcular valores exactos a revertir (usando snapshot `lealtad_aplicada` si existe, o cálculo determinista para ventas históricas)
+    const saleSubtotal = Number(saleData.subtotal ?? saleData.total ?? 0);
+    const saleCoinsDiscount = Number(saleData.descuento_alfacoins ?? 0);
+    const saleAnticipo = Number(saleData.anticipoPagado ?? saleData.anticipo_pagado ?? 0);
+    const fallbackNetPaidNow = Math.max(0, Number(saleData.monto_pagado_real ?? (Number(saleData.total || 0) - saleCoinsDiscount - saleAnticipo)));
+    const fallbackRealMoneySpent = Math.max(
+      0,
+      Math.round((Number(saleData.total || 0) - saleCoinsDiscount) * 100) / 100
+    );
+
+    const hasApp = isClientWithApp(clientData);
+    const coinsEarnedInSale =
+      snap?.alfa_coins_ganados !== undefined
+        ? Number(snap.alfa_coins_ganados)
+        : hasApp
+        ? Math.floor(Math.max(0, fallbackNetPaidNow))
+        : 0;
+    const coinsRedeemedInSale =
+      snap?.alfa_coins_canjeados !== undefined
+        ? Number(snap.alfa_coins_canjeados)
+        : Number(saleData.alfacoins_canjeados || 0);
+    const juntosTitularBonus = Number(snap?.juntos_titular_coins_awarded || 0);
+
+    const appliedBenefitId = String(
+      snap?.beneficio_id || saleData.beneficio_aplicado?.id || ''
+    ).toLowerCase();
+    const appliedBenefitFolio = String(
+      snap?.beneficio_folio || saleData.beneficio_aplicado?.folio || ''
+    );
+    const isFreeCutSale = Boolean(
+      snap?.corte_gratis_canjeado ||
+        appliedBenefitId === 'decimo_corte' ||
+        appliedBenefitId === 'corte_gratis' ||
+        appliedBenefitFolio.startsWith('VA-CORTE')
+    );
+
+    const saleItems = Array.isArray(saleData.items) ? saleData.items : [];
+    const hasServiceInSale =
+      saleItems.length === 0 || saleItems.some((it: any) => it.tipo === 'servicio' || !it.tipo);
+
+    const stampsAwardedInSale =
+      snap?.sellos_ganados !== undefined
+        ? Number(snap.sellos_ganados)
+        : !isFreeCutSale &&
+          hasApp &&
+          hasServiceInSale &&
+          fallbackRealMoneySpent + 0.01 >= haircutPriceRef
+        ? 1
+        : 0;
+
+    const realSpendAdded =
+      snap?.consumo_real_sumado !== undefined
+        ? Number(snap.consumo_real_sumado)
+        : fallbackRealMoneySpent;
+
+    const visitAdded =
+      snap?.visita_asistida_sumada !== undefined
+        ? Number(snap.visita_asistida_sumada)
+        : hasServiceInSale && !remainingVisitDays.has(saleDayStr)
+        ? 1
+        : 0;
+
+    const eligibleVisitAdded =
+      snap?.visita_elegible_sumada !== undefined
+        ? Number(snap.visita_elegible_sumada)
+        : stampsAwardedInSale > 0
+        ? 1
+        : 0;
+
+    const clientUpdate: Record<string, any> = {};
+
+    // A. Revertir Alfa Coins del cliente (restar ganados + bonos Juntos y devolver canjeados)
+    const currentClientCoins = Number(
+      clientData.alfaCoins ??
+        clientData.alfa_coins ??
+        clientData.puntosLealtad ??
+        clientData.puntos_lealtad ??
+        clientData.puntos ??
+        0
+    );
+    const totalCoinsToSubtract = coinsEarnedInSale + juntosTitularBonus;
+    const totalCoinsToRefund = coinsRedeemedInSale;
+
+    if (totalCoinsToSubtract > 0 || totalCoinsToRefund > 0) {
+      const nextClientCoins = Math.max(
+        0,
+        currentClientCoins - totalCoinsToSubtract + totalCoinsToRefund
+      );
+      clientUpdate.puntos = nextClientCoins;
+      clientUpdate.alfaCoins = nextClientCoins;
+      clientUpdate.alfa_coins = nextClientCoins;
+      clientUpdate.puntosLealtad = nextClientCoins;
+      clientUpdate.puntos_lealtad = nextClientCoins;
+
+      if (totalCoinsToSubtract > 0) {
+        summary.push(`-${totalCoinsToSubtract} Alfa Coins retirados`);
+      }
+      if (totalCoinsToRefund > 0) {
+        summary.push(`+${totalCoinsToRefund} Alfa Coins devueltos al monedero`);
+      }
+    }
+
+    // B. Revertir Sellos del Pase Alfa o restaurar 10.° Corte Gratis
+    const currentStamps = Number(
+      clientData.cortes_acumulados ?? clientData.cortesAcumulados ?? 0
+    );
+    if (isFreeCutSale) {
+      const restoredStamps =
+        snap?.prev_cortes_acumulados !== undefined && snap.prev_cortes_acumulados > 0
+          ? Number(snap.prev_cortes_acumulados)
+          : targetStamps;
+      clientUpdate.cortes_acumulados = restoredStamps;
+      clientUpdate.corte_gratis_disponible = true;
+      summary.push(`10.° Corte Gratis restaurado (${restoredStamps}/${targetStamps} sellos)`);
+    } else if (stampsAwardedInSale > 0) {
+      const nextStamps = Math.max(0, currentStamps - stampsAwardedInSale);
+      clientUpdate.cortes_acumulados = nextStamps;
+      clientUpdate.corte_gratis_disponible = nextStamps >= targetStamps;
+      if (clientData.ultimo_sello_fecha === saleDayStr) {
+        clientUpdate.ultimo_sello_fecha =
+          snap?.prev_ultimo_sello_fecha !== undefined
+            ? snap.prev_ultimo_sello_fecha
+            : latestRemainingStampDay || '';
+      }
+      summary.push(
+        `-${stampsAwardedInSale} sello(s) Pase Alfa (${nextStamps}/${targetStamps})`
+      );
+    }
+
+    // C. Revertir Consumo Histórico, Visitas y recalcular Nivel Alfa
+    const currentSpend = Math.max(
+      Number(clientData.consumo_total ?? 0),
+      Number(clientData.gasto_total ?? 0),
+      Number(clientData.consumoTotal ?? 0)
+    );
+    const nextSpend = Math.max(
+      Math.round(remainingSpendFromSales * 100) / 100,
+      Math.max(0, Math.round((currentSpend - realSpendAdded) * 100) / 100)
+    );
+    clientUpdate.consumo_total = nextSpend;
+    clientUpdate.gasto_total = nextSpend;
+    clientUpdate.consumoTotal = nextSpend;
+
+    const currentVisits = Math.max(
+      Number(clientData.citas_asistidas ?? 0),
+      Number(clientData.visitas_totales ?? 0)
+    );
+    const nextVisits = Math.max(
+      remainingVisitDays.size,
+      Math.max(0, currentVisits - visitAdded)
+    );
+    clientUpdate.citas_asistidas = nextVisits;
+    clientUpdate.visitas_totales = nextVisits;
+
+    if (clientData.ultima_visita_fecha === saleDayStr && !remainingVisitDays.has(saleDayStr)) {
+      clientUpdate.ultima_visita_fecha =
+        snap?.prev_ultima_visita_fecha || latestRemainingVisitDay || '';
+    }
+
+    if (eligibleVisitAdded > 0) {
+      const currEligible = Number(clientData.visitas_elegibles_historicas ?? 0);
+      clientUpdate.visitas_elegibles_historicas = Math.max(0, currEligible - eligibleVisitAdded);
+    }
+
+    if (hasApp) {
+      const remainingPaseAlfaStats = calculatePaseAlfaStatsFromSales(remainingSales, clientData);
+      const currPaseAlfaVisits = Number(clientData.visitas_pase_alfa ?? 0);
+      const currPaseAlfaSpend = Number(clientData.consumo_pase_alfa ?? 0);
+      const nextPaseAlfaVisits = Math.max(
+        remainingPaseAlfaStats.visits,
+        Math.max(0, currPaseAlfaVisits - visitAdded),
+        Number(clientUpdate.cortes_acumulados ?? currentStamps)
+      );
+      const nextPaseAlfaSpend = Math.max(
+        remainingPaseAlfaStats.spend,
+        Math.max(0, Math.round((currPaseAlfaSpend - realSpendAdded) * 100) / 100)
+      );
+
+      clientUpdate.visitas_pase_alfa = nextPaseAlfaVisits;
+      clientUpdate.consumo_pase_alfa = nextPaseAlfaSpend;
+
+      const reEvaluatedTier = evaluateClientAlfaTier(clientData, nivelesConfig, {
+        overrideVisits: nextPaseAlfaVisits,
+        overrideSpend: nextPaseAlfaSpend,
+        forceEvaluateWhenPaused: true,
+      });
+      if (reEvaluatedTier.tierName && reEvaluatedTier.tierName !== 'Sin Nivel') {
+        clientUpdate.nivel = reEvaluatedTier.tierName;
+      }
+    }
+
+    // D. Limpiar recompensa_pendiente si corresponde a la venta eliminada
+    const pendingReward = clientData.recompensa_pendiente;
+    if (pendingReward) {
+      const matchesById =
+        snap?.recompensa_pendiente_id && pendingReward.id === snap.recompensa_pendiente_id;
+      const matchesByValues =
+        !snap?.recompensa_pendiente_id &&
+        Number(pendingReward.coins_ganadas || 0) === coinsEarnedInSale &&
+        Number(pendingReward.sellos_ganados || 0) === stampsAwardedInSale;
+      if (matchesById || matchesByValues) {
+        clientUpdate.recompensa_pendiente = null;
+      }
+    }
+
+    // E. Revertir efectos de Beneficios QR (Cumpleaños, Invita a un Amigo, Juntos es Mejor)
+    const isBirthday = Boolean(
+      snap?.is_birthday_applied ||
+        appliedBenefitId === 'regalo_cumpleanos' ||
+        appliedBenefitFolio.includes('CUMPLE')
+    );
+    if (isBirthday) {
+      clientUpdate.ultimo_canje_cumpleanos_anio = deleteField();
+      clientUpdate.ultimo_canje_cumpleanos_folio = deleteField();
+      clientUpdate.fecha_ultimo_canje_cumpleanos = deleteField();
+      summary.push('Regalo de Cumpleaños reactivado');
+    }
+
+    const isReferral = Boolean(
+      snap?.is_referral_applied ||
+        appliedBenefitId === 'invita_amigo' ||
+        appliedBenefitFolio.startsWith('VA-REF')
+    );
+    if (isReferral) {
+      clientUpdate.beneficio_referido_usado = false;
+      clientUpdate.referido_por_id = deleteField();
+      clientUpdate.referido_por_nombre = deleteField();
+      clientUpdate.codigo_referido_usado = deleteField();
+      clientUpdate.fecha_canje_referido = deleteField();
+    }
+
+    const isJuntos = Boolean(
+      snap?.is_juntos_applied ||
+        appliedBenefitId === 'juntos_es_mejor' ||
+        appliedBenefitFolio.startsWith('VA-JUNTOS')
+    );
+    if (isJuntos && clientData.ultimo_canje_juntos_fecha === saleDayStr) {
+      clientUpdate.ultimo_canje_juntos_fecha = snap?.prev_ultimo_canje_juntos_fecha || '';
+    }
+
+    // Guardar actualización consolidada en el documento del cliente
+    await updateDoc(doc(db, 'clientes', clientId), clientUpdate);
+
+    // F. Si fue un canje de referido y se premiaron 500 Alfa Coins al anfitrión, revertirlos del anfitrión
+    let referrerId = snap?.referrer_id || '';
+    let referrerCoinsToRevert = Number(snap?.referrer_coins_awarded || 0);
+    if (isReferral && (!referrerId || !snap) && appliedBenefitFolio) {
+      try {
+        const canjeSnap = await getDoc(doc(db, 'canjes_beneficios', appliedBenefitFolio));
+        if (canjeSnap.exists()) {
+          const cData = canjeSnap.data();
+          referrerId = referrerId || String(cData.referrerId || '');
+          if (snap === undefined && cData.recompensaAcreditada) {
+            referrerCoinsToRevert = Number(cData.rewardCoins || REFERRAL_HOST_REWARD_COINS);
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (referrerId && referrerCoinsToRevert > 0) {
+      try {
+        const hostRef = doc(db, 'clientes', referrerId);
+        const hostSnap = await getDoc(hostRef);
+        if (hostSnap.exists()) {
+          const hostData: any = hostSnap.data();
+          const hostCurrCoins = Number(
+            hostData.alfaCoins ??
+              hostData.alfa_coins ??
+              hostData.puntosLealtad ??
+              hostData.puntos_lealtad ??
+              hostData.puntos ??
+              0
+          );
+          const nextHostCoins = Math.max(0, hostCurrCoins - referrerCoinsToRevert);
+          const nextHostReferrals = Math.max(0, Number(hostData.amigos_referidos || 1) - 1);
+          const hostUpdate: Record<string, any> = {
+            puntos: nextHostCoins,
+            alfaCoins: nextHostCoins,
+            alfa_coins: nextHostCoins,
+            puntosLealtad: nextHostCoins,
+            puntos_lealtad: nextHostCoins,
+            amigos_referidos: nextHostReferrals,
+          };
+          if (
+            hostData.recompensa_pendiente &&
+            (hostData.recompensa_pendiente.id === snap?.referrer_recompensa_pendiente_id ||
+              hostData.recompensa_pendiente.tipo_recompensa === 'referido')
+          ) {
+            hostUpdate.recompensa_pendiente = null;
+          }
+          await updateDoc(hostRef, hostUpdate);
+          summary.push(`-${referrerCoinsToRevert} Alfa Coins de referido revertidos al anfitrión`);
+        }
+      } catch (e) {
+        console.warn('Error revirtiendo Alfa Coins del anfitrión:', e);
+      }
+    }
+
+    // G. Si fue Juntos es Mejor con acompañantes con App, revertir sus +400 Alfa Coins
+    if (Array.isArray(snap?.juntos_companions_awarded) && snap!.juntos_companions_awarded.length > 0) {
+      for (const comp of snap!.juntos_companions_awarded) {
+        if (!comp?.id || Number(comp.coins || 0) <= 0) continue;
+        try {
+          const compRef = doc(db, 'clientes', comp.id);
+          const compSnap = await getDoc(compRef);
+          if (compSnap.exists()) {
+            const compData: any = compSnap.data();
+            const compCurrCoins = Number(
+              compData.alfaCoins ??
+                compData.alfa_coins ??
+                compData.puntosLealtad ??
+                compData.puntos_lealtad ??
+                compData.puntos ??
+                0
+            );
+            const nextCompCoins = Math.max(0, compCurrCoins - Number(comp.coins));
+            const compUpdate: Record<string, any> = {
+              puntos: nextCompCoins,
+              alfaCoins: nextCompCoins,
+              alfa_coins: nextCompCoins,
+              puntosLealtad: nextCompCoins,
+              puntos_lealtad: nextCompCoins,
+            };
+            if (compData.ultimo_canje_juntos_fecha === saleDayStr) {
+              compUpdate.ultimo_canje_juntos_fecha = '';
+            }
+            await updateDoc(compRef, compUpdate);
+          }
+          if (comp.folio) {
+            await updateDoc(doc(db, 'canjes_beneficios', comp.folio), {
+              estado: 'cancelado_por_venta_eliminada',
+              utilizado_en_venta: false,
+              recompensaAcreditada: false,
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      }
+    }
+
+    // H. Cancelar el documento en `canjes_beneficios` para que el folio/beneficio no quede quemado
+    if (appliedBenefitFolio) {
+      await updateDoc(doc(db, 'canjes_beneficios', appliedBenefitFolio), {
+        estado: 'cancelado_por_venta_eliminada',
+        utilizado_en_venta: false,
+        recompensaAcreditada: false,
+        revertido_en: Timestamp.now(),
+      }).catch(() => {});
+    }
+
+    return { reverted: true, summary };
+  } catch (err) {
+    console.error('Error en revertSaleLoyaltyAndBenefits:', err);
+    return { reverted: false, summary };
+  }
+}
+
 
 
 

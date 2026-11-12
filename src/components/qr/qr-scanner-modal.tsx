@@ -1409,8 +1409,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
         }
       }
 
-      // Si es el 10.° corte gratis, reiniciar sellos del cliente en Firestore
-      if (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis') {
+      // Si es el 10.° corte gratis y se eligió "Solo Canjear" (sin pasar por Caja), reiniciar sellos aquí.
+      // Cuando applyToCashbox === true, NewSaleSheet aplica el descuento del corte y reinicia a 0/9 al confirmar el cobro.
+      if (!applyToCashbox && (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis')) {
         if (clientId) {
           await updateDoc(doc(db, 'clientes', clientId), {
             cortes_acumulados: 0,
@@ -1456,19 +1457,39 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   };
 
   // Acción: Cobrar en Caja de Ventas
-  const handleOpenInCashbox = () => {
+  const handleOpenInCashbox = (applyFreeCutFromPass = false) => {
     if (!scannedClient && !scannedBenefit) return;
     onOpenChange(false);
 
-    if (onClientSelectedForSale && scannedClient) {
+    const requiredPaidStampsForPass = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
+    const hasFreeCutReady = Boolean(
+      scannedClient &&
+        (scannedClient.corte_gratis_disponible ||
+          Number(scannedClient.cortes_acumulados || 0) >= requiredPaidStampsForPass)
+    );
+
+    if (onClientSelectedForSale && scannedClient && !applyFreeCutFromPass && !scannedBenefit) {
       onClientSelectedForSale(scannedClient);
     } else {
       // Disparar evento para abrir NewSaleSheet automáticamente con el cliente precargado
       // Seguridad: NUNCA reenviar a Caja un beneficio que haya sido bloqueado por reglas antifraude
-      const safeBenefitToPass =
+      let safeBenefitToPass =
         scannedBenefit && !scannedBenefit.isBlocked && !scannedBenefit.isRedeemed
           ? scannedBenefit
           : undefined;
+
+      if (!safeBenefitToPass && (applyFreeCutFromPass || hasFreeCutReady) && scannedClient) {
+        safeBenefitToPass = {
+          folio: `VA-CORTE-${Date.now().toString().slice(-6)}`,
+          benefitId: 'decimo_corte',
+          benefitTitle: '10.° Corte Gratis (La Décima Va por la Casa)',
+          clientId: scannedClient.id,
+          clientName: `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim(),
+          phone: scannedClient.telefono || '',
+          discount: 100,
+        };
+      }
+
       document.dispatchEvent(
         new CustomEvent('new-sale', {
           detail: {
@@ -1616,7 +1637,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
   const clientStamps = Number(scannedClient?.cortes_acumulados || 0);
   const totalSlots = targetStamps;
-  const freeCutAvailable = Boolean(scannedClient?.corte_gratis_disponible || clientStamps >= totalSlots);
+  const requiredPaidStampsForGoal = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
+  const freeCutAvailable = Boolean(scannedClient?.corte_gratis_disponible || clientStamps >= requiredPaidStampsForGoal);
 
   return (
     <>
@@ -2194,12 +2216,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                           <Sparkles className="h-5 w-5 text-[#C5A880] animate-bounce" />
                           <div>
                             <p className="text-xs font-bold text-[#C5A880]">¡{rewardName} Disponible!</p>
-                            <p className="text-[10px] text-gray-300">El cliente completó sus {targetStamps} visitas en la app.</p>
+                            <p className="text-[10px] text-gray-300">El cliente completó sus {requiredPaidStampsForGoal} sellos en la app.</p>
                           </div>
                         </div>
                         <Button
                           size="sm"
-                          onClick={handleOpenInCashbox}
+                          onClick={() => handleOpenInCashbox(true)}
                           className="bg-[#C5A880] hover:bg-[#b0936b] text-black text-xs font-bold shadow-md"
                         >
                           Aplicar en Caja
@@ -2208,7 +2230,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                     ) : (
                       <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
                         <span>
-                          Faltan {Math.max(0, totalSlots - clientStamps)} visitas para su corte de cortesía. (Se acredita automáticamente al cobrar en Caja).
+                          Faltan {Math.max(0, requiredPaidStampsForGoal - clientStamps)} visitas para su corte de cortesía. (Se acredita automáticamente al cobrar en Caja).
                         </span>
                       </div>
                     )}
@@ -2259,7 +2281,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                 {/* Acciones Rápidas */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <Button
-                    onClick={handleOpenInCashbox}
+                    onClick={() => handleOpenInCashbox(freeCutAvailable)}
                     className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
                   >
                     <CreditCard className="h-4 w-4 mr-1.5" />

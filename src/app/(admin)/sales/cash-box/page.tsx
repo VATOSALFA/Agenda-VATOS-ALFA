@@ -116,6 +116,7 @@ import { useLiveCash } from './use-live-cash';
 import { useLocal } from '@/contexts/local-context';
 import { logAuditAction } from '@/lib/audit-logger';
 import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
+import { revertSaleLoyaltyAndBenefits } from '@/lib/benefit-security';
 
 
 const SummaryCard = ({
@@ -475,6 +476,7 @@ export default function CashBoxPage() {
             }
 
             // 2. Ejecutar transacción atómica e idempotente
+            let deletedSaleSnapshot: any = null;
             await runTransaction(db, async (transaction) => {
                 const saleDoc = await transaction.get(saleRef);
                 // Si la venta ya no existe (ej. eliminada concurrentemente), abortar inmediatamente
@@ -483,6 +485,7 @@ export default function CashBoxPage() {
                 }
 
                 const currentSaleData = saleDoc.data() as Sale;
+                deletedSaleSnapshot = currentSaleData;
 
                 // A. Revertir inventario de productos consolidados
                 for (const [productId, { quantity, name }] of productQuantitiesToReturn.entries()) {
@@ -577,15 +580,24 @@ export default function CashBoxPage() {
                 transaction.delete(saleRef);
             });
 
+            // 3. Revertir automáticamente Alfa Coins, sellos Pase Alfa, nivel y beneficios asociados a la venta eliminada
+            const loyaltyReversal = await revertSaleLoyaltyAndBenefits(
+                db,
+                deletedSaleSnapshot || saleToDelete,
+                saleToDelete.id
+            );
+
             toast({
                 title: "Venta Eliminada",
-                description: "La venta ha sido eliminada y el stock revertido correctamente.",
+                description: loyaltyReversal.summary.length > 0
+                    ? `Venta eliminada, stock revertido y lealtad ajustada (${loyaltyReversal.summary.join(' • ')}).`
+                    : "La venta ha sido eliminada y el stock revertido correctamente.",
             });
             setQueryKey(prevKey => prevKey + 1);
 
             await logAuditAction({
                 action: 'Eliminar Venta',
-                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total}. Local: ${saleToDelete.local_id}`,
+                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total}. Local: ${saleToDelete.local_id}${loyaltyReversal.summary.length > 0 ? `. Lealtad revertida: ${loyaltyReversal.summary.join(', ')}` : ''}`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
                 userRole: user?.role,

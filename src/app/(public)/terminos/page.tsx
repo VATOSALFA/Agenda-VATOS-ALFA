@@ -95,11 +95,14 @@ export default function TerminosPage() {
 
                     <section className="space-y-3 p-5 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-border">
                         <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                            5. PROGRAMA DE LEALTAD &ldquo;PASE ALFA CLUB&rdquo; Y REGLAS DE SELLOS
+                            5. PROGRAMA DE LEALTAD &ldquo;PASE ALFA&rdquo; Y REGLAS DE SELLOS
                         </h3>
                         <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
                             <li>
                                 <strong>Exclusivo en App Móvil Oficial:</strong> La acumulación de sellos de visita (&ldquo;La Décima va por la Casa&rdquo;) y AlfaCoins es exclusiva para clientes con cuenta activa e instalada en la aplicación móvil oficial de {companyName}. El portal web es informativo y de agendamiento.
+                            </li>
+                            <li>
+                                <strong>Validez en todas las sucursales:</strong> Todos los beneficios, sellos, AlfaCoins y rangos del Pase Alfa son válidos y canjeables en cualquier sucursal de {companyName}, tanto en las sucursales actuales como en futuras aperturas.
                             </li>
                             <li>
                                 <strong>Acreditación Automática al Liquidar en Caja:</strong> Los sellos y AlfaCoins no se registran por escaneo previo ni de forma manual; se acreditan únicamente de manera automática por el sistema en el instante en que recepción confirma el pago efectivo del servicio en Caja.
@@ -114,7 +117,38 @@ export default function TerminosPage() {
                                 <strong>Una Acreditación por Día Hábil Operativo:</strong> Cada cuenta podrá recibir una (1) sola acreditación de sellos por jornada hábil operativa de la barbería (de apertura a cierre del establecimiento). Nuevas acreditaciones de sellos estarán disponibles a partir del siguiente día hábil operativo.
                             </li>
                             <li>
-                                <strong>Regalo de Cumpleaños (Antigüedad Mínima de 5 Visitas Válidas):</strong> Para desbloquear y canjear el beneficio de Regalo de Cumpleaños durante el mes calendario de nacimiento registrado en su perfil, el titular deberá contar con al menos cinco (5) visitas válidas previas pagadas cuyo consumo individual en servicio haya sido igual o superior a la tarifa regular vigente del <em>Corte de cabello</em> al momento de cada visita (excluyendo servicios menores como arreglo de ceja o compras de puros productos). Se otorga un máximo de un (1) regalo por cliente por año calendario mediante escaneo de código QR oficial en recepción, no siendo retroactivo para clientes recién registrados ni transferible a meses posteriores.
+                                <strong>Regalo de Cumpleaños (Antigüedad Mínima de 5 Visitas Válidas):</strong> Para desbloquear y canjear el beneficio de Regalo de Cumpleaños durante el mes calendario de nacimiento registrado en su perfil, el titular deberá contar con al menos cinco (5) visitas válidas previas pagadas a partir de su registro en la app cuyo consumo individual en servicio haya sido igual o superior a la tarifa regular vigente del <em>Corte de cabello</em> al momento de cada visita (excluyendo servicios menores como arreglo de ceja o compras de puros productos). Se otorga un máximo de un (1) regalo por cliente por año calendario mediante escaneo de código QR oficial en recepción, no siendo retroactivo para clientes recién registrados ni transferible a meses posteriores.
+                            </li>
+                        </ul>
+                    </section>
+
+                    <section className="space-y-3 p-5 rounded-xl bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/70 dark:border-amber-800/40">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                            6. NIVELES Y RANGOS DEL PASE ALFA (ALFA MEMBER, ALFA GOLD Y ALFA BLACK VIP)
+                        </h3>
+                        <ul className="list-disc pl-5 space-y-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                            <li>
+                                <strong>Inicio del conteo al registrarse en la App (Alfa Member):</strong> Al descargar la aplicación móvil oficial de {companyName} e iniciar sesión o vincular su cuenta con su correo electrónico y número telefónico registrados en la barbería, el cliente ingresa automáticamente con el nivel inicial <strong>Alfa Member</strong>. El cliente podrá visualizar en la aplicación su historial de reservas y compras previas en la barbería; sin embargo, <strong>todas las compras y visitas realizadas antes de su fecha de registro en la aplicación móvil no contabilizan para el Pase Alfa</strong>. Su conteo para subir de nivel, acumular sellos y desbloquear beneficios comienza estrictamente desde cero (0) a partir del momento en que se registra en la aplicación.
+                            </li>
+                            <li>
+                                <strong>Reglas y Criterios de Ascenso de Nivel:</strong> El sistema evalúa automáticamente las visitas elegibles completadas y el gasto efectivamente pagado con posterioridad al registro del cliente en la aplicación móvil:
+                                <ul className="list-circle pl-5 mt-1.5 space-y-1">
+                                    <li>
+                                        <strong>Alfa Member (Nivel Inicial — 0 visitas / $0 MXN):</strong> Otorgado al registrarse en la aplicación móvil. Otorga un <strong>3% de retorno en Alfa Coins</strong> (1 Alfa Coin por cada $1 MXN pagado; valor de conversión: 1 Alfa Coin = $0.03 MXN) y acceso a la tarjeta digital de sellos Pase Alfa.
+                                    </li>
+                                    <li>
+                                        <strong>Alfa Gold (12 visitas elegibles Ó $2,400 MXN acumulados):</strong> Se alcanza al cumplir cualquiera de los dos umbrales posteriores al registro en la app. Otorga un <strong>5% de retorno en Alfa Coins</strong> (valor de conversión: 1 Alfa Coin = $0.05 MXN) y privilegios preferenciales de rango Gold.
+                                    </li>
+                                    <li>
+                                        <strong>Alfa Black VIP (24 visitas elegibles Ó $4,800 MXN acumulados):</strong> Máximo nivel de distinción al cumplir cualquiera de los dos umbrales posteriores al registro en la app. Otorga un <strong>7% de retorno en Alfa Coins</strong> (valor de conversión: 1 Alfa Coin = $0.07 MXN) y acceso total a los privilegios VIP.
+                                    </li>
+                                </ul>
+                            </li>
+                            <li>
+                                <strong>Cancelaciones o devoluciones de ventas:</strong> Si una venta o ticket es cancelado, reembolsado o eliminado por cualquier motivo, el sistema descontará de manera automática la visita, el consumo acumulado y los Alfa Coins generados por dicha operación, ajustando el progreso y nivel del titular conforme a su historial real pagado.
+                            </li>
+                            <li>
+                                <strong>Reconocimiento en todas las sucursales:</strong> El nivel alcanzado y sus privilegios son personales, intransferibles y válidos en cualquier sucursal de {companyName}.
                             </li>
                         </ul>
                     </section>

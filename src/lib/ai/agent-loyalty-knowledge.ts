@@ -379,19 +379,18 @@ export const consultarPaseAlfaYPromocionesTool = ai.defineTool(
         };
 
     const resumenParaResponder =
-      `GUÍA OFICIAL DEL PASE ALFA CLUB Y BENEFICIOS:\n` +
-      `⚡ ATENCIÓN - ESTADO DE ALFA COINS: Los ALFA COINS están catalogados como "PRÓXIMAMENTE" y se encuentran en fase final de integración técnica para la App Oficial. Si un cliente pregunta si ya están disponibles o cómo acumularlos/usarlos hoy, infórmale con amabilidad que estarán disponibles muy pronto en la App Oficial de VATOS ALFA, y que hoy en día ya puede aprovechar plenamente el programa de La 10ª Visita va por la Casa y su corte de cortesía en el mes de su cumpleaños.\n` +
-      `1. ¿Cómo funcionarán los ALFA COINS?: Por cada $1.00 MXN que el cliente pague en servicios o productos en sucursal (teniendo su cuenta de la App vinculada), ganará automáticamente 1 ALFA COIN.\n` +
-      `2. ¿Cuánto valdrá 1 ALFA COIN en pesos?: Dependerá del nivel del cliente en el Club:\n` +
+      `GUÍA OFICIAL DEL PASE ALFA CLUB Y BENEFICIOS (VÁLIDOS EN CUALQUIER SUCURSAL DE VATOS ALFA BARBER SHOP):\n` +
+      `1. ¿Cómo funcionan los ALFA COINS?: Por cada $1.00 MXN que el cliente pague en servicios o productos en cualquier sucursal oficial de VATOS ALFA Barber Shop (teniendo su cuenta de la App vinculada), gana automáticamente 1 ALFA COIN (o 2x / 3x en días promocionales de Alfa Coins dobles o triples).\n` +
+      `2. ¿Cuánto vale 1 ALFA COIN en pesos?: Depende del nivel del cliente en el Club:\n` +
       `   - ${nivelesClub[0].nivel}: ${nivelesClub[0].cashbackPorcentaje}% de cashback -> 1 ALFA COIN = $${nivelesClub[0].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (100 AlfaCoins = $${nivelesClub[0].ejemplo100CoinsMxn.toFixed(2)} MXN).\n` +
       `   - ${nivelesClub[1].nivel} (${nivelesClub[1].requisito}): ${nivelesClub[1].cashbackPorcentaje}% de cashback -> 1 ALFA COIN = $${nivelesClub[1].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (100 AlfaCoins = $${nivelesClub[1].ejemplo100CoinsMxn.toFixed(2)} MXN).\n` +
       `   - ${nivelesClub[2].nivel} (${nivelesClub[2].requisito}): ${nivelesClub[2].cashbackPorcentaje}% de cashback -> 1 ALFA COIN = $${nivelesClub[2].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (100 AlfaCoins = $${nivelesClub[2].ejemplo100CoinsMxn.toFixed(2)} MXN).\n` +
-      `3. ¿Cómo se canjearán?: Se podrán usar directamente al pagar en recepción como dinero electrónico para descontar o liquidar servicios y productos (ceras, polvos de textura, aftershave, bálsamos, cortes, etc.) en cuanto se active el módulo en la App.\n` +
-      `4. Tarjeta de Sellos Pase Alfa (${tituloPase} - 100% ACTIVO HOY): Cada visita pagada suma 1 sello. Al acumular ${sellosReq - 1} visitas pagadas, la visita #${sellosReq} otorga: ${recompensaSellos}. Términos: ${terminosSellos}\n` +
+      `3. ¿Cómo se canjean?: Se pueden usar directamente al pagar en recepción en cualquier sucursal de VATOS ALFA Barber Shop como dinero electrónico para descontar o liquidar servicios y productos (ceras, polvos de textura, aftershave, bálsamos, cortes, etc.).\n` +
+      `4. Tarjeta de Sellos Pase Alfa (${tituloPase}): Cada visita pagada elegible suma 1 sello automáticamente en Caja. Al acumular ${sellosReq - 1} visitas pagadas, se habilita en la App el código QR para canjear en recepción la visita #${sellosReq}: ${recompensaSellos} en cualquier sucursal. Términos: ${terminosSellos}\n` +
       (estadoClienteActual.identificado
         ? (estadoClienteActual.appVinculada
-            ? `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo valdrá $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS registrados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
-            : `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): No cuenta con la App Móvil VATOS ALFA vinculada (Sin Nivel). Invítalo amablemente a descargar la App para activar su Pase Alfa y empezar a acumular sellos para cortes gratis.`)
+            ? `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): Nivel ${estadoClienteActual.nivelActual} (cada AlfaCoin suyo vale $${estadoClienteActual.valorDeSuAlfaCoinMxn?.toFixed(2)} MXN), tiene ${estadoClienteActual.saldoAlfaCoins} ALFA COINS registrados (equivalentes a $${estadoClienteActual.equivalenteEnPesosMxn?.toFixed(2)} MXN) y ${estadoClienteActual.sellosAcumulados} visitas/sellos registrados (le faltan ${estadoClienteActual.sellosParaCorteGratis} para su corte gratis).`
+            : `5. Estado del cliente en este chat (${estadoClienteActual.nombre}): No cuenta con la App Móvil VATOS ALFA vinculada (Sin Nivel). Invítalo amablemente a descargar la App para activar su Pase Alfa y empezar a acumular Alfa Coins y sellos para cortes gratis en cualquier sucursal.`)
         : '');
 
     return {
@@ -403,17 +402,15 @@ export const consultarPaseAlfaYPromocionesTool = ai.defineTool(
         terminosSellos,
       },
       alfaCoinsExplicacion: {
-        estado: 'PRÓXIMAMENTE',
-        proximamente: true,
         comoSeGanan:
-          'Próximamente: Ganarás 1 ALFA COIN por cada $1.00 MXN pagado en tus servicios y productos en sucursal al tener tu cuenta vinculada en la App de VATOS ALFA.',
+          'Ganas 1 ALFA COIN por cada $1.00 MXN pagado en tus servicios y productos en cualquier sucursal de VATOS ALFA Barber Shop al tener tu cuenta vinculada en la App (y hasta 2x o 3x en días promocionales).',
         cuantoValeUnAlfaCoin:
-          `El valor de cada ALFA COIN crecerá según tu nivel en el Club: en ${nivelesClub[0].nivel} valdrá $${nivelesClub[0].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[0].cashbackPorcentaje}%), en ${nivelesClub[1].nivel} valdrá $${nivelesClub[1].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[1].cashbackPorcentaje}%), y en ${nivelesClub[2].nivel} valdrá $${nivelesClub[2].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[2].cashbackPorcentaje}%).`,
+          `El valor de cada ALFA COIN depende de tu nivel activo en el Club: en ${nivelesClub[0].nivel} vale $${nivelesClub[0].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[0].cashbackPorcentaje}%), en ${nivelesClub[1].nivel} vale $${nivelesClub[1].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[1].cashbackPorcentaje}%), y en ${nivelesClub[2].nivel} vale $${nivelesClub[2].valorPorCadaAlfaCoinMxn.toFixed(2)} MXN (${nivelesClub[2].cashbackPorcentaje}%).`,
         nivelesClub,
         comoSeCanjean:
-          'Se podrán canjear directamente en recepción al momento de pagar para descontar o cubrir el total de tus servicios o productos de barbería una vez habilitado el módulo en la App Oficial.',
+          'Se canjean directamente en recepción de cualquier sucursal de VATOS ALFA Barber Shop al momento de pagar para descontar o cubrir el total de tus servicios o productos.',
         terminosAlfaCoins:
-          'Funcionalidad en desarrollo ("Próximamente"). Estará disponible de forma oficial a través de la App de VATOS ALFA.',
+          'Disponibles en la App Oficial de VATOS ALFA Barber Shop y canjeables en cualquier sucursal.',
       },
       beneficioCumpleanos: {
         titulo: 'Beneficios vigentes del Club',

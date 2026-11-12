@@ -35,7 +35,19 @@ import {
     ArrowUp,
     ArrowDown,
     X,
+    FileText,
+    Image as ImageIcon,
+    Maximize2,
 } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from '@/components/ui/dialog';
+import { ImageUploader } from '@/components/shared/image-uploader';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
 import { cn } from '@/lib/utils';
@@ -57,6 +69,10 @@ export interface NivelItemConfig {
 export interface NivelesClubConfig {
     activo: boolean;
     criterio: CriterioAscenso;
+    titulo_tarjeta?: string;
+    descripcion_tarjeta?: string;
+    imagenUrl?: string | null;
+    terminos?: string;
     member: NivelItemConfig;
     gold: NivelItemConfig;
     vip: NivelItemConfig;
@@ -64,9 +80,67 @@ export interface NivelesClubConfig {
     actualizado_por?: string;
 }
 
+export const DEFAULT_NIVELES_IMAGE_URL =
+    'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/pase_alfa%2Fniveles_pase_alfa_oficial.png?alt=media&token=927a8ffc-e00d-4fd5-b5c9-a11270a423bf';
+
+export function buildDefaultNivelesTerminos(cfg?: Partial<NivelesClubConfig>): string {
+    const memberName = cfg?.member?.nombre || 'Alfa Member';
+    const goldName = cfg?.gold?.nombre || 'Alfa Gold';
+    const vipName = cfg?.vip?.nombre || 'Alfa Black VIP';
+
+    const goldVisitas = cfg?.gold?.visitasMin ?? 12;
+    const goldGasto = cfg?.gold?.gastoMin ?? 2400;
+    const vipVisitas = cfg?.vip?.visitasMin ?? 24;
+    const vipGasto = cfg?.vip?.gastoMin ?? 4800;
+
+    const memberPct = cfg?.member?.cashbackPct ?? 3;
+    const goldPct = cfg?.gold?.cashbackPct ?? 5;
+    const vipPct = cfg?.vip?.cashbackPct ?? 7;
+
+    const memberCoinVal = (memberPct / 100).toFixed(2);
+    const goldCoinVal = (goldPct / 100).toFixed(2);
+    const vipCoinVal = (vipPct / 100).toFixed(2);
+
+    return `Términos y Condiciones de los Niveles y Rangos del Pase Alfa
+
+1. Naturaleza del sistema de niveles
+El sistema de Niveles y Rangos del Pase Alfa de VATOS ALFA Barber Shop reconoce y premia la constancia y preferencia de los clientes registrados en la aplicación móvil oficial mediante tres rangos progresivos: ${memberName}, ${goldName} y ${vipName}.
+
+2. Inicio del conteo e historial previo a la App
+Al descargar la aplicación móvil de VATOS ALFA Barber Shop e iniciar sesión o vincular su perfil con su correo electrónico y número telefónico registrados en la barbería, el cliente ingresa automáticamente con el rango inicial "${memberName}". El cliente podrá consultar en la aplicación su historial de reservas y compras previas registradas en la barbería; sin embargo, todas las visitas, servicios y compras realizadas antes de la fecha de su registro y vinculación en la aplicación móvil NO contabilizan para el progreso del Pase Alfa, sellos ni ascenso de nivel. El conteo de visitas y consumo acumulado para subir de nivel inicia estrictamente desde cero (0) a partir del momento en que el cliente se registra en la aplicación móvil.
+
+3. Reglas y criterios de ascenso de nivel
+El ascenso entre niveles se evalúa de manera automática conforme a las visitas completadas y/o el consumo efectivamente pagado en sucursal con posterioridad al registro del cliente en la aplicación:
+- Nivel 1 — ${memberName}: Nivel inicial otorgado al registrarse y activar su cuenta en la aplicación móvil (0 visitas / $0 MXN). Otorga un ${memberPct}% de retorno en el monedero Alfa Coins (1 Alfa Coin = $${memberCoinVal} MXN al canjear).
+- Nivel 2 — ${goldName}: Se desbloquea automáticamente al acumular ${goldVisitas} visitas elegibles completadas Ó $${goldGasto.toLocaleString('es-MX')} MXN en compras pagadas a partir de su registro en la app (lo que ocurra primero, o según el criterio activo en el programa). Otorga un ${goldPct}% de retorno en el monedero Alfa Coins (1 Alfa Coin = $${goldCoinVal} MXN al canjear) y privilegios preferenciales de rango Gold.
+- Nivel 3 — ${vipName}: Es el máximo rango de distinción y se desbloquea al acumular ${vipVisitas} visitas elegibles completadas Ó $${vipGasto.toLocaleString('es-MX')} MXN en compras pagadas a partir de su registro en la app. Otorga un ${vipPct}% de retorno en el monedero Alfa Coins (1 Alfa Coin = $${vipCoinVal} MXN al canjear) y acceso total a los privilegios VIP.
+
+4. Operaciones válidas para el progreso de nivel
+Únicamente suman para el conteo de visitas y gasto acumulado de nivel las ventas efectivamente cobradas y liquidadas en recepción (con efectivo, tarjeta o transferencia) posteriores a la vinculación de la cuenta en la app. Los servicios gratuitos por canje de recompensas, cortesías sin costo o el importe cubierto mediante Alfa Coins no suman gasto pagado para el ascenso de nivel.
+
+5. Cancelaciones, devoluciones o eliminación de ventas
+En caso de que una venta o ticket sea cancelado, reembolsado o eliminado por cualquier motivo operativo o administrativo, el sistema descontará automáticamente la visita, el monto acumulado y los Alfa Coins que dicha transacción hubiera generado, recalculando de forma inmediata el nivel y progreso real del titular.
+
+6. Validez en todas las sucursales
+El rango alcanzado en el Pase Alfa (${memberName}, ${goldName} o ${vipName}), así como su porcentaje de retorno en Alfa Coins y sus privilegios vigentes, son reconocidos y válidos en cualquier sucursal de VATOS ALFA Barber Shop, tanto en las sucursales actuales como en las próximas aperturas.
+
+7. Carácter personal e intransferible
+El nivel, las visitas acumuladas, el historial de consumo y los beneficios asociados a cada rango son estrictamente personales e intransferibles; están vinculados a la cuenta verificada del titular y no pueden cederse, venderse ni combinarse entre distintas cuentas o clientes.
+
+8. Actualización del programa
+VATOS ALFA Barber Shop se reserva el derecho de actualizar los umbrales de ascenso, porcentajes de bonificación o privilegios de cada nivel desde su panel oficial, manteniendo siempre visibles las condiciones vigentes dentro de la aplicación móvil y en el sitio web oficial vatosalfa.com.`;
+}
+
+export const DEFAULT_NIVELES_TERMINOS = buildDefaultNivelesTerminos();
+
 export const DEFAULT_NIVELES_CONFIG: NivelesClubConfig = {
     activo: true,
     criterio: 'ambos_opcional',
+    titulo_tarjeta: 'NIVELES PASE ALFA',
+    descripcion_tarjeta:
+        'Sube de nivel desde que te registras en la app (Alfa Member, Alfa Gold y Alfa Black VIP) y desbloquea mayor porcentaje en Alfa Coins y privilegios exclusivos en cualquier sucursal de VATOS ALFA Barber Shop.',
+    imagenUrl: DEFAULT_NIVELES_IMAGE_URL,
+    terminos: DEFAULT_NIVELES_TERMINOS,
     member: {
         id: 'member',
         nombre: 'Alfa Member',
@@ -75,18 +149,18 @@ export const DEFAULT_NIVELES_CONFIG: NivelesClubConfig = {
         cashbackPct: 3, // 3%
         color: '#2563EB', // Azul Real
         colorTexto: '#FFFFFF',
-        descripcion: 'Nivel base otorgado automáticamente a todos los caballeros registrados en la app.',
+        descripcion: 'Nivel base otorgado automáticamente a todos los caballeros al registrarse en la app.',
         beneficios: [
             '1 AlfaCoin por cada $1 MXN gastado (Retorno del 3% en monedero)',
             'Tarjeta digital Pase Alfa (10.° corte de cabello gratis)',
-            'Acceso a promociones y cupones exclusivos de la app móvil',
+            'Acceso a promociones y beneficios en cualquier sucursal de VATOS ALFA Barber Shop',
         ],
     },
     gold: {
         id: 'gold',
         nombre: 'Alfa Gold',
-        visitasMin: 4,
-        gastoMin: 1500,
+        visitasMin: 12,
+        gastoMin: 2400,
         cashbackPct: 5, // 5%
         color: '#C5A880', // Dorado Alfa
         colorTexto: '#0F172A',
@@ -102,8 +176,8 @@ export const DEFAULT_NIVELES_CONFIG: NivelesClubConfig = {
     vip: {
         id: 'vip',
         nombre: 'Alfa Black VIP',
-        visitasMin: 8,
-        gastoMin: 3500,
+        visitasMin: 24,
+        gastoMin: 4800,
         cashbackPct: 7, // 7%
         color: '#0F172A', // Negro Azabache Premium
         colorTexto: '#F8FAFC',
@@ -151,6 +225,7 @@ export function NivelesAlfaManager() {
     // Simulador interactivo en vivo
     const [simVisitas, setSimVisitas] = useState<number>(5);
     const [simGasto, setSimGasto] = useState<number>(1800);
+    const [expandedTerminosOpen, setExpandedTerminosOpen] = useState<boolean>(false);
 
     // Cargar configuración desde Firestore
     useEffect(() => {
@@ -172,9 +247,13 @@ export function NivelesAlfaManager() {
                     appData?.pase_alfa?.niveles_config;
 
                 if (rawNiveles && isMounted) {
-                    setConfig({
+                    const mergedCfg: NivelesClubConfig = {
                         activo: rawNiveles.activo !== undefined ? Boolean(rawNiveles.activo) : true,
                         criterio: rawNiveles.criterio || 'ambos_opcional',
+                        titulo_tarjeta: rawNiveles.titulo_tarjeta || DEFAULT_NIVELES_CONFIG.titulo_tarjeta,
+                        descripcion_tarjeta: rawNiveles.descripcion_tarjeta || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta,
+                        imagenUrl: rawNiveles.imagenUrl || DEFAULT_NIVELES_IMAGE_URL,
+                        terminos: rawNiveles.terminos || buildDefaultNivelesTerminos(rawNiveles),
                         member: {
                             ...DEFAULT_NIVELES_CONFIG.member,
                             ...(rawNiveles.member || {}),
@@ -196,7 +275,8 @@ export function NivelesAlfaManager() {
                                 ? rawNiveles.vip.beneficios
                                 : DEFAULT_NIVELES_CONFIG.vip.beneficios,
                         },
-                    });
+                    };
+                    setConfig(mergedCfg);
                 }
             } catch (err) {
                 console.warn('Error cargando configuración de niveles:', err);
@@ -218,6 +298,14 @@ export function NivelesAlfaManager() {
             const payload: NivelesClubConfig = {
                 activo: Boolean(cfgToSave.activo),
                 criterio: cfgToSave.criterio,
+                titulo_tarjeta: (cfgToSave.titulo_tarjeta || 'NIVELES PASE ALFA').trim(),
+                descripcion_tarjeta: (
+                    cfgToSave.descripcion_tarjeta ||
+                    DEFAULT_NIVELES_CONFIG.descripcion_tarjeta ||
+                    ''
+                ).trim(),
+                imagenUrl: cfgToSave.imagenUrl || DEFAULT_NIVELES_IMAGE_URL,
+                terminos: (cfgToSave.terminos || buildDefaultNivelesTerminos(cfgToSave)).trim(),
                 member: {
                     id: 'member',
                     nombre: cfgToSave.member.nombre.trim() || 'Alfa Member',
@@ -232,8 +320,8 @@ export function NivelesAlfaManager() {
                 gold: {
                     id: 'gold',
                     nombre: cfgToSave.gold.nombre.trim() || 'Alfa Gold',
-                    visitasMin: Math.max(1, Number(cfgToSave.gold.visitasMin) || 4),
-                    gastoMin: Math.max(0, Number(cfgToSave.gold.gastoMin) || 1500),
+                    visitasMin: Math.max(1, Number(cfgToSave.gold.visitasMin) || 12),
+                    gastoMin: Math.max(0, Number(cfgToSave.gold.gastoMin) || 2400),
                     cashbackPct: Math.max(1, Number(cfgToSave.gold.cashbackPct) || 5),
                     color: cfgToSave.gold.color || '#C5A880',
                     colorTexto: cfgToSave.gold.colorTexto || '#0F172A',
@@ -243,8 +331,8 @@ export function NivelesAlfaManager() {
                 vip: {
                     id: 'vip',
                     nombre: cfgToSave.vip.nombre.trim() || 'Alfa Black VIP',
-                    visitasMin: Math.max(2, Number(cfgToSave.vip.visitasMin) || 8),
-                    gastoMin: Math.max(0, Number(cfgToSave.vip.gastoMin) || 3500),
+                    visitasMin: Math.max(2, Number(cfgToSave.vip.visitasMin) || 24),
+                    gastoMin: Math.max(0, Number(cfgToSave.vip.gastoMin) || 4800),
                     cashbackPct: Math.max(1, Number(cfgToSave.vip.cashbackPct) || 7),
                     color: cfgToSave.vip.color || '#0F172A',
                     colorTexto: cfgToSave.vip.colorTexto || '#F8FAFC',
@@ -274,12 +362,57 @@ export function NivelesAlfaManager() {
                 },
             };
 
+            // Sincronizar también la tarjeta "NIVELES PASE ALFA" dentro de beneficios_detallados y privilegios
+            const nivelesBenefitCard = {
+                id: 'niveles_pase_alfa',
+                titulo: payload.titulo_tarjeta || 'NIVELES PASE ALFA',
+                descripcion:
+                    payload.descripcion_tarjeta ||
+                    'Sube de nivel desde que te registras en la app (Alfa Member, Alfa Gold y Alfa Black VIP) y desbloquea mayor porcentaje en Alfa Coins y privilegios exclusivos en cualquier sucursal de VATOS ALFA Barber Shop.',
+                imagenUrl: payload.imagenUrl || DEFAULT_NIVELES_IMAGE_URL,
+                activo: payload.activo,
+                terminos: payload.terminos || buildDefaultNivelesTerminos(payload),
+                vigenciaInicio: null,
+                vigenciaFin: null,
+            };
+
+            const [paseSnap, appMovilSnap, vipSnap] = await Promise.all([
+                getDoc(doc(db, 'configuracion', 'pase_alfa')),
+                getDoc(doc(db, 'configuracion', 'app_movil')),
+                getDoc(doc(db, 'ajustes_sitio', 'membresia_vip')),
+            ]);
+
+            const upsertNivelesBenefit = (list: any[]) => {
+                const arr = Array.isArray(list) ? [...list] : [];
+                const idx = arr.findIndex(
+                    (b) =>
+                        b?.id === 'niveles_pase_alfa' ||
+                        String(b?.titulo || '').toUpperCase().includes('NIVELES PASE ALFA') ||
+                        String(b?.titulo || '').toUpperCase().includes('NIVELES DEL PASE ALFA')
+                );
+                if (idx >= 0) {
+                    arr[idx] = { ...arr[idx], ...nivelesBenefitCard, id: 'niveles_pase_alfa' };
+                } else {
+                    arr.push(nivelesBenefitCard);
+                }
+                return arr;
+            };
+
+            const paseData = paseSnap.exists() ? paseSnap.data() : {};
+            const updatedPaseBeneficios = upsertNivelesBenefit(paseData?.beneficios_detallados || []);
+
+            const appMovilData = appMovilSnap.exists() ? appMovilSnap.data() : {};
+            const updatedAppBeneficios = upsertNivelesBenefit(
+                appMovilData?.pase_alfa?.beneficios_detallados || updatedPaseBeneficios
+            );
+
             // 1. Guardar en configuracion/pase_alfa
             await setDoc(
                 doc(db, 'configuracion', 'pase_alfa'),
                 {
                     niveles_config: payload,
                     niveles: simpleNivelesPayload,
+                    beneficios_detallados: updatedPaseBeneficios,
                     actualizado_el: Timestamp.now(),
                 },
                 { merge: true }
@@ -291,8 +424,10 @@ export function NivelesAlfaManager() {
                 {
                     niveles_config: payload,
                     pase_alfa: {
+                        ...(appMovilData?.pase_alfa || {}),
                         niveles_config: payload,
                         niveles: simpleNivelesPayload,
+                        beneficios_detallados: updatedAppBeneficios,
                     },
                     'pase_alfa.niveles_config': payload,
                     actualizado_el: Timestamp.now(),
@@ -300,12 +435,49 @@ export function NivelesAlfaManager() {
                 { merge: true }
             );
 
-            // 3. Registrar en bitácora de auditoría
+            // 3. Sincronizar en ajustes_sitio/membresia_vip para la página web y tarjetas de beneficios
+            if (vipSnap.exists()) {
+                const vipData = vipSnap.exists() ? vipSnap.data() : {};
+                const updatedVipBeneficios = upsertNivelesBenefit(vipData?.beneficios_detallados || []);
+                const privList = Array.isArray(vipData?.privilegios) ? [...vipData.privilegios] : [];
+                const privIdx = privList.findIndex(
+                    (p: any) =>
+                        p?.id === 'niveles_pase_alfa' ||
+                        String(p?.titulo || '').toUpperCase().includes('NIVELES PASE ALFA')
+                );
+                const privItem = {
+                    id: 'niveles_pase_alfa',
+                    icono: 'Crown',
+                    titulo: nivelesBenefitCard.titulo,
+                    descripcion: nivelesBenefitCard.descripcion,
+                    imagenUrl: nivelesBenefitCard.imagenUrl,
+                    activo: nivelesBenefitCard.activo,
+                    terminos: nivelesBenefitCard.terminos,
+                    vigenciaInicio: null,
+                    vigenciaFin: null,
+                };
+                if (privIdx >= 0) {
+                    privList[privIdx] = { ...privList[privIdx], ...privItem };
+                } else {
+                    privList.push(privItem);
+                }
+                await setDoc(
+                    doc(db, 'ajustes_sitio', 'membresia_vip'),
+                    {
+                        beneficios_detallados: updatedVipBeneficios,
+                        privilegios: privList,
+                        updatedAt: Timestamp.now(),
+                    },
+                    { merge: true }
+                );
+            }
+
+            // 4. Registrar en bitácora de auditoría
             await logAuditAction({
-                action: 'ACTUALIZAR_NIVELES_ALFA_CLUB',
+                action: 'ACTUALIZAR_NIVELES_PASE_ALFA',
                 userId: user?.uid || (user as any)?.id || 'admin',
                 userName: user?.displayName || user?.email || 'Administrador',
-                details: `Configuración de niveles actualizada (${payload.activo ? 'ACTIVO' : 'PAUSADO'}). Criterio: ${payload.criterio}. Member: ${payload.member.visitasMin}v/$${payload.member.gastoMin} (${payload.member.cashbackPct}%), Gold: ${payload.gold.visitasMin}v/$${payload.gold.gastoMin} (${payload.gold.cashbackPct}%), VIP: ${payload.vip.visitasMin}v/$${payload.vip.gastoMin} (${payload.vip.cashbackPct}%)`,
+                details: `Configuración de niveles Pase Alfa actualizada (${payload.activo ? 'ACTIVO' : 'PAUSADO'}). Criterio: ${payload.criterio}. Member: ${payload.member.visitasMin}v/$${payload.member.gastoMin} (${payload.member.cashbackPct}%), Gold: ${payload.gold.visitasMin}v/$${payload.gold.gastoMin} (${payload.gold.cashbackPct}%), VIP: ${payload.vip.visitasMin}v/$${payload.vip.gastoMin} (${payload.vip.cashbackPct}%)`,
                 severity: 'info',
             });
 
@@ -516,7 +688,7 @@ export function NivelesAlfaManager() {
                     <div className="flex items-center gap-2">
                         <Crown className="h-5 w-5 text-[#C5A880]" />
                         <h3 className="text-lg font-bold text-foreground tracking-tight">
-                            Niveles y Rangos de Clientes (Pase Alfa Club)
+                            Niveles y Rangos de Clientes (Pase Alfa)
                         </h3>
                         <Badge
                             variant={config.activo ? 'default' : 'secondary'}
@@ -1113,7 +1285,186 @@ export function NivelesAlfaManager() {
                 </CardContent>
             </Card>
 
-            {/* 4. Simulador Interactivo en Vivo */}
+            {/* 4. Tarjeta de Beneficio "Niveles Pase Alfa" y Términos y Condiciones */}
+            <Card className="border-border/60 shadow-xs">
+                <CardHeader className="pb-3 border-b border-border/40">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <ImageIcon className="h-4 w-4 text-[#C5A880]" />
+                            <CardTitle className="text-sm font-bold">
+                                Tarjeta de Beneficio &quot;Niveles Pase Alfa&quot; y Términos y Condiciones
+                            </CardTitle>
+                        </div>
+                        <Badge className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] w-fit">
+                            Visible en App Móvil y Sitio Web
+                        </Badge>
+                    </div>
+                    <CardDescription className="text-xs">
+                        Personaliza la imagen de portada, el título, la descripción y los términos y condiciones legales de los Niveles del Pase Alfa que aparecen como tarjeta en la sección de Beneficios de la App y en la web.
+                    </CardDescription>
+                </CardHeader>
+
+                <CardContent className="pt-4 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                        {/* Imagen de Portada */}
+                        <div className="md:col-span-4 space-y-1.5">
+                            <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                <ImageIcon className="h-3.5 w-3.5 text-[#C5A880]" />
+                                Imagen de la Tarjeta (Pase Alfa)
+                            </Label>
+                            <ImageUploader
+                                folder="pase_alfa"
+                                currentImageUrl={config.imagenUrl || DEFAULT_NIVELES_IMAGE_URL}
+                                onUpload={(url) => setConfig((prev) => ({ ...prev, imagenUrl: url }))}
+                                onRemove={() => setConfig((prev) => ({ ...prev, imagenUrl: DEFAULT_NIVELES_IMAGE_URL }))}
+                                className="max-w-full"
+                            />
+                            <p className="text-[10px] text-muted-foreground leading-snug">
+                                Esta imagen se muestra en la tarjeta de niveles dentro de la sección Beneficios de la app móvil y del sitio web.
+                            </p>
+                        </div>
+
+                        {/* Título, Descripción y Términos */}
+                        <div className="md:col-span-8 space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold">Título de la Tarjeta</Label>
+                                    <Input
+                                        value={config.titulo_tarjeta || 'NIVELES PASE ALFA'}
+                                        onChange={(e) =>
+                                            setConfig((prev) => ({ ...prev, titulo_tarjeta: e.target.value }))
+                                        }
+                                        placeholder="NIVELES PASE ALFA"
+                                        className="h-9 text-xs font-bold uppercase"
+                                    />
+                                </div>
+                                <div className="space-y-1 flex flex-col justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setConfig((prev) => ({
+                                                ...prev,
+                                                terminos: buildDefaultNivelesTerminos(prev),
+                                            }))
+                                        }
+                                        className="h-9 text-xs font-semibold border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/10"
+                                    >
+                                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                        Sincronizar Términos con Valores Actuales
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <Label className="text-xs font-semibold">Descripción de la Tarjeta</Label>
+                                <Textarea
+                                    rows={2}
+                                    value={config.descripcion_tarjeta || ''}
+                                    onChange={(e) =>
+                                        setConfig((prev) => ({ ...prev, descripcion_tarjeta: e.target.value }))
+                                    }
+                                    placeholder="Breve resumen del sistema de niveles Pase Alfa..."
+                                    className="text-xs resize-none"
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                                        <FileText className="h-3.5 w-3.5 text-[#C5A880]" />
+                                        Términos y Condiciones de los Niveles del Pase Alfa
+                                    </Label>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setExpandedTerminosOpen(true)}
+                                        className="h-7 px-2 text-[11px] font-semibold text-[#C5A880] hover:text-[#C5A880] hover:bg-[#C5A880]/10 gap-1"
+                                    >
+                                        <Maximize2 className="h-3 w-3" />
+                                        Ampliar Editor
+                                    </Button>
+                                </div>
+                                <Textarea
+                                    rows={7}
+                                    value={config.terminos || ''}
+                                    onChange={(e) =>
+                                        setConfig((prev) => ({ ...prev, terminos: e.target.value }))
+                                    }
+                                    placeholder="Escribe aquí las reglas y términos legales de los niveles del Pase Alfa..."
+                                    className="text-xs font-mono leading-relaxed"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Modal ampliado para editar Términos y Condiciones de los Niveles */}
+            <Dialog open={expandedTerminosOpen} onOpenChange={setExpandedTerminosOpen}>
+                <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-base font-bold">
+                            <FileText className="h-4 w-4 text-[#C5A880]" />
+                            Términos y Condiciones — {config.titulo_tarjeta || 'NIVELES PASE ALFA'}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Edita las cláusulas oficiales del sistema de niveles. Recuerda hacer clic en &quot;Guardar Niveles&quot; para publicar los cambios en la app móvil y el sitio web.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 py-2 overflow-hidden flex flex-col gap-2">
+                        <div className="flex justify-end">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    setConfig((prev) => ({
+                                        ...prev,
+                                        terminos: buildDefaultNivelesTerminos(prev),
+                                    }))
+                                }
+                                className="h-8 text-xs font-semibold border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/10"
+                            >
+                                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                Regenerar con Visitas, Gasto y % Actuales
+                            </Button>
+                        </div>
+                        <Textarea
+                            value={config.terminos || ''}
+                            onChange={(e) => setConfig((prev) => ({ ...prev, terminos: e.target.value }))}
+                            className="min-h-[380px] flex-1 text-xs font-mono leading-relaxed resize-y"
+                            placeholder="Escribe aquí los términos y condiciones..."
+                        />
+                    </div>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setExpandedTerminosOpen(false)}
+                            className="text-xs"
+                        >
+                            Cerrar Vista Ampliada
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                setExpandedTerminosOpen(false);
+                                await handleSave();
+                            }}
+                            disabled={saving}
+                            className="bg-[#C5A880] hover:bg-[#b09268] text-black font-bold text-xs"
+                        >
+                            <Save className="h-3.5 w-3.5 mr-1.5" />
+                            Guardar y Sincronizar Todo
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* 5. Simulador Interactivo en Vivo */}
             <Card className="border-border/60 bg-muted/15 shadow-xs">
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">

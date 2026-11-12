@@ -39,6 +39,9 @@ export interface Client {
   puntosLealtad?: number;
   puntos_lealtad?: number;
   fecha_registro_app?: any;
+  fecha_registro_app_iso?: string;
+  visitas_pase_alfa?: number;
+  consumo_pase_alfa?: number;
   exento_anticipo?: boolean;
   exento_anticipo_por?: string;
   exento_anticipo_fecha?: any;

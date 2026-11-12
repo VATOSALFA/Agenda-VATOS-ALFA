@@ -27,7 +27,16 @@ import {
     FileText,
     HelpCircle,
     X,
+    Coins,
+    Flame,
+    CheckCircle2,
 } from 'lucide-react';
+import {
+    DEFAULT_MULTIPLICADOR_COINS_CONFIG,
+    DAY_NAMES_ES,
+    evaluateActiveCoinsMultiplier,
+    type MultiplicadorCoinsConfig,
+} from '@/lib/benefit-security';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
 import { cn } from '@/lib/utils';
@@ -143,7 +152,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
     // Estado principal del programa Pase Alfa
     const [paseAlfaForm, setPaseAlfaForm] = useState<PaseAlfaConfig>({
         activo: true,
-        titulo: 'Pase Alfa Club',
+        titulo: 'Pase Alfa',
         subtitulo: '',
         sellosRequeridos: 10,
         recompensa: '10.° Corte Totalmente Gratis',
@@ -157,6 +166,13 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
     const [isSavingPaseAlfa, setIsSavingPaseAlfa] = useState(false);
     const [isUploadingPaseAlfaImage, setIsUploadingPaseAlfaImage] = useState(false);
     const [isPaseAlfaOpen, setIsPaseAlfaOpen] = useState(true);
+
+    // Estado de Promoción Días de Alfa Coins al Doble (2x) o Triple (3x)
+    const [multiplicadorConfig, setMultiplicadorConfig] = useState<MultiplicadorCoinsConfig>(
+        DEFAULT_MULTIPLICADOR_COINS_CONFIG
+    );
+    const [isMultiplicadorOpen, setIsMultiplicadorOpen] = useState(true);
+    const [isSavingMultiplicador, setIsSavingMultiplicador] = useState(false);
 
     // Estado de Beneficios VIP
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
@@ -238,7 +254,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 if ((paseData || appMovilPaseData) && isMounted) {
                     setPaseAlfaForm({
                         activo: merged.activo !== undefined ? Boolean(merged.activo) : true,
-                        titulo: merged.titulo || 'Pase Alfa Club',
+                        titulo: (merged.titulo || 'Pase Alfa').replace(/Pase Alfa Club/gi, 'Pase Alfa'),
                         subtitulo: merged.subtitulo || '',
                         sellosRequeridos: Number(merged.sellosRequeridos) || 10,
                         recompensa: merged.recompensa || '10.° Corte Totalmente Gratis',
@@ -247,6 +263,20 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                         terminos: merged.terminos || '',
                         imagenUrl: merged.imagenUrl || merged.imagen || '',
                     });
+
+                    const rawMult = merged.multiplicador_coins_config || mData?.multiplicador_coins_config;
+                    if (rawMult && typeof rawMult === 'object') {
+                        setMultiplicadorConfig({
+                            activo: Boolean(rawMult.activo),
+                            multiplicador: Number(rawMult.multiplicador) === 3 ? 3 : 2,
+                            dias_semana: Array.isArray(rawMult.dias_semana)
+                                ? rawMult.dias_semana.map((d: any) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
+                                : [],
+                            mensaje_promo: typeof rawMult.mensaje_promo === 'string' && rawMult.mensaje_promo.trim()
+                                ? rawMult.mensaje_promo
+                                : DEFAULT_MULTIPLICADOR_COINS_CONFIG.mensaje_promo,
+                        });
+                    }
 
                     if (Array.isArray(merged.beneficios_detallados) && merged.beneficios_detallados.length > 0) {
                         rawBenefits = merged.beneficios_detallados;
@@ -327,7 +357,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
             const payload = {
                 activo: Boolean(paseAlfaForm.activo),
-                titulo: paseAlfaForm.titulo.trim() || 'Pase Alfa Club',
+                titulo: paseAlfaForm.titulo.trim() || 'Pase Alfa',
                 subtitulo: paseAlfaForm.subtitulo.trim(),
                 sellosRequeridos: sellosNum,
                 recompensa: paseAlfaForm.recompensa.trim() || `${sellosNum}.° Corte Totalmente Gratis`,
@@ -337,6 +367,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 imagenUrl: (paseAlfaForm.imagenUrl || '').trim() || null,
                 beneficios: activeTitles,
                 beneficios_detallados: privilegios,
+                multiplicador_coins_config: multiplicadorConfig,
                 actualizado_el: Timestamp.now(),
                 actualizado_por: user?.email || 'admin',
             };
@@ -442,6 +473,81 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
             });
         } finally {
             setIsSavingPaseAlfa(false);
+        }
+    };
+
+    // --- PROMOCIÓN DÍAS DE ALFA COINS AL DOBLE (2x) O TRIPLE (3x) ---
+    const handleToggleDayOfWeek = (dayIndex: number) => {
+        setMultiplicadorConfig((prev) => {
+            const exists = prev.dias_semana.includes(dayIndex);
+            const nextDays = exists
+                ? prev.dias_semana.filter((d) => d !== dayIndex)
+                : [...prev.dias_semana, dayIndex].sort((a, b) => a - b);
+            return { ...prev, dias_semana: nextDays };
+        });
+    };
+
+    const handleSaveMultiplicadorCoins = async () => {
+        if (multiplicadorConfig.activo && multiplicadorConfig.dias_semana.length === 0) {
+            return toast({
+                title: 'Selecciona al menos un día',
+                description: 'Para activar la promoción de Alfa Coins al doble o triple, elige qué día(s) de la semana aplicará.',
+                variant: 'destructive',
+            });
+        }
+
+        setIsSavingMultiplicador(true);
+        try {
+            const cleanConfig: MultiplicadorCoinsConfig = {
+                activo: Boolean(multiplicadorConfig.activo),
+                multiplicador: multiplicadorConfig.multiplicador === 3 ? 3 : 2,
+                dias_semana: [...multiplicadorConfig.dias_semana].sort((a, b) => a - b),
+                mensaje_promo: (multiplicadorConfig.mensaje_promo || '').trim() || `¡Hoy tus compras generan el ${multiplicadorConfig.multiplicador === 3 ? 'TRIPLE (3x)' : 'DOBLE (2x)'} de Alfa Coins en cualquier sucursal!`,
+            };
+
+            await Promise.all([
+                setDoc(doc(db, 'configuracion', 'pase_alfa'), {
+                    multiplicador_coins_config: cleanConfig,
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+                setDoc(doc(db, 'configuracion', 'app_movil'), {
+                    multiplicador_coins_config: cleanConfig,
+                    pase_alfa: {
+                        multiplicador_coins_config: cleanConfig,
+                    },
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+            ]);
+
+            setMultiplicadorConfig(cleanConfig);
+
+            const daysText = cleanConfig.dias_semana.map((d) => DAY_NAMES_ES[d]).join(', ') || 'Ninguno';
+            await logAuditAction({
+                action: 'Configurar Multiplicador Alfa Coins',
+                details: `Estado: ${cleanConfig.activo ? 'ACTIVO' : 'INACTIVO'}, Multiplicador: ${cleanConfig.multiplicador}x, Días: ${daysText}`,
+                userId: user?.uid || 'unknown',
+                userName: user?.displayName || user?.email || 'Unknown',
+                userRole: user?.role,
+                severity: 'info',
+            });
+
+            toast({
+                title: cleanConfig.activo
+                    ? `¡Alfa Coins ${cleanConfig.multiplicador}x Activado!`
+                    : 'Configuración de Multiplicador Guardada',
+                description: cleanConfig.activo
+                    ? `Los días seleccionados (${daysText}) otorgarán automáticamente ${cleanConfig.multiplicador} Alfa Coins por cada $1 MXN pagado en Caja.`
+                    : 'La promoción de días de Alfa Coins dobles/triples ha quedado pausada.',
+            });
+        } catch (err: any) {
+            console.error('Error guardando multiplicador de Alfa Coins:', err);
+            toast({
+                title: 'Error al guardar multiplicador',
+                description: err.message || 'No se pudo guardar la configuración.',
+                variant: 'destructive',
+            });
+        } finally {
+            setIsSavingMultiplicador(false);
         }
     };
 
@@ -887,6 +993,204 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             </div>
                         </CardContent>
                     )
+                )}
+            </Card>
+
+            {/* 1.5 CARD: PROMOCIÓN DÍAS DE ALFA COINS AL DOBLE (2x) O TRIPLE (3x) */}
+            <Card className="border border-border/70 shadow-xs transition-all">
+                <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                            <Flame className={cn("h-4 w-4 shrink-0", multiplicadorConfig.activo ? "text-amber-400" : "text-slate-400")} />
+                            <div className="flex items-center gap-1.5">
+                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                    Días de Alfa Coins al Doble (2x) o Triple (3x)
+                                </CardTitle>
+                                <InfoTooltip text="Elige qué días de la semana quieres multiplicar por 2x o 3x los Alfa Coins que ganan tus clientes por cada $1 MXN pagado en Caja." />
+                            </div>
+                            {(() => {
+                                const evalStatus = evaluateActiveCoinsMultiplier(multiplicadorConfig);
+                                if (evalStatus.isActiveToday) {
+                                    return (
+                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] py-0 px-2 font-bold">
+                                            🔥 ACTIVO HOY ({evalStatus.multiplier}x en Caja)
+                                        </Badge>
+                                    );
+                                }
+                                if (multiplicadorConfig.activo && multiplicadorConfig.dias_semana.length > 0) {
+                                    return (
+                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                            Programado ({multiplicadorConfig.multiplicador}x: {multiplicadorConfig.dias_semana.map((d) => DAY_NAMES_ES[d].slice(0, 3)).join(', ')})
+                                        </Badge>
+                                    );
+                                }
+                                return (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-muted-foreground">
+                                        Inactivo
+                                    </Badge>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                            <Switch
+                                checked={multiplicadorConfig.activo}
+                                onCheckedChange={(checked) =>
+                                    setMultiplicadorConfig((prev) => ({ ...prev, activo: checked }))
+                                }
+                                title={multiplicadorConfig.activo ? "Multiplicador Activo" : "Multiplicador Pausado"}
+                                aria-label="Activar promoción de Alfa Coins dobles o triples"
+                                className="scale-90"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setIsMultiplicadorOpen(!isMultiplicadorOpen)}
+                                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                                title={isMultiplicadorOpen ? "Minimizar" : "Desplegar"}
+                            >
+                                {isMultiplicadorOpen ? (
+                                    <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                    <ChevronDown className="w-4 h-4" />
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </CardHeader>
+
+                {isMultiplicadorOpen && (
+                    <CardContent className="space-y-4 pt-3.5 px-3.5 sm:px-5 pb-5">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
+                            {/* SELECTOR 2X / 3X */}
+                            <div className="md:col-span-4 space-y-1.5">
+                                <Label className="text-xs font-semibold text-foreground">
+                                    Multiplicador de Alfa Coins
+                                </Label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setMultiplicadorConfig((prev) => ({
+                                            ...prev,
+                                            multiplicador: 2,
+                                            mensaje_promo: (prev.mensaje_promo || '').includes('TRIPLE')
+                                                ? '¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!'
+                                                : (prev.mensaje_promo || ''),
+                                        }))}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                                            multiplicadorConfig.multiplicador === 2
+                                                ? "border-amber-500/60 bg-amber-500/15 text-amber-300 shadow-xs"
+                                                : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
+                                        )}
+                                    >
+                                        <span className="text-base font-black tracking-tight">2x DOBLE</span>
+                                        <span className="text-[10px] opacity-80">$1 MXN = 2 Alfa Coins</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setMultiplicadorConfig((prev) => ({
+                                            ...prev,
+                                            multiplicador: 3,
+                                            mensaje_promo: (prev.mensaje_promo || '').includes('DOBLE')
+                                                ? '¡Hoy tus compras generan el TRIPLE (3x) de Alfa Coins en cualquier sucursal!'
+                                                : (prev.mensaje_promo || ''),
+                                        }))}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
+                                            multiplicadorConfig.multiplicador === 3
+                                                ? "border-amber-500/60 bg-amber-500/15 text-amber-300 shadow-xs"
+                                                : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
+                                        )}
+                                    >
+                                        <span className="text-base font-black tracking-tight">3x TRIPLE</span>
+                                        <span className="text-[10px] opacity-80">$1 MXN = 3 Alfa Coins</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* SELECTOR DE DÍAS DE LA SEMANA */}
+                            <div className="md:col-span-8 space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Días de la semana en que aplica la promoción
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        Toca los días para activarlos o desactivarlos
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-7 gap-1.5">
+                                    {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                                        const isSelected = multiplicadorConfig.dias_semana.includes(dayIdx);
+                                        const isToday = new Date().getDay() === dayIdx;
+                                        return (
+                                            <button
+                                                key={dayIdx}
+                                                type="button"
+                                                onClick={() => handleToggleDayOfWeek(dayIdx)}
+                                                className={cn(
+                                                    "flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition-all cursor-pointer relative",
+                                                    isSelected
+                                                        ? "border-blue-500 bg-blue-500/20 text-blue-300 font-bold shadow-2xs"
+                                                        : "border-border/60 bg-muted/15 text-muted-foreground hover:border-border/90"
+                                                )}
+                                            >
+                                                <span className="text-[11px] font-bold">
+                                                    {DAY_NAMES_ES[dayIdx].slice(0, 3)}
+                                                </span>
+                                                <span className="text-[9px] opacity-75 hidden sm:inline">
+                                                    {DAY_NAMES_ES[dayIdx]}
+                                                </span>
+                                                {isToday && (
+                                                    <span className="text-[8px] uppercase tracking-wider text-amber-400 font-extrabold mt-0.5">
+                                                        Hoy
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* MENSAJE PROMOCIONAL PARA LA APP */}
+                        <div className="space-y-1">
+                            <Label className="text-xs font-semibold text-foreground">
+                                Mensaje de aviso en la App Móvil (Opcional)
+                            </Label>
+                            <Input
+                                value={multiplicadorConfig.mensaje_promo || ''}
+                                onChange={(e) => setMultiplicadorConfig((prev) => ({ ...prev, mensaje_promo: e.target.value }))}
+                                placeholder="Ej. ¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!"
+                                className="h-8.5 text-xs font-sans"
+                            />
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2.5 border-t border-border/50">
+                            <span className="text-[11px] text-muted-foreground">
+                                En los días seleccionados, Caja abonará automáticamente <strong>{multiplicadorConfig.multiplicador} Alfa Coins por cada $1 MXN</strong> pagado y la App mostrará el distintivo activo.
+                            </span>
+                            <Button
+                                type="button"
+                                onClick={handleSaveMultiplicadorCoins}
+                                disabled={isSavingMultiplicador}
+                                variant="alfa"
+                                className="font-semibold text-xs px-5 h-9 w-full sm:w-auto cursor-pointer shrink-0"
+                            >
+                                {isSavingMultiplicador ? (
+                                    <>
+                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                        Guardando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save className="w-3.5 h-3.5 mr-1.5" />
+                                        Guardar Días {multiplicadorConfig.multiplicador}x Alfa Coins
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    </CardContent>
                 )}
             </Card>
 

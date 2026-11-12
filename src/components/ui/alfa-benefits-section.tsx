@@ -80,8 +80,8 @@ function StickyBenefitCard({
   const discountLabel = isComingSoon
     ? 'PRÓXIMAMENTE'
     : rawDiscount
-    ? rawDiscount.includes('%') || rawDiscount.includes('GRATIS') || rawDiscount.includes('PUNTOS') || rawDiscount.includes('CLUB')
-      ? rawDiscount
+    ? rawDiscount.includes('%') || rawDiscount.includes('GRATIS') || rawDiscount.includes('PUNTOS') || rawDiscount.includes('PASE ALFA') || rawDiscount.includes('ALFA')
+      ? rawDiscount.replace(/CLUB ALFA/gi, 'PASE ALFA')
       : `-${rawDiscount}% OFF`
     : null;
 
@@ -198,7 +198,8 @@ export function AlfaBenefitsSection({
     (selectedBenefit?.titulo || '').toLowerCase().includes('alfa coin') ||
     (selectedBenefit?.tag || '').toLowerCase().includes('alfa coin');
 
-  // Default Club Benefits
+  // Default Pase Alfa Benefits
+  const defaultNivelesConfig = paseAlfaData?.niveles_config || {};
   const defaultClubBenefits: BenefitItem[] = [
     {
       id: 'pase-alfa-10',
@@ -206,10 +207,10 @@ export function AlfaBenefitsSection({
       discount: `${paseAlfaData?.sellosRequeridos || 10}ª GRATIS`,
       badgeType: 'vip',
       titulo: paseAlfaData?.titulo || 'La 10ª Visita va por la Casa',
-      descripcion: paseAlfaData?.subtitulo || paseAlfaData?.instrucciones || 'En VATOS ALFA premiamos tu lealtad. Acumula 9 visitas en cualquiera de nuestros servicios pagados y tu décimo corte de cabello es 100% de cortesía.',
+      descripcion: paseAlfaData?.subtitulo || paseAlfaData?.instrucciones || 'En VATOS ALFA Barber Shop premiamos tu lealtad. Acumula 9 visitas en cualquiera de nuestros servicios pagados y tu décimo corte de cabello es 100% de cortesía.',
       recompensa: paseAlfaData?.recompensa || 'Corte de Cabello 100% Gratis',
-      vigencia: 'Vigencia Permanente • Pase Alfa Club',
-      terminos: paseAlfaData?.terminos || 'Aplica en todas las sucursales oficiales de VATOS ALFA. Válido para clientes registrados. No es transferible ni acumulable con otras promociones de corte gratuito en la misma cita.',
+      vigencia: 'Vigencia Permanente • Pase Alfa',
+      terminos: paseAlfaData?.terminos || 'Aplica en cualquier sucursal de VATOS ALFA Barber Shop. Válido para clientes registrados en la app móvil. No es transferible ni acumulable con otras promociones de corte gratuito en la misma cita.',
       imagenUrl: paseAlfaData?.imagenUrl || 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=800&q=80',
       ctaText: 'Agendar para Acumular Sello',
     },
@@ -219,7 +220,7 @@ export function AlfaBenefitsSection({
       discount: '100% OFF',
       badgeType: 'gold',
       titulo: 'REGALO DE CUMPLEAÑOS',
-      descripcion: 'Un detalle especial de VATOS ALFA durante tu mes.',
+      descripcion: 'Un detalle especial de VATOS ALFA Barber Shop durante tu mes.',
       recompensa: 'Detalle especial de cumpleaños en tu visita',
       vigencia: 'Válido durante todo tu mes de cumpleaños',
       terminos: 'Presenta tu identificación oficial (INE o pasaporte) en recepción para validar tu fecha de nacimiento al momento de tu cita.',
@@ -228,21 +229,40 @@ export function AlfaBenefitsSection({
     },
     {
       id: 'alfacoins-club',
-      tag: 'PRÓXIMAMENTE • CLUB ALFA',
+      tag: 'PRÓXIMAMENTE • PASE ALFA',
       discount: 'PRÓXIMAMENTE',
       badgeType: 'vip',
       proximamente: true,
       titulo: 'Gana ALFA COINS en Cada Servicio',
-      descripcion: 'Cada vez que te atiendes en nuestra barbería acumularás ALFA COINS que podrás canjear directamente por productos de peinado, ceras, tónicos o descuentos.',
-      recompensa: 'Canjeable por Ceras, Polvos y Bálsamos (Próximo Lanzamiento)',
+      descripcion: 'Cada vez que te atiendes en nuestra barbería acumularás ALFA COINS que podrás canjear directamente por productos de peinado, ceras, tónicos o servicios en cualquier sucursal.',
+      recompensa: 'Canjeable por Servicios y Productos (Próximo Lanzamiento)',
       vigencia: 'Próximamente en App Móvil',
       terminos: 'El programa de ALFA COINS se encuentra actualmente en fase final de integración y estará disponible muy pronto de forma exclusiva a través de nuestra App Oficial.',
       imagenUrl: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=800&q=80',
       ctaText: 'Descargar App Oficial (Próximo Lanzamiento)',
     },
+    {
+      id: 'niveles_pase_alfa',
+      tag: 'RANGOS & PRIVILEGIOS • PASE ALFA',
+      discount: 'PASE ALFA',
+      badgeType: 'gold',
+      titulo: defaultNivelesConfig.titulo_tarjeta || 'NIVELES PASE ALFA',
+      descripcion:
+        defaultNivelesConfig.descripcion_tarjeta ||
+        'Sube de nivel desde que te registras en la app (Alfa Member, Alfa Gold y Alfa Black VIP) y desbloquea mayor porcentaje en Alfa Coins y privilegios exclusivos en cualquier sucursal de VATOS ALFA Barber Shop.',
+      recompensa: 'Alfa Member (3%) • Alfa Gold (5%) • Alfa Black VIP (7%)',
+      vigencia: 'Vigencia Permanente • Pase Alfa',
+      terminos:
+        defaultNivelesConfig.terminos ||
+        'Al descargar la app y registrarte ingresas como Alfa Member (3% en Alfa Coins). El conteo de visitas y consumo para subir de nivel (Alfa Gold: 12 visitas ó $2,400 MXN; Alfa Black VIP: 24 visitas ó $4,800 MXN) inicia estrictamente desde tu fecha de registro en la app móvil; las compras previas se muestran en tu historial de compras pero no cuentan para el progreso del Pase Alfa. Válido en cualquier sucursal de VATOS ALFA Barber Shop.',
+      imagenUrl:
+        defaultNivelesConfig.imagenUrl ||
+        'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/pase_alfa%2Fniveles_pase_alfa_oficial.png?alt=media&token=927a8ffc-e00d-4fd5-b5c9-a11270a423bf',
+      ctaText: 'Agendar Cita',
+    },
   ];
 
-  // Dynamic VIP privileges configured in Pase Alfa (Privilegios VIP)
+  // Dynamic VIP privileges configured in Pase Alfa
   const rawPrivilegios = Array.isArray(paseAlfaData?.beneficios_detallados)
     ? paseAlfaData.beneficios_detallados
     : (Array.isArray(paseAlfaData?.privilegios) ? paseAlfaData.privilegios : []);
@@ -258,29 +278,35 @@ export function AlfaBenefitsSection({
 
       return {
         id: p.id || `vip_${p.titulo || Math.random()}`,
-        tag: isCoin ? (p.tag || 'PRÓXIMAMENTE • CLUB ALFA') : (p.tag || 'PRIVILEGIO VIP'),
-        discount: isCoin ? 'PRÓXIMAMENTE' : (p.discount || 'CLUB ALFA'),
+        tag: isCoin ? (p.tag || 'PRÓXIMAMENTE • PASE ALFA').replace(/CLUB ALFA/gi, 'PASE ALFA') : (p.tag || 'BENEFICIO PASE ALFA').replace(/CLUB ALFA/gi, 'PASE ALFA'),
+        discount: isCoin ? 'PRÓXIMAMENTE' : (p.discount || 'PASE ALFA').replace(/CLUB ALFA/gi, 'PASE ALFA'),
         badgeType: 'gold' as const,
         proximamente: isCoin,
         titulo: p.titulo || 'Beneficio Exclusivo',
-        descripcion: p.descripcion || 'Privilegio exclusivo para miembros del Club Pase Alfa.',
+        descripcion: (p.descripcion || 'Privilegio exclusivo para miembros del Pase Alfa.').replace(/Club Alfa|Pase Alfa Club/gi, 'Pase Alfa'),
         recompensa: p.recompensa,
-        vigencia: isCoin ? 'Próximamente en App Móvil' : (p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa Club'),
+        vigencia: isCoin ? 'Próximamente en App Móvil' : (p.fechaLimite ? `Hasta el ${p.fechaLimite}` : 'Permanente • Pase Alfa'),
         terminos: isCoin
-          ? (p.terminos || 'El programa de ALFA COINS se encuentra actualmente en fase final de integración y estará disponible muy pronto en la App Oficial.')
-          : (p.terminos || 'Exclusivo para clientes registrados en la app móvil.'),
+          ? (p.terminos || 'El programa de ALFA COINS se encuentra actualmente en fase final de integración y estará disponible muy pronto en la App Oficial.').replace(/Club Alfa|Pase Alfa Club/gi, 'Pase Alfa')
+          : (p.terminos || 'Exclusivo para clientes registrados en la app móvil.').replace(/Club Alfa|Pase Alfa Club/gi, 'Pase Alfa'),
         imagenUrl: p.imagenUrl || 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=800&q=80',
         ctaText: isCoin ? (p.ctaText || 'Descargar App Oficial (Próximo Lanzamiento)') : (p.ctaText || 'Aprovechar Beneficio'),
       };
     });
 
+  // Si niveles_pase_alfa está activo pero aún no viene en dynamicPrivilegios, lo aseguramos
+  const hasNivelesCard = dynamicPrivilegios.some(
+    (b) => b.id === 'niveles_pase_alfa' || b.titulo.toUpperCase().includes('NIVELES PASE ALFA')
+  );
+  if (!hasNivelesCard && defaultNivelesConfig.activo !== false && dynamicPrivilegios.length > 0) {
+    dynamicPrivilegios.push(defaultClubBenefits[3]);
+  }
 
-  // Beneficios del Club Alfa exclusivos para usuarios de la app.
-  // Se muestran única y exclusivamente los beneficios reales creados y configurados en el Pase Alfa.
+  // Beneficios del Pase Alfa exclusivos para usuarios de la app.
   const paseAlfaCard = paseAlfaData && paseAlfaData.activo !== false ? [defaultClubBenefits[0]] : [];
   const allBenefits = dynamicPrivilegios.length > 0
-    ? [...dynamicPrivilegios, ...paseAlfaCard]
-    : (paseAlfaCard.length > 0 ? paseAlfaCard : defaultClubBenefits);
+    ? [...dynamicPrivilegios, ...paseAlfaCard.filter((c) => !dynamicPrivilegios.some((d) => d.titulo.toLowerCase().includes('décima') || d.titulo.toLowerCase().includes('10ª')))]
+    : (paseAlfaCard.length > 0 ? defaultClubBenefits : defaultClubBenefits);
 
   // Seguimiento del scroll de la baraja para animar el reescalado 3D progresivo
   const { scrollYProgress } = useScroll({
@@ -315,7 +341,7 @@ export function AlfaBenefitsSection({
               <span>Beneficios Exclusivos</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2 text-[#202A49]">
-              Beneficios del Club Alfa
+              Beneficios del Pase Alfa
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
               Toca cualquier beneficio para más detalles y dinámicas exclusivas
@@ -328,7 +354,7 @@ export function AlfaBenefitsSection({
                   className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#C5A880] hover:text-[#e4cfb7] transition-colors py-1 px-3 rounded-full border border-[#C5A880]/30 hover:border-[#C5A880]/60 bg-[#C5A880]/10 hover:bg-[#C5A880]/20 cursor-pointer shadow-2xs"
                 >
                   <Smartphone className="w-3.5 h-3.5 text-[#C5A880]" />
-                  <span>Descargar App Oficial (Club Alfa)</span>
+                  <span>Descargar App Oficial (Pase Alfa)</span>
                 </button>
               </div>
             )}

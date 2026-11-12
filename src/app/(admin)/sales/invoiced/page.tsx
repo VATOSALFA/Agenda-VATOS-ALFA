@@ -51,6 +51,7 @@ import { DonutChartCard } from "@/components/sales/donut-chart-card";
 import { useInvoicedSales, getSaleActualRevenue } from "./use-invoiced-sales";
 import { logAuditAction } from '@/lib/audit-logger';
 import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
+import { revertSaleLoyaltyAndBenefits } from '@/lib/benefit-security';
 
 function formatPaymentMethodName(saleOrMethod: any): string {
     const rawMethod = (typeof saleOrMethod === 'string'
@@ -318,6 +319,7 @@ export default function InvoicedSalesPage() {
             }
 
             // 2. Ejecutar transacción atómica e idempotente
+            let deletedSaleSnapshot: any = null;
             await runTransaction(db, async (transaction) => {
                 const saleDoc = await transaction.get(saleRef);
                 // Si la venta ya no existe (ej. eliminada concurrentemente), abortar inmediatamente
@@ -326,6 +328,7 @@ export default function InvoicedSalesPage() {
                 }
 
                 const currentSaleData = saleDoc.data() as Sale;
+                deletedSaleSnapshot = currentSaleData;
 
                 // A. Revertir inventario de productos consolidados
                 for (const [productId, { quantity, name }] of productQuantitiesToReturn.entries()) {
@@ -423,14 +426,23 @@ export default function InvoicedSalesPage() {
                 transaction.delete(saleRef);
             });
 
+            // 3. Revertir automáticamente Alfa Coins, sellos Pase Alfa, nivel y beneficios asociados a la venta eliminada
+            const loyaltyReversal = await revertSaleLoyaltyAndBenefits(
+                db,
+                deletedSaleSnapshot || saleToDelete,
+                saleToDelete.id
+            );
+
             toast({
                 title: "Venta Eliminada",
-                description: "La venta ha sido eliminada y el stock revertido correctamente.",
+                description: loyaltyReversal.summary.length > 0
+                    ? `Venta eliminada, stock revertido y lealtad ajustada (${loyaltyReversal.summary.join(' • ')}).`
+                    : "La venta ha sido eliminada y el stock revertido correctamente.",
             });
 
             await logAuditAction({
                 action: 'Eliminar Venta Facturada',
-                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total} del cliente ${saleToDelete.client?.nombre || 'Desconocido'}.`,
+                details: `Venta ID: ${saleToDelete.id} eliminada. Monto: $${saleToDelete.total} del cliente ${saleToDelete.client?.nombre || 'Desconocido'}.${loyaltyReversal.summary.length > 0 ? ` Lealtad revertida: ${loyaltyReversal.summary.join(', ')}` : ''}`,
                 userId: user?.uid || 'unknown',
                 userName: user?.displayName || user?.email || 'Unknown',
                 userRole: user?.role,

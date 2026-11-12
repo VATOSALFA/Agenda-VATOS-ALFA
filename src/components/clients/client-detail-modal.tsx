@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
 import { ArrowUpDown } from 'lucide-react';
 import { NewClientForm } from './new-client-form';
 import { getClientAppInfo, isClientWithApp } from '@/lib/client-app-helper';
-import { parseBirthMonthAndDay, formatBirthdaySpanish } from '@/lib/benefit-security';
+import { parseBirthMonthAndDay, formatBirthdaySpanish, calculatePaseAlfaStatsFromSales, evaluateClientAlfaTier } from '@/lib/benefit-security';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -347,77 +347,41 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
         nextNombre: null,
         faltanVisitas: 0,
         faltaGasto: 0,
+        visitasPaseAlfa: 0,
+        consumoPaseAlfa: 0,
       };
     }
 
-    const defaultTiers = {
-      member: { nombre: 'Alfa Member', color: '#2563EB', visitasMin: 0, gastoMin: 0 },
-      gold: { nombre: 'Alfa Gold', color: '#C5A880', visitasMin: 4, gastoMin: 1500 },
-      vip: { nombre: 'Alfa Black VIP', color: '#0F172A', visitasMin: 8, gastoMin: 3500 },
-    };
+    const paseAlfaFromSales = calculatePaseAlfaStatsFromSales(validSales, liveClient);
+    const storedPaseAlfaVisits = Math.max(
+      Number((liveClient as any).visitas_pase_alfa ?? 0),
+      stamps
+    );
+    const storedPaseAlfaSpend = Number((liveClient as any).consumo_pase_alfa ?? 0);
 
-    const cfg = nivelesConfig || {
-      activo: true,
-      criterio: 'ambos_opcional',
-      ...defaultTiers,
-    };
+    const effectivePaseAlfaVisits = Math.max(storedPaseAlfaVisits, paseAlfaFromSales.visits);
+    const effectivePaseAlfaSpend = Math.max(storedPaseAlfaSpend, paseAlfaFromSales.spend);
 
-    const criterio = cfg.criterio || 'ambos_opcional';
-    const member = cfg.member || defaultTiers.member;
-    const gold = cfg.gold || defaultTiers.gold;
-    const vip = cfg.vip || defaultTiers.vip;
+    const evaluated = evaluateClientAlfaTier(liveClient, nivelesConfig, {
+      overrideVisits: effectivePaseAlfaVisits,
+      overrideSpend: effectivePaseAlfaSpend,
+      forceEvaluateWhenPaused: true,
+    });
 
-    const v = stamps;
-    const g = totalSpent || Number((liveClient as any).consumo_total || liveClient.gasto_total || 0);
-
-    let meetsVip = false;
-    let meetsGold = false;
-
-    if (criterio === 'visitas') {
-      meetsVip = v >= (vip.visitasMin ?? 8);
-      meetsGold = v >= (gold.visitasMin ?? 4);
-    } else if (criterio === 'gasto') {
-      meetsVip = g >= (vip.gastoMin ?? 3500);
-      meetsGold = g >= (gold.gastoMin ?? 1500);
-    } else {
-      meetsVip = v >= (vip.visitasMin ?? 8) || g >= (vip.gastoMin ?? 3500);
-      meetsGold = v >= (gold.visitasMin ?? 4) || g >= (gold.gastoMin ?? 1500);
-    }
-
-    if (meetsVip) {
-      return {
-        nombre: vip.nombre || 'Alfa Black VIP',
-        color: vip.color || '#0F172A',
-        colorTexto: vip.colorTexto || '#FFFFFF',
-        id: 'vip',
-        nextNombre: null,
-        faltanVisitas: 0,
-        faltaGasto: 0,
-      };
-    }
-    if (meetsGold) {
-      return {
-        nombre: gold.nombre || 'Alfa Gold',
-        color: gold.color || '#C5A880',
-        colorTexto: gold.colorTexto || '#0F172A',
-        id: 'gold',
-        nextNombre: vip.nombre || 'Alfa Black VIP',
-        faltanVisitas: Math.max(0, (vip.visitasMin ?? 8) - v),
-        faltaGasto: Math.max(0, (vip.gastoMin ?? 3500) - g),
-      };
-    }
     return {
-      nombre: member.nombre || 'Alfa Member',
-      color: member.color || '#2563EB',
-      colorTexto: member.colorTexto || '#FFFFFF',
-      id: 'member',
-      nextNombre: gold.nombre || 'Alfa Gold',
-      faltanVisitas: Math.max(0, (gold.visitasMin ?? 4) - v),
-      faltaGasto: Math.max(0, (gold.gastoMin ?? 1500) - g),
+      nombre: evaluated.tierName || 'Alfa Member',
+      color: evaluated.color || '#2563EB',
+      colorTexto: evaluated.colorTexto || '#FFFFFF',
+      id: evaluated.tierId,
+      nextNombre: evaluated.nextTierName,
+      faltanVisitas: evaluated.faltanVisitas,
+      faltaGasto: evaluated.faltaGasto,
+      visitasPaseAlfa: effectivePaseAlfaVisits,
+      consumoPaseAlfa: effectivePaseAlfaSpend,
     };
-  }, [nivelesConfig, stamps, totalSpent, liveClient, hasAppLinked]);
+  }, [nivelesConfig, stamps, validSales, liveClient, hasAppLinked]);
 
-  const clientLevel = hasAppLinked ? (liveClient.nivel || clientLevelInfo.nombre) : 'Sin Nivel';
+  const clientLevel = hasAppLinked ? clientLevelInfo.nombre : 'Sin Nivel';
 
   const attendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length : (client.citas_asistidas || 0);
   const unattendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'No asiste').length : (client.citas_no_asistidas || 0);
@@ -787,7 +751,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   </>
                 ) : (
                   <p className="text-[11px] text-slate-400 leading-snug">
-                    El Pase Alfa Club y los niveles de lealtad están disponibles al usar la App Móvil.
+                    El Pase Alfa y los niveles de lealtad están disponibles al usar la App Móvil.
                   </p>
                 )}
               </div>
@@ -881,7 +845,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${validSales.length} compras`} />
                     <StatCard title="ALFA COINS (App)" value={hasAppLinked ? alfaCoins : 0} icon={Sparkles} description={hasAppLinked ? "Monedas digitales en app" : "Requiere App Móvil"} />
                     <StatCard title="Pase Alfa" value={hasAppLinked ? `${stamps} / 10` : "No activo"} icon={Scissors} description={hasAppLinked ? (freeCutReady ? '¡10.° Corte DISPONIBLE!' : `Faltan ${Math.max(0, 10 - stamps)} visitas`) : "Disponible con App"} />
-                    <StatCard title="Nivel del Cliente" value={hasAppLinked ? clientLevel : "Sin Nivel"} icon={Award} description={hasAppLinked ? "Categoría Pase Alfa Club" : "Requiere App Móvil"} />
+                    <StatCard title="Nivel del Cliente" value={hasAppLinked ? clientLevel : "Sin Nivel"} icon={Award} description={hasAppLinked ? "Categoría Pase Alfa" : "Requiere App Móvil"} />
                   </div>
                 </TabsContent>
                 <TabsContent value="reservations" className="m-0 h-full">
@@ -967,7 +931,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                   {!hasAppLinked ? (
                     <div className="bg-[#0F172A] border border-border/60 rounded-2xl p-6 sm:p-8 text-white shadow-xl text-center space-y-3">
                       <Smartphone className="h-10 w-10 text-slate-400 mx-auto" />
-                      <h4 className="text-base sm:text-lg font-bold text-white">Programa Pase Alfa Club No Disponible</h4>
+                      <h4 className="text-base sm:text-lg font-bold text-white">Programa Pase Alfa No Disponible</h4>
                       <p className="text-xs sm:text-sm text-gray-300 max-w-lg mx-auto leading-relaxed">
                         Este cliente aún no ha descargado ni iniciado sesión en la <strong>App Móvil VATOS ALFA</strong>. Los niveles de lealtad (Alfa Member, Alfa Gold, Alfa Black VIP), los sellos para el 10.º corte gratis y la acumulación de ALFA COINS están reservados exclusivamente para clientes con la aplicación móvil activa.
                       </p>
@@ -985,14 +949,14 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-[#C5A880]/20 pb-4">
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#C5A880] tracking-wider uppercase">Club de Lealtad</span>
+                          <span className="text-xs font-bold text-[#C5A880] tracking-wider uppercase">Programa de Lealtad</span>
                           <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-xs">
                             {clientLevel}
                           </Badge>
                         </div>
                         <h4 className="text-xl font-bold text-white mt-1">Pase Alfa Digital • {liveClient.nombre}</h4>
                         <p className="text-xs text-gray-300">
-                          {stamps} de 10 visitas registradas en sucursal Sombrerete
+                          {stamps} de 10 visitas registradas en sucursales oficiales de VATOS ALFA Barber Shop
                         </p>
                       </div>
 

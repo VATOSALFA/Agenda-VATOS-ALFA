@@ -97,7 +97,7 @@ export default function MobileAppSettingsPage() {
                 <div>
                     <h2 className="text-xl font-bold tracking-tight text-foreground">App Móvil VATOS ALFA</h2>
                     <p className="text-xs text-muted-foreground">
-                        Gestiona el programa Pase Alfa Club, niveles y rangos de lealtad, buzón de opiniones, efectos por temporada y métricas de la app móvil.
+                        Gestiona el programa Pase Alfa, niveles y rangos de lealtad, buzón de opiniones, efectos por temporada y métricas de la app móvil.
                     </p>
                 </div>
             </div>
@@ -330,7 +330,7 @@ export default function MobileAppSettingsPage() {
                                                 const clientPhoto = client.fotoUrl || client.avatarUrl || (client as any).foto_perfil_url;
                                                 const stamps = Number(client.cortes_acumulados ?? client.cortesAcumulados ?? 0);
                                                 const coins = Number(client.alfaCoins ?? (client as any).alfa_coins ?? client.puntosLealtad ?? (client as any).puntos ?? 0);
-                                                const level = isClientWithApp(client) ? (client.nivel || (stamps >= 8 ? 'Alfa Black VIP' : stamps >= 4 ? 'Alfa Gold' : 'Alfa Member')) : 'Sin Nivel';
+                                                const level = isClientWithApp(client) ? (client.nivel || (stamps >= 24 ? 'Alfa Black VIP' : stamps >= 12 ? 'Alfa Gold' : 'Alfa Member')) : 'Sin Nivel';
                                                 const freeCut = Boolean(client.corte_gratis_disponible ?? stamps >= 9);
 
                                                 return (

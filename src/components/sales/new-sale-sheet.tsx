@@ -76,7 +76,11 @@ import {
     calculateJuntosRewardCoins,
     JUNTOS_REWARD_COINS_PER_PERSON,
     evaluateClientAlfaTier,
+    calculatePaseAlfaStatsFromSales,
     evaluatePaseAlfaStampsForSale,
+    evaluateActiveCoinsMultiplier,
+    type MultiplicadorCoinsConfig,
+    type SaleLoyaltySnapshot,
 } from '@/lib/benefit-security';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { useLocal } from '@/contexts/local-context';
@@ -223,6 +227,7 @@ const ResumenCarrito = ({
     pointsDiscount, alfaCoinsToUse, setAlfaCoinsToUse, clientAlfaCoins, maxUsableAlfaCoins,
     propina, appliedBenefit, onApplyReferralCode, onRemoveBenefit, alfaCoinUnitValue, clientLevelInfo,
     juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140, targetStampsConfig = 9,
+    activeCoinsMultiplier,
 }: any) => {
     const [referralInput, setReferralInput] = useState('');
     const nowPreview = new Date();
@@ -397,10 +402,17 @@ const ResumenCarrito = ({
                         {hasAppDownloaded ? (
                             <div className="p-3 rounded-xl border border-border/50 bg-muted/20 space-y-2 text-xs">
                                 <div className="flex items-center justify-between text-foreground font-semibold gap-2">
-                                    <span className="flex items-center gap-1.5">
+                                    <span className="flex items-center gap-1.5 flex-wrap">
                                         <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
+                                        {activeCoinsMultiplier?.isActive && (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-sans">
+                                                🔥 {activeCoinsMultiplier.shortBadge}
+                                            </span>
+                                        )}
                                     </span>
-                                    <span className="text-[#C5A880] font-bold">+{total > 0 ? Math.floor(total) : 0} ALFA COINS</span>
+                                    <span className="text-[#C5A880] font-bold">
+                                        +{total > 0 ? Math.floor(total) * (activeCoinsMultiplier?.multiplier || 1) : 0} ALFA COINS
+                                    </span>
                                 </div>
                                 <div className="pt-1.5 border-t border-border/40 flex flex-col gap-1">
                                     <div className="flex items-center justify-between gap-2">
@@ -1122,6 +1134,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [juntosMinorsCount, setJuntosMinorsCount] = useState<number>(0);
     const currentHaircutPrice = useMemo(() => getCurrentHaircutPrice(services), [services]);
     const [nivelesConfig, setNivelesConfig] = useState<any>(null);
+    const [multiplicadorCoinsConfig, setMultiplicadorCoinsConfig] = useState<MultiplicadorCoinsConfig | null>(null);
     const [targetStampsConfig, setTargetStampsConfig] = useState<number>(9);
     const [reconciledClientStats, setReconciledClientStats] = useState<{
         clientId: string;
@@ -1129,7 +1142,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         spend: number;
     } | null>(null);
 
-    // Suscripción en tiempo real a la configuración de Niveles y Rangos (Pase Alfa Club)
+    const activeCoinsMultiplier = useMemo(
+        () => evaluateActiveCoinsMultiplier(multiplicadorCoinsConfig),
+        [multiplicadorCoinsConfig]
+    );
+
+    // Suscripción en tiempo real a la configuración de Niveles y Rangos (Pase Alfa Club) y Multiplicador de Alfa Coins
     useEffect(() => {
         if (!db) return;
         const unsubPase = onSnapshot(
@@ -1139,6 +1157,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const data = snap.data();
                     if (data.niveles_config) {
                         setNivelesConfig(data.niveles_config);
+                    }
+                    if (data.multiplicador_coins_config) {
+                        setMultiplicadorCoinsConfig(data.multiplicador_coins_config);
                     }
                     const sReq = Number(data.sellosRequeridos || 10);
                     setTargetStampsConfig(sReq === 10 ? 9 : sReq);
@@ -1154,6 +1175,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const cfg = data.niveles_config || data.pase_alfa?.niveles_config || data['pase_alfa.niveles_config'];
                     if (cfg) {
                         setNivelesConfig((prev: any) => prev || cfg);
+                    }
+                    const multCfg = data.multiplicador_coins_config || data.pase_alfa?.multiplicador_coins_config;
+                    if (multCfg) {
+                        setMultiplicadorCoinsConfig((prev) => prev || multCfg);
                     }
                 }
             },
@@ -1244,19 +1269,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const bestVisits = Math.max(storedVisits, paidVisits);
                 const bestSpend = Math.max(storedSpend, paidSpend);
 
+                // Regla Oficial Pase Alfa: Las compras y visitas anteriores al registro en la App Móvil
+                // NO cuentan para subir de nivel en el Pase Alfa (sí se conservan en su historial general).
+                const allSalesDocs = snapSales.docs.map((d) => ({ id: d.id, ...d.data() }));
+                const paseAlfaFromSales = calculatePaseAlfaStatsFromSales(allSalesDocs, selectedClient);
+                const storedPaseAlfaVisits = Math.max(
+                    Number((selectedClient as any).visitas_pase_alfa ?? 0),
+                    Number(selectedClient.cortes_acumulados ?? selectedClient.cortesAcumulados ?? 0)
+                );
+                const storedPaseAlfaSpend = Number((selectedClient as any).consumo_pase_alfa ?? 0);
+
+                const bestPaseAlfaVisits = Math.max(storedPaseAlfaVisits, paseAlfaFromSales.visits);
+                const bestPaseAlfaSpend = Math.max(storedPaseAlfaSpend, paseAlfaFromSales.spend);
+
                 setReconciledClientStats({
                     clientId: selectedClient.id,
-                    visits: bestVisits,
-                    spend: bestSpend,
+                    visits: bestPaseAlfaVisits,
+                    spend: bestPaseAlfaSpend,
                 });
 
-                // Si las ventas reales superan lo guardado en el documento del cliente, sincronizar en Firestore
-                if (bestSpend > storedSpend + 0.5 || bestVisits > storedVisits) {
-                    const evaluated = evaluateClientAlfaTier(selectedClient, nivelesConfig, {
-                        overrideVisits: bestVisits,
-                        overrideSpend: bestSpend,
-                        forceEvaluateWhenPaused: true,
-                    });
+                const evaluated = evaluateClientAlfaTier(selectedClient, nivelesConfig, {
+                    overrideVisits: bestPaseAlfaVisits,
+                    overrideSpend: bestPaseAlfaSpend,
+                    forceEvaluateWhenPaused: true,
+                });
+
+                const needsGeneralSync = bestSpend > storedSpend + 0.5 || bestVisits > storedVisits;
+                const needsPaseAlfaSync =
+                    isClientWithApp(selectedClient) &&
+                    ((selectedClient as any).visitas_pase_alfa !== bestPaseAlfaVisits ||
+                        Math.abs(Number((selectedClient as any).consumo_pase_alfa ?? 0) - bestPaseAlfaSpend) > 0.5 ||
+                        (evaluated.tierName && evaluated.tierName !== 'Sin Nivel' && selectedClient.nivel !== evaluated.tierName));
+
+                if (needsGeneralSync || needsPaseAlfaSync) {
                     const updateFields: any = {
                         citas_asistidas: bestVisits,
                         visitas_totales: bestVisits,
@@ -1264,9 +1309,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         gasto_total: bestSpend,
                         consumoTotal: bestSpend,
                     };
-                    // Los niveles son exclusivos para usuarios que tienen la app móvil
-                    if (isClientWithApp(selectedClient) && evaluated.tierName && evaluated.tierName !== 'Sin Nivel') {
-                        updateFields.nivel = evaluated.tierName;
+                    if (isClientWithApp(selectedClient)) {
+                        updateFields.visitas_pase_alfa = bestPaseAlfaVisits;
+                        updateFields.consumo_pase_alfa = bestPaseAlfaSpend;
+                        if (evaluated.tierName && evaluated.tierName !== 'Sin Nivel') {
+                            updateFields.nivel = evaluated.tierName;
+                        }
                     }
                     await updateDoc(doc(db, 'clientes', selectedClient.id), updateFields).catch(() => {});
                 }
@@ -1468,6 +1516,40 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [appliedBenefit?.isReferralBenefit, appliedBenefit?.isReferralBlocked, cart.length]);
 
+    // Aplicar automáticamente el descuento del 10.° Corte Gratis ("La Décima Va por la Casa") sobre el primer servicio en carrito
+    useEffect(() => {
+        const isFreeCut =
+            appliedBenefit?.benefitId === 'decimo_corte' ||
+            appliedBenefit?.benefitId === 'corte_gratis' ||
+            String(appliedBenefit?.folio || '').startsWith('VA-CORTE');
+        if (!isFreeCut) return;
+
+        setCart(prev => {
+            const alreadyApplied = prev.some(
+                it => it.tipo === 'servicio' && Number(it.discountValue) > 0
+            );
+            if (alreadyApplied) return prev;
+
+            const firstServiceIdx = prev.findIndex(it => it.tipo === 'servicio');
+            if (firstServiceIdx === -1) return prev;
+
+            const targetItem = prev[firstServiceIdx];
+            const itemLineTotal = (Number(targetItem.precio) || 0) * (Number(targetItem.cantidad) || 1);
+            const freeCutDiscountAmt = Math.min(itemLineTotal, Number(currentHaircutPrice || 140));
+            if (freeCutDiscountAmt <= 0) return prev;
+
+            return prev.map((it, idx) =>
+                idx === firstServiceIdx
+                    ? {
+                          ...it,
+                          discountValue: String(freeCutDiscountAmt),
+                          discountType: 'fixed' as const,
+                      }
+                    : it
+            );
+        });
+    }, [appliedBenefit?.benefitId, appliedBenefit?.folio, cart.length, currentHaircutPrice]);
+
     // Validación Zero-Trust cuando se selecciona al cliente en Caja con un código de referido activo
     useEffect(() => {
         if (!appliedBenefit?.isReferralBenefit || !selectedClient || !db) return;
@@ -1628,10 +1710,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         : it
                 )
             );
+        } else if (
+            appliedBenefit?.benefitId === 'decimo_corte' ||
+            appliedBenefit?.benefitId === 'corte_gratis' ||
+            String(appliedBenefit?.folio || '').startsWith('VA-CORTE')
+        ) {
+            setCart(prev =>
+                prev.map(it =>
+                    it.tipo === 'servicio' &&
+                    it.discountType === 'fixed' &&
+                    Number(it.discountValue) <= Number(currentHaircutPrice || 140)
+                        ? { ...it, discountValue: '0', discountType: 'fixed' }
+                        : it
+                )
+            );
         }
         setAppliedBenefit(null);
         setJuntosMinorsCount(0);
-    }, [appliedBenefit]);
+    }, [appliedBenefit, currentHaircutPrice]);
 
     const removeFromCart = (uniqueId: string) => {
         setCart(prev => prev.filter(item => item.uniqueId !== uniqueId));
@@ -2001,10 +2097,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [initialData, form, isOpen, db]);
 
 
-    const finalizeSaleProcess = async (clientId: string, localId: string) => {
+    const finalizeSaleProcess = async (clientId: string, localId: string, finalizedSaleId?: string) => {
         const targetClient = selectedClient || clients.find(c => c.id === clientId);
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const coinsMult = activeCoinsMultiplier?.multiplier || 1;
+
+        const loyaltySnapshot: SaleLoyaltySnapshot = {
+            aplicado: true,
+            cliente_id: targetClient?.id || clientId || '',
+            fecha_dia: todayStr,
+            consumo_real_sumado: 0,
+            visita_asistida_sumada: 0,
+            prev_ultima_visita_fecha: String((targetClient as any)?.ultima_visita_fecha || ''),
+            visita_elegible_sumada: 0,
+            alfa_coins_ganados: 0,
+            alfa_coins_canjeados: 0,
+            multiplicador_aplicado: coinsMult,
+            sellos_ganados: 0,
+            corte_gratis_canjeado: false,
+            prev_cortes_acumulados: Number(targetClient?.cortes_acumulados ?? targetClient?.cortesAcumulados ?? 0),
+            prev_corte_gratis_disponible: Boolean((targetClient as any)?.corte_gratis_disponible),
+            prev_ultimo_sello_fecha: String((targetClient as any)?.ultimo_sello_fecha ?? ''),
+            beneficio_folio: appliedBenefit?.folio || undefined,
+            beneficio_id: appliedBenefit?.benefitId || appliedBenefit?.id || undefined,
+        };
 
         // 1. Actualizar Consumo Histórico ($ MXN), Visitas Históricas, Sellos, AlfaCoins y Nivel (Pase Alfa Club)
         if (db && targetClient) {
@@ -2012,13 +2129,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const clientRef = doc(db, 'clientes', targetClient.id);
                 const realMoneySpent = Math.max(0, Math.round((total + Number(anticipoPagado || 0)) * 100) / 100);
                 const hasServiceInCart = cart.some(it => it.tipo === 'servicio');
-                const isFreeCutRedemption =
+                const isFreeCutRedemption = Boolean(
                     appliedBenefit?.benefitId === 'decimo_corte' ||
                     appliedBenefit?.benefitId === 'corte_gratis' ||
-                    appliedBenefit?.folio?.startsWith('VA-CORTE');
+                    appliedBenefit?.folio?.startsWith('VA-CORTE')
+                );
 
                 const alreadyCountedToday = (targetClient as any).ultima_visita_fecha === todayStr;
                 const visitDelta = hasServiceInCart && !alreadyCountedToday ? 1 : 0;
+
+                loyaltySnapshot.consumo_real_sumado = realMoneySpent;
+                loyaltySnapshot.visita_asistida_sumada = visitDelta;
+                loyaltySnapshot.corte_gratis_canjeado = isFreeCutRedemption;
 
                 // Evaluar nivel antes y después de la compra actual
                 const prevEvaluated = evaluateClientAlfaTier(targetClient, nivelesConfig, {
@@ -2039,6 +2161,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     forceEvaluateWhenPaused: true,
                 });
 
+                loyaltySnapshot.prev_nivel = prevEvaluated.tierName;
+                loyaltySnapshot.new_nivel = nextEvaluated.tierName;
+
                 const updatePayload: Record<string, any> = {};
 
                 // Los niveles y ascensos son exclusivos para usuarios que tienen la app móvil
@@ -2050,19 +2175,28 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     updatePayload.consumo_total = increment(realMoneySpent);
                     updatePayload.gasto_total = increment(realMoneySpent);
                     updatePayload.consumoTotal = increment(realMoneySpent);
+                    if (hasAppDownloaded) {
+                        updatePayload.consumo_pase_alfa = increment(realMoneySpent);
+                    }
                 }
 
                 if (visitDelta > 0) {
                     updatePayload.citas_asistidas = increment(1);
                     updatePayload.visitas_totales = increment(1);
                     updatePayload.ultima_visita_fecha = todayStr;
+                    if (hasAppDownloaded) {
+                        updatePayload.visitas_pase_alfa = increment(1);
+                    }
                 }
 
                 // Si el cliente tiene la App descargada, actualizar también sus AlfaCoins y Sello del Pase Alfa
                 if (hasAppDownloaded) {
-                    const pointsEarned = total > 0 ? Math.floor(total) : 0;
+                    const pointsEarned = total > 0 ? Math.floor(total) * coinsMult : 0;
                     const pointsSpent = effectiveAlfaCoinsToUse || 0;
                     const deltaCoins = pointsEarned - pointsSpent;
+
+                    loyaltySnapshot.alfa_coins_ganados = pointsEarned;
+                    loyaltySnapshot.alfa_coins_canjeados = pointsSpent;
 
                     if (pointsEarned > 0 || pointsSpent > 0) {
                         updatePayload.puntos = increment(deltaCoins);
@@ -2087,6 +2221,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         appliedBenefit,
                     });
                     const stampsToAward = stampEvaluation.stampsToAward;
+                    loyaltySnapshot.sellos_ganados = isFreeCutRedemption ? 0 : stampsToAward;
 
                     if (isFreeCutRedemption) {
                         updatePayload.cortes_acumulados = 0;
@@ -2099,6 +2234,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         updatePayload.corte_gratis_disponible = nextStamps >= targetStampsConfig;
                         updatePayload.ultimo_sello_fecha = todayStr;
                         updatePayload.visitas_elegibles_historicas = increment(1);
+                        loyaltySnapshot.visita_elegible_sumada = 1;
                         stampAdded = true;
                     } else {
                         if (
@@ -2107,6 +2243,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             realMoneySpent + 0.01 >= stampEvaluation.minServicePrice
                         ) {
                             updatePayload.visitas_elegibles_historicas = increment(1);
+                            loyaltySnapshot.visita_elegible_sumada = 1;
                         }
                         // Preservar explícitamente el campo ('' si nunca ha acreditado sello hoy)
                         // para que un servicio menor (ej. ceja $30) o compra de producto no bloquee
@@ -2124,8 +2261,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             0
                         );
                         const newCoinsTotal = Math.max(0, prevCoins + deltaCoins);
+                        const rewardId = `reward_${Date.now()}`;
+                        loyaltySnapshot.recompensa_pendiente_id = rewardId;
                         updatePayload.recompensa_pendiente = {
-                            id: `reward_${Date.now()}`,
+                            id: rewardId,
                             sello_agregado: stampAdded,
                             sellos_ganados: stampsToAward,
                             sellos_anteriores: currStamps,
@@ -2133,6 +2272,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             meta_sellos: targetStampsConfig,
                             corte_gratis_desbloqueado: nextStamps >= targetStampsConfig,
                             coins_ganadas: pointsEarned,
+                            multiplicador_aplicado: coinsMult,
                             coins_anteriores: prevCoins,
                             coins_actuales: newCoinsTotal,
                             fecha: new Date().toISOString(),
@@ -2183,6 +2323,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
                 let totalBonusCoinsCredited = 0;
+                const companionsAwardedForSnapshot: { id: string; coins: number; folio?: string }[] = [];
+                loyaltySnapshot.is_juntos_applied = true;
+                loyaltySnapshot.juntos_mode = mode;
+                loyaltySnapshot.prev_ultimo_canje_juntos_fecha = String((selectedClient as any).ultimo_canje_juntos_fecha || '');
 
                 if (isMet) {
                     if (mode === 'companions_single_ticket' && companionsList.length > 0) {
@@ -2197,6 +2341,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             ultimo_canje_juntos_fecha: todayStr,
                         });
                         totalBonusCoinsCredited += titularCoins;
+                        loyaltySnapshot.juntos_titular_coins_awarded = titularCoins;
 
                         for (const comp of companionsList) {
                             if (comp?.id && comp.id !== selectedClient.id) {
@@ -2209,6 +2354,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     ultimo_canje_juntos_fecha: todayStr,
                                 });
                                 totalBonusCoinsCredited += JUNTOS_REWARD_COINS_PER_PERSON;
+                                companionsAwardedForSnapshot.push({
+                                    id: comp.id,
+                                    coins: JUNTOS_REWARD_COINS_PER_PERSON,
+                                    folio: comp.folio || undefined,
+                                });
                                 if (comp.folio) {
                                     await setDoc(doc(db, 'canjes_beneficios', comp.folio), {
                                         folio: comp.folio,
@@ -2226,6 +2376,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 }
                             }
                         }
+                        loyaltySnapshot.juntos_companions_awarded = companionsAwardedForSnapshot;
 
                         toast({
                             title: '🪙 ¡Alfa Coins Acreditados al Grupo!',
@@ -2243,6 +2394,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             ultimo_canje_juntos_fecha: todayStr,
                         });
                         totalBonusCoinsCredited = individualCoins;
+                        loyaltySnapshot.juntos_titular_coins_awarded = individualCoins;
 
                         toast({
                             title: '🪙 ¡Alfa Coins por Juntos es Mejor!',
@@ -2260,6 +2412,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             ultimo_canje_juntos_fecha: todayStr,
                         });
                         totalBonusCoinsCredited = bonusCoins;
+                        loyaltySnapshot.juntos_titular_coins_awarded = bonusCoins;
 
                         toast({
                             title: '🪙 ¡Alfa Coins por Juntos es Mejor!',
@@ -2269,6 +2422,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
 
                 const folio = appliedBenefit.folio || `VA-JUNTOS-${Date.now().toString().slice(-6)}`;
+                loyaltySnapshot.beneficio_folio = folio;
                 await setDoc(doc(db, 'canjes_beneficios', folio), {
                     folio,
                     estado: 'canjeado',
@@ -2316,6 +2470,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     Boolean(appliedBenefit.referrerId) &&
                     appliedBenefit.referrerId !== clientId &&
                     referralEval.isEligible;
+
+                loyaltySnapshot.beneficio_folio = appliedBenefit.folio;
+                loyaltySnapshot.is_birthday_applied = isBirthdayApplied;
+                if (isBirthdayApplied) {
+                    loyaltySnapshot.cumpleanos_anio_marcado = currentYear;
+                }
+                if (appliedBenefit.isReferralBenefit) {
+                    loyaltySnapshot.is_referral_applied = true;
+                    loyaltySnapshot.referrer_id = appliedBenefit.referrerId || undefined;
+                    loyaltySnapshot.referrer_coins_awarded = isEligibleReferralReward ? REFERRAL_HOST_REWARD_COINS : 0;
+                }
 
                 await setDoc(doc(db, 'canjes_beneficios', appliedBenefit.folio), {
                     folio: appliedBenefit.folio,
@@ -2381,6 +2546,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const hostCurrStamps = Number(
                         hostData?.cortes_acumulados ?? hostData?.cortesAcumulados ?? 0
                     );
+                    const refRewardId = `reward_ref_${Date.now()}`;
+                    loyaltySnapshot.referrer_recompensa_pendiente_id = refRewardId;
 
                     await updateDoc(referrerRef, {
                         puntos: increment(REFERRAL_HOST_REWARD_COINS),
@@ -2390,7 +2557,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         puntos_lealtad: increment(REFERRAL_HOST_REWARD_COINS),
                         amigos_referidos: increment(1),
                         recompensa_pendiente: {
-                            id: `reward_ref_${Date.now()}`,
+                            id: refRewardId,
                             tipo_recompensa: 'referido',
                             ...(invitedFriendName ? { amigo_referido_nombre: invitedFriendName } : {}),
                             sello_agregado: false,
@@ -2412,6 +2579,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
             } catch (e) {
                 console.error("Error updating canjes_beneficios in sale finalization:", e);
+            }
+        }
+
+        // Persistir snapshot exacto de lealtad y beneficios en el documento de la venta para reversión automática 100% fiel si se elimina
+        if (db && finalizedSaleId) {
+            try {
+                await updateDoc(doc(db, 'ventas', finalizedSaleId), {
+                    lealtad_aplicada: removeUndefinedFields(loyaltySnapshot),
+                });
+            } catch (e) {
+                console.warn('No se pudo guardar lealtad_aplicada en la venta:', e);
             }
         }
 
@@ -2568,6 +2746,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             // 2. Preparamos los datos de la venta para guardarla como "Pendiente"
             //    Esto es crucial para que el webhook tenga qué actualizar.
 
+            let completedSaleId: string | undefined = undefined;
             await runTransaction(db, async (transaction) => {
                 // A. Consolidar cantidades por producto (para evitar lecturas/escrituras conflictivas en la misma transacción)
                 const productQuantities = new Map<string, number>();
@@ -2876,7 +3055,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 }
                             }
 
-                            await finalizeSaleProcess(data.cliente_id, data.local_id);
+                            await finalizeSaleProcess(data.cliente_id, data.local_id, approvedSaleId);
                         }
                     });
                     activeUnsubs.push(unsub);
@@ -3004,6 +3183,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const revertPendingSale = async (saleId: string) => {
         if (!db) return;
         try {
+            let completedSaleId: string | undefined = undefined;
             await runTransaction(db, async (transaction) => {
                 const saleRef = doc(db, 'ventas', saleId);
                 const saleDoc = await transaction.get(saleRef);
@@ -3161,6 +3341,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
             }
 
+            let completedSaleId: string | undefined = undefined;
             await runTransaction(db, async (transaction) => {
 
                 // Consolidar cantidades por producto para el stock
@@ -3582,6 +3763,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     transaction.set(saleDocRef, removeUndefinedFields(saleDataToSave));
                 }
 
+                completedSaleId = saleDocRef.id;
                 if (reservationId) {
                     const reservationRef = doc(db, 'reservas', reservationId);
                     const reservationItems = cart.map((item: any) => ({
@@ -3615,7 +3797,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
             });
 
-            await finalizeSaleProcess(data.cliente_id, data.local_id);
+            await finalizeSaleProcess(data.cliente_id, data.local_id, completedSaleId);
 
         } catch (error: any) {
             console.error('Error al registrar la venta: ', error);
@@ -4051,6 +4233,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         setJuntosMinorsCount={setJuntosMinorsCount}
                                         currentHaircutPrice={currentHaircutPrice}
                                         targetStampsConfig={targetStampsConfig}
+                                        activeCoinsMultiplier={activeCoinsMultiplier}
                                     />
                                 </div>
 
@@ -4945,6 +5128,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         setJuntosMinorsCount={setJuntosMinorsCount}
                                         currentHaircutPrice={currentHaircutPrice}
                                         targetStampsConfig={targetStampsConfig}
+                                        activeCoinsMultiplier={activeCoinsMultiplier}
                                     />
                                 </div>
                                 <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">

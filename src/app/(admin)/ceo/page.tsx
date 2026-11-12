@@ -49,6 +49,8 @@ import {
   Mic,
   Camera,
   SlidersHorizontal,
+  Volume2,
+  VolumeX,
   Play,
   Pause,
   Image as ImageIcon,
@@ -170,6 +172,28 @@ export default function JanetCeoPage() {
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState<boolean>(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState<boolean>(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState<boolean>(false);
+  const [isJanetVideoMuted, setIsJanetVideoMuted] = useState(false);
+  const fullscreenJanetVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const handleCloseJanetVideo = useCallback(() => {
+    if (fullscreenJanetVideoRef.current) {
+      try {
+        fullscreenJanetVideoRef.current.pause();
+      } catch (_) {}
+    }
+    setIsAvatarModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isAvatarModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseJanetVideo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAvatarModalOpen, handleCloseJanetVideo]);
   const [isMicPermissionModalOpen, setIsMicPermissionModalOpen] = useState<boolean>(false);
   const [previewImageModalUrl, setPreviewImageModalUrl] = useState<string | null>(null);
 
@@ -1820,45 +1844,105 @@ export default function JanetCeoPage() {
         onCaptureFile={handleCameraCapturedFile}
       />
 
-      {/* MODAL DE FOTO / VIDEO EN PANTALLA COMPLETA DE JANET */}
-      <Dialog open={isAvatarModalOpen} onOpenChange={setIsAvatarModalOpen}>
-        <DialogContent
-          hideCloseButton={true}
-          className="sm:max-w-sm p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-[#0b101e]"
+      {/* =====================================================================
+          MODAL OFICIAL: VIDEO DE PERFIL DE JANET EN PANTALLA COMPLETA (9:16)
+          ===================================================================== */}
+      {isAvatarModalOpen && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 select-none animate-in fade-in duration-200"
+          onClick={handleCloseJanetVideo}
         >
-          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 py-3 border-b border-[#2d3a60]/60 flex items-center justify-between relative overflow-hidden">
-            <div className="header-light-beam" aria-hidden="true" />
-            <div className="relative z-10">
-              <DialogTitle className="text-sm font-bold text-white">
-                Janet CEO • Vatos Alfa
-              </DialogTitle>
-              <DialogDescription className="text-[11px] text-slate-300">
-                Dirección General, Finanzas y Estrategia
-              </DialogDescription>
+          {/* Contenedor del reproductor 9:16 (vertical optimizado) */}
+          <div
+            className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-[440px] sm:aspect-[9/16] sm:rounded-2xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.95)] border-0 sm:border sm:border-slate-800 bg-black flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. Poster inicial idéntico al primer frame (cero parpadeos ni imágenes previas) */}
+            <img
+              src="/janeth-poster.jpg"
+              alt="Janet"
+              className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none z-0"
+            />
+
+            {/* 2. Video oficial en reproducción continua */}
+            <video
+              ref={fullscreenJanetVideoRef}
+              src="/janeth-fullscreen.mp4"
+              poster="/janeth-poster.jpg"
+              autoPlay
+              loop
+              muted={isJanetVideoMuted}
+              playsInline
+              className="relative z-10 w-full h-full object-cover select-none"
+            />
+
+            {/* 3. Controles superiores flotantes */}
+            <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+              {/* Identidad de Janet */}
+              <div className="flex items-center gap-2.5 bg-slate-900/85 backdrop-blur-md border border-slate-700/70 rounded-full py-1.5 px-3.5 shadow-xl pointer-events-auto">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs sm:text-sm font-bold text-white tracking-wide leading-tight truncate">
+                      Janet CEO
+                    </h4>
+                    <Sparkles className="h-3 w-3 text-sky-400 shrink-0" />
+                  </div>
+                  <p className="text-[10px] text-slate-300 font-medium leading-tight truncate">
+                    Asistente IA • VATOS ALFA Barber Shop
+                  </p>
+                </div>
+              </div>
+
+              {/* Botones de acción: Mute y Cerrar (X) */}
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsJanetVideoMuted((prev) => {
+                      const next = !prev;
+                      if (fullscreenJanetVideoRef.current) {
+                        fullscreenJanetVideoRef.current.muted = next;
+                      }
+                      return next;
+                    });
+                  }}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-slate-900/85 hover:bg-slate-800 text-white flex items-center justify-center border border-white/20 shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95"
+                  title={isJanetVideoMuted ? 'Activar sonido' : 'Silenciar video'}
+                  aria-label={isJanetVideoMuted ? 'Activar sonido' : 'Silenciar video'}
+                >
+                  {isJanetVideoMuted ? (
+                    <VolumeX className="h-5 w-5 text-slate-300" />
+                  ) : (
+                    <Volume2 className="h-5 w-5 text-white" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCloseJanetVideo();
+                  }}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-slate-900/85 hover:bg-red-600/90 text-white flex items-center justify-center border border-white/20 hover:border-red-400 shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95"
+                  title="Cerrar video (Esc)"
+                  aria-label="Cerrar video"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsAvatarModalOpen(false)}
-              className="relative z-10 h-8 w-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 flex items-center justify-center"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="p-3 flex flex-col items-center">
-            <div className="w-full aspect-square rounded-2xl overflow-hidden border-2 border-blue-500/60 bg-black">
-              <video
-                src="/janet-avatar.mp4"
-                poster="/janet-avatar.jpg"
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="w-full h-full object-cover"
-              />
+
+            {/* 4. Pie sutil de marca */}
+            <div className="absolute bottom-4 left-4 right-4 z-20 text-center pointer-events-none">
+              <span className="inline-block px-3 py-1 rounded-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 text-[10px] text-slate-300 font-medium">
+                Janet CEO • Sala de Consejo Directivo
+              </span>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
 
       {/* MODAL DE VISTA PREVIA DE IMAGEN ADJUNTA */}
       <Dialog

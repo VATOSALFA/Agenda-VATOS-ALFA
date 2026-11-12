@@ -330,6 +330,29 @@ export function JanetFloatingAssistant() {
   ]);
   const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
   const [isJanetPhotoModalOpen, setIsJanetPhotoModalOpen] = useState(false);
+  const [isJanetVideoMuted, setIsJanetVideoMuted] = useState(false);
+  const fullscreenJanetVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const handleCloseJanetVideo = useCallback(() => {
+    if (fullscreenJanetVideoRef.current) {
+      try {
+        fullscreenJanetVideoRef.current.pause();
+      } catch (_) {}
+    }
+    setIsJanetPhotoModalOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isJanetPhotoModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseJanetVideo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isJanetPhotoModalOpen, handleCloseJanetVideo]);
+
   const [fullscreenImageUri, setFullscreenImageUri] = useState<string | null>(null);
 
   // Cámara en vivo integrada
@@ -3519,45 +3542,6 @@ export function JanetFloatingAssistant() {
           )}
 
           {/* =====================================================================
-              SUB-MODAL 5: FOTO / VIDEO DE PERFIL DE JANET EN PANTALLA COMPLETA
-              ===================================================================== */}
-          {isJanetPhotoModalOpen && (
-            <div className="absolute inset-0 z-[130] bg-black/90 flex flex-col justify-between p-4 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-white">{assistantDisplayName}</h4>
-                  <p className="text-xs text-slate-400">VATOS ALFA Barber Shop</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsJanetPhotoModalOpen(false)}
-                  className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="my-auto mx-auto w-full max-w-[300px] aspect-square rounded-2xl overflow-hidden border-2 border-blue-500 shadow-[0_10px_40px_rgba(59,130,246,0.35)] bg-slate-950">
-                <video
-                  src="/janet-avatar.mp4"
-                  poster="/janet-avatar.png"
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="text-center pb-2">
-                <p className="text-xs text-slate-400">
-                  Asistente Ejecutiva de Inteligencia Artificial • En línea 24/7
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* =====================================================================
               SUB-MODAL 6: VISOR DE IMÁGENES ADJUNTAS EN PANTALLA COMPLETA
               ===================================================================== */}
           {fullscreenImageUri && (
@@ -3582,6 +3566,106 @@ export function JanetFloatingAssistant() {
               <div />
             </div>
           )}
+        </div>
+      )}
+
+      {/* =====================================================================
+          MODAL OFICIAL: VIDEO DE PERFIL DE JANET EN PANTALLA COMPLETA (9:16)
+          ===================================================================== */}
+      {isJanetPhotoModalOpen && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-4 select-none animate-in fade-in duration-200"
+          onClick={handleCloseJanetVideo}
+        >
+          {/* Contenedor del reproductor 9:16 (vertical optimizado) */}
+          <div
+            className="relative w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-[440px] sm:aspect-[9/16] sm:rounded-2xl overflow-hidden shadow-[0_25px_80px_rgba(0,0,0,0.95)] border-0 sm:border sm:border-slate-800 bg-black flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 1. Poster inicial idéntico al primer frame (cero parpadeos ni imágenes previas) */}
+            <img
+              src="/janeth-poster.jpg"
+              alt="Janet"
+              className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none z-0"
+            />
+
+            {/* 2. Video oficial en reproducción continua */}
+            <video
+              ref={fullscreenJanetVideoRef}
+              src="/janeth-fullscreen.mp4"
+              poster="/janeth-poster.jpg"
+              autoPlay
+              loop
+              muted={isJanetVideoMuted}
+              playsInline
+              className="relative z-10 w-full h-full object-cover select-none"
+            />
+
+            {/* 3. Controles superiores flotantes */}
+            <div className="absolute top-4 left-4 right-4 z-20 flex items-center justify-between pointer-events-none">
+              {/* Identidad de Janet */}
+              <div className="flex items-center gap-2.5 bg-slate-900/85 backdrop-blur-md border border-slate-700/70 rounded-full py-1.5 px-3.5 shadow-xl pointer-events-auto">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs sm:text-sm font-bold text-white tracking-wide leading-tight truncate">
+                      {assistantDisplayName}
+                    </h4>
+                    <Sparkles className="h-3 w-3 text-sky-400 shrink-0" />
+                  </div>
+                  <p className="text-[10px] text-slate-300 font-medium leading-tight truncate">
+                    Asistente IA • VATOS ALFA Barber Shop
+                  </p>
+                </div>
+              </div>
+
+              {/* Botones de acción: Mute y Cerrar (X) */}
+              <div className="flex items-center gap-2 pointer-events-auto">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsJanetVideoMuted((prev) => {
+                      const next = !prev;
+                      if (fullscreenJanetVideoRef.current) {
+                        fullscreenJanetVideoRef.current.muted = next;
+                      }
+                      return next;
+                    });
+                  }}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-slate-900/85 hover:bg-slate-800 text-white flex items-center justify-center border border-white/20 shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95"
+                  title={isJanetVideoMuted ? 'Activar sonido' : 'Silenciar video'}
+                  aria-label={isJanetVideoMuted ? 'Activar sonido' : 'Silenciar video'}
+                >
+                  {isJanetVideoMuted ? (
+                    <VolumeX className="h-5 w-5 text-slate-300" />
+                  ) : (
+                    <Volume2 className="h-5 w-5 text-white" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCloseJanetVideo();
+                  }}
+                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-full bg-slate-900/85 hover:bg-red-600/90 text-white flex items-center justify-center border border-white/20 hover:border-red-400 shadow-xl cursor-pointer transition-all hover:scale-105 active:scale-95"
+                  title="Cerrar video (Esc)"
+                  aria-label="Cerrar video"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 4. Pie sutil de marca */}
+            <div className="absolute bottom-4 left-4 right-4 z-20 text-center pointer-events-none">
+              <span className="inline-block px-3 py-1 rounded-full bg-slate-950/70 backdrop-blur-md border border-slate-800/80 text-[10px] text-slate-300 font-medium">
+                Janet • En línea 24/7
+              </span>
+            </div>
+          </div>
         </div>
       )}
 

@@ -152,6 +152,48 @@ export function isShortNoticeAppointment(
 }
 
 /**
+ * Determina si una cita es elegible para pasar al estado "En espera" (botón verde)
+ * sin anticipo ni código de autorización porque el cliente ya se encuentra físicamente
+ * en la sucursal esperando su turno.
+ * Regla: La cita debe ser HOY y faltar máximo `maxMinutesBeforeStart` (90 min = 1h 30m)
+ * para su hora de inicio (o que su hora de inicio ya haya llegado hoy).
+ */
+export function canMarkWaitingRoomInPerson(
+  res: { fecha?: string; hora_inicio?: string } | null | undefined,
+  maxMinutesBeforeStart: number = 90,
+  nowDate: Date = new Date()
+): boolean {
+  if (!res || !res.fecha || !res.hora_inicio) return false;
+
+  try {
+    const parts = res.fecha.trim().split('-').map(Number);
+    if (parts.length < 3) return false;
+    const [year, month, day] = parts;
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+
+    const isSameDay =
+      nowDate.getFullYear() === year &&
+      nowDate.getMonth() + 1 === month &&
+      nowDate.getDate() === day;
+
+    if (!isSameDay) return false;
+
+    const [hStr, mStr] = res.hora_inicio.trim().split(':');
+    const h = parseInt(hStr, 10);
+    const m = parseInt(mStr, 10);
+    if (isNaN(h) || isNaN(m)) return false;
+
+    const aptStart = new Date(year, month - 1, day, h, m, 0);
+    const diffMinutes = (aptStart.getTime() - nowDate.getTime()) / (1000 * 60);
+
+    return diffMinutes <= maxMinutesBeforeStart;
+  } catch (e) {
+    console.error('Error evaluando elegibilidad de sala de espera presencial:', e);
+    return false;
+  }
+}
+
+/**
  * Determina si una reserva se encuentra actualmente esperando el pago de su anticipo
  * (estado preliminar de 30 minutos de tolerancia).
  */

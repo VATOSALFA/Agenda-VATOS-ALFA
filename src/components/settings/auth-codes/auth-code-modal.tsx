@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { addDoc, collection, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import type { AuthCode } from '@/lib/types';
+import { WEAK_BLOCKED_AUTH_CODES } from '@/lib/auth-code-validator';
 
 interface AuthCodeModalProps {
   isOpen: boolean;
@@ -31,7 +32,12 @@ interface AuthCodeModalProps {
 
 const authCodeSchema = z.object({
   name: z.string().min(1, 'El nombre es requerido.'),
-  code: z.string().min(1, 'El código es requerido.'),
+  code: z
+    .string()
+    .min(4, 'El código debe tener al menos 4 caracteres.')
+    .refine((val) => !WEAK_BLOCKED_AUTH_CODES.has(val.trim()), {
+      message: 'Por seguridad, no se permiten códigos obvios como 1234 o 0000.',
+    }),
   active: z.boolean(),
   reserves: z.boolean(),
   cashbox: z.boolean(),

@@ -69,7 +69,7 @@ import { logAuditAction } from '@/lib/audit-logger';
 import { OverdueNotificationsPopover } from './overdue-notifications-popover';
 import { BookingRulesCheatSheetModal } from './booking-rules-cheat-sheet-modal';
 import { playAgendaClickSound } from '@/lib/notification-sound';
-import { isExpiredPendingDepositReservation, isPendingDepositReservation } from '@/lib/booking-rules';
+import { isExpiredPendingDepositReservation, isPendingDepositReservation, canMarkWaitingRoomInPerson } from '@/lib/booking-rules';
 import { getNormalizedDayOfWeek, getEffectiveBarberDaySchedule } from '@/lib/scheduling/schedule-engine';
 import { checkAndSendPendingChatReminders } from '@/lib/actions/conversation-actions';
 
@@ -1292,17 +1292,27 @@ export default function AgendaView() {
         clientForStatus?.exento_anticipo === true &&
         Number(clientForStatus?.faltas_desde_exencion || 0) < 2
       );
+      const canSetWaitingRoomNow = newStatus === 'En espera' && canMarkWaitingRoomInPerson(resData, 90);
+      const canAdvanceFromWaitingRoom =
+        (newStatus === 'Asiste' || newStatus === 'En espera') &&
+        (resData?.estado === 'En espera' || resData?.estado === 'Asiste');
+
       if (
         (newStatus === 'Confirmado' || newStatus === 'En espera' || newStatus === 'Asiste' || newStatus === 'Completado') &&
         !isResDepositPaid &&
         resData?.pago_estado !== 'Pagado' &&
         !isClientExemptForStatus &&
+        !canSetWaitingRoomNow &&
+        !canAdvanceFromWaitingRoom &&
         isPendingDepositReservation(resData)
       ) {
         toast({
           variant: 'destructive',
-          title: 'Anticipo Pendiente',
-          description: 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza un código de autorización.',
+          title: newStatus === 'En espera' ? 'Sala de Espera No Disponible Aún' : 'Anticipo Pendiente',
+          description:
+            newStatus === 'En espera'
+              ? 'El estado "En espera" sin anticipo solo se habilita para citas del día de hoy cuando faltan 90 minutos (1h 30m) o menos para su inicio y el cliente ya está presente en la sucursal.'
+              : 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza un código de autorización.',
         });
         return;
       }
@@ -1407,9 +1417,12 @@ export default function AgendaView() {
       if (newStatus === 'Confirmado' || newStatus === 'Asiste' || newStatus === 'Completado') {
         updateData.whatsappConfirmationSent = true;
       }
-      if (newStatus === 'Asiste' || newStatus === 'Completado' || newStatus === 'No asiste' || newStatus === 'Cancelado') {
+      if (newStatus === 'En espera' || newStatus === 'Asiste' || newStatus === 'Completado' || newStatus === 'No asiste' || newStatus === 'Cancelado') {
         updateData.whatsappReminderSent = true;
         updateData.whatsappReminderNotNeeded = true;
+      }
+      if (canSetWaitingRoomNow && !isResDepositPaid && resData?.pago_estado !== 'Pagado' && !isClientExemptForStatus) {
+        updateData.presencial_en_espera = true;
       }
       if (isReactivating) {
         updateData.motivo_cancelacion = deleteField();
@@ -1418,6 +1431,18 @@ export default function AgendaView() {
       }
 
       await updateDoc(resRef, updateData);
+
+      if (canSetWaitingRoomNow && !isResDepositPaid && resData?.pago_estado !== 'Pagado' && !isClientExemptForStatus) {
+        await logAuditAction({
+          action: 'Cliente Presencial en Sala de Espera' + (isSandboxRes ? ' (Sandbox)' : ''),
+          details: `Se marcó en estado "En espera" la cita presencial de ${formatClientName(clientForStatus?.nombre || (resData as any)?.cliente_nombre, clientForStatus?.apellido)} (${resData?.fecha} a las ${resData?.hora_inicio}).`,
+          userId: user?.uid || 'unknown',
+          userName: user?.displayName || user?.email || 'Recepción',
+          userRole: user?.role,
+          severity: 'info',
+          localId: resData?.local_id || selectedLocalId || 'unknown',
+        }).catch(() => {});
+      }
 
       // Sincronizar contadores e inasistencias (incluyendo pérdida automática de exención a las 2 faltas) en el perfil del cliente
       if (!isSandboxRes && resData?.cliente_id) {

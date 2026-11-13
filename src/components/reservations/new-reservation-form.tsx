@@ -41,7 +41,7 @@ import type { Profesional, Service as ServiceType, Reservation, TimeBlock, Local
 import type { Client } from '@/lib/types';
 import { NewClientForm } from '../clients/new-client-form';
 import { sendManualBookingConfirmation } from '@/lib/actions/booking';
-import { isShortNoticeAppointment, isOpeningHourTime, isExpiredPendingDepositReservation, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { isShortNoticeAppointment, isOpeningHourTime, isExpiredPendingDepositReservation, canMarkWaitingRoomInPerson, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 import { Card, CardContent } from '../ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Checkbox } from '../ui/checkbox';
@@ -1432,13 +1432,26 @@ export function NewReservationForm({
       const effectiveDepositPaid = Boolean(rawEffectiveDepositPaid && (targetDepositAmount > 0 || isInitialAlreadyPaid));
 
       const isFullPaymentCovered = totalPrecioNum > 0 && targetDepositAmount >= totalPrecioNum;
-      const preservedStatuses = effectiveDepositPaid
-        ? ['Asiste', 'En espera', 'Completado', 'Venta completada']
-        : ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado'];
+      const isEligibleForInPersonWaitingRoom = canMarkWaitingRoomInPerson(
+        { fecha: formattedDate, hora_inicio },
+        90
+      );
+      const preservedStatuses = effectiveDepositPaid || isExemptFromDeposit || !isSaveAnyAnticipoActive
+        ? ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado']
+        : isEligibleForInPersonWaitingRoom
+        ? ['Asiste', 'En espera', 'Completado', 'Venta completada', 'No asiste', 'Cancelado']
+        : ['Completado', 'Venta completada', 'No asiste', 'Cancelado'];
+      const wasResetFromWaitingRoomByReschedule =
+        isEditMode &&
+        (data.estado === 'En espera' || data.estado === 'Asiste') &&
+        !effectiveDepositPaid &&
+        !isExemptFromDeposit &&
+        isSaveAnyAnticipoActive &&
+        !isEligibleForInPersonWaitingRoom;
       const cleanInitialEstado =
         data.estado === 'Pendiente de pago' ||
         data.estado === 'Pendiente de Pago' ||
-        (data.estado === 'Confirmado' && isSaveAnyAnticipoActive && !effectiveDepositPaid && !isExemptFromDeposit)
+        ((data.estado === 'Confirmado' || wasResetFromWaitingRoomByReschedule) && isSaveAnyAnticipoActive && !effectiveDepositPaid && !isExemptFromDeposit)
           ? 'Reservado'
           : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
@@ -1446,6 +1459,14 @@ export function NewReservationForm({
         : (effectiveDepositPaid || isExemptFromDeposit
             ? 'Confirmado'
             : (isSaveAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
+
+      if (wasResetFromWaitingRoomByReschedule) {
+        toast({
+          title: 'Cita Reprogramada: Anticipo Requerido',
+          description:
+            'Como la cita se movió fuera de la ventana presencial de 90 minutos sin anticipo pagado, su estado volvió a "Pendiente de pago".',
+        });
+      }
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 

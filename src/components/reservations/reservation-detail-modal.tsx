@@ -72,7 +72,7 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { logAuditAction } from '@/lib/audit-logger';
 import { formatClientName } from '../agenda/agenda-utils';
 import { sendBookingCancellationAction } from '@/lib/actions/booking';
-import { isShortNoticeAppointment, isOpeningHourTime, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
+import { isShortNoticeAppointment, isOpeningHourTime, canMarkWaitingRoomInPerson, DEFAULT_BOOKING_RULES, ReglasReservasConfig } from '@/lib/booking-rules';
 
 const addMinutesToTimeStr = (timeStr?: string, mins: number = 60): string => {
   if (!timeStr || !timeStr.includes(':')) return '';
@@ -1261,7 +1261,12 @@ export function ReservationDetailModal({
               )}
 
               {/* Alerta de Cita Tentativa en Espera de Anticipo */}
-              {isAnticipoRequired && reservation.pago_estado !== 'Pagado' && !isDepositPaid && (
+              {isAnticipoRequired &&
+                reservation.pago_estado !== 'Pagado' &&
+                !isDepositPaid &&
+                reservation.estado !== 'En espera' &&
+                reservation.estado !== 'Asiste' &&
+                reservation.estado !== 'Completado' && (
                 <div className={cn(
                   "p-3 rounded-xl border-2 flex items-start gap-2.5",
                   isDepositExpired
@@ -1285,6 +1290,11 @@ export function ReservationDetailModal({
                     </div>
                     <p className="text-muted-foreground text-[11px] leading-snug">
                       Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de {toleranceMins} minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
+                      {canMarkWaitingRoomInPerson(reservation, 90) && (
+                        <span className="block mt-1 text-emerald-400 font-semibold">
+                          ✓ Si el cliente ya está presente físicamente en la sucursal esperando su turno, puedes activar directamente el botón verde &ldquo;En espera&rdquo;.
+                        </span>
+                      )}
                     </p>
 
                     {!isStaff && reservation.estado !== 'Cancelado' && (
@@ -1664,6 +1674,17 @@ export function ReservationDetailModal({
                 {statusOptions.map(({ status, hex, label }) => {
                   const hintKey = `status_${status}`;
                   const isSelected = effectiveReservationEstado === status;
+                  const canSetWaitingRoomNow = status === 'En espera' && canMarkWaitingRoomInPerson(reservation, 90);
+                  const canAdvanceFromWaitingRoom =
+                    (status === 'Asiste' || status === 'En espera') &&
+                    (reservation.estado === 'En espera' || reservation.estado === 'Asiste');
+                  const isBlockedByPendingDeposit =
+                    (status === 'Confirmado' || status === 'En espera' || status === 'Asiste') &&
+                    isAnticipoRequired &&
+                    !isDepositPaid &&
+                    !isReservationExempt &&
+                    !canSetWaitingRoomNow &&
+                    !canAdvanceFromWaitingRoom;
                   return (
                     <TooltipProvider key={status} delayDuration={80}>
                       <Tooltip open={activeHintId === hintKey}>
@@ -1701,11 +1722,14 @@ export function ReservationDetailModal({
                                 handleCancelClick();
                               } else if (reservation.estado === 'Cancelado') {
                                 handleReactivateReservation(status);
-                              } else if ((status === 'Confirmado' || status === 'En espera' || status === 'Asiste') && isAnticipoRequired && !isDepositPaid && !isReservationExempt) {
+                              } else if (isBlockedByPendingDeposit) {
                                 toast({
                                   variant: 'destructive',
-                                  title: 'Anticipo Pendiente',
-                                  description: 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
+                                  title: status === 'En espera' ? 'Sala de Espera No Disponible Aún' : 'Anticipo Pendiente',
+                                  description:
+                                    status === 'En espera'
+                                      ? 'El estado "En espera" sin anticipo solo se habilita para citas del día de hoy cuando faltan 90 minutos (1h 30m) o menos para su inicio y el cliente ya está presente en la sucursal.'
+                                      : 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
                                 });
                                 setShowExemptBox(true);
                               } else {
@@ -1721,7 +1745,7 @@ export function ReservationDetailModal({
                                 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
                                 : (isConcluded ? 'opacity-35' : 'opacity-80 hover:opacity-100'),
                               (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40',
-                              ((status === 'Confirmado' || status === 'En espera' || status === 'Asiste') && isAnticipoRequired && !isDepositPaid && !isReservationExempt && !isConcluded) && 'cursor-not-allowed opacity-45'
+                              (isBlockedByPendingDeposit && !isConcluded) && 'cursor-not-allowed opacity-45'
                             )}
                           >
                             <span

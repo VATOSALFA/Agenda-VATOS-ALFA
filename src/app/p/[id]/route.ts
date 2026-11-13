@@ -116,7 +116,7 @@ function renderStatusHtml(title: string, message: string, ctaText: string, ctaUr
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ id: string }> | { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
     const resolvedParams = await Promise.resolve(context.params);

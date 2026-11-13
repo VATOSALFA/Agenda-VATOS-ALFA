@@ -37,6 +37,25 @@ export interface ValidateAuthCodeResult {
   isOneTime?: boolean;
 }
 
+export const WEAK_BLOCKED_AUTH_CODES = new Set<string>([
+  '1234',
+  '4321',
+  '0000',
+  '1111',
+  '2222',
+  '3333',
+  '4444',
+  '5555',
+  '6666',
+  '7777',
+  '8888',
+  '9999',
+  '1212',
+  '0123',
+  '12345',
+  '123456',
+]);
+
 /**
  * Valida un código de autorización (fijo o de 1 solo uso de 4 dígitos).
  * Si es un código de 1 solo uso (`is_one_time === true`), verifica su vigencia
@@ -67,6 +86,11 @@ export async function validateAndConsumeAuthCode(
   const cleanCode = String(code || '').trim();
   if (!cleanCode) {
     const msg = 'Ingresa un código de autorización.';
+    return { valid: false, error: msg, errorMessage: msg };
+  }
+
+  if (WEAK_BLOCKED_AUTH_CODES.has(cleanCode)) {
+    const msg = 'Código no permitido por seguridad. Solicita un código de autorización válido.';
     return { valid: false, error: msg, errorMessage: msg };
   }
 
@@ -202,7 +226,7 @@ export async function createOneTimeAuthCode(options: {
   } = options;
   const effectiveExpMinutes = expiresInMinutes ?? expirationMinutes ?? 30;
 
-  // Generar 4 dígitos entre 1000 y 9999 que no colisionen con un código activo
+  // Generar 4 dígitos entre 1000 y 9999 que no colisionen con un código activo ni sean códigos débiles
   let generatedCode = String(Math.floor(1000 + Math.random() * 9000));
   try {
     const existingSnap = await getDocs(
@@ -210,7 +234,10 @@ export async function createOneTimeAuthCode(options: {
     );
     const activeCodes = new Set(existingSnap.docs.map((d) => String(d.data().code || '').trim()));
     let attempts = 0;
-    while (activeCodes.has(generatedCode) && attempts < 20) {
+    while (
+      (activeCodes.has(generatedCode) || WEAK_BLOCKED_AUTH_CODES.has(generatedCode)) &&
+      attempts < 30
+    ) {
       generatedCode = String(Math.floor(1000 + Math.random() * 9000));
       attempts++;
     }

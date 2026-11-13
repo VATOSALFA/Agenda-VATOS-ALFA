@@ -381,13 +381,15 @@ export default function Header() {
 
         docs.forEach((conv) => {
           const unread = Number(conv.mensajes_no_leidos || 0);
-          const needsHuman = conv.modo_atencion === 'requiere_atencion';
+          const needsHuman =
+            conv.modo_atencion === 'requiere_atencion' ||
+            conv.atencion_pendiente_fuera_horario === true;
           const isHumanWithUnread = conv.modo_atencion === 'humano_al_mando' && unread > 0;
           if (needsHuman) {
             totalHumanRequests += 1;
           }
           // Solo se contabilizan en recepción conversaciones que requieren atención humana directa:
-          // 1. Clientes que solicitaron hablar con una persona (requiere_atencion).
+          // 1. Clientes que solicitaron hablar con una persona (requiere_atencion o fuera de horario).
           // 2. Chats bajo mando de recepción (humano_al_mando) con mensajes sin leer.
           // Mientras Janet esté atendiendo (bot_activo), no se alerta a la recepcionista.
           if (needsHuman || isHumanWithUnread) {
@@ -406,6 +408,12 @@ export default function Header() {
               unread: Number(conv.mensajes_no_leidos || 0),
             });
           });
+          if (totalHumanRequests > 0) {
+            toast({
+              title: '🔔 ¡Clientes esperando atención en Recepción!',
+              description: `Tienes ${totalHumanRequests} ${totalHumanRequests === 1 ? 'cliente que solicitó' : 'clientes que solicitaron'} hablar con una persona. Revisa la sección de Mensajes.`,
+            });
+          }
           return;
         }
 

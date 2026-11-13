@@ -21,6 +21,10 @@ import {
   Tag,
   Smartphone,
   PartyPopper,
+  Crown,
+  Image as ImageIcon,
+  MessageSquareWarning,
+  BarChart3,
 } from "lucide-react";
 
 interface SettingsLayoutProps {
@@ -41,7 +45,19 @@ const sidebarNavItems = [
   { title: "Usuarios", href: "/settings/users", icon: ShieldCheck },
   { title: "Códigos de autorización", href: "/settings/auth-codes", icon: KeyRound },
   { title: "Promociones", href: "/settings/promotions", icon: Tag },
-  { title: "App Móvil", href: "/settings/mobile-app", icon: Smartphone },
+  {
+    title: "App Móvil",
+    href: "/settings/mobile-app",
+    icon: Smartphone,
+    children: [
+      { title: "Pase Alfa", href: "/settings/mobile-app?tab=pase_alfa", icon: Sparkles },
+      { title: "Niveles", href: "/settings/mobile-app?tab=niveles", icon: Crown },
+      { title: "Galería", href: "/settings/mobile-app?tab=galeria", icon: ImageIcon },
+      { title: "Promociones", href: "/settings/mobile-app?tab=promociones", icon: Tag },
+      { title: "Buzón", href: "/settings/mobile-app?tab=buzon", icon: MessageSquareWarning },
+      { title: "Uso & Tiendas", href: "/settings/mobile-app?tab=metricas", icon: BarChart3 },
+    ],
+  },
   { title: "Temporadas", href: "/settings/temporadas", icon: PartyPopper },
 ];
 

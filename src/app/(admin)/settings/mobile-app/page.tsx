@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,9 +37,44 @@ import {
     Image as ImageIcon,
 } from 'lucide-react';
 
-export default function MobileAppSettingsPage() {
-    // Tab activo controlado
-    const [activeTab, setActiveTab] = useState('pase_alfa');
+const TAB_META: Record<string, { title: string; subtitle: string }> = {
+    pase_alfa: {
+        title: 'Pase Alfa',
+        subtitle: 'Administra el programa Pase Alfa, días multiplicadores y beneficios exclusivos de la app móvil.',
+    },
+    niveles: {
+        title: 'Niveles & Rangos',
+        subtitle: 'Configura los criterios de visitas, gasto y recompensas de los niveles VIP.',
+    },
+    galeria: {
+        title: 'Galería',
+        subtitle: 'Gestiona el catálogo de cortes y estilos visibles en la aplicación móvil.',
+    },
+    promociones: {
+        title: 'Promociones',
+        subtitle: 'Sincroniza promociones activas entre el sitio web y la app móvil.',
+    },
+    buzon: {
+        title: 'Buzón',
+        subtitle: 'Revisa y atiende opiniones, sugerencias y quejas enviadas desde la app.',
+    },
+    metricas: {
+        title: 'Uso & Tiendas',
+        subtitle: 'Consulta enlaces de descarga, adopción y métricas de clientes con app móvil.',
+    },
+};
+
+function MobileAppSettingsContent() {
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get('tab');
+    const resolvedTab = tabParam && TAB_META[tabParam] ? tabParam : 'pase_alfa';
+    const [activeTab, setActiveTab] = useState(resolvedTab);
+
+    useEffect(() => {
+        setActiveTab(resolvedTab);
+    }, [resolvedTab]);
+
+    const currentMeta = TAB_META[activeTab] || TAB_META.pase_alfa;
 
     // -- MÉTRICAS & USO DE LA APP MÓVIL --
     const { data: clientsList = [], loading: clientsLoading } = useFirestoreQuery<Client>('clientes');
@@ -94,49 +130,22 @@ export default function MobileAppSettingsPage() {
 
     return (
         <div className="space-y-5 max-w-7xl pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/60">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/60">
                 <div>
-                    <h2 className="text-xl font-bold tracking-tight text-foreground">App Móvil VATOS ALFA</h2>
-                    <p className="text-xs text-muted-foreground">
-                        Gestiona el programa Pase Alfa, niveles y rangos de lealtad, buzón de opiniones, efectos por temporada y métricas de la app móvil.
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="text-xl font-bold tracking-tight text-foreground">App Móvil VATOS ALFA</h2>
+                        <span className="text-muted-foreground/50">/</span>
+                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{currentMeta.title}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        {currentMeta.subtitle}
                     </p>
                 </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto p-1 gap-1 bg-muted/40 border border-border/50 rounded-xl">
-                    <TabsTrigger value="pase_alfa" className="text-xs sm:text-sm py-1.5 px-2 rounded-lg">Pase Alfa</TabsTrigger>
-                    <TabsTrigger value="niveles" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
-                        <Crown className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                        <span className="truncate">Niveles</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="galeria" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
-                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">Galería</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="promociones" className="text-xs sm:text-sm py-1.5 px-2 rounded-lg">Promociones</TabsTrigger>
-                    <TabsTrigger value="buzon" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
-                        <MessageSquareWarning className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                        <span className="truncate">Buzón</span>
-                        {pendingFeedbackCount > 0 && (
-                            <Badge className="ml-0.5 text-[10px] px-1.5 py-0 h-4 bg-blue-500 text-white font-bold font-sans">
-                                {pendingFeedbackCount}
-                            </Badge>
-                        )}
-                    </TabsTrigger>
-                    <TabsTrigger value="metricas" className="flex items-center justify-center gap-1.5 font-medium text-xs sm:text-sm py-1.5 px-2 rounded-lg">
-                        <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:inline" />
-                        <span className="truncate">Uso & Tiendas</span>
-                        {appClients.length > 0 && (
-                            <Badge variant="secondary" className="ml-0.5 text-[10px] px-1.5 py-0 h-4 bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 font-sans">
-                                {appClients.length}
-                            </Badge>
-                        )}
-                    </TabsTrigger>
-                </TabsList>
-
                 {/* PASE ALFA TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB) */}
-                <TabsContent value="pase_alfa" className="mt-5 space-y-4">
+                <TabsContent value="pase_alfa" className="mt-0 space-y-4">
                     <PaseAlfaManager />
                 </TabsContent>
 
@@ -450,5 +459,19 @@ export default function MobileAppSettingsPage() {
                 />
             )}
         </div>
+    );
+}
+
+export default function MobileAppSettingsPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+            }
+        >
+            <MobileAppSettingsContent />
+        </Suspense>
     );
 }

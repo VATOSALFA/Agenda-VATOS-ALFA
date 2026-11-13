@@ -178,7 +178,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
     const [loadingPrivilegios, setLoadingPrivilegios] = useState(true);
     const [isSavingPrivilegios, setIsSavingPrivilegios] = useState(false);
-    const [isBeneficiosOpen, setIsBeneficiosOpen] = useState(false);
+    const [isBeneficiosOpen, setIsBeneficiosOpen] = useState(true);
 
     // Formulario de edición/creación de beneficio individual
     const [editingBenefitId, setEditingBenefitId] = useState<string | null>(null); // null = listado, 'new' = nuevo, string = editar existente
@@ -473,6 +473,36 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
             });
         } finally {
             setIsSavingPaseAlfa(false);
+        }
+    };
+
+    const handleTogglePaseAlfaActive = async (checked: boolean) => {
+        setPaseAlfaForm((prev) => ({ ...prev, activo: checked }));
+        try {
+            await Promise.all([
+                setDoc(doc(db, 'configuracion', 'pase_alfa'), {
+                    activo: checked,
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+                setDoc(doc(db, 'configuracion', 'app_movil'), {
+                    pase_alfa: {
+                        activo: checked,
+                    },
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+            ]);
+            toast({
+                title: checked ? 'Programa Pase Alfa visible' : 'Programa Pase Alfa oculto',
+                description: 'Estado actualizado en espejo para Web y App Móvil.',
+            });
+        } catch (e: any) {
+            console.error('Error toggling Pase Alfa:', e);
+            setPaseAlfaForm((prev) => ({ ...prev, activo: !checked }));
+            toast({
+                title: 'Error al cambiar estado',
+                description: e.message || 'No se pudo actualizar el estado del Pase Alfa.',
+                variant: 'destructive',
+            });
         }
     };
 
@@ -775,227 +805,6 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
     return (
         <div className={cn("space-y-5", className)}>
-            {/* 1. CARD: PROGRAMA PASE ALFA */}
-            <Card className="border border-border/70 shadow-xs transition-all">
-                <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Award className="h-4 w-4 text-slate-400 shrink-0" />
-                            <div className="flex items-center gap-1.5">
-                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                    Programa Pase Alfa
-                                </CardTitle>
-                                <InfoTooltip text="Configura los sellos necesarios, recompensa y textos del Pase Alfa que ven tus clientes en el sitio web y la app móvil." />
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0">
-                            <Switch
-                                checked={paseAlfaForm.activo}
-                                onCheckedChange={(checked) =>
-                                    setPaseAlfaForm((prev) => ({ ...prev, activo: checked }))
-                                }
-                                title={paseAlfaForm.activo ? "Pase Alfa Activo" : "Pase Alfa Pausado"}
-                                aria-label="Pase Alfa Activo"
-                                className="scale-90"
-                            />
-
-                            <button
-                                type="button"
-                                onClick={() => setIsPaseAlfaOpen(!isPaseAlfaOpen)}
-                                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
-                                title={isPaseAlfaOpen ? "Minimizar" : "Desplegar"}
-                                aria-label={isPaseAlfaOpen ? "Minimizar" : "Desplegar"}
-                            >
-                                {isPaseAlfaOpen ? (
-                                    <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </CardHeader>
-
-                {isPaseAlfaOpen && (
-                    loadingPaseAlfa ? (
-                        <CardContent className="py-8 flex justify-center">
-                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                        </CardContent>
-                    ) : (
-                        <CardContent className="space-y-4 pt-3 px-3.5 sm:px-5 pb-5">
-                            {/* PARÁMETROS BÁSICOS */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <Label className="text-xs font-semibold text-foreground">Título del Pase</Label>
-                                        <InfoTooltip text="Nombre visible en la tarjeta y en la sección del Pase Alfa." />
-                                    </div>
-                                    <Input
-                                        value={paseAlfaForm.titulo}
-                                        onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, titulo: e.target.value })}
-                                        placeholder="Ej. Pase Alfa Club"
-                                        className="h-8.5 text-xs font-medium font-sans"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <Label className="text-xs font-semibold text-foreground">Recompensa al completar sellos</Label>
-                                        <InfoTooltip text="Premio que se desbloquea al llenar la tarjeta (ej. 10.° Corte Totalmente Gratis)." />
-                                    </div>
-                                    <Input
-                                        value={paseAlfaForm.recompensa}
-                                        onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, recompensa: e.target.value })}
-                                        placeholder="Ej. 10.° Corte Totalmente Gratis"
-                                        className="h-8.5 text-xs font-medium font-sans"
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <Label className="text-xs font-semibold text-foreground">Meta de Sellos Requeridos</Label>
-                                        <InfoTooltip text="Número de visitas o servicios requeridos para ganar la recompensa." />
-                                    </div>
-                                    <div className="relative">
-                                        <Input
-                                            type="number"
-                                            min="1"
-                                            max="20"
-                                            value={paseAlfaForm.sellosRequeridos}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, sellosRequeridos: Number(e.target.value) || 10 })}
-                                            className="h-8.5 text-xs font-semibold pr-14 font-sans"
-                                        />
-                                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none font-sans">sellos</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* TEXTOS DESCRIPTIVOS */}
-                            <div className="space-y-3 border-t border-border/50 pt-3">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <Label className="text-xs font-semibold text-foreground">Subtítulo / Lema Explicativo</Label>
-                                        <InfoTooltip text="Lema o frase explicativa visible en la cabecera del pase." />
-                                    </div>
-                                    <Textarea
-                                        value={paseAlfaForm.subtitulo}
-                                        onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, subtitulo: e.target.value })}
-                                        placeholder="Ej. Cada visita cuenta. Presenta tu código QR en recepción y disfruta tu corte de cortesía."
-                                        rows={2}
-                                        className="text-xs min-h-[50px] py-1.5 px-3 resize-y font-sans"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">Instrucciones de Escaneo (Modal QR)</Label>
-                                            <InfoTooltip text="Instrucciones que ve el cliente al abrir su código QR en recepción para sellar su visita." />
-                                        </div>
-                                        <Textarea
-                                            value={paseAlfaForm.instrucciones}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, instrucciones: e.target.value })}
-                                            placeholder="Ej. Presenta tu código QR en recepción al finalizar tu servicio..."
-                                            rows={2}
-                                            className="text-xs min-h-[50px] py-1.5 px-3 resize-y font-sans"
-                                        />
-                                    </div>
-
-                                    <div className="space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-1.5">
-                                                <Label className="text-xs font-semibold text-foreground">Términos y Condiciones del Pase</Label>
-                                                <InfoTooltip text="Reglas, restricciones y validez aplicables al Pase Alfa." />
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => openExpandedEditor(
-                                                    "Términos y Condiciones del Programa Pase Alfa",
-                                                    "Edita con amplitud las reglas, restricciones y validez aplicables al Programa Pase Alfa.",
-                                                    paseAlfaForm.terminos,
-                                                    (val) => setPaseAlfaForm((prev) => ({ ...prev, terminos: val }))
-                                                )}
-                                                className="h-6 px-1.5 text-[11px] gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                                title="Ver y editar en modal maximizado"
-                                            >
-                                                <Maximize2 className="w-3 h-3" />
-                                                <span className="font-medium">Maximizar</span>
-                                            </Button>
-                                        </div>
-                                        <Textarea
-                                            value={paseAlfaForm.terminos}
-                                            onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, terminos: e.target.value })}
-                                            placeholder="Ej. Válido en sucursales oficiales de Vatos Alfa Barbería..."
-                                            rows={2}
-                                            className="text-xs min-h-[50px] py-1.5 px-3 resize-y font-sans"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* FOTOGRAFÍA / IMAGEN DEL PASE ALFA */}
-                                <div className="space-y-1.5 border-t border-border/50 pt-3">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Fotografía / Portada del Pase Alfa (Opcional)
-                                            </Label>
-                                            <InfoTooltip text="Sube una portada para el Programa Pase Alfa. Tamaño ideal: 1280 x 720 px (16:9)." />
-                                        </div>
-                                        <span className="text-[10px] font-medium text-slate-400">
-                                            Tamaño sugerido: 1280 x 720 px (16:9)
-                                        </span>
-                                    </div>
-                                    <ImageUploader
-                                        folder="pase_alfa"
-                                        currentImageUrl={paseAlfaForm.imagenUrl || ''}
-                                        onUpload={(url) => setPaseAlfaForm((prev) => ({ ...prev, imagenUrl: url }))}
-                                        onRemove={() => setPaseAlfaForm((prev) => ({ ...prev, imagenUrl: '' }))}
-                                        onUploadStateChange={setIsUploadingPaseAlfaImage}
-                                        multiple={false}
-                                        objectFit="contain"
-                                        className="w-full h-36 sm:h-44 border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* BOTÓN GUARDAR PASE ALFA */}
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
-                                <span className="text-[11px] text-muted-foreground">
-                                    Los cambios del Pase Alfa se sincronizan en espejo entre el Sitio Web y la App Móvil.
-                                </span>
-                                <Button
-                                    type="button"
-                                    onClick={handleSavePaseAlfa}
-                                    disabled={isSavingPaseAlfa || isUploadingPaseAlfaImage}
-                                    variant="alfa"
-                                    className="font-semibold text-xs px-5 h-9 w-full sm:w-auto cursor-pointer"
-                                >
-                                    {isUploadingPaseAlfaImage ? (
-                                        <>
-                                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                            Subiendo foto...
-                                        </>
-                                    ) : isSavingPaseAlfa ? (
-                                        <>
-                                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                            Guardando Pase Alfa...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Save className="w-3.5 h-3.5 mr-1.5" />
-                                            Guardar Configuración del Pase Alfa
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
-                        </CardContent>
-                    )
-                )}
-            </Card>
-
             {/* 1.5 CARD: PROMOCIÓN DÍAS DE ALFA COINS AL DOBLE (2x) O TRIPLE (3x) */}
             <Card className="border border-border/70 shadow-xs transition-all">
                 <CardHeader
@@ -1222,24 +1031,26 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                 variant="outline"
                                 className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-muted-foreground"
                             >
-                                {privilegios.length} {privilegios.length === 1 ? 'beneficio' : 'beneficios'}
+                                {privilegios.length + 1} beneficios
                             </Badge>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <Button
-                                type="button"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsBeneficiosOpen(true);
-                                    handleStartNewBenefit();
-                                }}
-                                variant="alfa"
-                                className="font-semibold text-xs h-7.5 px-3 gap-1.5 cursor-pointer"
-                            >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Agregar Beneficio</span>
-                            </Button>
+                            {editingBenefitId === null && (
+                                <Button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsBeneficiosOpen(true);
+                                        handleStartNewBenefit();
+                                    }}
+                                    variant="alfa"
+                                    className="font-semibold text-xs h-7.5 px-3 gap-1.5 cursor-pointer"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Agregar Beneficio</span>
+                                </Button>
+                            )}
                             <button
                                 type="button"
                                 onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
@@ -1264,30 +1075,91 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
                             </div>
                         ) : editingBenefitId === null ? (
-                            /* VISTA 1: LISTADO DE BENEFICIOS */
-                            <div className="space-y-3">
-                                {privilegios.length === 0 ? (
-                                    <div className="text-center py-8 px-4 border border-dashed rounded-xl bg-muted/10 space-y-2">
-                                        <Award className="w-8 h-8 text-slate-400 mx-auto" />
-                                        <div className="space-y-1">
-                                            <h5 className="font-semibold text-xs text-foreground">No hay beneficios configurados</h5>
-                                            <p className="text-[11px] text-muted-foreground max-w-md mx-auto">
-                                                Crea beneficios exclusivos para los miembros del Pase Alfa (ej. Regalo de cumpleaños, bebida de cortesía, 20% off en ceras, etc.).
-                                            </p>
+                            /* VISTA 1: LISTADO DE BENEFICIOS (INCLUYENDO PROGRAMA PASE ALFA) */
+                            <div className="space-y-2.5">
+                                <div className="grid gap-2.5">
+                                    {/* PROGRAMA PASE ALFA (SIEMPRE PRIMER ELEMENTO) */}
+                                    <div
+                                        className={cn(
+                                            "flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl border transition-all gap-2.5",
+                                            paseAlfaForm.activo
+                                                ? "bg-card border-[#C5A880]/40 shadow-2xs hover:border-blue-500/50"
+                                                : "bg-muted/30 border-border/50 opacity-70"
+                                        )}
+                                    >
+                                        {/* IZQUIERDA: Miniatura y Detalles */}
+                                        <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                                            {paseAlfaForm.imagenUrl ? (
+                                                <div className="w-14 h-12 sm:w-16 sm:h-12 rounded-lg overflow-hidden border border-[#C5A880]/40 shrink-0 bg-slate-950 relative">
+                                                    <img
+                                                        src={paseAlfaForm.imagenUrl}
+                                                        alt={paseAlfaForm.titulo || 'Pase Alfa'}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="w-10 h-10 rounded-lg bg-muted/40 text-[#C5A880] flex items-center justify-center shrink-0 border border-[#C5A880]/40">
+                                                    <Award className="w-4 h-4 text-[#C5A880]" />
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-0.5 min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <h5 className="font-semibold text-xs text-foreground truncate font-sans">
+                                                        {paseAlfaForm.titulo || 'PASE ALFA'}
+                                                    </h5>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-[10px] py-0 px-1.5 font-medium border-[#C5A880]/40 text-[#C5A880] bg-[#C5A880]/10 font-sans"
+                                                    >
+                                                        Programa Base
+                                                    </Badge>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-[10px] py-0 px-1.5 font-medium border font-sans",
+                                                            paseAlfaForm.activo
+                                                                ? "text-blue-400 border-blue-500/30 bg-blue-500/10"
+                                                                : "text-muted-foreground border-border bg-muted/20"
+                                                        )}
+                                                    >
+                                                        {paseAlfaForm.activo ? "Visible" : "Pausado"}
+                                                    </Badge>
+                                                </div>
+
+                                                <p className="text-[11px] text-muted-foreground line-clamp-1 font-sans">
+                                                    {paseAlfaForm.recompensa} ({paseAlfaForm.sellosRequeridos} sellos){paseAlfaForm.subtitulo ? ` • ${paseAlfaForm.subtitulo}` : ''}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <Button
-                                            type="button"
-                                            onClick={handleStartNewBenefit}
-                                            variant="alfa"
-                                            className="text-xs h-8 px-4 font-semibold cursor-pointer"
-                                        >
-                                            <Plus className="w-3.5 h-3.5 mr-1" />
-                                            Crear Primer Beneficio
-                                        </Button>
+
+                                        {/* DERECHA: Switch y Editar */}
+                                        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-border/40">
+                                            <div className="flex items-center gap-1.5 mr-1">
+                                                <Label htmlFor="pase-alfa-list-toggle" className="text-[10px] text-muted-foreground cursor-pointer font-sans">
+                                                    {paseAlfaForm.activo ? 'Visible' : 'Oculto'}
+                                                </Label>
+                                                <Switch
+                                                    id="pase-alfa-list-toggle"
+                                                    checked={paseAlfaForm.activo}
+                                                    onCheckedChange={handleTogglePaseAlfaActive}
+                                                    className="scale-75"
+                                                />
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingBenefitId('pase_alfa')}
+                                                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/10 cursor-pointer"
+                                                title="Editar Programa Pase Alfa"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="grid gap-2.5">
-                                        {privilegios.map((item, idx) => {
+
+                                    {/* BENEFICIOS ADICIONALES */}
+                                    {privilegios.map((item, idx) => {
                                             const isExpired = isPrivilegeExpired(item.fechaLimite);
                                             return (
                                                 <div
@@ -1384,12 +1256,231 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                 </div>
                                             );
                                         })}
+                                </div>
+                            </div>
+                        ) : editingBenefitId === 'pase_alfa' ? (
+                            /* VISTA 2A: FORMULARIO DE EDICIÓN DEL PROGRAMA PASE ALFA */
+                            <div className="space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-border/50 gap-2">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setEditingBenefitId(null)}
+                                            className="h-7.5 px-2 text-xs gap-1 text-slate-400 hover:text-white cursor-pointer"
+                                        >
+                                            <ChevronLeft className="w-4 h-4" />
+                                            <span>Volver a la lista</span>
+                                        </Button>
+                                        <div className="h-4 w-px bg-border/80" />
+                                        <h4 className="font-semibold text-xs sm:text-sm text-foreground">
+                                            Editar: {paseAlfaForm.titulo || 'Programa Pase Alfa'}
+                                        </h4>
                                     </div>
-                                )}
+
+                                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                                        <Label htmlFor="pase-alfa-form-active" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                                            {paseAlfaForm.activo ? 'Visible' : 'Pausado'}
+                                        </Label>
+                                        <Switch
+                                            id="pase-alfa-form-active"
+                                            checked={paseAlfaForm.activo}
+                                            onCheckedChange={(checked) =>
+                                                setPaseAlfaForm((prev) => ({ ...prev, activo: checked }))
+                                            }
+                                            className="scale-90"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                                    {/* COLUMNA IZQUIERDA: CAMPOS Y TEXTOS */}
+                                    <div className="lg:col-span-8 space-y-3.5">
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">Título del Pase</Label>
+                                                    <InfoTooltip text="Nombre visible en la tarjeta y en la sección del Pase Alfa." />
+                                                </div>
+                                                <Input
+                                                    value={paseAlfaForm.titulo}
+                                                    onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, titulo: e.target.value })}
+                                                    placeholder="Ej. PASE ALFA"
+                                                    className="h-8.5 text-xs font-medium font-sans"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">Recompensa</Label>
+                                                    <InfoTooltip text="Premio que se desbloquea al llenar la tarjeta (ej. El décimo corte GRATIS)." />
+                                                </div>
+                                                <Input
+                                                    value={paseAlfaForm.recompensa}
+                                                    onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, recompensa: e.target.value })}
+                                                    placeholder="Ej. El décimo corte GRATIS"
+                                                    className="h-8.5 text-xs font-medium font-sans"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">Meta de Sellos</Label>
+                                                    <InfoTooltip text="Número de visitas o servicios requeridos para ganar la recompensa." />
+                                                </div>
+                                                <div className="relative">
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        max="20"
+                                                        value={paseAlfaForm.sellosRequeridos}
+                                                        onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, sellosRequeridos: Number(e.target.value) || 10 })}
+                                                        className="h-8.5 text-xs font-semibold pr-14 font-sans"
+                                                    />
+                                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground pointer-events-none font-sans">sellos</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-semibold text-foreground">Subtítulo / Lema Explicativo</Label>
+                                                <InfoTooltip text="Lema o frase explicativa visible en la cabecera del pase." />
+                                            </div>
+                                            <Input
+                                                value={paseAlfaForm.subtitulo}
+                                                onChange={(e) => setPaseAlfaForm({ ...paseAlfaForm, subtitulo: e.target.value })}
+                                                placeholder="Ej. Acumula sellos y Alfa Coins en cada visita..."
+                                                className="h-8.5 text-xs font-medium font-sans"
+                                            />
+                                        </div>
+
+                                        {/* INSTRUCCIONES DE ESCANEO (MODAL COMPACTO + BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">
+                                                        Instrucciones de Escaneo (Modal QR)
+                                                    </Label>
+                                                    <InfoTooltip text="Instrucciones que ve el cliente al abrir su código QR en recepción para sellar su visita." />
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
+                                                    {paseAlfaForm.instrucciones?.trim() || 'Sin instrucciones configuradas.'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    "Instrucciones de Escaneo (Modal QR)",
+                                                    "Edita las instrucciones que ve el cliente al presentar su código QR en recepción.",
+                                                    paseAlfaForm.instrucciones,
+                                                    (val) => setPaseAlfaForm((prev) => ({ ...prev, instrucciones: val }))
+                                                )}
+                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Abrir</span>
+                                            </Button>
+                                        </div>
+
+                                        {/* TÉRMINOS Y CONDICIONES DEL PASE (MODAL COMPACTO + BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">
+                                                        Términos y Condiciones del Pase
+                                                    </Label>
+                                                    <InfoTooltip text="Reglas, restricciones y validez aplicables al Pase Alfa." />
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
+                                                    {paseAlfaForm.terminos?.trim() || 'Sin términos y condiciones configurados.'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    "Términos y Condiciones del Programa Pase Alfa",
+                                                    "Edita con amplitud las reglas, restricciones y validez aplicables al Programa Pase Alfa.",
+                                                    paseAlfaForm.terminos,
+                                                    (val) => setPaseAlfaForm((prev) => ({ ...prev, terminos: val }))
+                                                )}
+                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Abrir</span>
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* COLUMNA DERECHA: FOTOGRAFÍA */}
+                                    <div className="lg:col-span-4 space-y-1.5">
+                                        <div className="flex items-center justify-between gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Fotografía / Portada
+                                                </Label>
+                                                <InfoTooltip text="Sube una portada para el Programa Pase Alfa. Tamaño ideal: 1280 x 720 px (16:9)." />
+                                            </div>
+                                            <span className="text-[10px] font-medium text-slate-400">1280×720</span>
+                                        </div>
+                                        <ImageUploader
+                                            folder="pase_alfa"
+                                            currentImageUrl={paseAlfaForm.imagenUrl || ''}
+                                            onUpload={(url) => setPaseAlfaForm((prev) => ({ ...prev, imagenUrl: url }))}
+                                            onRemove={() => setPaseAlfaForm((prev) => ({ ...prev, imagenUrl: '' }))}
+                                            onUploadStateChange={setIsUploadingPaseAlfaImage}
+                                            multiple={false}
+                                            objectFit="contain"
+                                            className="w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setEditingBenefitId(null)}
+                                        className="text-xs h-8.5 px-4 w-full sm:w-auto cursor-pointer"
+                                    >
+                                        Cancelar
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        onClick={handleSavePaseAlfa}
+                                        disabled={isSavingPaseAlfa || isUploadingPaseAlfaImage}
+                                        variant="alfa"
+                                        className="font-semibold text-xs px-5 h-8.5 w-full sm:w-auto cursor-pointer"
+                                    >
+                                        {isUploadingPaseAlfaImage ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                Subiendo foto...
+                                            </>
+                                        ) : isSavingPaseAlfa ? (
+                                            <>
+                                                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                                Guardando Pase Alfa...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-3.5 h-3.5 mr-1.5" />
+                                                Guardar Configuración del Pase Alfa
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         ) : (
-                            /* VISTA 2: FORMULARIO DE CREACIÓN / EDICIÓN DE BENEFICIO */
-                            <div className="space-y-3.5">
+                            /* VISTA 2B: FORMULARIO DE CREACIÓN / EDICIÓN DE BENEFICIO */
+                            <div className="space-y-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-border/50 gap-2">
                                     <div className="flex items-center gap-2">
                                         <Button
@@ -1421,178 +1512,171 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                     </div>
                                 </div>
 
-                                {/* TÍTULO */}
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-1.5">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Título del beneficio *
-                                        </Label>
-                                        <InfoTooltip text="Nombre visible en la tarjeta del beneficio en el sitio web y la app móvil." />
-                                    </div>
-                                    <Input
-                                        value={newTitle}
-                                        onChange={(e) => setNewTitle(e.target.value)}
-                                        placeholder="Ej. Regalo de cumpleaños, Bebida de cortesía..."
-                                        className="h-8.5 text-xs font-medium font-sans"
-                                    />
-                                </div>
-
-                                {/* DESCRIPCIÓN */}
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Descripción del beneficio
-                                            </Label>
-                                            <InfoTooltip text="Detalla qué incluye este beneficio para el cliente." />
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                                    {/* COLUMNA IZQUIERDA: TÍTULO, DESCRIPCIÓN, TÉRMINOS Y VIGENCIA */}
+                                    <div className="lg:col-span-8 space-y-3.5">
+                                        {/* TÍTULO */}
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Título del beneficio *
+                                                </Label>
+                                                <InfoTooltip text="Nombre visible en la tarjeta del beneficio en el sitio web y la app móvil." />
+                                            </div>
+                                            <Input
+                                                value={newTitle}
+                                                onChange={(e) => setNewTitle(e.target.value)}
+                                                placeholder="Ej. Regalo de cumpleaños, Bebida de cortesía..."
+                                                className="h-8.5 text-xs font-medium font-sans"
+                                            />
                                         </div>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => openExpandedEditor(
-                                                "Descripción del Beneficio",
-                                                "Detalla con amplitud lo que incluye este beneficio para el cliente.",
-                                                newDescripcion,
-                                                (val) => setNewDescripcion(val)
+
+                                        {/* DESCRIPCIÓN (COMPACTO + BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">
+                                                        Descripción del beneficio
+                                                    </Label>
+                                                    <InfoTooltip text="Detalla qué incluye este beneficio para el cliente." />
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
+                                                    {newDescripcion?.trim() || 'Sin descripción configurada.'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    "Descripción del Beneficio",
+                                                    "Detalla con amplitud lo que incluye este beneficio para el cliente.",
+                                                    newDescripcion,
+                                                    (val) => setNewDescripcion(val)
+                                                )}
+                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Abrir</span>
+                                            </Button>
+                                        </div>
+
+                                        {/* TÉRMINOS Y CONDICIONES (COMPACTO + BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="min-w-0 flex-1 space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Label className="text-xs font-semibold text-foreground">
+                                                        Términos y condiciones
+                                                    </Label>
+                                                    <InfoTooltip text="Condiciones o restricciones aplicables para hacer válido este beneficio." />
+                                                </div>
+                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
+                                                    {newTerminos?.trim() || 'Sin términos y condiciones configurados.'}
+                                                </p>
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => openExpandedEditor(
+                                                    "Términos y Condiciones del Beneficio",
+                                                    "Edita las reglas y restricciones para hacer válido este beneficio.",
+                                                    newTerminos,
+                                                    (val) => setNewTerminos(val)
+                                                )}
+                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                            >
+                                                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Abrir</span>
+                                            </Button>
+                                        </div>
+
+                                        {/* FECHA LÍMITE DE VIGENCIA */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border bg-muted/15 border-border/60">
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    id="new-expiry-toggle"
+                                                    checked={newHasExpiry}
+                                                    onCheckedChange={setNewHasExpiry}
+                                                    className="scale-90"
+                                                />
+                                                <div>
+                                                    <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-semibold text-foreground">
+                                                        Fecha límite de vigencia
+                                                    </Label>
+                                                    <p className="text-[11px] text-muted-foreground font-sans">
+                                                        {newHasExpiry ? 'El beneficio expirará automáticamente en la fecha indicada' : 'Permanente / Sin caducidad'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {newHasExpiry && (
+                                                <div className="flex items-center gap-2 animate-in fade-in duration-200">
+                                                    <Popover modal={true} open={newDatePickerOpen} onOpenChange={setNewDatePickerOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                className={cn(
+                                                                    "h-8 text-xs px-3 font-normal justify-start text-left bg-background font-sans",
+                                                                    !newFechaLimite && "text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                                                <span className="truncate">
+                                                                    {parseDateSafe(newFechaLimite)
+                                                                        ? format(parseDateSafe(newFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
+                                                                        : "Seleccionar fecha"}
+                                                                </span>
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0 z-[60] border-2 border-blue-500 rounded-xl shadow-xl" align="start">
+                                                            <Calendar
+                                                                mode="single"
+                                                                selected={parseDateSafe(newFechaLimite)}
+                                                                onSelect={(date) => {
+                                                                    if (date) {
+                                                                        setNewFechaLimite(format(date, 'yyyy-MM-dd'));
+                                                                        setNewDatePickerOpen(false);
+                                                                    }
+                                                                }}
+                                                                disabled={(date) => {
+                                                                    const today = new Date();
+                                                                    today.setHours(0, 0, 0, 0);
+                                                                    return date < today;
+                                                                }}
+                                                                initialFocus
+                                                                locale={es}
+                                                            />
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
                                             )}
-                                            className="h-6 px-1.5 text-[11px] gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Ver y editar en modal maximizado"
-                                        >
-                                            <Maximize2 className="w-3 h-3" />
-                                            <span className="font-medium">Maximizar</span>
-                                        </Button>
-                                    </div>
-                                    <Textarea
-                                        value={newDescripcion}
-                                        onChange={(e) => setNewDescripcion(e.target.value)}
-                                        placeholder="Ej. Disfruta de un detalle especial o bebida de cortesía al visitar nuestra barbería."
-                                        rows={2}
-                                        className="text-xs resize-y py-1.5 min-h-[50px] font-sans"
-                                    />
-                                </div>
-
-                                {/* TÉRMINOS Y CONDICIONES */}
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Términos y condiciones
-                                            </Label>
-                                            <InfoTooltip text="Condiciones o restricciones aplicables para hacer válido este beneficio." />
                                         </div>
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => openExpandedEditor(
-                                                "Términos y Condiciones del Beneficio",
-                                                "Edita las reglas y restricciones para hacer válido este beneficio.",
-                                                newTerminos,
-                                                (val) => setNewTerminos(val)
-                                            )}
-                                            className="h-6 px-1.5 text-[11px] gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                                            title="Abrir en modal maximizado"
-                                        >
-                                            <Maximize2 className="w-3 h-3" />
-                                            <span className="font-medium">Maximizar</span>
-                                        </Button>
                                     </div>
-                                    <Textarea
-                                        value={newTerminos}
-                                        onChange={(e) => setNewTerminos(e.target.value)}
-                                        placeholder="Ej. Válido una cortesía por cita. No acumulable con otras promociones."
-                                        rows={2}
-                                        className="text-xs resize-y py-1.5 min-h-[50px] font-sans"
-                                    />
-                                </div>
 
-                                {/* IMAGEN DEL BENEFICIO */}
-                                <div className="space-y-1">
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <Label className="text-xs font-semibold text-foreground">
-                                                Fotografía / Imagen del beneficio (Opcional)
-                                            </Label>
-                                            <InfoTooltip text="Sube una fotografía para este beneficio. Tamaño ideal: 1280 x 720 px (16:9)." />
+                                    {/* COLUMNA DERECHA: FOTOGRAFÍA / IMAGEN */}
+                                    <div className="lg:col-span-4 space-y-1.5">
+                                        <div className="flex items-center justify-between gap-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Fotografía / Imagen
+                                                </Label>
+                                                <InfoTooltip text="Sube una fotografía para este beneficio. Tamaño ideal: 1280 x 720 px (16:9)." />
+                                            </div>
+                                            <span className="text-[10px] font-medium text-slate-400">1280×720</span>
                                         </div>
-                                        <span className="text-[10px] font-medium text-slate-400">
-                                            Tamaño sugerido: 1280 x 720 px (16:9)
-                                        </span>
-                                    </div>
-                                    <ImageUploader
-                                        folder="beneficios_pase_alfa"
-                                        currentImageUrl={newImagenUrl}
-                                        onUpload={(url) => setNewImagenUrl(url)}
-                                        onRemove={() => setNewImagenUrl('')}
-                                        onUploadStateChange={setIsUploadingBenefitImage}
-                                        multiple={false}
-                                        objectFit="contain"
-                                        className="w-full h-36 sm:h-44 border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
-                                    />
-                                </div>
-
-                                {/* FECHA LÍMITE DE VIGENCIA */}
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border bg-muted/15 border-border/60">
-                                    <div className="flex items-center gap-2">
-                                        <Switch
-                                            id="new-expiry-toggle"
-                                            checked={newHasExpiry}
-                                            onCheckedChange={setNewHasExpiry}
-                                            className="scale-90"
+                                        <ImageUploader
+                                            folder="beneficios_pase_alfa"
+                                            currentImageUrl={newImagenUrl}
+                                            onUpload={(url) => setNewImagenUrl(url)}
+                                            onRemove={() => setNewImagenUrl('')}
+                                            onUploadStateChange={setIsUploadingBenefitImage}
+                                            multiple={false}
+                                            objectFit="contain"
+                                            className="w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
                                         />
-                                        <div>
-                                            <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-semibold text-foreground">
-                                                Fecha límite de vigencia
-                                            </Label>
-                                            <p className="text-[11px] text-muted-foreground font-sans">
-                                                {newHasExpiry ? 'El beneficio expirará automáticamente en la fecha indicada' : 'Permanente / Sin caducidad'}
-                                            </p>
-                                        </div>
                                     </div>
-
-                                    {newHasExpiry && (
-                                        <div className="flex items-center gap-2 animate-in fade-in duration-200">
-                                            <Popover modal={true} open={newDatePickerOpen} onOpenChange={setNewDatePickerOpen}>
-                                                <PopoverTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "h-8 text-xs px-3 font-normal justify-start text-left bg-background font-sans",
-                                                            !newFechaLimite && "text-muted-foreground"
-                                                        )}
-                                                    >
-                                                        <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                                        <span className="truncate">
-                                                            {parseDateSafe(newFechaLimite)
-                                                                ? format(parseDateSafe(newFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
-                                                                : "Seleccionar fecha"}
-                                                        </span>
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0 z-[60] border-2 border-blue-500 rounded-xl shadow-xl" align="start">
-                                                    <Calendar
-                                                        mode="single"
-                                                        selected={parseDateSafe(newFechaLimite)}
-                                                        onSelect={(date) => {
-                                                            if (date) {
-                                                                setNewFechaLimite(format(date, 'yyyy-MM-dd'));
-                                                                setNewDatePickerOpen(false);
-                                                            }
-                                                        }}
-                                                        disabled={(date) => {
-                                                            const today = new Date();
-                                                            today.setHours(0, 0, 0, 0);
-                                                            return date < today;
-                                                        }}
-                                                        initialFocus
-                                                        locale={es}
-                                                    />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    )}
                                 </div>
 
                                 {/* BOTONES GUARDAR / CANCELAR BENEFICIO */}
@@ -1700,7 +1784,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
             >
                 <DialogContent
                     hideCloseButton={true}
-                    className="p-0 overflow-hidden max-w-3xl w-[95vw] max-h-[90vh] flex flex-col rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+                    className="p-0 overflow-hidden w-screen h-[100dvh] max-w-none rounded-none border-0 sm:border-2 sm:border-blue-500 sm:rounded-2xl sm:w-[95vw] sm:max-w-4xl sm:h-[85vh] sm:max-h-[85vh] flex flex-col shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
                 >
                     <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800 shrink-0">
                         <div className="header-light-beam" aria-hidden="true" />

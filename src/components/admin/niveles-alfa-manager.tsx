@@ -890,7 +890,7 @@ export function NivelesAlfaManager() {
                                 value="vip"
                                 className="flex items-center justify-center gap-1.5 text-xs py-2 data-[state=active]:bg-[#0F172A] data-[state=active]:text-white border border-slate-700 font-bold"
                             >
-                                <Crown className="h-3.5 w-3.5 text-amber-400" />
+                                <Crown className="h-3.5 w-3.5 text-[#C5A880]" />
                                 <span>{config.vip.nombre || 'Alfa Black VIP'}</span>
                                 <span className="text-[10px] opacity-75 font-normal">
                                     ({config.vip.visitasMin}v / ${config.vip.gastoMin})
@@ -1094,7 +1094,7 @@ export function NivelesAlfaManager() {
                                                         }}
                                                     >
                                                         {tierKey === 'vip' ? (
-                                                            <Crown className="h-3.5 w-3.5 text-amber-300" />
+                                                            <Crown className="h-3.5 w-3.5 text-[#C5A880]" />
                                                         ) : tierKey === 'gold' ? (
                                                             <Star className="h-3.5 w-3.5" />
                                                         ) : (
@@ -1112,12 +1112,12 @@ export function NivelesAlfaManager() {
                                             <div className="pt-2 border-t border-white/10 text-[11px] text-slate-300 space-y-1">
                                                 <div className="flex justify-between">
                                                     <span className="text-slate-400">Requisito Visitas:</span>
-                                                    <span className="font-bold text-amber-300">{tier.visitasMin} visitas</span>
+                                                    <span className="font-bold text-[#C5A880]">{tier.visitasMin} visitas</span>
                                                 </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-slate-400">Requisito Gasto:</span>
-                                                    <span className="font-bold text-emerald-400">
-                                                        ${tier.gastoMin.toLocaleString('es-MX')} MXN
+                                                    <span className="font-bold text-white font-sans">
+                                                        ${tier.gastoMin.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
                                                     </span>
                                                 </div>
                                             </div>

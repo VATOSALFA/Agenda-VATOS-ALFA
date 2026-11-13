@@ -171,14 +171,14 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
     const [multiplicadorConfig, setMultiplicadorConfig] = useState<MultiplicadorCoinsConfig>(
         DEFAULT_MULTIPLICADOR_COINS_CONFIG
     );
-    const [isMultiplicadorOpen, setIsMultiplicadorOpen] = useState(true);
+    const [isMultiplicadorOpen, setIsMultiplicadorOpen] = useState(false);
     const [isSavingMultiplicador, setIsSavingMultiplicador] = useState(false);
 
     // Estado de Beneficios VIP
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
     const [loadingPrivilegios, setLoadingPrivilegios] = useState(true);
     const [isSavingPrivilegios, setIsSavingPrivilegios] = useState(false);
-    const [isBeneficiosOpen, setIsBeneficiosOpen] = useState(true);
+    const [isBeneficiosOpen, setIsBeneficiosOpen] = useState(false);
 
     // Formulario de edición/creación de beneficio individual
     const [editingBenefitId, setEditingBenefitId] = useState<string | null>(null); // null = listado, 'new' = nuevo, string = editar existente
@@ -998,11 +998,17 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
             {/* 1.5 CARD: PROMOCIÓN DÍAS DE ALFA COINS AL DOBLE (2x) O TRIPLE (3x) */}
             <Card className="border border-border/70 shadow-xs transition-all">
-                <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                <CardHeader
+                    onClick={() => setIsMultiplicadorOpen(!isMultiplicadorOpen)}
+                    className={cn(
+                        "py-3 px-3.5 sm:px-5 bg-muted/10 cursor-pointer hover:bg-muted/20 transition-colors select-none",
+                        isMultiplicadorOpen && "border-b border-border/50"
+                    )}
+                >
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                            <Flame className={cn("h-4 w-4 shrink-0", multiplicadorConfig.activo ? "text-amber-400" : "text-slate-400")} />
-                            <div className="flex items-center gap-1.5">
+                            <Flame className={cn("h-4 w-4 shrink-0", multiplicadorConfig.activo ? "text-blue-500" : "text-slate-400")} />
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
                                     Días de Alfa Coins al Doble (2x) o Triple (3x)
                                 </CardTitle>
@@ -1012,14 +1018,14 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                 const evalStatus = evaluateActiveCoinsMultiplier(multiplicadorConfig);
                                 if (evalStatus.isActiveToday) {
                                     return (
-                                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[10px] py-0 px-2 font-bold">
-                                            🔥 ACTIVO HOY ({evalStatus.multiplier}x en Caja)
+                                        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-[10px] py-0 px-2 font-bold">
+                                            ACTIVO HOY ({evalStatus.multiplier}x en Caja)
                                         </Badge>
                                     );
                                 }
                                 if (multiplicadorConfig.activo && multiplicadorConfig.dias_semana.length > 0) {
                                     return (
-                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10">
                                             Programado ({multiplicadorConfig.multiplicador}x: {multiplicadorConfig.dias_semana.map((d) => DAY_NAMES_ES[d].slice(0, 3)).join(', ')})
                                         </Badge>
                                     );
@@ -1032,7 +1038,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             })()}
                         </div>
 
-                        <div className="flex items-center gap-2.5 shrink-0">
+                        <div className="flex items-center gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <Switch
                                 checked={multiplicadorConfig.activo}
                                 onCheckedChange={(checked) =>
@@ -1045,7 +1051,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             <button
                                 type="button"
                                 onClick={() => setIsMultiplicadorOpen(!isMultiplicadorOpen)}
-                                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                                className="text-slate-400 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted/50"
                                 title={isMultiplicadorOpen ? "Minimizar" : "Desplegar"}
                             >
                                 {isMultiplicadorOpen ? (
@@ -1079,7 +1085,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                         className={cn(
                                             "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
                                             multiplicadorConfig.multiplicador === 2
-                                                ? "border-amber-500/60 bg-amber-500/15 text-amber-300 shadow-xs"
+                                                ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-xs"
                                                 : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
                                         )}
                                     >
@@ -1099,7 +1105,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                         className={cn(
                                             "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
                                             multiplicadorConfig.multiplicador === 3
-                                                ? "border-amber-500/60 bg-amber-500/15 text-amber-300 shadow-xs"
+                                                ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-xs"
                                                 : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
                                         )}
                                     >
@@ -1131,7 +1137,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                 className={cn(
                                                     "flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition-all cursor-pointer relative",
                                                     isSelected
-                                                        ? "border-blue-500 bg-blue-500/20 text-blue-300 font-bold shadow-2xs"
+                                                        ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shadow-2xs"
                                                         : "border-border/60 bg-muted/15 text-muted-foreground hover:border-border/90"
                                                 )}
                                             >
@@ -1142,7 +1148,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     {DAY_NAMES_ES[dayIdx]}
                                                 </span>
                                                 {isToday && (
-                                                    <span className="text-[8px] uppercase tracking-wider text-amber-400 font-extrabold mt-0.5">
+                                                    <span className="text-[8px] uppercase tracking-wider text-blue-500 font-extrabold mt-0.5">
                                                         Hoy
                                                     </span>
                                                 )}
@@ -1196,11 +1202,17 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
             {/* 2. CARD: GESTOR DE BENEFICIOS / PRIVILEGIOS VIP */}
             <Card className="border border-border/70 shadow-xs transition-all">
-                <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                <CardHeader
+                    onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
+                    className={cn(
+                        "py-3 px-3.5 sm:px-5 bg-muted/10 cursor-pointer hover:bg-muted/20 transition-colors select-none",
+                        isBeneficiosOpen && "border-b border-border/50"
+                    )}
+                >
                     <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-2 min-w-0">
-                            <Sparkles className="h-4 w-4 text-slate-400 shrink-0" />
-                            <div className="flex items-center gap-1.5">
+                            <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
+                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
                                     Beneficios Exclusivos (Privilegios VIP)
                                 </CardTitle>
@@ -1208,13 +1220,13 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             </div>
                             <Badge
                                 variant="outline"
-                                className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-slate-300"
+                                className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-muted-foreground"
                             >
                                 {privilegios.length} {privilegios.length === 1 ? 'beneficio' : 'beneficios'}
                             </Badge>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
                             <Button
                                 type="button"
                                 onClick={(e) => {
@@ -1231,7 +1243,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             <button
                                 type="button"
                                 onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
-                                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                                className="text-slate-400 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted/50"
                                 title={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
                                 aria-label={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
                             >

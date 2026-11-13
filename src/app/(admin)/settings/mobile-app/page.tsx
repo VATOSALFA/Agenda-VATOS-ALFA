@@ -33,6 +33,7 @@ import {
     Search,
     Crown,
     MessageSquareWarning,
+    Image as ImageIcon,
 } from 'lucide-react';
 
 export default function MobileAppSettingsPage() {
@@ -103,27 +104,31 @@ export default function MobileAppSettingsPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 h-auto p-1 gap-1">
-                    <TabsTrigger value="pase_alfa" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">Pase Alfa</TabsTrigger>
-                    <TabsTrigger value="niveles" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 h-auto p-1 gap-1 bg-muted/40 border border-border/50 rounded-xl">
+                    <TabsTrigger value="pase_alfa" className="text-xs sm:text-sm py-1.5 px-2 rounded-lg">Pase Alfa</TabsTrigger>
+                    <TabsTrigger value="niveles" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
                         <Crown className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                        <span className="truncate">Niveles & Rangos</span>
+                        <span className="truncate">Niveles</span>
                     </TabsTrigger>
-                    <TabsTrigger value="promociones" className="text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">Promociones</TabsTrigger>
-                    <TabsTrigger value="buzon" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
+                    <TabsTrigger value="galeria" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
+                        <ImageIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">Galería</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="promociones" className="text-xs sm:text-sm py-1.5 px-2 rounded-lg">Promociones</TabsTrigger>
+                    <TabsTrigger value="buzon" className="flex items-center justify-center gap-1.5 text-xs sm:text-sm py-1.5 px-2 rounded-lg">
                         <MessageSquareWarning className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                        <span className="truncate">Buzón & Quejas</span>
+                        <span className="truncate">Buzón</span>
                         {pendingFeedbackCount > 0 && (
-                            <Badge className="ml-0.5 text-[10px] px-1 py-0 h-3.5 bg-amber-500 text-black font-black font-sans">
+                            <Badge className="ml-0.5 text-[10px] px-1.5 py-0 h-4 bg-blue-500 text-white font-bold font-sans">
                                 {pendingFeedbackCount}
                             </Badge>
                         )}
                     </TabsTrigger>
-                    <TabsTrigger value="metricas" className="flex items-center justify-center gap-1 font-bold text-xs sm:text-sm py-1.5 px-1 sm:px-2.5">
+                    <TabsTrigger value="metricas" className="flex items-center justify-center gap-1.5 font-medium text-xs sm:text-sm py-1.5 px-2 rounded-lg">
                         <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:inline" />
-                        <span className="truncate">Uso & Descargas</span>
+                        <span className="truncate">Uso & Tiendas</span>
                         {appClients.length > 0 && (
-                            <Badge variant="secondary" className="ml-0.5 text-[10px] px-1 py-0 h-3.5 bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 font-sans">
+                            <Badge variant="secondary" className="ml-0.5 text-[10px] px-1.5 py-0 h-4 bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 font-sans">
                                 {appClients.length}
                             </Badge>
                         )}
@@ -131,29 +136,33 @@ export default function MobileAppSettingsPage() {
                 </TabsList>
 
                 {/* PASE ALFA TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB) */}
-                <TabsContent value="pase_alfa" className="mt-6 space-y-6">
-                    <AppDownloadLinksCard />
+                <TabsContent value="pase_alfa" className="mt-5 space-y-4">
                     <PaseAlfaManager />
-                    <GaleriaCortesManager />
                 </TabsContent>
 
                 {/* NIVELES & RANGOS TAB (ADMINISTRACIÓN DE CRITERIOS VISITAS/GASTO Y CLUB ALFA) */}
-                <TabsContent value="niveles" className="mt-6 space-y-6">
+                <TabsContent value="niveles" className="mt-5 space-y-4">
                     <NivelesAlfaManager />
                 </TabsContent>
 
+                {/* GALERÍA DE CORTES TAB */}
+                <TabsContent value="galeria" className="mt-5 space-y-4">
+                    <GaleriaCortesManager />
+                </TabsContent>
+
                 {/* PROMOCIONES TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB Y /settings/promotions) */}
-                <TabsContent value="promociones" className="mt-6 space-y-6">
+                <TabsContent value="promociones" className="mt-5 space-y-4">
                     <PromotionsManager hideHeader />
                 </TabsContent>
 
                 {/* BUZÓN DE OPINIONES, SUGERENCIAS Y QUEJAS DE CLIENTES */}
-                <TabsContent value="buzon" className="mt-6 space-y-6">
+                <TabsContent value="buzon" className="mt-5 space-y-4">
                     <BuzonClientesManager />
                 </TabsContent>
 
-                {/* MÉTRICAS & USO TAB */}
-                <TabsContent value="metricas" className="mt-4 sm:mt-6 space-y-3 sm:space-y-4">
+                {/* MÉTRICAS, USO Y ENLACES DE TIENDAS TAB */}
+                <TabsContent value="metricas" className="mt-4 sm:mt-5 space-y-4">
+                    <AppDownloadLinksCard />
                     {/* Tarjetas de Estadísticas Principales */}
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                         <div className="rounded-xl border border-border/60 bg-card p-2.5 sm:p-3.5 shadow-xs flex flex-col justify-between">

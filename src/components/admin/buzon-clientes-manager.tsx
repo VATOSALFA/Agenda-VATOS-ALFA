@@ -274,7 +274,7 @@ export function BuzonClientesManager() {
             case 'calificacion':
             default:
                 return (
-                    <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 font-bold text-[10px] gap-1">
+                    <Badge className="bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/30 font-bold text-[10px] gap-1">
                         <HeartHandshake className="h-3 w-3" />
                         Felicitación / Reseña
                     </Badge>
@@ -283,7 +283,7 @@ export function BuzonClientesManager() {
     };
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-4">
             {/* Encabezado y Escudo de Reputación */}
             <div className="rounded-xl border border-[#C5A880]/40 bg-gradient-to-r from-[#10172b] via-[#18223f] to-[#10172b] p-4 sm:p-5 text-white shadow-md">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -294,7 +294,7 @@ export function BuzonClientesManager() {
                                 Buzón de Clientes & Escudo de Reputación
                             </h3>
                             {stats.pendientes > 0 && (
-                                <Badge className="bg-amber-500 text-black font-black text-[10px] px-2 py-0.5">
+                                <Badge className="bg-blue-500 text-white font-bold text-[10px] px-2 py-0.5">
                                     {stats.pendientes} por revisar
                                 </Badge>
                             )}
@@ -313,11 +313,9 @@ export function BuzonClientesManager() {
                     <CardContent className="p-3.5 flex items-center justify-between">
                         <div>
                             <p className="text-[11px] font-medium text-muted-foreground">Total Mensajes</p>
-                            <p className="text-2xl font-bold text-foreground mt-0.5">{stats.total}</p>
+                            <p className="text-2xl font-bold text-foreground mt-0.5 font-sans">{stats.total}</p>
                         </div>
-                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                            <MessageSquarePlus className="h-4 w-4" />
-                        </div>
+                        <MessageSquarePlus className="h-4 w-4 text-slate-400 shrink-0" />
                     </CardContent>
                 </Card>
 
@@ -325,11 +323,9 @@ export function BuzonClientesManager() {
                     <CardContent className="p-3.5 flex items-center justify-between">
                         <div>
                             <p className="text-[11px] font-medium text-muted-foreground">Pendientes de Revisión</p>
-                            <p className="text-2xl font-bold text-amber-500 mt-0.5">{stats.pendientes}</p>
+                            <p className="text-2xl font-bold text-blue-500 mt-0.5 font-sans">{stats.pendientes}</p>
                         </div>
-                        <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
-                            <Clock className="h-4 w-4" />
-                        </div>
+                        <Clock className="h-4 w-4 text-blue-500 shrink-0" />
                     </CardContent>
                 </Card>
 
@@ -337,11 +333,9 @@ export function BuzonClientesManager() {
                     <CardContent className="p-3.5 flex items-center justify-between">
                         <div>
                             <p className="text-[11px] font-medium text-muted-foreground">Quejas / Reportes</p>
-                            <p className="text-2xl font-bold text-red-500 mt-0.5">{stats.quejas}</p>
+                            <p className="text-2xl font-bold text-red-400 mt-0.5 font-sans">{stats.quejas}</p>
                         </div>
-                        <div className="h-9 w-9 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500">
-                            <AlertTriangle className="h-4 w-4" />
-                        </div>
+                        <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
                     </CardContent>
                 </Card>
 
@@ -350,13 +344,11 @@ export function BuzonClientesManager() {
                         <div>
                             <p className="text-[11px] font-medium text-muted-foreground">Satisfacción App</p>
                             <div className="flex items-center gap-1.5 mt-0.5">
-                                <span className="text-2xl font-bold text-foreground">{stats.promedio}</span>
-                                <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                                <span className="text-2xl font-bold text-foreground font-sans">{stats.promedio}</span>
+                                <Star className="h-4 w-4 fill-[#C5A880] text-[#C5A880]" />
                             </div>
                         </div>
-                        <div className="h-9 w-9 rounded-lg bg-[#C5A880]/15 flex items-center justify-center text-[#C5A880]">
-                            <Sparkles className="h-4 w-4" />
-                        </div>
+                        <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
                     </CardContent>
                 </Card>
             </div>
@@ -444,7 +436,7 @@ export function BuzonClientesManager() {
                                                             className={cn(
                                                                 'h-3 w-3',
                                                                 star <= item.calificacion
-                                                                    ? 'fill-amber-400 text-amber-400'
+                                                                    ? 'fill-[#C5A880] text-[#C5A880]'
                                                                     : 'text-muted-foreground/30'
                                                             )}
                                                         />
@@ -455,12 +447,12 @@ export function BuzonClientesManager() {
                                                 </div>
 
                                                 {item.estado === 'pendiente' ? (
-                                                    <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 text-[10px]">
+                                                    <Badge className="bg-blue-500/15 text-blue-500 border border-blue-500/30 text-[10px]">
                                                         Pendiente
                                                     </Badge>
                                                 ) : (
-                                                    <Badge className="bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 text-[10px] gap-1">
-                                                        <CheckCircle2 className="h-3 w-3" />
+                                                    <Badge className="bg-muted/60 text-muted-foreground border border-border/60 text-[10px] gap-1">
+                                                        <CheckCircle2 className="h-3 w-3 text-blue-500" />
                                                         Atendido
                                                     </Badge>
                                                 )}
@@ -504,7 +496,7 @@ export function BuzonClientesManager() {
 
                                             {item.barberoNombre && (
                                                 <div className="flex items-center gap-1">
-                                                    <Scissors className="h-3.5 w-3.5 text-amber-400" />
+                                                    <Scissors className="h-3.5 w-3.5 text-slate-400" />
                                                     <span>Barbero: <strong>{item.barberoNombre}</strong></span>
                                                 </div>
                                             )}

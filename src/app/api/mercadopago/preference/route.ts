@@ -2,6 +2,8 @@ import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 
+let cachedMpToken: { token: string; expiresAt: number } | null = null;
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -35,22 +37,27 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Initialize Mercado Pago (prioritize dynamic Firestore config, fallback to env)
-        let accessToken = '';
-        try {
-            const configDoc = await db.collection('configuracion').doc('mercadopago').get();
-            if (configDoc.exists) {
-                const fsToken = configDoc.data()?.accessToken;
-                if (fsToken && typeof fsToken === 'string' && fsToken.trim().length > 10) {
-                    accessToken = fsToken.trim();
-                }
-            }
-        } catch (e) {
-            console.warn("[MP] Could not read configuracion/mercadopago from Firestore, falling back to env:", e);
-        }
-
+        // Initialize Mercado Pago (prioritize in-memory cache -> dynamic Firestore config -> env)
+        let accessToken = cachedMpToken && Date.now() < cachedMpToken.expiresAt ? cachedMpToken.token : '';
         if (!accessToken) {
-            accessToken = process.env.MP_WEB_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+            try {
+                const configDoc = await db.collection('configuracion').doc('mercadopago').get();
+                if (configDoc.exists) {
+                    const fsToken = configDoc.data()?.accessToken;
+                    if (fsToken && typeof fsToken === 'string' && fsToken.trim().length > 10) {
+                        accessToken = fsToken.trim();
+                    }
+                }
+            } catch (e) {
+                console.warn("[MP] Could not read configuracion/mercadopago from Firestore, falling back to env:", e);
+            }
+
+            if (!accessToken) {
+                accessToken = process.env.MP_WEB_ACCESS_TOKEN || process.env.MERCADO_PAGO_ACCESS_TOKEN || process.env.MP_ACCESS_TOKEN || '';
+            }
+            if (accessToken && accessToken.length >= 10) {
+                cachedMpToken = { token: accessToken, expiresAt: Date.now() + 5 * 60 * 1000 };
+            }
         }
 
         if (!accessToken || accessToken.length < 10) {
@@ -111,7 +118,8 @@ export async function POST(req: NextRequest) {
             external_reference: reservationId,
             statement_descriptor: "VATOS ALFA",
             expires: true,
-            date_of_expiration: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            expiration_date_from: new Date().toISOString(),
+            expiration_date_to: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
             payment_methods: {
                 installments: 1,
                 excluded_payment_types: [{ id: "ticket" }]

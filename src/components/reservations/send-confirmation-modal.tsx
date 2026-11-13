@@ -70,7 +70,7 @@ export function SendConfirmationModal({
   );
 
   const [whatsappAnticipoTemplate, setWhatsappAnticipoTemplate] = useState<string>(
-    '¡Hola *{nombre}*! 👋\n\n💈 *Cita:* {servicios} con {profesional}\n📅 *Fecha:* {fecha} a las {hora}\n\nPara confirmar tu espacio, realiza tu anticipo de *${monto_anticipo} MXN* (SPEI o tarjeta) aquí:\n{link_pago}'
+    '¡Hola *{nombre}*! 👋\n\n💈 *Cita:* {servicios} con {profesional}\n📅 *Fecha:* {fecha} a las {hora}\n\nPara confirmar tu espacio, realiza tu anticipo de *${monto_anticipo} MXN* (SPEI o tarjeta) aquí:\n{link_pago}\n\n⏳ *Importante:* Este enlace tiene una vigencia de *30 minutos* para confirmar tu lugar; pasado ese tiempo el horario se libera automáticamente.'
   );
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
@@ -111,7 +111,13 @@ export function SendConfirmationModal({
 
   const canSwitchToFullLink = isDepositRequired && totalReservationAmount > depositAmount + 0.01;
   const activeChargeAmount = (linkMode === 'full' && canSwitchToFullLink) ? totalReservationAmount : depositAmount;
-  const paymentLink = linkMode === 'full' ? (paymentLinksCache.full || '') : (paymentLinksCache.deposit || '');
+  const shortPaymentLink = useMemo(() => {
+    if (!reservation?.id) return '';
+    return linkMode === 'full' && canSwitchToFullLink
+      ? `https://vatosalfa.com/p/${reservation.id}?m=full`
+      : `https://vatosalfa.com/p/${reservation.id}`;
+  }, [reservation?.id, linkMode, canSwitchToFullLink]);
+  const paymentLink = shortPaymentLink || (linkMode === 'full' ? (paymentLinksCache.full || '') : (paymentLinksCache.deposit || ''));
 
   useEffect(() => {
     if (isOpen) {
@@ -144,7 +150,7 @@ export function SendConfirmationModal({
     }
   }, [isOpen, db, reservation]);
 
-  // Generate or load Mercado Pago Preference Link
+  // Pre-warm Mercado Pago Preference Link in background without blocking the UI
   useEffect(() => {
     if (!isOpen || !reservation || !isDepositRequired) return;
 
@@ -154,7 +160,7 @@ export function SendConfirmationModal({
 
     let isMounted = true;
     const generateLink = async () => {
-      setIsGeneratingLink(true);
+      if (!reservation.id) setIsGeneratingLink(true);
       try {
         let servicesText = '';
         if (reservation.items && reservation.items.length > 0) {
@@ -192,38 +198,31 @@ export function SendConfirmationModal({
         });
 
         const data = await res.json();
-        if (isMounted) {
-          if (data.init_point) {
-            setPaymentLinksCache((prev) => ({
-              ...prev,
-              [currentMode]: data.init_point,
-            }));
-            if (db && reservation.id) {
-              await updateDoc(doc(db, 'reservas', reservation.id), {
-                ...(currentMode === 'full'
-                  ? {
-                      mercado_pago_link_total: data.init_point,
-                      mercado_pago_preference_id_total: data.id,
-                    }
-                  : {
-                      mercado_pago_link: data.init_point,
-                      mercado_pago_preference_id: data.id,
-                    }),
-                anticipo_esperado: depositAmount,
-                requiere_anticipo: true,
-              }).catch(console.error);
-            }
-          } else {
-            console.error('Error in MP preference response:', data);
-            toast({
-              variant: 'destructive',
-              title: 'Error de Enlace de Pago',
-              description: data.error || 'No se pudo generar el enlace de Mercado Pago.',
-            });
+        if (isMounted && data.init_point) {
+          setPaymentLinksCache((prev) => ({
+            ...prev,
+            [currentMode]: data.init_point,
+          }));
+          if (db && reservation.id) {
+            await updateDoc(doc(db, 'reservas', reservation.id), {
+              ...(currentMode === 'full'
+                ? {
+                    mercado_pago_link_total: data.init_point,
+                    mercado_pago_preference_id_total: data.id,
+                    mercado_pago_link_total_ts: Date.now(),
+                  }
+                : {
+                    mercado_pago_link: data.init_point,
+                    mercado_pago_preference_id: data.id,
+                    mercado_pago_link_ts: Date.now(),
+                  }),
+              anticipo_esperado: depositAmount,
+              requiere_anticipo: true,
+            }).catch(console.error);
           }
         }
       } catch (err: any) {
-        console.error('Failed to create MP preference:', err);
+        console.error('Failed to pre-warm MP preference:', err);
       } finally {
         if (isMounted) setIsGeneratingLink(false);
       }
@@ -297,6 +296,13 @@ export function SendConfirmationModal({
 
       if (linkMode === 'full' && canSwitchToFullLink) {
         msg = msg.replace(/tu anticipo de/gi, 'tu pago total de');
+      }
+      if (
+        !/(30 minutos|vigencia|tolerancia)/i.test(msg) &&
+        !(reservation as any).tolerancia_anticipo_extendida
+      ) {
+        msg +=
+          '\n\n⏳ *Importante:* Este enlace tiene una vigencia de *30 minutos* para confirmar tu lugar; pasado ese tiempo el horario se libera automáticamente.';
       }
       return msg;
     }

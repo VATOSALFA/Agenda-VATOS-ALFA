@@ -74,32 +74,38 @@ export function AlfaPromotionsSection({
     <section
       id="promociones"
       className={cn(
-        "w-full py-14 sm:py-20 bg-slate-50/80 border-t border-border/60 scroll-mt-20",
+        "w-full py-8 sm:py-12 bg-slate-50/80 border-t border-border/60 scroll-mt-20",
         className
       )}
     >
-      <div className="container px-4 md:px-6 max-w-6xl mx-auto">
-        {/* Encabezado Institucional de la Sección */}
-        <div className="text-center mb-10 sm:mb-14">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-xs font-bold uppercase tracking-wider mb-2.5">
-            <Tag className="w-3.5 h-3.5 text-blue-600" />
-            <span>Promociones Especiales</span>
+      <div className="container px-4 md:px-6 max-w-5xl mx-auto">
+        {/* Encabezado Institucional Compacto (Estilo App Móvil) */}
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 text-[10.5px] font-extrabold uppercase tracking-wider mb-2">
+            <Tag className="w-3 h-3 text-blue-600" />
+            <span>
+              {promotions.length > 1
+                ? `${promotions.length} PROMOCIONES ESPECIALES`
+                : 'PROMOCIONES ESPECIALES'}
+            </span>
           </div>
-          <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-2.5 text-[#202A49]">
+          <h2 className="text-xl sm:text-3xl font-extrabold tracking-tight mb-1 text-[#202A49]">
             Promociones y Ofertas
           </h2>
-          <p className="text-xs sm:text-base text-slate-500 max-w-xl mx-auto leading-relaxed">
-            Ofertas vigentes disponibles para todos nuestros clientes por tiempo limitado en sucursal.
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
+            {promotions.length > 1
+              ? `${promotions.length} ofertas vigentes disponibles por tiempo limitado en sucursal.`
+              : 'Ofertas vigentes disponibles por tiempo limitado en sucursal.'}
           </p>
         </div>
 
-        {/* Cuadrícula de Promociones en Formato Vertical */}
+        {/* Lista de Tarjetas Horizontales Compactas (Estilo App Móvil) */}
         <div
           className={cn(
-            "grid gap-6 sm:gap-8 justify-center",
-            promotions.length === 1 && "grid-cols-1 max-w-sm mx-auto",
-            promotions.length === 2 && "grid-cols-1 sm:grid-cols-2 max-w-3xl mx-auto",
-            promotions.length >= 3 && "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto"
+            "grid gap-4 justify-center",
+            promotions.length === 1 && "grid-cols-1 max-w-md sm:max-w-lg mx-auto w-full",
+            promotions.length === 2 && "grid-cols-1 md:grid-cols-2 max-w-4xl mx-auto w-full",
+            promotions.length >= 3 && "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 max-w-6xl mx-auto w-full"
           )}
         >
           {promotions.map((promo) => {
@@ -111,12 +117,13 @@ export function AlfaPromotionsSection({
             return (
               <div
                 key={promo.id}
-                className="group relative bg-white rounded-3xl overflow-hidden border border-border/60 hover:border-blue-500/60 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_16px_40px_rgba(37,99,235,0.18)] transition-all duration-300 flex flex-col justify-between"
+                className="group relative bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200/90 shadow-[0_4px_16px_rgba(0,0,0,0.06)] hover:shadow-[0_8px_24px_rgba(37,99,235,0.12)] hover:border-blue-500/40 transition-all duration-300 flex flex-row items-stretch gap-3"
               >
-                {/* Contenedor de Imagen de la Promoción en Formato Vertical (Aspect Ratio 4:5) */}
+                {/* Miniatura Vertical del Flyer a la izquierda (toca para abrir modal con flyer completo) */}
                 <div
                   onClick={() => setSelectedPromotion(promo)}
-                  className="relative w-full aspect-[4/5] overflow-hidden bg-slate-900 cursor-pointer select-none"
+                  className="relative w-[102px] sm:w-[110px] h-[128px] sm:h-[136px] shrink-0 rounded-xl overflow-hidden bg-slate-900 border border-slate-200/80 cursor-pointer select-none group/thumb"
+                  title="Toca para ver el flyer completo"
                 >
                   {promoImg ? (
                     <Image
@@ -124,84 +131,80 @@ export function AlfaPromotionsSection({
                       alt={promoTitle}
                       fill
                       quality={92}
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px"
+                      className="object-cover group-hover/thumb:scale-105 transition-transform duration-300"
+                      sizes="(max-width: 640px) 110px, 120px"
                       unoptimized={true}
                     />
                   ) : (
-                    <div className="absolute inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-slate-500 p-6 text-center">
-                      <Sparkles className="w-10 h-10 text-blue-500 mb-2 opacity-60" />
-                      <span className="text-xs font-medium">VATOS ALFA</span>
+                    <div className="absolute inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-slate-500 p-2 text-center">
+                      <Sparkles className="w-6 h-6 text-blue-500 mb-1 opacity-60" />
+                      <span className="text-[9px] font-bold text-slate-400">PROMO</span>
                     </div>
                   )}
 
-                  {/* Gradiente sutil inferior para legibilidad */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+                  {/* Gradiente inferior para destacar botón VER FLYER */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-transparent pointer-events-none" />
 
-                  {/* Distintivo de Vigencia Superior */}
-                  <div className="absolute top-3.5 left-3.5 right-3.5 flex items-center justify-between pointer-events-none z-10">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#202A49]/90 backdrop-blur-md text-white text-[11px] font-bold shadow-md border border-white/10 font-sans">
-                      <Calendar className="w-3 h-3 text-blue-400 shrink-0" />
-                      <span>{periodLabel}</span>
+                  {/* Distintivo "VER FLYER" */}
+                  <div className="absolute bottom-1.5 inset-x-1 flex justify-center pointer-events-none z-10">
+                    <span className="text-[8.5px] uppercase tracking-wider text-blue-300 font-extrabold bg-slate-950/90 px-2 py-0.5 rounded-md border border-blue-400/35 shadow-sm">
+                      VER FLYER
                     </span>
+                  </div>
+                </div>
+
+                {/* Columna derecha: Vigencia, Compartir, Título, Descripción breve y Botones */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  {/* Fila superior: Vigencia + Compartir */}
+                  <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-100/90 border border-slate-200/70 text-slate-700">
+                      <Calendar className="w-3 h-3 text-blue-600 shrink-0" />
+                      <span className="text-[10px] sm:text-[10.5px] font-semibold truncate leading-none">
+                        {periodLabel}
+                      </span>
+                    </div>
 
                     <button
                       type="button"
                       onClick={(e) => handleSharePromotion(promo, e)}
                       title="Compartir enlace de la promoción"
-                      className="pointer-events-auto p-2 rounded-xl bg-black/50 hover:bg-black/80 backdrop-blur-md text-slate-300 hover:text-white transition-colors border border-white/10 shadow-md cursor-pointer"
+                      className="h-7 w-7 rounded-lg border border-slate-200/80 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
                     >
                       {copiedId === promo.id ? (
-                        <Check className="w-3.5 h-3.5 text-blue-400" />
+                        <Check className="w-3.5 h-3.5 text-blue-600" />
                       ) : (
                         <Share2 className="w-3.5 h-3.5" />
                       )}
                     </button>
                   </div>
 
-                  {/* Indicador de "Toca para ampliar" en la base de la imagen */}
-                  <div className="absolute bottom-3 left-3.5 right-3.5 flex items-center justify-between text-white/90 text-xs font-semibold drop-shadow-md pointer-events-none z-10">
-                    <span className="line-clamp-1">{promoTitle}</span>
-                    <span className="text-[10px] uppercase tracking-wider text-blue-300 font-bold bg-blue-950/70 px-2 py-0.5 rounded-md border border-blue-400/30 shrink-0 ml-2">
-                      Ver flyer
-                    </span>
-                  </div>
-                </div>
-
-                {/* Contenido y Botones de la Tarjeta */}
-                <div className="p-4 sm:p-5 flex flex-col flex-1 justify-between gap-3.5 bg-white">
-                  <div className="space-y-1.5">
-                    <h3 className="font-extrabold text-base sm:text-lg text-[#202A49] group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+                  {/* Bloque central: Título y descripción compactos */}
+                  <div
+                    onClick={() => setSelectedPromotion(promo)}
+                    className="cursor-pointer my-1 space-y-0.5"
+                    title="Ver detalles de la oferta"
+                  >
+                    <h3 className="text-sm sm:text-base font-extrabold text-[#202A49] group-hover:text-blue-600 transition-colors line-clamp-1 leading-snug">
                       {promoTitle}
                     </h3>
-                    {promoDesc ? (
-                      <p className="text-xs sm:text-sm text-slate-600 line-clamp-3 leading-relaxed">
-                        {promoDesc}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-400 italic">
-                        Consulta detalles y términos con tu barbero en sucursal.
-                      </p>
-                    )}
+                    <p className="text-[11px] sm:text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                      {promoDesc ? promoDesc.replace(/\s+/g, ' ').trim() : 'Consulta detalles y términos en sucursal.'}
+                    </p>
                   </div>
 
-                  {/* Acciones */}
-                  <div className="pt-2 border-t border-border/40 flex flex-col sm:flex-row gap-2">
-                    <Button
+                  {/* Fila inferior: Botones compactos (Detalles y Reservar) */}
+                  <div className="flex items-center gap-2 mt-auto pt-1">
+                    <button
                       type="button"
-                      variant="outline"
-                      size="sm"
                       onClick={() => setSelectedPromotion(promo)}
-                      className="rounded-xl border-border/60 text-xs font-medium h-9 text-slate-700 hover:text-[#202A49] hover:bg-slate-100 flex items-center justify-center gap-1.5"
+                      className="flex-1 h-8 px-2 rounded-lg border border-slate-300/80 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span>Términos y detalles</span>
-                    </Button>
+                      <Info className="w-3 h-3 text-slate-500 shrink-0" />
+                      <span>Detalles</span>
+                    </button>
 
-                    <Button
+                    <button
                       type="button"
-                      variant="alfa"
-                      size="sm"
                       onClick={() => {
                         if (onBookPromotion) {
                           onBookPromotion(promo);
@@ -209,11 +212,11 @@ export function AlfaPromotionsSection({
                           window.location.href = '/reservar';
                         }
                       }}
-                      className="rounded-xl text-xs font-bold text-white h-9 flex-1 flex items-center justify-center gap-1.5 shadow-md"
+                      className="flex-[1.2] h-8 px-2.5 rounded-lg bg-[#202A49] hover:bg-[#18223c] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
                     >
-                      <span>Reservar Cita</span>
-                      <ArrowRight className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                    </Button>
+                      <span>Reservar</span>
+                      <ArrowRight className="w-3 h-3 text-white stroke-[2.5]" />
+                    </button>
                   </div>
                 </div>
               </div>

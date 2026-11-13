@@ -25,6 +25,46 @@ service cloud.firestore {
       );
     }
 
+    // Detecta si la sesión pertenece a un cliente de la App Móvil (y no a personal de Agenda Web)
+    function isMobileClientSession(targetDocData, incomingDocData) {
+      return !isGeneralAdmin() && (
+        !isNotAppAnonymousSync() ||
+        request.auth.token.firebase.sign_in_provider == 'anonymous' ||
+        (targetDocData != null && targetDocData.get('authUid', '') == request.auth.uid) ||
+        (incomingDocData != null && incomingDocData.get('authUid', '') == request.auth.uid) ||
+        exists(/databases/$(database)/documents/clientes/$(request.auth.uid))
+      );
+    }
+
+    // Impide que un cliente desde la App Móvil se auto-asigne Alfa Coins, Sellos, Cortes Gratis o Exención de Anticipo
+    function isSafeClientCreate() {
+      return !isMobileClientSession(null, request.resource.data) || (
+        request.resource.data.get('alfaCoins', 0) <= 0 &&
+        request.resource.data.get('alfa_coins', 0) <= 0 &&
+        request.resource.data.get('puntos_lealtad', 0) <= 0 &&
+        request.resource.data.get('puntosLealtad', 0) <= 0 &&
+        request.resource.data.get('cortes_acumulados', 0) <= 0 &&
+        request.resource.data.get('cortesAcumulados', 0) <= 0 &&
+        request.resource.data.get('corte_gratis_disponible', false) == false &&
+        request.resource.data.get('corteGratisDisponible', false) == false &&
+        request.resource.data.get('exento_anticipo', false) == false
+      );
+    }
+
+    function isSafeClientUpdate() {
+      return !isMobileClientSession(resource.data, request.resource.data) || (
+        request.resource.data.get('alfaCoins', 0) <= resource.data.get('alfaCoins', 0) &&
+        request.resource.data.get('alfa_coins', 0) <= resource.data.get('alfa_coins', 0) &&
+        request.resource.data.get('puntos_lealtad', 0) <= resource.data.get('puntos_lealtad', 0) &&
+        request.resource.data.get('puntosLealtad', 0) <= resource.data.get('puntosLealtad', 0) &&
+        request.resource.data.get('cortes_acumulados', 0) <= resource.data.get('cortes_acumulados', 0) &&
+        request.resource.data.get('cortesAcumulados', 0) <= resource.data.get('cortesAcumulados', 0) &&
+        (!request.resource.data.get('corte_gratis_disponible', false) || resource.data.get('corte_gratis_disponible', false) == true) &&
+        (!request.resource.data.get('corteGratisDisponible', false) || resource.data.get('corteGratisDisponible', false) == true) &&
+        (!request.resource.data.get('exento_anticipo', false) || resource.data.get('exento_anticipo', false) == true)
+      );
+    }
+
     // ---------------------------------------------------------
     // RULES
     // ---------------------------------------------------------
@@ -128,7 +168,12 @@ service cloud.firestore {
 
     match /caja/{document=**} { allow read, write: if isAuthenticated(); }
     
-    match /clientes/{document=**} { allow read, write: if isAuthenticated(); } 
+    match /clientes/{docId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isSafeClientCreate();
+      allow update: if isAuthenticated() && isSafeClientUpdate();
+      allow delete: if isNotAppAnonymousSync();
+    }
     match /clients/{document=**} { allow read, write: if isAuthenticated(); } 
 
     // Canjes de Beneficios (Pase Alfa y Cupones App Móvil)

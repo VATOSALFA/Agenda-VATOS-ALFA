@@ -122,6 +122,7 @@ export async function GET(
     const resolvedParams = await Promise.resolve(context.params);
     const reservationId = String(resolvedParams.id || '').trim();
     const mode = req.nextUrl.searchParams.get('m') === 'full' ? 'full' : 'deposit';
+    const wantsJson = req.nextUrl.searchParams.get('format') === 'json';
 
     if (!reservationId) {
       return new NextResponse(
@@ -210,6 +211,12 @@ export async function GET(
     ) || 0;
 
     if (existingLink && linkCreatedAtMs > 0 && Date.now() - linkCreatedAtMs < 25 * 60 * 1000) {
+      if (wantsJson) {
+        return NextResponse.json({
+          id: mode === 'full' ? resData.mercado_pago_preference_id_total || reservationId : resData.mercado_pago_preference_id || reservationId,
+          initPoint: existingLink,
+        });
+      }
       return NextResponse.redirect(existingLink, 302);
     }
 
@@ -323,6 +330,14 @@ export async function GET(
           requiere_anticipo: true,
         })
         .catch(() => {});
+
+      if (wantsJson) {
+        return NextResponse.json({
+          id: prefResult.id || reservationId,
+          initPoint: prefResult.init_point,
+          sandboxInitPoint: prefResult.sandbox_init_point,
+        });
+      }
 
       return NextResponse.redirect(prefResult.init_point, 302);
     }

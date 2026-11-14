@@ -49,6 +49,7 @@ import {
   Link2,
   KeyRound,
   ShieldCheck,
+  AlertCircle,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
@@ -770,9 +771,31 @@ export function ReservationDetailModal({
     return encodeURIComponent(message);
   };
 
+  const matchedClient = useMemo(() => {
+    if (!reservation?.cliente_id || !allClients) return null;
+    return allClients.find((c: any) => c.id === reservation.cliente_id) || null;
+  }, [reservation?.cliente_id, allClients]);
+
+  const effectivePhone = useMemo(() => {
+    return (
+      reservation.customer?.telefono ||
+      (reservation as any).cliente_telefono ||
+      (reservation as any).telefonoCliente ||
+      (reservation as any).telefono ||
+      matchedClient?.telefono ||
+      ''
+    ).trim();
+  }, [
+    reservation.customer?.telefono,
+    (reservation as any).cliente_telefono,
+    (reservation as any).telefonoCliente,
+    (reservation as any).telefono,
+    matchedClient?.telefono,
+  ]);
+
   const handleWhatsAppClick = async (type: 'confirmation' | 'reminder') => {
-    if (!reservation.customer?.telefono || !db) return;
-    const rawTel = String(reservation.customer.telefono).trim();
+    if (!effectivePhone || !db) return;
+    const rawTel = String(effectivePhone).trim();
     const phone = rawTel.replace(/\D/g, '');
     const formattedPhone = !rawTel.startsWith('+') && phone.length === 10 ? '52' + phone : phone;
     
@@ -1538,98 +1561,125 @@ export function ReservationDetailModal({
             )}
 
             {/* 5. COMUNICACIÓN POR WHATSAPP (Oculto para rol Staff por privacidad del cliente) */}
-            {canViewPhone && reservation.customer?.telefono && (
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
-                    <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" /> Notificaciones WhatsApp
-                  </span>
-                  {reservation.customer?.correo && reservation.notifications?.email_confirmation_sent && (
-                    <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 text-[10px] py-0 px-2 flex items-center gap-1">
-                      <CheckCircle2 className="w-2.5 h-2.5" /> Correo enviado
-                    </Badge>
-                  )}
-                </div>
+            {canViewPhone && (
+              effectivePhone ? (
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                      <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" /> Notificaciones WhatsApp
+                    </span>
+                    {reservation.customer?.correo && reservation.notifications?.email_confirmation_sent && (
+                      <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 text-[10px] py-0 px-2 flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Correo enviado
+                      </Badge>
+                    )}
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {/* Si requiere anticipo y no está pagada, mostrar botón prioritario para enviar enlace SPEI */}
-                  {isAnticipoRequired && (
-                    <div className="flex items-center justify-between bg-muted/40 border border-border/70 p-2.5 rounded-xl text-xs col-span-1 sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Si requiere anticipo y no está pagada, mostrar botón prioritario para enviar enlace SPEI */}
+                    {isAnticipoRequired && (
+                      <div className="flex items-center justify-between bg-muted/40 border border-border/70 p-2.5 rounded-xl text-xs col-span-1 sm:col-span-2">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
+                          <div>
+                            <span className="font-bold text-foreground">Enlace de Anticipo (SPEI / MP)</span>
+                            <span className="block text-[10px] text-muted-foreground">
+                              {reservation.mercado_pago_link ? 'Enlace generado listo para enviar' : 'Generar enlace dinámico con CLABE SPEI'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsDepositLinkModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#202A49] hover:bg-[#18223c] text-white shadow-xs transition-all"
+                        >
+                          <Send className="w-3 h-3" /> Enviar Link
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
                       <div className="flex items-center gap-2">
-                        <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
-                        <div>
-                          <span className="font-bold text-foreground">Enlace de Anticipo (SPEI / MP)</span>
-                          <span className="block text-[10px] text-muted-foreground">
-                            {reservation.mercado_pago_link ? 'Enlace generado listo para enviar' : 'Generar enlace dinámico con CLABE SPEI'}
-                          </span>
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+                        <span className="font-medium text-foreground">Confirmación</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="alfa"
+                        disabled={isConcluded || isPastDate}
+                        onClick={() => handleWhatsAppClick('confirmation')}
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
+                          reservation.whatsappConfirmationSent && "opacity-90",
+                          (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3 h-3" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
+                      <div className="flex items-center gap-2">
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
+                        <div className="leading-tight">
+                          <span className="font-medium text-foreground">Recordatorio</span>
+                          {isShortNotice && !reservation.whatsappReminderSent && (
+                            <span className="block text-[9px] text-muted-foreground">
+                              Cita de poca anticipación
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => setIsDepositLinkModalOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#202A49] hover:bg-[#18223c] text-white shadow-xs transition-all"
-                      >
-                        <Send className="w-3 h-3" /> Enviar Link
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
-                    <div className="flex items-center gap-2">
-                      <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
-                      <span className="font-medium text-foreground">Confirmación</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="alfa"
-                      disabled={isConcluded || isPastDate}
-                      onClick={() => handleWhatsAppClick('confirmation')}
-                      className={cn(
-                        "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                        reservation.whatsappConfirmationSent && "opacity-90",
-                        (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3 h-3" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
-                    </Button>
-                  </div>
-
-                  <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
-                    <div className="flex items-center gap-2">
-                      <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
-                      <div className="leading-tight">
-                        <span className="font-medium text-foreground">Recordatorio</span>
-                        {isShortNotice && !reservation.whatsappReminderSent && (
-                          <span className="block text-[9px] text-muted-foreground">
-                            Cita de poca anticipación
-                          </span>
+                      <Button
+                        size="sm"
+                        variant="alfa"
+                        disabled={isConcluded || isPastDate}
+                        onClick={() => handleWhatsAppClick('reminder')}
+                        className={cn(
+                          "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
+                          reservation.whatsappReminderSent && "opacity-90",
+                          (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
                         )}
-                      </div>
+                        title={
+                          reservation.whatsappReminderSent
+                            ? "Reenviar recordatorio por WhatsApp"
+                            : "Enviar recordatorio por WhatsApp"
+                        }
+                      >
+                        {reservation.whatsappReminderSent ? (
+                          <><CheckCircle2 className="w-3 h-3" /> Enviado</>
+                        ) : (
+                          <><Send className="w-3 h-3" /> Enviar</>
+                        )}
+                      </Button>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="alfa"
-                      disabled={isConcluded || isPastDate}
-                      onClick={() => handleWhatsAppClick('reminder')}
-                      className={cn(
-                        "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                        reservation.whatsappReminderSent && "opacity-90",
-                        (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
-                      )}
-                      title={
-                        reservation.whatsappReminderSent
-                          ? "Reenviar recordatorio por WhatsApp"
-                          : "Enviar recordatorio por WhatsApp"
-                      }
-                    >
-                      {reservation.whatsappReminderSent ? (
-                        <><CheckCircle2 className="w-3 h-3" /> Enviado</>
-                      ) : (
-                        <><Send className="w-3 h-3" /> Enviar</>
-                      )}
-                    </Button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                      <WhatsAppIcon className="w-3.5 h-3.5 text-muted-foreground opacity-60" /> Notificaciones WhatsApp
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-dashed border-border/70 bg-muted/20 text-xs gap-3">
+                    <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                      <AlertCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                      <span className="truncate">Cliente sin teléfono registrado. Agrega su celular para enviar WhatsApp.</span>
+                    </div>
+                    {reservation.cliente_id && onClientClick && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onClientClick(reservation.cliente_id!)}
+                        className="h-7 px-2 text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0"
+                      >
+                        Editar Teléfono
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )
             )}
 
             {/* 6. NOTAS INTERNAS O MOTIVO DE CANCELACIÓN */}

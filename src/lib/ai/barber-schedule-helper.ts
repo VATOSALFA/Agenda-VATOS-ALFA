@@ -66,6 +66,32 @@ export function normalizeName(str: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+export function stringSimilarity(str1: string, str2: string): number {
+  const s1 = (str1 || '').trim().toLowerCase();
+  const s2 = (str2 || '').trim().toLowerCase();
+  if (s1 === s2) return 1.0;
+  if (!s1 || !s2) return 0.0;
+
+  const m = s1.length;
+  const n = s2.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  const maxLen = Math.max(m, n);
+  return 1 - (dp[m][n] / maxLen);
+}
+
 export function matchesBarber(prof: any, query: string): boolean {
   if (!prof || !query) return false;
   const qNorm = normalizeName(query);

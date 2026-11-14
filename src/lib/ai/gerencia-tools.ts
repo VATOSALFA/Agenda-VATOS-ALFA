@@ -18,6 +18,7 @@ import {
   parseTimeToHHmm,
   calculateBarberFreeSlots,
   normalizeName,
+  stringSimilarity,
   BarberDayScheduleInfo,
 } from '@/lib/ai/barber-schedule-helper';
 
@@ -662,12 +663,31 @@ async function resolveOrCreateClientForGerencia(
 
       // Coincidencia por nombre completo o tokens
       if (qNorm && cFullNameNorm) {
-        if (cFullNameNorm === qNorm) score += 100;
-        else if (cFullNameNorm.includes(qNorm)) score += 80;
-        else {
+        if (cFullNameNorm === qNorm) {
+          score += 100;
+        } else if (cFullNameNorm.includes(qNorm)) {
+          score += 80;
+        } else {
           const tokens = qNorm.split(/\s+/).filter((t: string) => t.length > 1);
           if (tokens.length > 0 && tokens.every((t: string) => cFullNameNorm.includes(t))) {
             score += 75;
+          } else {
+            // Coincidencia difusa (tolerancia a errores ortográficos o transposición de letras ej. Zuridasai vs Zurisadai)
+            const sim = stringSimilarity(qNorm, cFullNameNorm);
+            if (sim >= 0.85) {
+              score += Math.round(sim * 85);
+            } else if (tokens.length >= 2) {
+              const cTokens = cFullNameNorm.split(/\s+/).filter((t: string) => t.length > 1);
+              const matchesAnyExact = tokens.some((t: string) => cTokens.includes(t));
+              if (matchesAnyExact) {
+                const maxTokenSim = Math.max(
+                  ...tokens.map((t: string) => Math.max(...cTokens.map((ct: string) => stringSimilarity(t, ct))))
+                );
+                if (maxTokenSim >= 0.75 || sim >= 0.75) {
+                  score += 72;
+                }
+              }
+            }
           }
         }
       }
@@ -814,7 +834,7 @@ export const buscarClienteSucursalTool = ai.defineTool(
         score += 85;
       }
 
-      // 4. Coincidencia por nombre completo o palabras individuales
+      // 4. Coincidencia por nombre completo o palabras individuales / difusas
       if (fullNameNorm) {
         if (fullNameNorm === qNorm) {
           match = true;
@@ -827,6 +847,24 @@ export const buscarClienteSucursalTool = ai.defineTool(
           if (tokens.length > 0 && tokens.every((t) => fullNameNorm.includes(t))) {
             match = true;
             score += 75;
+          } else {
+            const sim = stringSimilarity(qNorm, fullNameNorm);
+            if (sim >= 0.85) {
+              match = true;
+              score += Math.round(sim * 85);
+            } else if (tokens.length >= 2) {
+              const cTokens = fullNameNorm.split(/\s+/).filter((t) => t.length > 1);
+              const matchesAnyExact = tokens.some((t) => cTokens.includes(t));
+              if (matchesAnyExact) {
+                const maxTokenSim = Math.max(
+                  ...tokens.map((t) => Math.max(...cTokens.map((ct) => stringSimilarity(t, ct))))
+                );
+                if (maxTokenSim >= 0.75 || sim >= 0.75) {
+                  match = true;
+                  score += 72;
+                }
+              }
+            }
           }
         }
       }

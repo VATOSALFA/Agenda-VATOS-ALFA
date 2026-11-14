@@ -18,7 +18,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { cn, formatMoney } from '@/lib/utils';
-import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { addDoc, collection, doc, updateDoc, deleteDoc, Timestamp, setDoc, getDoc, writeBatch, arrayUnion, arrayRemove, query, where, getDocs } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
 import {
     AlertDialog,
@@ -271,29 +271,45 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
             if (profesional) { // EDIT MODE
                 const profId = profesional.id;
                 const profRef = doc(db, 'profesionales', profId);
+
+                // Asegurar que el nombre público nunca quede vacío
+                if (!profData.publicName || !profData.publicName.trim()) {
+                    profData.publicName = (profData.name || '').trim().split(' ')[0] || profData.name;
+                }
+
                 await updateDoc(profRef, profData);
 
                 // Sync services
                 await syncServices(profId, profData.services || []);
 
-                // Also update the user document with the new avatar and name
-                if (profesional.userId) {
-                    try {
-                        const userRef = doc(db, 'usuarios', profesional.userId);
-                        const userSnap = await getDoc(userRef);
-
+                // Sincronizar con el usuario del sistema (por userId o por correo)
+                try {
+                    let targetUserRef: any = null;
+                    if (profesional.userId) {
+                        const directUserRef = doc(db, 'usuarios', profesional.userId);
+                        const userSnap = await getDoc(directUserRef);
                         if (userSnap.exists()) {
-                            const userUpdates: any = { name: profData.name };
-                            if ('avatarUrl' in profData) {
-                                userUpdates.avatarUrl = profData.avatarUrl;
-                            }
-                            await updateDoc(userRef, userUpdates);
-                        } else {
-                            console.warn(`Linked user document ${profesional.userId} not found associated with professional ${profId}. Skipping user update.`);
+                            targetUserRef = directUserRef;
                         }
-                    } catch (userUpdateError) {
-                        console.error("Error updating linked user document:", userUpdateError);
                     }
+                    if (!targetUserRef && profData.email) {
+                        const emailQuery = query(collection(db, 'usuarios'), where('email', '==', profData.email.trim()));
+                        const emailSnap = await getDocs(emailQuery);
+                        if (!emailSnap.empty) {
+                            targetUserRef = emailSnap.docs[0].ref;
+                            await updateDoc(profRef, { userId: emailSnap.docs[0].id });
+                        }
+                    }
+
+                    if (targetUserRef) {
+                        const userUpdates: any = { name: profData.name };
+                        if ('avatarUrl' in profData) {
+                            userUpdates.avatarUrl = profData.avatarUrl;
+                        }
+                        await updateDoc(targetUserRef, userUpdates);
+                    }
+                } catch (userUpdateError) {
+                    console.error("Error updating linked user document:", userUpdateError);
                 }
 
                 toast({ title: "Profesional actualizado con éxito" });
@@ -490,16 +506,17 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                             <Input 
                                                 id="name" 
                                                 {...form.register('name', { required: true })} 
-                                                placeholder="Ej. Beatriz Martínez" 
+                                                placeholder="Ej. Beatriz Elizarraga Casas" 
                                                 className="h-9 text-xs sm:text-sm bg-background border-border/60"
                                             />
+                                            <p className="text-[10px] text-muted-foreground">Nombre real para registro interno, comisiones y nómina.</p>
                                         </div>
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
                                                 <Label htmlFor="publicName" className="text-xs font-semibold text-foreground">
-                                                    Nombre Público (Web)
+                                                    Nombre Público (Web y Agenda) *
                                                 </Label>
-                                                <span className="text-[10px] text-muted-foreground">Visible para clientes</span>
+                                                <span className="text-[10px] text-blue-400 font-medium">Web, App y Agenda</span>
                                             </div>
                                             <Input 
                                                 id="publicName" 
@@ -507,6 +524,7 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                                 placeholder="Ej. Bety" 
                                                 className="h-9 text-xs sm:text-sm bg-background border-border/60"
                                             />
+                                            <p className="text-[10px] text-muted-foreground">Seudónimo o nombre corto que ven los clientes y en las columnas de la agenda.</p>
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="email" className="text-xs font-semibold text-foreground">

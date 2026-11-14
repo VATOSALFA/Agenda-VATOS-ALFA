@@ -123,9 +123,9 @@ function SortableProfesionalItem({ prof, onToggleActive, onEdit, onOpenSpecialDa
         </Avatar>
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-xs sm:text-sm text-foreground truncate">{prof.name}</span>
-          {prof.publicName && prof.publicName !== prof.name && (
-            <span className="text-[11px] text-muted-foreground truncate">Web: {prof.publicName}</span>
-          )}
+          <span className="text-[11px] text-muted-foreground truncate">
+            Web y Agenda: <span className="text-blue-400 font-medium">{prof.publicName || prof.name}</span>
+          </span>
         </div>
       </div>
       <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end flex-wrap">

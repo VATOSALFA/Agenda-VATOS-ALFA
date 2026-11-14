@@ -169,11 +169,25 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         const userRef = doc(db, 'usuarios', user.id);
         await updateDoc(userRef, dataToSave);
 
-        // Sync with professional profile if it exists
-        const professional = professionals.find(p => p.userId === user.id);
+        // Sync with professional profile if it exists (matching by userId OR by email)
+        const professional = professionals.find(p => 
+          (p.userId && p.userId === user.id) || 
+          (p.email && user.email && p.email.toLowerCase().trim() === user.email.toLowerCase().trim())
+        );
         if (professional) {
           const profRef = doc(db, 'profesionales', professional.id);
-          await updateDoc(profRef, { name: fullName, avatarUrl: data.avatarUrl, email: data.email });
+          const updates: any = { 
+            name: fullName, 
+            avatarUrl: data.avatarUrl, 
+            email: data.email,
+            userId: user.id
+          };
+          // PROTEGER publicName: NUNCA sobreescribir publicName con el nombre completo.
+          // Si el profesional aún no tenía publicName, asignar su nombre corto (primer nombre) para que nunca quede vacío
+          if (!professional.publicName || !professional.publicName.trim()) {
+            updates.publicName = professional.name || data.nombre;
+          }
+          await updateDoc(profRef, updates);
         }
 
         if (auth.currentUser && auth.currentUser.uid === user.id) {

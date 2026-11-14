@@ -5240,7 +5240,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             </Sheet >
 
             <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-                <DialogContent className="sm:max-w-lg p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card" hideCloseButton>
+                <DialogContent className="sm:max-w-xl p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card" hideCloseButton>
                     <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 sm:px-6 py-3.5 border-b border-blue-900/40 flex items-center justify-between shrink-0">
                         <div className="header-light-beam" />
                         <div className="flex items-center gap-3 relative z-10">

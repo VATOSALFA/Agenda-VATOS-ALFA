@@ -16,7 +16,6 @@ import { useDebounce } from 'use-debounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Form,
   FormControl,
@@ -130,6 +129,9 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
   const [emailError, setEmailError] = useState<string | null>(null);
   const [phoneCountryCode, setPhoneCountryCode] = useState<string>('+52');
   const [phoneLocalDigits, setPhoneLocalDigits] = useState<string>('');
+  const [dayVal, setDayVal] = useState<string | undefined>(undefined);
+  const [monthVal, setMonthVal] = useState<string | undefined>(undefined);
+  const [yearVal, setYearVal] = useState<string | undefined>(undefined);
 
   const clientSchema = useMemo(() => createClientSchema(agendaSettings || undefined), [agendaSettings]);
 
@@ -275,6 +277,15 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
       const parsedPhone = parseStoredPhone(client.telefono);
       setPhoneCountryCode(parsedPhone.countryCode);
       setPhoneLocalDigits(canViewPhone ? parsedPhone.localDigits : '••••••••••');
+      if (birthDate && isValid(birthDate)) {
+        setDayVal(getDate(birthDate).toString());
+        setMonthVal(getMonth(birthDate).toString());
+        setYearVal(getYear(birthDate).toString());
+      } else {
+        setDayVal(undefined);
+        setMonthVal(undefined);
+        setYearVal(undefined);
+      }
       form.reset({
         ...client,
         telefono: client.telefono || '',
@@ -283,6 +294,9 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     } else {
       setPhoneCountryCode('+52');
       setPhoneLocalDigits('');
+      setDayVal(undefined);
+      setMonthVal(undefined);
+      setYearVal(undefined);
       form.reset({
         nombre: initialName,
         apellido: '',
@@ -421,27 +435,48 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     }
   }
 
-  // --- LÓGICA DE FECHA (Selectores Desplegables) ---
-  const handleDateSelectChange = (key: 'day' | 'month' | 'year', value: string) => {
-    const val = parseInt(value, 10);
-    const currentDate = form.getValues('fecha_nacimiento') || new Date(2000, 0, 1);
+  // --- LÓGICA DE FECHA DE NACIMIENTO (Selectores Directos sin Popover) ---
+  const currentDaysCount = useMemo(() => {
+    const m = monthVal !== undefined ? parseInt(monthVal, 10) : 0;
+    const y = yearVal !== undefined ? parseInt(yearVal, 10) : 2000;
+    return getDaysInMonth(new Date(y, m));
+  }, [monthVal, yearVal]);
 
-    let newDay = getDate(currentDate);
-    let newMonth = getMonth(currentDate);
-    let newYear = getYear(currentDate);
+  const currentDaysList = useMemo(() => {
+    return Array.from({ length: currentDaysCount }, (_, i) => i + 1);
+  }, [currentDaysCount]);
 
-    if (key === 'day') newDay = val;
-    if (key === 'month') newMonth = val;
-    if (key === 'year') newYear = val;
+  const handleDatePartChange = (part: 'day' | 'month' | 'year', val: string) => {
+    const nextDay = part === 'day' ? val : dayVal;
+    const nextMonth = part === 'month' ? val : monthVal;
+    const nextYear = part === 'year' ? val : yearVal;
 
-    // Ajustar si el día excede los días del nuevo mes
-    const daysInNewMonth = getDaysInMonth(new Date(newYear, newMonth));
-    if (newDay > daysInNewMonth) newDay = daysInNewMonth;
+    if (part === 'day') setDayVal(val);
+    if (part === 'month') setMonthVal(val);
+    if (part === 'year') setYearVal(val);
 
-    const newDate = new Date(newYear, newMonth, newDay);
-    if (isValid(newDate)) {
-      form.setValue('fecha_nacimiento', newDate, { shouldValidate: true });
+    if (nextDay && nextMonth) {
+      const d = parseInt(nextDay, 10);
+      const m = parseInt(nextMonth, 10);
+      const y = nextYear ? parseInt(nextYear, 10) : (yearVal ? parseInt(yearVal, 10) : 2000);
+
+      const daysInM = getDaysInMonth(new Date(y, m));
+      const validD = Math.min(d, daysInM);
+      if (validD !== d && part !== 'day') {
+        setDayVal(validD.toString());
+      }
+      const newDate = new Date(y, m, validD);
+      if (isValid(newDate)) {
+        form.setValue('fecha_nacimiento', newDate, { shouldValidate: true });
+      }
     }
+  };
+
+  const handleClearDate = () => {
+    setDayVal(undefined);
+    setMonthVal(undefined);
+    setYearVal(undefined);
+    form.setValue('fecha_nacimiento', null, { shouldValidate: true });
   };
 
   const fieldSettings = agendaSettings?.customerFields;
@@ -628,72 +663,81 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
                 name="fecha_nacimiento"
                 render={({ field }) => (
                   <FormItem className="space-y-1 flex flex-col">
-                    <FormLabel className="flex items-center text-xs font-medium text-foreground">
-                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}
+                    <FormLabel className="flex items-center justify-between text-xs font-medium text-foreground">
+                      <span className="flex items-center">
+                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-slate-400" /> Fecha de Nacimiento {(fieldSettings.dob.required && <span className="text-red-500 ml-1">*</span>) || <OptionalLabel />}
+                      </span>
+                      {field.value && isValid(field.value) && (
+                        <span className="text-[10px] text-blue-400 font-medium capitalize truncate max-w-[140px]">
+                          {format(field.value, "d 'de' MMM, yyyy", { locale: es })}
+                        </span>
+                      )}
                     </FormLabel>
-                    <Popover modal={true}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full h-9 pl-3 text-left font-normal text-xs rounded-lg",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? format(field.value, 'dd MMMM yyyy', { locale: es }) : <span>Selecciona una fecha</span>}
-                            {field.value ? (
-                              <X className="ml-auto h-3.5 w-3.5 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); field.onChange(null); }} />
-                            ) : (
-                              <CalendarIcon className="ml-auto h-3.5 w-3.5 opacity-50" />
-                            )}
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]" align="start">
-                        <p className="font-semibold text-center mb-2 text-xs text-muted-foreground">Fecha de Nacimiento</p>
-                        <div className="flex gap-2">
-                          {/* DÍA */}
-                          <Select
-                            onValueChange={(val) => handleDateSelectChange('day', val)}
-                            value={field.value ? getDate(field.value).toString() : undefined}
-                          >
-                            <SelectTrigger className="w-[70px] h-8 text-xs">
-                              <SelectValue placeholder="Día" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                              {days.map(d => <SelectItem key={d} value={d.toString()} className="text-xs">{d}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                    <div className="flex items-center gap-1.5">
+                      {/* DÍA */}
+                      <Select
+                        value={dayVal}
+                        onValueChange={(val) => handleDatePartChange('day', val)}
+                      >
+                        <SelectTrigger className="w-[68px] h-9 text-xs shrink-0">
+                          <SelectValue placeholder="Día" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[220px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                          {currentDaysList.map((d) => (
+                            <SelectItem key={d} value={d.toString()} className="text-xs">
+                              {d}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                          {/* MES */}
-                          <Select
-                            onValueChange={(val) => handleDateSelectChange('month', val)}
-                            value={field.value ? getMonth(field.value).toString() : undefined}
-                          >
-                            <SelectTrigger className="w-[110px] h-8 text-xs">
-                              <SelectValue placeholder="Mes" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                              {months.map(m => <SelectItem key={m.value} value={m.value.toString()} className="capitalize text-xs">{m.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                      {/* MES */}
+                      <Select
+                        value={monthVal}
+                        onValueChange={(val) => handleDatePartChange('month', val)}
+                      >
+                        <SelectTrigger className="flex-1 min-w-[95px] h-9 text-xs">
+                          <SelectValue placeholder="Mes" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[220px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                          {months.map((m) => (
+                            <SelectItem key={m.value} value={m.value.toString()} className="capitalize text-xs">
+                              {m.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
 
-                          {/* AÑO */}
-                          <Select
-                            onValueChange={(val) => handleDateSelectChange('year', val)}
-                            value={field.value ? getYear(field.value).toString() : undefined}
-                          >
-                            <SelectTrigger className="w-[80px] h-8 text-xs">
-                              <SelectValue placeholder="Año" />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[200px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                              {years.map(y => <SelectItem key={y} value={y.toString()} className="text-xs">{y}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
+                      {/* AÑO */}
+                      <Select
+                        value={yearVal}
+                        onValueChange={(val) => handleDatePartChange('year', val)}
+                      >
+                        <SelectTrigger className="w-[78px] h-9 text-xs shrink-0">
+                          <SelectValue placeholder="Año" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[220px] border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                          {years.map((y) => (
+                            <SelectItem key={y} value={y.toString()} className="text-xs">
+                              {y}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Quitar fecha */}
+                      {(dayVal || monthVal || yearVal) && (
+                        <button
+                          type="button"
+                          onClick={handleClearDate}
+                          className="h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors shrink-0"
+                          title="Quitar fecha"
+                          aria-label="Quitar fecha"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                     {form.formState.errors.fecha_nacimiento && <FormMessage className="text-[11px]" />}
                   </FormItem>
                 )}

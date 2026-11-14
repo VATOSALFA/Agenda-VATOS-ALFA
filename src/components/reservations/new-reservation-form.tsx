@@ -2586,7 +2586,7 @@ export function NewReservationForm({
           setClientSearchTerm('');
         }
       }}>
-        <DialogContent hideCloseButton={true} className="sm:max-w-lg p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background flex flex-col">
+        <DialogContent hideCloseButton={true} className="sm:max-w-xl p-0 overflow-hidden border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background flex flex-col">
           {/* CABECERA OFICIAL VATOS ALFA */}
           <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 sm:px-5 py-3 border-b border-blue-900/40 flex items-center justify-between shrink-0 relative overflow-hidden">
             <div className="header-light-beam" aria-hidden="true" />

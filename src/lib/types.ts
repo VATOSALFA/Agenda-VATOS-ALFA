@@ -84,6 +84,12 @@ export interface Local {
   google_maps_review_url?: string;
   secondaryPhone?: string;
   description?: string;
+  modoOperacion?: 'tradicional' | 'sin_recepcionista';
+  kioscoTerminalId?: string;
+  estacionTerminalId?: string;
+  cobroEnKioscoPreferente?: boolean;
+  fondoFijoEstacion?: number;
+  whatsappSoporteRemoto?: string;
 }
 
 
@@ -107,6 +113,8 @@ export interface Profesional {
   comisionesPorProducto?: { [key: string]: Commission };
   deleted?: boolean;
   deletedAt?: Timestamp;
+  pinEstacion?: string;
+  numeroEstacion?: string;
 }
 
 export interface Reservation {
@@ -173,6 +181,19 @@ export interface Reservation {
   exento_en?: any;
   anticipo_en_sucursal?: boolean;
   tolerancia_anticipo_extendida?: boolean;
+  checkin_en?: any;
+  hora_inicio_atencion?: any;
+  hora_fin_atencion?: any;
+  kiosco_venta_id?: string;
+  origen_registro?: 'kiosco' | 'app' | 'web' | 'recepcion';
+  servicios_bloqueados_kiosco?: {
+    id: string;
+    nombre: string;
+    precio: number;
+    cantidad: number;
+  }[];
+  cancelado_por_barbero_id?: string;
+  codigo_autorizacion_usado?: string;
 }
 
 export interface TimeBlock {
@@ -339,6 +360,13 @@ export interface Sale {
   final_sale_id?: string;
   propina?: number;
   propina_detalles?: { barbero_id: string; monto: number }[];
+  modalidad_sucursal?: 'tradicional' | 'sin_recepcionista';
+  origen_cobro?: 'kiosco' | 'estacion' | 'caja';
+  cobrado_por_barbero_id?: string;
+  cobrado_por_barbero_nombre?: string;
+  efectivo_retenido_barbero?: number;
+  efectivo_descontado_en_comision?: boolean;
+  comision_liquidacion_egreso_id?: string;
 }
 
 
@@ -352,6 +380,9 @@ export interface SaleItem {
   subtotal: number;
   tipo: 'servicio' | 'producto';
   servicio?: string;
+  duracion?: number;
+  pagado_en_kiosco?: boolean;
+  bloqueado_kiosco?: boolean;
   descuento?: {
     valor: number;
     tipo: 'fixed' | 'percentage';
@@ -375,10 +406,14 @@ export interface Egreso {
     professionalId: string;
     saleItemIds: { saleId: string; itemIndex: number }[];
     tipSaleIds: string[];
+    cashRetainedSaleIds?: string[];
   };
   comisionServicios?: number;
   comisionProductos?: number;
   propina?: number;
+  comisionBruta?: number;
+  efectivoRetenidoDescontado?: number;
+  saldoAFavorSucursal?: number;
   source?: string;
   quienPagaId?: string;
   quienPagaNombre?: string;
@@ -484,6 +519,8 @@ export interface Promotion {
   description: string;
   termsAndConditions?: string;
   active: boolean;
+  mostrarEnApp?: boolean;
+  mostrarEnWeb?: boolean;
   createdAt?: Timestamp;
 }
 
@@ -577,6 +614,8 @@ export interface ProfessionalCommissionSummary {
   professionalName: string;
   totalSales: number;
   totalCommission: number;
+  cashRetainedByBarber?: number;
+  netPayable?: number;
   details: CommissionRowData[];
 }
 

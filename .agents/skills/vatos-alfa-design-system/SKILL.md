@@ -429,3 +429,109 @@ Todas las áreas y secciones con desplazamiento en la interfaz (`overflow-y-auto
 - **Barra (thumb) en hover / interacción activa:** Azul Acento Móvil vibrante (`#3B82F6` / `#2563EB`).
 - **Botones de flecha eliminados:** `::-webkit-scrollbar-button { display: none !important; }`.
 - **Soporte estándar W3C/Firefox:** `scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.45) transparent;`.
+
+---
+
+## 12. Estándar Oficial de Vistas de Configuración, Tarjetas de Beneficios y Portadas 16:9 (Minimalismo y Densidad)
+
+Para garantizar consistencia, orden visual y cero redundancias en los módulos administrativos y de configuración (ej. App Móvil, Pase Alfa, Beneficios, Niveles, etc.), se deben seguir estrictamente estas pautas:
+
+### 12.1. Encabezado de Página Dinámico y Minimalista
+- La cabecera superior debe mostrar únicamente el título limpio del módulo o beneficio activo (ej. `Pase Alfa`, `Regalo de cumpleaños`, `Alfa Coins`, `Niveles`, `Galería`, `Promociones`, `Buzón`, `Uso y Tiendas`).
+- **PROHIBIDO** incluir rutas de migas de pan como `App Móvil VATOS ALFA /` o párrafos explicativos extensos debajo del título.
+- Al editar un beneficio o elemento individual, el título superior de la página debe actualizarse dinámicamente con el nombre del beneficio (ej. `Regalo de cumpleaños` o `Alfa Coins`), evitando duplicar títulos dentro de la tarjeta.
+
+### 12.2. Botón Único de Retorno ("Regresar a la lista")
+- Debe ubicarse en el extremo superior derecho del encabezado de la página:
+  ```tsx
+  <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60">
+      <h2 className="text-xl font-bold tracking-tight text-foreground">{displayTitle}</h2>
+      {isEditing && (
+          <button
+              type="button"
+              onClick={handleBack}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-foreground transition-colors cursor-pointer select-none"
+          >
+              <ChevronLeft className="w-4 h-4 text-slate-400" />
+              <span>Regresar a la lista</span>
+          </button>
+      )}
+  </div>
+  ```
+- **PROHIBIDO** encerrar este botón en contenedores o marcos (`variant="outline"`, bordes grises o fondos pesados). Debe ser un enlace limpio con bare icon + texto.
+- **PROHIBIDO** duplicar botones de cancelar o regresar dentro del formulario o en el pie de página.
+
+### 12.3. Estructura de la Tarjeta de Edición (Cero Textos Redundantes)
+- La tarjeta no debe incluir títulos repetitivos como `Editar: [Nombre]`.
+- La primera fila de la tarjeta debe contener **únicamente el switch de visibilidad (`Visible / Pausado`) alineado al extremo derecho**, sin ningún texto en el lado izquierdo:
+  ```tsx
+  <div className="flex items-center justify-end pb-2.5 border-b border-border/50">
+      <div className="flex items-center gap-2">
+          <Label htmlFor="item-active" className="text-xs font-medium cursor-pointer text-muted-foreground">
+              {activo ? 'Visible' : 'Pausado'}
+          </Label>
+          <Switch id="item-active" checked={activo} onCheckedChange={setActivo} className="scale-90" />
+      </div>
+  </div>
+  ```
+
+### 12.4. Estándar de Fotografía / Portada (Relación 16:9 y Botón de Ojo)
+- Todas las portadas e imágenes de beneficios deben presentarse en formato panorámico estándar **16:9** (`1280 × 720 px`, `aspect-video`).
+- Queda prohibido forzar contenedores cuadrados (1:1) cuando la imagen recomendada sea 16:9.
+- El componente `ImageUploader` debe configurarse obligatoriamente con:
+  - `aspectRatio="16/9"`
+  - `showPreview={true}` (muestra un botón flotante con el icono de ojo sobre la imagen para abrir la previsualización a pantalla completa en su modal oficial con borde azul de 2px).
+  - `showRemove={true}`
+  - `objectFit="cover"`
+  - Estilo: `w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs`
+
+### 12.5. Botón de Guardado Oficial
+- Variante `.btn-vatos-alfa` o `variant="alfa"`.
+- Etiqueta ultra limpia: solo el icono de disquete y la palabra `Guardar`:
+  ```tsx
+  <Button variant="alfa" onClick={handleSave} className="font-semibold text-xs px-5 h-8.5 cursor-pointer">
+      <Save className="w-3.5 h-3.5 mr-1.5" />
+      Guardar
+  </Button>
+  ```
+- **PROHIBIDO** textos largos o redundantes como "Guardar Configuración del Pase Alfa" o "Guardar Cambios del Beneficio".
+
+---
+
+## 13. Estándar Oficial de Campos de Texto Extensos / Plantillas (Edición en Modal Maximizado)
+
+Para evitar campos de texto gigantescos (`<Textarea>`) que saturen visualmente la interfaz, generen scroll vertical excesivo y provoquen fatiga visual al usuario, **todos los textos largos, políticas, avisos de privacidad, descripciones de más de 200 caracteres, prompts maestros y plantillas de mensajes deben representarse en una fila compacta con un botón para abrir un modal de redacción**.
+
+### 13.1. Fila Compacta en la Vista Principal
+En la tarjeta o sección, el campo se muestra únicamente como una fila limpia con hover sutil:
+```tsx
+<div className="p-3 sm:px-4 sm:py-2.5 rounded-xl border border-border/70 bg-muted/15 flex items-center justify-between gap-3 hover:bg-muted/20 transition-colors">
+  <div className="flex items-center gap-2 min-w-0">
+    <span className="text-xs font-semibold text-foreground">
+      {tituloDelCampo}
+    </span>
+    {valor && (
+      <span className="text-[10px] text-muted-foreground font-sans hidden sm:inline">
+        ({valor.length} caracteres)
+      </span>
+    )}
+  </div>
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    onClick={() => openEditorModal(titulo, descripcion, campo, supportsTags)}
+    className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+  >
+    Editar
+  </Button>
+</div>
+```
+
+### 13.2. Modal Oficial de Lectura y Redacción
+Al presionar **Editar**, se abre un modal maximizado oficial (`Dialog` de tamaño `max-w-3xl w-[95vw]`):
+1. **Contenedor:** `border-2 border-blue-500 rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-0 overflow-hidden`.
+2. **Cabecera Institucional:** Franja con degradado `#10172b` via `#1c2847` to `#12192d`, haz de luz `.header-light-beam`, icono bare `FileText`, título nítido en blanco, descripción suave en `text-slate-300`, badges con conteo dinámico de palabras y caracteres, y botón de cierre `X`.
+3. **Etiquetas Dinámicas (si aplica):** Si el campo admite variables (ej. `{nombre}`, `{fecha}`, `{hora}`, `{profesional}`), se incluye una barra superior de badges clicables para insertarlas o copiarlas directamente al texto con un solo clic.
+4. **Área de Redacción:** `<Textarea className="flex-1 min-h-[260px] sm:min-h-[360px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500">`.
+5. **Pie de Modal:** Botón `Cancelar` y botón `Aplicar y Guardar Ahora` con `variant="alfa"`.

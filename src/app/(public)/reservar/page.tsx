@@ -117,7 +117,13 @@ export default function BookingPage() {
     const activePromotions = useMemo(() => {
         const d = new Date();
         const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        return promotions?.filter((p: any) => p.active && (!p.endDate || today <= p.endDate)) || [];
+        return promotions?.filter((p: any) => {
+            if (!p.active || (p.endDate && today > p.endDate)) return false;
+            if (p.mostrarEnWeb === false) return false;
+            const name = (p.name || p.titulo || '').toLowerCase();
+            if (p.id === 'DSVwbmEtiK1xJzJjwrqu' || p.id === 'promo_pase_alfa' || p.es_pase_alfa === true || name.includes('décima va por la casa') || name.includes('decima va por la casa')) return false;
+            return true;
+        }) || [];
     }, [promotions]);
 
 

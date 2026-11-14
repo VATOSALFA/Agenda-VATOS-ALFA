@@ -5,7 +5,6 @@ import {
   Card,
   CardHeader,
   CardTitle,
-  CardDescription,
   CardContent,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,24 +13,25 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   ShieldCheck,
-  Clock,
-  Scissors,
   CheckCircle2,
   XCircle,
   Plus,
   Trash2,
   Bot,
-  AlertTriangle,
-  Sparkles,
   Save,
   Loader2,
-  HelpCircle,
-  UserCheck,
+  FileText,
+  X,
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
+  Minus,
 } from 'lucide-react';
 
 export interface GarantiasConfig {
@@ -94,6 +94,36 @@ export function GarantiasManager() {
   const [nuevoCriterioAplica, setNuevoCriterioAplica] = useState('');
   const [nuevoCriterioNoAplica, setNuevoCriterioNoAplica] = useState('');
 
+  // Secciones minimizadas por defecto
+  const [openSections, setOpenSections] = useState<{
+    general: boolean;
+    criterios: boolean;
+    protocolo: boolean;
+  }>({
+    general: false,
+    criterios: false,
+    protocolo: false,
+  });
+
+  const toggleSection = (section: 'general' | 'criterios' | 'protocolo') => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  // Modal para edición de textos largos
+  const [editorModal, setEditorModal] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    field: 'instruccionesJanet' | 'mensajeTransferencia';
+    value: string;
+  }>({
+    open: false,
+    title: '',
+    description: '',
+    field: 'instruccionesJanet',
+    value: '',
+  });
+
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
@@ -146,7 +176,7 @@ export function GarantiasManager() {
 
       toast({
         title: 'Garantías Actualizadas',
-        description: 'Las políticas de garantías y el protocolo de Janet se guardaron exitosamente.',
+        description: 'Las políticas de garantías y el protocolo de Janeth se guardaron exitosamente.',
       });
     } catch (err: any) {
       console.error('Error al guardar garantías:', err);
@@ -194,336 +224,421 @@ export function GarantiasManager() {
     }));
   };
 
+  const openEditor = (
+    title: string,
+    description: string,
+    field: 'instruccionesJanet' | 'mensajeTransferencia'
+  ) => {
+    const val = field === 'instruccionesJanet'
+      ? config.instruccionesJanet
+      : config.escalamientoHumano.mensajeTransferencia;
+
+    setEditorModal({
+      open: true,
+      title,
+      description,
+      field,
+      value: val || '',
+    });
+  };
+
+  const applyEditorModal = () => {
+    if (editorModal.field === 'instruccionesJanet') {
+      setConfig((prev) => ({ ...prev, instruccionesJanet: editorModal.value }));
+    } else {
+      setConfig((prev) => ({
+        ...prev,
+        escalamientoHumano: {
+          ...prev.escalamientoHumano,
+          mensajeTransferencia: editorModal.value,
+        },
+      }));
+    }
+    setEditorModal((prev) => ({ ...prev, open: false }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="h-7 w-7 animate-spin text-blue-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Cabecera de Página */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-border/60">
-        <div>
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-slate-400 shrink-0" />
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-              Garantías y Retoques de Satisfacción
-            </h1>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Configura las reglas oficiales para clientes inconformes, tiempos de cobertura y el protocolo de respuesta de Janet.
-          </p>
-        </div>
+    <div className="space-y-3.5 max-w-5xl pb-6">
+      {/* Cabecera de Página Oficial y Limpia */}
+      <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-border/60">
+        <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">GARANTÍAS</h2>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             type="button"
             variant="alfa"
             onClick={handleSave}
             disabled={saving}
-            className="w-full sm:w-auto h-9 px-4 text-xs font-semibold cursor-pointer shrink-0"
+            className="h-8 px-4 text-xs font-semibold cursor-pointer shrink-0"
           >
             {saving ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
                 Guardando...
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-1.5" />
-                Guardar Reglas
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+                Guardar
               </>
             )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setOpenSections({ general: true, criterios: true, protocolo: true })}
+            className="text-xs h-8 px-2 flex items-center gap-1 border-border/80 hover:bg-muted font-medium cursor-pointer"
+            title="Expandir todas las secciones"
+          >
+            <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden sm:inline">Expandir</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setOpenSections({ general: false, criterios: false, protocolo: false })}
+            className="text-xs h-8 px-2 flex items-center gap-1 border-border/80 hover:bg-muted font-medium cursor-pointer"
+            title="Minimizar todas las secciones"
+          >
+            <Minus className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="hidden sm:inline">Minimizar</span>
           </Button>
         </div>
       </div>
 
-      {/* TARJETA 1: REGLAS GENERALES DE LA GARANTÍA */}
+      {/* TARJETA 1: REGLAS GENERALES DE LA GARANTÍA (MINIMIZABLE) */}
       <Card className="border border-border/70 shadow-xs overflow-hidden">
-        <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
-              <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                Política General de Garantía (Satisfacción Alfa)
-              </CardTitle>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="garantia-activa" className="text-xs text-muted-foreground cursor-pointer">
-                {config.activa ? 'Garantía Activa' : 'Desactivada'}
-              </Label>
-              <Switch
-                id="garantia-activa"
-                checked={config.activa}
-                onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, activa: checked }))}
-              />
+        <CardHeader
+          className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10 cursor-pointer select-none hover:bg-muted/20 transition-colors"
+          onClick={() => toggleSection('general')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+              Política General de Garantía (Satisfacción Alfa)
+            </CardTitle>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Label htmlFor="garantia-activa" className="text-xs text-muted-foreground cursor-pointer font-sans">
+                  {config.activa ? 'Garantía Activa' : 'Desactivada'}
+                </Label>
+                <Switch
+                  id="garantia-activa"
+                  checked={config.activa}
+                  onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, activa: checked }))}
+                />
+              </div>
+              <button
+                type="button"
+                className="p-1 rounded-md text-slate-400 hover:text-foreground transition-colors cursor-pointer"
+                title={openSections.general ? "Minimizar" : "Maximizar"}
+                aria-label={openSections.general ? "Minimizar" : "Maximizar"}
+              >
+                {openSections.general ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
-          <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-            Establece el tiempo de validez y la duración estimada en agenda para retoques sin costo.
-          </CardDescription>
         </CardHeader>
-        <CardContent className="p-3.5 sm:p-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Nombre del Programa</Label>
-              <Input
-                value={config.titulo}
-                onChange={(e) => setConfig((prev) => ({ ...prev, titulo: e.target.value }))}
-                placeholder="Garantía de Satisfacción Alfa"
-                className="h-8 text-xs font-sans"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Ventana de Cobertura</Label>
-              <div className="relative">
+        {openSections.general && (
+          <CardContent className="p-3.5 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">Nombre del Programa</Label>
                 <Input
-                  type="number"
-                  min={12}
-                  max={168}
-                  step={6}
-                  value={config.ventanaHoras}
-                  onChange={(e) =>
-                    setConfig((prev) => ({ ...prev, ventanaHoras: Number(e.target.value) || 48 }))
-                  }
-                  className="h-8 text-xs font-sans pr-14"
+                  value={config.titulo}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, titulo: e.target.value }))}
+                  placeholder="Garantía de Satisfacción Alfa"
+                  className="h-8 text-xs font-sans"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-medium pointer-events-none">
-                  horas
-                </span>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Tiempo límite tras la cita para solicitar el retoque (recomendado: 48 hrs).
-              </p>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">Ventana de Cobertura</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={12}
+                    max={168}
+                    step={6}
+                    value={config.ventanaHoras}
+                    onChange={(e) =>
+                      setConfig((prev) => ({ ...prev, ventanaHoras: Number(e.target.value) || 48 }))
+                    }
+                    className="h-8 text-xs font-sans pr-14"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-medium pointer-events-none">
+                    horas
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">Tiempo de Retoque en Agenda</Label>
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={10}
+                    max={60}
+                    step={5}
+                    value={config.duracionRetoqueMinutos}
+                    onChange={(e) =>
+                      setConfig((prev) => ({
+                        ...prev,
+                        duracionRetoqueMinutos: Number(e.target.value) || 20,
+                      }))
+                    }
+                    className="h-8 text-xs font-sans pr-14"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-medium pointer-events-none">
+                    minutos
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Tiempo de Retoque en Agenda</Label>
-              <div className="relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">Costo del Retoque</Label>
                 <Input
-                  type="number"
-                  min={10}
-                  max={60}
-                  step={5}
-                  value={config.duracionRetoqueMinutos}
-                  onChange={(e) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      duracionRetoqueMinutos: Number(e.target.value) || 20,
-                    }))
-                  }
-                  className="h-8 text-xs font-sans pr-14"
+                  value={config.costoRetoque}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, costoRetoque: e.target.value }))}
+                  placeholder="100% Gratuito dentro de la ventana de garantía"
+                  className="h-8 text-xs font-sans"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground font-medium pointer-events-none">
-                  minutos
-                </span>
               </div>
-              <p className="text-[10px] text-muted-foreground">
-                Espacio que Janet y recepción contemplan para el ajuste (recomendado: 20 min).
-              </p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Costo del Retoque</Label>
-              <Input
-                value={config.costoRetoque}
-                onChange={(e) => setConfig((prev) => ({ ...prev, costoRetoque: e.target.value }))}
-                placeholder="100% Gratuito dentro de la ventana de garantía"
-                className="h-8 text-xs font-sans"
-              />
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-foreground">Servicios Cubiertos</Label>
+                <Input
+                  value={config.coberturaServicios}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, coberturaServicios: e.target.value }))}
+                  placeholder="Cortes clásicos, fades, barba, perfilado y ceja."
+                  className="h-8 text-xs font-sans"
+                />
+              </div>
             </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Servicios Cubiertos</Label>
-              <Input
-                value={config.coberturaServicios}
-                onChange={(e) => setConfig((prev) => ({ ...prev, coberturaServicios: e.target.value }))}
-                placeholder="Cortes clásicos, fades, barba, perfilado y ceja."
-                className="h-8 text-xs font-sans"
-              />
-            </div>
-          </div>
-        </CardContent>
+          </CardContent>
+        )}
       </Card>
 
-      {/* TARJETA 2: CRITERIOS DE VALIDEZ (QUÉ SÍ APLICA VS QUÉ NO APLICA) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Casos que SÍ Aplican */}
-        <Card className="border border-border/70 shadow-xs overflow-hidden">
-          <CardHeader className="py-2.5 px-3.5 sm:px-4 border-b border-border/50 bg-muted/10">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />
-              <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                Casos que SÍ Aplican para Retoque
-              </CardTitle>
-            </div>
-            <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Motivos legítimos donde el cliente tiene derecho a ajuste sin costo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-3.5 space-y-3">
-            <div className="space-y-2">
-              {config.criteriosAplica.map((item, index) => (
-                <div
-                  key={`aplica-${index}`}
-                  className="flex items-start justify-between gap-2 p-2 rounded-lg bg-muted/20 border border-border/40 text-xs"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-blue-500 font-bold mt-0.5">•</span>
-                    <span className="text-foreground leading-relaxed">{item}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => eliminarAplica(index)}
-                    className="text-slate-400 hover:text-red-400 p-0.5 shrink-0 transition-colors"
-                    title="Eliminar regla"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <Input
-                placeholder="Agregar nuevo caso válido..."
-                value={nuevoCriterioAplica}
-                onChange={(e) => setNuevoCriterioAplica(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), agregarAplica())}
-                className="h-8 text-xs font-sans"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={agregarAplica}
-                className="h-8 px-3 text-xs shrink-0 cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1 text-slate-400" />
-                Agregar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Casos que NO Aplican */}
-        <Card className="border border-border/70 shadow-xs overflow-hidden">
-          <CardHeader className="py-2.5 px-3.5 sm:px-4 border-b border-border/50 bg-muted/10">
-            <div className="flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-slate-400 shrink-0" />
-              <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                Casos que NO Aplican (Exclusiones)
-              </CardTitle>
-            </div>
-            <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Situaciones que invalidan la garantía para proteger a los barberos y al negocio.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-3.5 space-y-3">
-            <div className="space-y-2">
-              {config.criteriosNoAplica.map((item, index) => (
-                <div
-                  key={`no-aplica-${index}`}
-                  className="flex items-start justify-between gap-2 p-2 rounded-lg bg-muted/20 border border-border/40 text-xs"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-slate-400 font-bold mt-0.5">✕</span>
-                    <span className="text-foreground leading-relaxed">{item}</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => eliminarNoAplica(index)}
-                    className="text-slate-400 hover:text-red-400 p-0.5 shrink-0 transition-colors"
-                    title="Eliminar regla"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex gap-2 pt-1">
-              <Input
-                placeholder="Agregar nueva exclusión..."
-                value={nuevoCriterioNoAplica}
-                onChange={(e) => setNuevoCriterioNoAplica(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), agregarNoAplica())}
-                className="h-8 text-xs font-sans"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={agregarNoAplica}
-                className="h-8 px-3 text-xs shrink-0 cursor-pointer"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1 text-slate-400" />
-                Agregar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* TARJETA 3: PROTOCOLO INTELIGENTE DE JANET (IA) Y ESCALAMIENTO HUMANO */}
+      {/* TARJETA 2: CRITERIOS DE VALIDEZ (MINIMIZABLE) */}
       <Card className="border border-border/70 shadow-xs overflow-hidden">
-        <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-          <div className="flex items-center gap-2">
-            <Bot className="h-4 w-4 text-blue-400 shrink-0" />
-            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-              Protocolo de Atención Inteligente de Janet
-            </CardTitle>
+        <CardHeader
+          className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10 cursor-pointer select-none hover:bg-muted/20 transition-colors"
+          onClick={() => toggleSection('criterios')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                Criterios de Validez (Casos que Aplican y Exclusiones)
+              </CardTitle>
+              <Badge variant="outline" className="text-[10px] font-sans text-muted-foreground border-border/60 hidden sm:inline-flex">
+                {config.criteriosAplica.length} Aplican • {config.criteriosNoAplica.length} Exclusiones
+              </Badge>
+            </div>
+            <button
+              type="button"
+              className="p-1 rounded-md text-slate-400 hover:text-foreground transition-colors cursor-pointer"
+              title={openSections.criterios ? "Minimizar" : "Maximizar"}
+              aria-label={openSections.criterios ? "Minimizar" : "Maximizar"}
+            >
+              {openSections.criterios ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
           </div>
-          <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-            Define cómo debe responder Janet cuando un cliente exprese inconformidad en el chat y cuándo transferir a recepción humana.
-          </CardDescription>
         </CardHeader>
-        <CardContent className="p-3.5 sm:p-5 space-y-4">
-          <div className="space-y-1">
-            <Label className="text-xs font-semibold text-foreground">
-              Instrucciones Específicas para Janet (Directriz de Empatía y Solución)
-            </Label>
-            <Textarea
-              rows={4}
-              value={config.instruccionesJanet}
-              onChange={(e) => setConfig((prev) => ({ ...prev, instruccionesJanet: e.target.value }))}
-              placeholder="Escribe cómo quieres que Janet reaccione ante una queja o inconformidad..."
-              className="text-xs font-sans resize-none"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Janet consultará este texto para responder con empatía, explicar la garantía y ofrecer un espacio de retoque sin costo.
-            </p>
-          </div>
+        {openSections.criterios && (
+          <CardContent className="p-3.5 sm:p-5 animate-in fade-in duration-200">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Casos que SÍ Aplican */}
+              <div className="space-y-2.5 p-3 rounded-xl border border-border/60 bg-muted/5">
+                <div className="flex items-center gap-2 pb-1 border-b border-border/50">
+                  <CheckCircle2 className="h-4 w-4 text-blue-500 shrink-0" />
+                  <span className="text-xs font-semibold text-foreground">Casos que SÍ Aplican para Retoque</span>
+                </div>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {config.criteriosAplica.map((item, index) => (
+                    <div
+                      key={`aplica-${index}`}
+                      className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/20 border border-border/40 text-xs"
+                    >
+                      <span className="text-foreground leading-relaxed flex-1 font-sans">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarAplica(index)}
+                        className="text-slate-400 hover:text-red-400 p-1 shrink-0 transition-colors cursor-pointer"
+                        title="Eliminar caso"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
 
-          <div className="border-t border-border/50 pt-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label className="text-xs font-semibold text-foreground">
-                  Escalamiento Humano Inmediato (Casos Graves o Disputas)
-                </Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Si se detectan palabras de conflicto, agresión o exigencia de dinero, Janet transfiere a recepción de inmediato.
-                </p>
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    placeholder="Agregar nuevo caso válido..."
+                    value={nuevoCriterioAplica}
+                    onChange={(e) => setNuevoCriterioAplica(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), agregarAplica())}
+                    className="h-8 text-xs font-sans"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={agregarAplica}
+                    className="h-8 px-3 text-xs shrink-0 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                    Agregar
+                  </Button>
+                </div>
               </div>
-              <Switch
-                checked={config.escalamientoHumano.activo}
-                onCheckedChange={(checked) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    escalamientoHumano: { ...prev.escalamientoHumano, activo: checked },
-                  }))
+
+              {/* Casos que NO Aplican */}
+              <div className="space-y-2.5 p-3 rounded-xl border border-border/60 bg-muted/5">
+                <div className="flex items-center gap-2 pb-1 border-b border-border/50">
+                  <XCircle className="h-4 w-4 text-slate-400 shrink-0" />
+                  <span className="text-xs font-semibold text-foreground">Casos que NO Aplican (Exclusiones)</span>
+                </div>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {config.criteriosNoAplica.map((item, index) => (
+                    <div
+                      key={`no-aplica-${index}`}
+                      className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/20 border border-border/40 text-xs"
+                    >
+                      <span className="text-foreground leading-relaxed flex-1 font-sans">{item}</span>
+                      <button
+                        type="button"
+                        onClick={() => eliminarNoAplica(index)}
+                        className="text-slate-400 hover:text-red-400 p-1 shrink-0 transition-colors cursor-pointer"
+                        title="Eliminar exclusión"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    placeholder="Agregar nueva exclusión..."
+                    value={nuevoCriterioNoAplica}
+                    onChange={(e) => setNuevoCriterioNoAplica(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), agregarNoAplica())}
+                    className="h-8 text-xs font-sans"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={agregarNoAplica}
+                    className="h-8 px-3 text-xs shrink-0 cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                    Agregar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* TARJETA 3: PROTOCOLO INTELIGENTE DE JANETH (MINIMIZABLE) */}
+      <Card className="border border-border/70 shadow-xs overflow-hidden">
+        <CardHeader
+          className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10 cursor-pointer select-none hover:bg-muted/20 transition-colors"
+          onClick={() => toggleSection('protocolo')}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Bot className="h-4 w-4 text-slate-400 shrink-0" />
+              <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                Protocolo de Atención Inteligente de Janeth
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <Label htmlFor="escalamiento-activo" className="text-xs text-muted-foreground cursor-pointer font-sans">
+                  {config.escalamientoHumano.activo ? 'Traspaso a Humano Activo' : 'Pausado'}
+                </Label>
+                <Switch
+                  id="escalamiento-activo"
+                  checked={config.escalamientoHumano.activo}
+                  onCheckedChange={(checked) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      escalamientoHumano: { ...prev.escalamientoHumano, activo: checked },
+                    }))
+                  }
+                />
+              </div>
+              <button
+                type="button"
+                className="p-1 rounded-md text-slate-400 hover:text-foreground transition-colors cursor-pointer"
+                title={openSections.protocolo ? "Minimizar" : "Maximizar"}
+                aria-label={openSections.protocolo ? "Minimizar" : "Maximizar"}
+              >
+                {openSections.protocolo ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </CardHeader>
+        {openSections.protocolo && (
+          <CardContent className="p-0 divide-y divide-border/60 animate-in fade-in duration-200">
+            {/* Fila 1: Instrucciones de Empatía para Janeth (Modal) */}
+            <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-semibold text-foreground">
+                  Instrucciones Específicas para Janeth (Directriz de Empatía y Solución)
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openEditor(
+                    'Instrucciones de Empatía para Janeth',
+                    'Janeth consultará este texto para responder con empatía, explicar la garantía y ofrecer un espacio de retoque sin costo.',
+                    'instruccionesJanet'
+                  )
                 }
-              />
+                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+              >
+                Editar
+              </Button>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Palabras Clave de Alerta</Label>
+            {/* Fila 2: Palabras Clave de Alerta */}
+            <div className="p-3 sm:px-4 sm:py-2.5 space-y-1.5">
+              <Label className="text-xs font-semibold text-foreground">
+                Palabras Clave de Traspaso a Recepción (Separadas por comas)
+              </Label>
               <Input
                 value={config.escalamientoHumano.palabrasClave}
                 onChange={(e) =>
@@ -538,32 +653,100 @@ export function GarantiasManager() {
                 placeholder="reembolso, queja formal, demanda, cortada, sangrado..."
                 className="h-8 text-xs font-sans"
               />
-              <p className="text-[10px] text-muted-foreground">
-                Términos separados por coma que activan el traspaso a recepción sin polemizar.
-              </p>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-foreground">Mensaje de Traspaso al Cliente</Label>
-              <Textarea
-                rows={2}
-                value={config.escalamientoHumano.mensajeTransferencia}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    escalamientoHumano: {
-                      ...prev.escalamientoHumano,
-                      mensajeTransferencia: e.target.value,
-                    },
-                  }))
+            {/* Fila 3: Mensaje de Traspaso al Cliente (Modal) */}
+            <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-semibold text-foreground">
+                  Mensaje de Traspaso al Cliente
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  openEditor(
+                    'Mensaje de Traspaso a Recepción Humana',
+                    'Mensaje inmediato que Janeth envía al cliente cuando se detectan palabras clave de inconformidad grave.',
+                    'mensajeTransferencia'
+                  )
                 }
-                placeholder="Entiendo tu situación. En este momento estoy transfiriendo tu caso con nuestro equipo..."
-                className="text-xs font-sans resize-none"
-              />
+                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+              >
+                Editar
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* MODAL OFICIAL PARA TEXTOS LARGOS */}
+      <Dialog
+        open={editorModal.open}
+        onOpenChange={(open) => !open && setEditorModal((prev) => ({ ...prev, open: false }))}
+      >
+        <DialogContent
+          hideCloseButton={true}
+          className="p-0 overflow-hidden max-w-3xl w-[95vw] max-h-[90vh] flex flex-col rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+        >
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800 shrink-0">
+            <div className="header-light-beam" aria-hidden="true" />
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <FileText className="h-4 w-4 text-slate-300 shrink-0" />
+                <div>
+                  <DialogTitle className="text-sm font-bold text-white tracking-tight">
+                    {editorModal.title}
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-slate-300">
+                    {editorModal.description}
+                  </DialogDescription>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditorModal((prev) => ({ ...prev, open: false }))}
+                className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10 ml-2"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+
+          <div className="flex-1 flex flex-col min-h-0 space-y-2 p-4 sm:p-5 overflow-y-auto">
+            <Textarea
+              value={editorModal.value}
+              onChange={(e) => setEditorModal((prev) => ({ ...prev, value: e.target.value }))}
+              placeholder="Escribe aquí el texto..."
+              className="flex-1 min-h-[220px] sm:min-h-[280px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="p-3 sm:p-4 bg-muted/15 border-t border-border/50 flex items-center justify-end gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setEditorModal((prev) => ({ ...prev, open: false }))}
+              className="h-8 text-xs cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="alfa"
+              size="sm"
+              onClick={applyEditorModal}
+              className="h-8 text-xs font-semibold cursor-pointer"
+            >
+              Aplicar Cambios
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

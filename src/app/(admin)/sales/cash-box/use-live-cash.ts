@@ -88,6 +88,7 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
 
         const salesCash = liveSales
             .filter(s => isAfterCut(s.fecha_hora_venta))
+            .filter(s => s.modalidad_sucursal !== 'sin_recepcionista' && !(Number(s.efectivo_retenido_barbero || 0) > 0))
             .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
             .reduce((sum, sale) => {
                 // If this sale had a deposit paid in cash BEFORE this cut, don't count that prior deposit again in this shift

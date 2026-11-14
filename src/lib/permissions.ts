@@ -1,5 +1,4 @@
-
-import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, Gift, MessageSquare } from 'lucide-react';
+import { Shield, Store, ConciergeBell, Wrench, Package, BarChart2, Briefcase, HandCoins, Users, Calendar, Wallet, FileText, Settings, LucideIcon, Gift, MessageSquare, KeyRound } from 'lucide-react';
 
 
 export interface Permission {
@@ -81,6 +80,7 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_reporte_ventas', label: 'Ver Reporte de Ventas' },
             { key: 'ver_cierres_caja', label: 'Ver Cierres de Caja' },
             { key: 'ver_auditoria', label: 'Ver Auditoría' },
+            { key: 'ver_reporte_codigos', label: 'Ver Historial de Códigos de Autorización' },
         ]
     },
     {
@@ -97,6 +97,9 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'ver_profesionales', label: 'Ver Profesionales' },
             { key: 'ver_servicios', label: 'Ver Servicios' },
             { key: 'ver_comisiones', label: 'Ver Comisiones' },
+            { key: 'generar_codigos_anticipo', label: 'Generar Códigos de Anticipo (4 Dígitos)' },
+            { key: 'ver_garantias', label: 'Ver Garantías' },
+            { key: 'ver_buzon', label: 'Ver Buzón' },
             { key: 'ver_ajustes', label: 'Ver Ajustes' },
             { key: 'ver_nomina', label: 'Ver Nómina' },
         ]
@@ -142,9 +145,9 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_clientes', 'editar_clientes', 'ver_numero_telefono',
             'ver_ventas', 'ver_ventas_facturadas', 'ver_reporte_comisiones', 'ver_caja', 'registrar_ventas', 'ver_propinas',
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
-            'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria',
+            'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria', 'ver_reporte_codigos',
             'ver_finanzas',
-            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'ver_ajustes',
+            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'generar_codigos_anticipo', 'ver_garantias', 'ver_buzon', 'ver_ajustes',
             'ver_promociones',
             'ver_conversaciones', 'atender_chats'
         ],

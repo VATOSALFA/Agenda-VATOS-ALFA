@@ -36,11 +36,13 @@ import {
   LayoutDashboard,
   X,
   MessageSquare,
+  MessageSquareWarning,
   QrCode,
   Bell,
   Clock,
   CheckCircle2,
   Sparkles,
+  KeyRound,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -100,6 +102,7 @@ const reportsNavLinks = [
   { href: '/reports/sales', label: 'Reporte de ventas', icon: LineChart, permission: 'ver_reporte_ventas' },
   { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet, permission: 'ver_cierres_caja' },
   { href: '/reports/audit', label: 'Auditoría', icon: ShieldCheck, permission: 'ver_auditoria' },
+  { href: '/reports/codigos', label: 'Auditoría de Códigos', icon: KeyRound, permission: 'ver_reporte_codigos' },
 ];
 
 const monthNamesNav = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -115,7 +118,9 @@ const adminNavLinks = [
   { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
   { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
   { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
-  { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_ajustes' },
+  { href: '/admin/codigos-anticipo', label: 'Códigos de Anticipo', icon: KeyRound, permission: 'generar_codigos_anticipo' },
+  { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_garantias' },
+  { href: '/admin/buzon', label: 'Buzón', icon: MessageSquareWarning, permission: 'ver_buzon' },
   { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
   { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
 ];
@@ -531,7 +536,6 @@ export default function Header() {
           { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
           { href: '/clients', label: 'Clientes', icon: Users, permission: 'ver_clientes' },
           { href: '/conversations', label: 'Mensajes', icon: MessageSquare, permission: 'ver_conversaciones' },
-          ...(isExclusiveCeoOwner ? [{ href: '/ceo', label: 'Janet CEO', icon: Sparkles, permission: 'ver_finanzas' }] : []),
         ]
       },
       {
@@ -559,6 +563,7 @@ export default function Header() {
           { href: '/reports/sales', label: 'Reporte Ventas', icon: LineChart, permission: 'ver_reporte_ventas' },
           { href: '/reports/cash-closings', label: 'Cierres de Caja', icon: Wallet, permission: 'ver_cierres_caja' },
           { href: '/reports/audit', label: 'Auditoría', icon: ShieldCheck, permission: 'ver_auditoria' },
+          { href: '/reports/codigos', label: 'Auditoría Códigos', icon: KeyRound, permission: 'ver_reporte_codigos' },
         ]
       },
       {
@@ -574,6 +579,9 @@ export default function Header() {
           { href: '/admin/profesionales', label: 'Profesionales', icon: Users, permission: 'ver_profesionales' },
           { href: '/admin/servicios', label: 'Servicios', icon: Scissors, permission: 'ver_servicios' },
           { href: '/admin/comisiones', label: 'Comisiones', icon: Percent, permission: 'ver_comisiones' },
+          { href: '/admin/codigos-anticipo', label: 'Códigos Anticipo', icon: KeyRound, permission: 'generar_codigos_anticipo' },
+          { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_garantias' },
+          { href: '/admin/buzon', label: 'Buzón', icon: MessageSquareWarning, permission: 'ver_buzon' },
           { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
           { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
         ]
@@ -663,7 +671,7 @@ export default function Header() {
           <div className="header-light-beam" />
         </div>
 
-        <div className="relative z-10 flex h-16 items-center px-4 md:px-6">
+        <div className="relative z-10 flex h-16 items-center px-3 sm:px-4 xl:px-6">
 
           {!isOnline && (
             <div className="bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-xs font-bold mr-4 flex items-center animate-pulse">
@@ -864,8 +872,8 @@ export default function Header() {
             </SheetContent>
           </Sheet>
 
-          <Link href="/agenda" className="mr-4 flex items-center flex-shrink-0">
-            <div className="relative h-14 w-32 md:w-40 lg:w-52">
+          <Link href="/agenda" className="mr-3 xl:mr-4 flex items-center shrink-0">
+            <div className="relative h-12 w-32 xl:w-40 2xl:w-48">
               <Image
                 src="/logo-header-blanco.webp"
                 alt="VATOS ALFA"
@@ -875,7 +883,7 @@ export default function Header() {
               />
             </div>
           </Link>
-          <nav className="hidden md:flex items-center min-w-0 flex-1 text-xs font-medium">
+          <nav className="hidden xl:flex items-center min-w-0 flex-1 text-xs font-medium gap-0.5 2xl:gap-1">
             {mainNavLinks.map(({ href, label, permission }) => {
               const isActive = (pathname === href) || (href === '/agenda' && pathname.startsWith('/agenda'));
               const isConversationsLink = href === '/conversations';
@@ -885,7 +893,7 @@ export default function Header() {
                     key={href}
                     href={href}
                     className={cn(
-                      'relative inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                      'relative inline-flex items-center gap-1.5 px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                       isActive
                         ? 'bg-secondary text-secondary-foreground font-semibold'
                         : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -918,7 +926,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                     pathname.startsWith('/sales')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -945,7 +953,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                     pathname.startsWith('/products')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -972,7 +980,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                     pathname.startsWith('/reports')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -999,7 +1007,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                     pathname.startsWith('/finanzas')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -1026,7 +1034,7 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
                     pathname.startsWith('/admin')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
@@ -1053,7 +1061,7 @@ export default function Header() {
               <Link
                 href="/promociones"
                 className={cn(
-                  'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap flex items-center gap-1.5 border ml-1',
+                  'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap flex items-center gap-1.5 border ml-0.5 2xl:ml-1 shrink-0',
                   pathname.startsWith('/promociones')
                     ? 'bg-[#202A49] text-[#C5A880] border-[#C5A880] font-semibold shadow-xs'
                     : 'text-[#C5A880] bg-[#162038]/60 hover:bg-[#1f2b4c] hover:text-[#e4cfb4] border-[#C5A880]/40'
@@ -1069,24 +1077,9 @@ export default function Header() {
               </Link>
             )}
 
-            {isExclusiveCeoOwner && (
-              <Link
-                href="/ceo"
-                className={cn(
-                  'px-2.5 py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap flex items-center gap-1.5 border ml-1',
-                  pathname.startsWith('/ceo')
-                    ? 'bg-[#202A49] text-[#C5A880] border-[#C5A880] font-semibold shadow-xs'
-                    : 'text-[#C5A880] bg-[#162038]/60 hover:bg-[#1f2b4c] hover:text-[#e4cfb4] border-[#C5A880]/40'
-                )}
-                title="Janet CEO — Sala de Juntas Ejecutiva Exclusiva"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
-                <span>Janet CEO</span>
-              </Link>
-            )}
-
+            {/* Botón Janet CEO movido a Configuración en el sidebar */}
           </nav>
-          <div className="ml-auto flex items-center space-x-1.5 flex-shrink-0">
+          <div className="ml-auto flex items-center space-x-1 sm:space-x-1.5 shrink-0 z-10">
             <TooltipProvider delayDuration={150}>
               {/* Escanear QR */}
               <Tooltip>
@@ -1405,6 +1398,18 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Botón de Menú Rápido (Tablet / Pantallas Medianas y Móvil) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+              className="xl:hidden h-8 w-8 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors shrink-0"
+              aria-label="Abrir menú"
+              title="Menú de opciones"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
@@ -1412,7 +1417,7 @@ export default function Header() {
       {/* Mobile Bottom Navigation Bar */}
       <div
         data-mobile-bottom-nav="true"
-        className="md:hidden fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-md z-[100] flex items-center justify-around px-2 pb-safe pointer-events-auto"
+        className="xl:hidden fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.3)] backdrop-blur-md z-[100] flex items-center justify-around px-2 pb-safe pointer-events-auto"
       >
         {/* Haz de luz oblicuo animado idéntico a la franja azul superior */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">

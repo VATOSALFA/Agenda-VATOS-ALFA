@@ -13,10 +13,11 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, MapPin, Clock, X, Globe } from 'lucide-react';
+import { Loader2, MapPin, Clock, X, Globe, Tablet, CreditCard, Wallet, Smartphone } from 'lucide-react';
 import type { Local } from '@/lib/types';
 import { db } from '@/firebase';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
+import { useFirestoreQuery } from '@/hooks/use-firestore';
 
 const timeOptions = Array.from({ length: 48 }, (_, i) => {
   const hour = Math.floor(i / 2);
@@ -46,6 +47,12 @@ const localSchema = z.object({
   delivery: z.boolean().default(false),
   secondaryPhone: z.string().optional(),
   description: z.string().optional(),
+  modoOperacion: z.enum(['tradicional', 'sin_recepcionista']).default('tradicional'),
+  kioscoTerminalId: z.string().optional().or(z.literal('')),
+  estacionTerminalId: z.string().optional().or(z.literal('')),
+  cobroEnKioscoPreferente: z.boolean().default(true),
+  fondoFijoEstacion: z.coerce.number().min(0).default(300),
+  whatsappSoporteRemoto: z.string().optional().or(z.literal('')),
 });
 
 type LocalFormData = z.infer<typeof localSchema>;
@@ -61,6 +68,7 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!local;
+  const { data: terminals = [] } = useFirestoreQuery<any>('terminales');
 
   const form = useForm<LocalFormData>({
     resolver: zodResolver(localSchema),
@@ -84,6 +92,12 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
       delivery: false,
       secondaryPhone: '',
       description: '',
+      modoOperacion: 'tradicional',
+      kioscoTerminalId: '',
+      estacionTerminalId: '',
+      cobroEnKioscoPreferente: true,
+      fondoFijoEstacion: 300,
+      whatsappSoporteRemoto: '',
     },
   });
 
@@ -92,6 +106,12 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
       form.reset({
         ...local,
         googleMapsReviewUrl: local.googleMapsReviewUrl || (local as any).google_maps_review_url || '',
+        modoOperacion: local.modoOperacion || 'tradicional',
+        kioscoTerminalId: local.kioscoTerminalId || '',
+        estacionTerminalId: local.estacionTerminalId || '',
+        cobroEnKioscoPreferente: local.cobroEnKioscoPreferente !== false,
+        fondoFijoEstacion: local.fondoFijoEstacion ?? 300,
+        whatsappSoporteRemoto: local.whatsappSoporteRemoto || '',
       });
     } else {
       form.reset({
@@ -114,6 +134,12 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
         delivery: false,
         secondaryPhone: '',
         description: '',
+        modoOperacion: 'tradicional',
+        kioscoTerminalId: '',
+        estacionTerminalId: '',
+        cobroEnKioscoPreferente: true,
+        fondoFijoEstacion: 300,
+        whatsappSoporteRemoto: '',
       });
     }
   }, [local, form]);
@@ -294,6 +320,164 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
                     {...form.register('googleMapsReviewUrl')}
                     className="h-8 text-xs font-sans"
                   />
+                </div>
+              </div>
+
+              {/* Modalidad Operativa Aislada: Con Recepcionista vs Sin Recepcionista */}
+              <div className="space-y-3 pt-3 border-t border-border/50">
+                <div className="rounded-xl border border-border/70 bg-muted/15 p-3.5 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Tablet className="h-4 w-4 text-blue-400 shrink-0" />
+                      <div>
+                        <Label htmlFor="modo-sin-recepcionista" className="text-xs font-semibold text-foreground cursor-pointer block">
+                          Sucursal Automatizada (Sin Recepcionista)
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground hidden sm:block">
+                          Habilita el Kiosco de Entrada, Mini-Tablets por estación, caja individual por barbero y comunicación vía App con Janeth sin alterar las demás sucursales.
+                        </p>
+                      </div>
+                    </div>
+                    <Controller
+                      name="modoOperacion"
+                      control={form.control}
+                      render={({ field }) => (
+                        <Switch
+                          id="modo-sin-recepcionista"
+                          checked={field.value === 'sin_recepcionista'}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked ? 'sin_recepcionista' : 'tradicional')
+                          }
+                        />
+                      )}
+                    />
+                  </div>
+
+                  {form.watch('modoOperacion') === 'sin_recepcionista' && (
+                    <div className="pt-3 border-t border-border/50 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <CreditCard className="h-3.5 w-3.5 text-slate-400" />
+                            Terminal Point Smart en Kiosco
+                          </Label>
+                          <Controller
+                            name="kioscoTerminalId"
+                            control={form.control}
+                            render={({ field }) => (
+                              <Select
+                                onValueChange={(v) => field.onChange(v === '__auto__' ? '' : v)}
+                                value={field.value || '__auto__'}
+                              >
+                                <SelectTrigger className="h-8 text-xs font-sans">
+                                  <SelectValue placeholder="Automática (primera activa)" />
+                                </SelectTrigger>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl">
+                                  <SelectItem value="__auto__" className="text-xs font-sans">
+                                    Automática (primera terminal activa)
+                                  </SelectItem>
+                                  {terminals.map((t: any) => (
+                                    <SelectItem key={t.id} value={t.id} className="text-xs font-sans">
+                                      {t.id.slice(-8)} • {t.operating_mode || 'PDV'}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <CreditCard className="h-3.5 w-3.5 text-slate-400" />
+                            Terminal Point Smart en Estación
+                          </Label>
+                          <Controller
+                            name="estacionTerminalId"
+                            control={form.control}
+                            render={({ field }) => (
+                              <Select
+                                onValueChange={(v) => field.onChange(v === '__same__' ? '' : v)}
+                                value={field.value || '__same__'}
+                              >
+                                <SelectTrigger className="h-8 text-xs font-sans">
+                                  <SelectValue placeholder="Misma terminal del Kiosco" />
+                                </SelectTrigger>
+                                <SelectContent className="border-2 border-blue-500 rounded-xl">
+                                  <SelectItem value="__same__" className="text-xs font-sans">
+                                    Usar misma terminal del Kiosco
+                                  </SelectItem>
+                                  {terminals.map((t: any) => (
+                                    <SelectItem key={t.id} value={t.id} className="text-xs font-sans">
+                                      {t.id.slice(-8)} • {t.operating_mode || 'PDV'}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor="fondoFijoEstacion" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <Wallet className="h-3.5 w-3.5 text-slate-400" />
+                            Fondo fijo individual por estación (MXN)
+                          </Label>
+                          <Input
+                            id="fondoFijoEstacion"
+                            type="number"
+                            step="50"
+                            min="0"
+                            {...form.register('fondoFijoEstacion')}
+                            placeholder="300"
+                            className="h-8 text-xs font-sans"
+                          />
+                          <p className="text-[10px] text-muted-foreground font-sans">
+                            Ej. ${formatMoney(Number(form.watch('fondoFijoEstacion') || 300))} bajo llave por barbero para dar cambio.
+                          </p>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label htmlFor="whatsappSoporteRemoto" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                            <Smartphone className="h-3.5 w-3.5 text-slate-400" />
+                            WhatsApp Soporte Remoto (Solo sin App)
+                          </Label>
+                          <Input
+                            id="whatsappSoporteRemoto"
+                            {...form.register('whatsappSoporteRemoto')}
+                            placeholder="Ej. 4331000000 (Respaldo Beatriz)"
+                            className="h-8 text-xs font-sans"
+                          />
+                          <p className="text-[10px] text-muted-foreground font-sans">
+                            La atención principal se canaliza al chat de Janeth en la App VATOS ALFA.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                        <div>
+                          <Label htmlFor="cobroEnKioscoPreferente" className="text-xs font-semibold text-foreground cursor-pointer block">
+                            Priorizar cobro inmediato en el Kiosco de Entrada
+                          </Label>
+                          <p className="text-[10px] text-muted-foreground">
+                            Sugiere pagar con tarjeta en el Kiosco al hacer check-in o registrarse sin cita (permitiendo efectivo en estación).
+                          </p>
+                        </div>
+                        <Controller
+                          name="cobroEnKioscoPreferente"
+                          control={form.control}
+                          render={({ field }) => (
+                            <Switch
+                              id="cobroEnKioscoPreferente"
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              className="scale-90"
+                            />
+                          )}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -35,7 +35,11 @@ import {
   ExternalLink,
   Phone,
   Power,
+  Tablet,
+  Scissors,
+  Copy,
 } from 'lucide-react';
+import Link from 'next/link';
 import { NewLocalModal } from '@/components/admin/locales/new-local-modal';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -172,7 +176,19 @@ export default function LocalesPage() {
                 ))
               ) : locales.map((local) => {
                 const isActive = local.status === 'active';
+                const isSmartMode = local.modoOperacion === 'sin_recepcionista';
                 const mapsUrl = local.googleMapsReviewUrl || (local as any).google_maps_review_url;
+
+                const copyScreenUrl = (screenPath: '/kiosco' | '/estacion', label: string) => {
+                  if (typeof window === 'undefined') return;
+                  const fullUrl = `${window.location.origin}${screenPath}?local_id=${local.id}`;
+                  navigator.clipboard.writeText(fullUrl).then(() => {
+                    toast({
+                      title: `Enlace de ${label} copiado`,
+                      description: fullUrl,
+                    });
+                  });
+                };
 
                 return (
                   <div
@@ -196,6 +212,15 @@ export default function LocalesPage() {
                           <Circle className={cn("mr-1.5 h-1.5 w-1.5 fill-current", isActive ? "text-blue-400" : "text-slate-400")} />
                           {isActive ? 'Activo' : 'Inactivo'}
                         </Badge>
+                        {isSmartMode && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-sans font-semibold py-0 px-2 rounded-full bg-[#202A49] text-blue-300 border-blue-500/50 flex items-center gap-1"
+                          >
+                            <Tablet className="h-3 w-3 text-blue-400" />
+                            Sin Recepcionista
+                          </Badge>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
@@ -228,7 +253,34 @@ export default function LocalesPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap">
+                      {isSmartMode && (
+                        <>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs rounded-lg border-blue-500/40 hover:bg-blue-500/10 gap-1.5 text-foreground"
+                          >
+                            <Link href={`/kiosco?local_id=${local.id}`}>
+                              <Tablet className="h-3.5 w-3.5 text-blue-400" />
+                              <span>Kiosco</span>
+                            </Link>
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2.5 text-xs rounded-lg border-border/80 hover:bg-muted/50 gap-1.5 text-foreground"
+                          >
+                            <Link href={`/estacion?local_id=${local.id}`}>
+                              <Scissors className="h-3.5 w-3.5 text-slate-400" />
+                              <span>Estación</span>
+                            </Link>
+                          </Button>
+                        </>
+                      )}
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -252,8 +304,26 @@ export default function LocalesPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"
-                          className="w-44 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card p-1 space-y-0.5"
+                          className="w-52 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card p-1 space-y-0.5"
                         >
+                          {isSmartMode && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => copyScreenUrl('/kiosco', 'Kiosco')}
+                                className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer flex items-center gap-2"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-slate-400" />
+                                <span>Copiar URL Kiosco</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => copyScreenUrl('/estacion', 'Estación')}
+                                className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer flex items-center gap-2"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-slate-400" />
+                                <span>Copiar URL Estación</span>
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           <DropdownMenuItem
                             onClick={() => handleToggleStatus(local)}
                             className="text-xs font-semibold py-2 px-2.5 rounded-lg cursor-pointer flex items-center gap-2"

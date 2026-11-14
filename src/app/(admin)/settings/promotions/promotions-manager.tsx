@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -65,6 +65,8 @@ import {
     Search,
     LayoutGrid,
     List,
+    Smartphone,
+    Globe,
 } from 'lucide-react';
 import { CustomLoader } from '@/components/ui/custom-loader';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -78,6 +80,8 @@ const promotionSchema = z.object({
     description: z.string().min(1, 'La descripción es requerida'),
     termsAndConditions: z.string().optional(),
     active: z.boolean().default(true),
+    mostrarEnApp: z.boolean().default(true),
+    mostrarEnWeb: z.boolean().default(true),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
@@ -177,7 +181,76 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
         }
     };
 
-    const allPromotions = useMemo(() => promotions || [], [promotions]);
+    const cleanedLegacyIdsRef = useRef<Set<string>>(new Set());
+
+    const isPaseAlfaLegacyPromo = (p: Promotion) => {
+        const name = (p.name || (p as any).titulo || (p as any).title || '').toLowerCase();
+        return (
+            p.id === 'DSVwbmEtiK1xJzJjwrqu' ||
+            p.id === 'promo_pase_alfa' ||
+            (p as any).es_pase_alfa === true ||
+            name.includes('décima va por la casa') ||
+            name.includes('decima va por la casa') ||
+            name.includes('la decima es gratis') ||
+            name.includes('la décima es gratis')
+        );
+    };
+
+    // Eliminar de la colección promociones cualquier registro heredado de Pase Alfa ("La décima va por la casa")
+    useEffect(() => {
+        if (!db || !promotions || promotions.length === 0) return;
+        promotions.forEach((p) => {
+            if (isPaseAlfaLegacyPromo(p) && !cleanedLegacyIdsRef.current.has(p.id)) {
+                cleanedLegacyIdsRef.current.add(p.id);
+                deleteDoc(doc(db, 'promociones', p.id)).catch((err) => {
+                    console.warn('No se pudo limpiar registro legado de Pase Alfa en promociones:', err);
+                });
+            }
+        });
+    }, [db, promotions]);
+
+    const handleCycleDestino = async (promo: Promotion) => {
+        if (!db) return;
+        const inApp = promo.mostrarEnApp !== false;
+        const inWeb = promo.mostrarEnWeb !== false;
+        let nextApp = true;
+        let nextWeb = true;
+        let label = 'App Móvil y Sitio Web';
+
+        if (inApp && inWeb) {
+            nextApp = true;
+            nextWeb = false;
+            label = 'Solo App Móvil';
+        } else if (inApp && !inWeb) {
+            nextApp = false;
+            nextWeb = true;
+            label = 'Solo Sitio Web';
+        } else {
+            nextApp = true;
+            nextWeb = true;
+            label = 'App Móvil y Sitio Web';
+        }
+
+        try {
+            await updateDoc(doc(db, 'promociones', promo.id), {
+                mostrarEnApp: nextApp,
+                mostrarEnWeb: nextWeb,
+                updatedAt: Timestamp.now(),
+            });
+            toast({
+                title: 'Destino actualizado',
+                description: `"${promo.name}" ahora se muestra en: ${label}.`,
+            });
+        } catch (error) {
+            console.error('Error updating promo destination:', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'No se pudo actualizar el destino.' });
+        }
+    };
+
+    const allPromotions = useMemo(
+        () => (promotions || []).filter((p) => !isPaseAlfaLegacyPromo(p)),
+        [promotions]
+    );
 
     const activePromotions = useMemo(() => {
         return allPromotions.filter(p => p.active && !isPromoExpired(p));
@@ -210,6 +283,8 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
             description: '',
             termsAndConditions: '',
             active: true,
+            mostrarEnApp: true,
+            mostrarEnWeb: true,
         },
     });
 
@@ -224,6 +299,8 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
             description: '',
             termsAndConditions: '',
             active: true,
+            mostrarEnApp: true,
+            mostrarEnWeb: true,
         });
         setIsDialogOpen(true);
     };
@@ -249,6 +326,8 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
             description: promotion.description,
             termsAndConditions: promotion.termsAndConditions || '',
             active: promotion.active,
+            mostrarEnApp: promotion.mostrarEnApp !== false,
+            mostrarEnWeb: promotion.mostrarEnWeb !== false,
         });
         setIsDialogOpen(true);
     };
@@ -313,6 +392,8 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
                 description: values.description,
                 termsAndConditions: values.termsAndConditions,
                 active: values.active,
+                mostrarEnApp: values.mostrarEnApp,
+                mostrarEnWeb: values.mostrarEnWeb,
                 updatedAt: Timestamp.now(),
             };
 
@@ -361,10 +442,7 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
             {!hideHeader ? (
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-2.5 border-b border-border/60">
                     <div>
-                        <h2 className="text-xl font-bold tracking-tight text-foreground">Promociones y Ofertas</h2>
-                        <p className="text-xs text-muted-foreground hidden sm:block">
-                            Gestiona las ofertas, campañas y beneficios visuales visibles para tus clientes.
-                        </p>
+                        <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">PROMOCIONES</h2>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button onClick={handleAddNew} variant="alfa" className="h-8 sm:h-9 px-3.5 sm:px-4 text-xs font-semibold gap-1.5 w-fit">
@@ -520,6 +598,20 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
                                                     Pausada
                                                 </Badge>
                                             )}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleCycleDestino(promo)}
+                                                title="Clic para cambiar dónde se muestra (App & Web / Solo App / Solo Web)"
+                                                className="cursor-pointer"
+                                            >
+                                                <Badge variant="outline" className="text-[9px] py-0 px-1.5 font-sans font-medium text-foreground/80 border-border/70 hover:bg-[#202A49] hover:text-white transition-colors">
+                                                    {promo.mostrarEnApp !== false && promo.mostrarEnWeb !== false
+                                                        ? 'App & Web'
+                                                        : promo.mostrarEnApp !== false
+                                                            ? 'Solo App'
+                                                            : 'Solo Web'}
+                                                </Badge>
+                                            </button>
                                         </div>
                                         <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                             <CalendarIcon className="h-3 w-3 text-slate-400 shrink-0" />
@@ -598,6 +690,28 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
                                             <ImageIcon className="h-10 w-10 opacity-20" />
                                         </div>
                                     )}
+
+                                    {/* Badge de Destino (clic para alternar App & Web / Solo App / Solo Web) */}
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCycleDestino(promo);
+                                        }}
+                                        title="Clic para cambiar dónde se muestra (App & Web / Solo App / Solo Web)"
+                                        className="absolute top-2 left-2 z-10 cursor-pointer"
+                                    >
+                                        <Badge
+                                            variant="outline"
+                                            className="text-[10px] font-sans font-medium backdrop-blur-md py-0 px-2 leading-tight shadow-xs text-white bg-black/70 border-white/20 hover:bg-[#202A49] transition-colors"
+                                        >
+                                            {promo.mostrarEnApp !== false && promo.mostrarEnWeb !== false
+                                                ? 'App & Web'
+                                                : promo.mostrarEnApp !== false
+                                                    ? 'Solo App'
+                                                    : 'Solo Web'}
+                                        </Badge>
+                                    </button>
 
                                     {/* Badge de Estado */}
                                     <div className={cn(
@@ -890,6 +1004,72 @@ export function PromotionsManager({ hideHeader = false }: { hideHeader?: boolean
                         <div className="space-y-1">
                             <Label className="text-xs font-semibold text-foreground">Términos y Condiciones (Opcional)</Label>
                             <Textarea {...form.register('termsAndConditions')} placeholder="Ej. Solo válido de Lunes a Miércoles..." rows={2} className="text-xs font-sans leading-relaxed" />
+                        </div>
+
+                        <div className="space-y-1.5 rounded-xl border border-border/60 p-3 bg-muted/10">
+                            <Label className="text-xs font-semibold text-foreground">
+                                Mostrar promoción en:
+                            </Label>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                {(() => {
+                                    const inApp = form.watch('mostrarEnApp');
+                                    const inWeb = form.watch('mostrarEnWeb');
+                                    const current = inApp && inWeb ? 'ambas' : inApp ? 'app' : 'web';
+                                    return (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    form.setValue('mostrarEnApp', true);
+                                                    form.setValue('mostrarEnWeb', true);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                    current === 'ambas'
+                                                        ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                        : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                )}
+                                            >
+                                                <Smartphone className="w-3.5 h-3.5" />
+                                                <Globe className="w-3.5 h-3.5" />
+                                                <span>Ambas (App y Web)</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    form.setValue('mostrarEnApp', true);
+                                                    form.setValue('mostrarEnWeb', false);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                    current === 'app'
+                                                        ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                        : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                )}
+                                            >
+                                                <Smartphone className="w-3.5 h-3.5" />
+                                                <span>Solo App Móvil</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    form.setValue('mostrarEnApp', false);
+                                                    form.setValue('mostrarEnWeb', true);
+                                                }}
+                                                className={cn(
+                                                    "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                    current === 'web'
+                                                        ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                        : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                )}
+                                            >
+                                                <Globe className="w-3.5 h-3.5" />
+                                                <span>Solo Sitio Web</span>
+                                            </button>
+                                        </>
+                                    );
+                                })()}
+                            </div>
                         </div>
 
                         <div className="flex items-center justify-between rounded-xl border border-border/60 p-3 bg-muted/10">

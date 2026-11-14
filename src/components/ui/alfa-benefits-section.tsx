@@ -268,7 +268,7 @@ export function AlfaBenefitsSection({
     : (Array.isArray(paseAlfaData?.privilegios) ? paseAlfaData.privilegios : []);
 
   const dynamicPrivilegios: BenefitItem[] = rawPrivilegios
-    .filter((p: any) => p && p.activo !== false)
+    .filter((p: any) => p && p.activo !== false && p.mostrarEnWeb !== false)
     .map((p: any) => {
       const isCoin =
         Boolean(p.proximamente) ||

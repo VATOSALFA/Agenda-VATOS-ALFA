@@ -16,10 +16,14 @@ import {
     Save,
     ChevronDown,
     ChevronUp,
-    Camera,
+    ChevronLeft,
+    ChevronRight,
     Image as ImageIcon,
     HelpCircle,
     X,
+    Eye,
+    Smartphone,
+    Globe,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
@@ -46,6 +50,8 @@ export interface LookbookItem {
     servicioNombre?: string;
     serviceMatchId?: string;
     activo: boolean;
+    mostrarEnApp?: boolean;
+    mostrarEnWeb?: boolean;
     creado_el?: any;
     orden?: number;
 }
@@ -151,6 +157,33 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
     const [isUploadingLookbook, setIsUploadingLookbook] = useState(false);
     const [deletingLookbookItem, setDeletingLookbookItem] = useState<LookbookItem | null>(null);
 
+    // Estados de UI para comodidad, paginación y zoom
+    const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [newLookbookDestino, setNewLookbookDestino] = useState<'ambas' | 'app' | 'web'>('ambas');
+    const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const ITEMS_PER_PAGE = 18;
+
+    const filteredItems = React.useMemo(() => {
+        if (activeFilter === 'active') return lookbookItems.filter((i) => i.activo);
+        if (activeFilter === 'inactive') return lookbookItems.filter((i) => !i.activo);
+        return lookbookItems;
+    }, [lookbookItems, activeFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+
+    useEffect(() => {
+        if (currentPage > totalPages) {
+            setCurrentPage(1);
+        }
+    }, [totalPages, currentPage]);
+
+    const paginatedItems = React.useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+    }, [filteredItems, currentPage]);
+
     // Cargar galería de Firestore
     useEffect(() => {
         let isMounted = true;
@@ -221,16 +254,37 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
             servicioNombre: '',
             serviceMatchId: '',
             activo: newLookbookActivo,
+            mostrarEnApp: newLookbookDestino === 'ambas' || newLookbookDestino === 'app',
+            mostrarEnWeb: newLookbookDestino === 'ambas' || newLookbookDestino === 'web',
             creado_el: new Date().toISOString(),
             orden: lookbookItems.length,
         };
 
         setLookbookItems((prev) => [newItem, ...prev]);
         setNewLookbookImage('');
+        const destinoLabel = newLookbookDestino === 'ambas' ? 'App Móvil y Sitio Web' : newLookbookDestino === 'app' ? 'Solo App Móvil' : 'Solo Sitio Web';
         toast({
             title: '¡Fotografía agregada a la galería!',
-            description: 'Recuerda hacer clic en "Guardar Galería de Cortes" para sincronizar los cambios con la App Móvil y el Sitio Web.',
+            description: `Destino: ${destinoLabel}. Haz clic en "Guardar" para aplicar los cambios.`,
         });
+    };
+
+    // Alternar destino de publicación (App & Web -> Solo App -> Solo Web)
+    const handleCycleDestino = (id: string) => {
+        setLookbookItems((prev) =>
+            prev.map((item) => {
+                if (item.id !== id) return item;
+                const inApp = item.mostrarEnApp !== false;
+                const inWeb = item.mostrarEnWeb !== false;
+                if (inApp && inWeb) {
+                    return { ...item, mostrarEnApp: true, mostrarEnWeb: false };
+                }
+                if (inApp && !inWeb) {
+                    return { ...item, mostrarEnApp: false, mostrarEnWeb: true };
+                }
+                return { ...item, mostrarEnApp: true, mostrarEnWeb: true };
+            })
+        );
     };
 
     // Alternar visibilidad de un elemento
@@ -277,10 +331,15 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
                 servicioNombre: (item.servicioNombre || '').trim(),
                 serviceMatchId: item.serviceMatchId || '',
                 activo: item.activo !== false,
+                mostrarEnApp: item.mostrarEnApp !== false,
+                mostrarEnWeb: item.mostrarEnWeb !== false,
                 orden: idx,
             }));
 
-            // 1. Guardar en configuracion/inspiracion_alfa (fuente universal)
+            const appItems = cleanItems.filter((i) => i.mostrarEnApp);
+            const webItems = cleanItems.filter((i) => i.mostrarEnWeb);
+
+            // 1. Guardar en configuracion/inspiracion_alfa (fuente maestra de administración)
             await setDoc(
                 doc(db, 'configuracion', 'inspiracion_alfa'),
                 {
@@ -291,11 +350,12 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
                 { merge: true }
             );
 
-            // 2. Sincronizar en espejo con configuracion/app_movil
+            // 2. Sincronizar en espejo con configuracion/app_movil separado por plataforma
             await setDoc(
                 doc(db, 'configuracion', 'app_movil'),
                 {
-                    inspiracion_alfa: cleanItems,
+                    inspiracion_alfa: appItems,
+                    inspiracion_alfa_web: webItems,
                     actualizado_el: Timestamp.now(),
                 },
                 { merge: true }
@@ -334,29 +394,67 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
     return (
         <div className={cn("space-y-4", className)}>
             <Card className="border border-border/70 shadow-sm transition-all">
-                <CardHeader className="pb-3 pt-4 px-4 sm:px-6">
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Camera className="h-4.5 w-4.5 text-primary shrink-0" />
-                            <div className="flex items-center gap-1.5">
-                                <CardTitle className="text-base font-semibold">
-                                    Galería de Cortes
-                                </CardTitle>
-                                <InfoTooltip text="Sube fotos de cortes y peinados reales realizados en tu barbería. Se mostrarán al instante en la sección de Cortes Reales del Sitio Web y en la App Móvil." />
-                            </div>
+                <CardHeader className="pb-2 pt-4 px-4 sm:px-6">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-1 p-1 bg-muted/40 rounded-xl border border-border/60">
+                            <button
+                                type="button"
+                                onClick={() => { setActiveFilter('all'); setCurrentPage(1); }}
+                                className={cn(
+                                    "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer select-none",
+                                    activeFilter === 'all'
+                                        ? "bg-[#202A49] text-white shadow-2xs font-bold"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                Todas ({lookbookItems.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setActiveFilter('active'); setCurrentPage(1); }}
+                                className={cn(
+                                    "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer select-none",
+                                    activeFilter === 'active'
+                                        ? "bg-[#202A49] text-white shadow-2xs font-bold"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                Visibles ({lookbookItems.filter((i) => i.activo).length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { setActiveFilter('inactive'); setCurrentPage(1); }}
+                                className={cn(
+                                    "px-2.5 py-1 text-xs rounded-lg font-medium transition-all cursor-pointer select-none",
+                                    activeFilter === 'inactive'
+                                        ? "bg-[#202A49] text-white shadow-2xs font-bold"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                Ocultas ({lookbookItems.filter((i) => !i.activo).length})
+                            </button>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                            <Badge variant="secondary" className="bg-[#202A49]/10 text-[#202A49] dark:bg-white/10 dark:text-slate-200 border border-[#202A49]/20 text-xs py-0.5 px-2 font-medium">
-                                {lookbookItems.filter((i) => i.activo).length} Visibles en App & Web
-                            </Badge>
-                            <Badge variant="outline" className="text-muted-foreground text-xs py-0.5 px-2 font-normal">
-                                {lookbookItems.length} Total
-                            </Badge>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsUploadOpen(!isUploadOpen)}
+                                className={cn(
+                                    "h-8 text-xs font-semibold gap-1.5 cursor-pointer rounded-xl transition-colors",
+                                    isUploadOpen
+                                        ? "bg-[#202A49] text-white border-[#202A49] hover:bg-[#2a375e] hover:text-white"
+                                        : "border-border/70 text-foreground hover:bg-muted/60 hover:text-foreground"
+                                )}
+                            >
+                                <Plus className={cn("w-3.5 h-3.5 transition-transform", isUploadOpen && "rotate-45")} />
+                                <span>{isUploadOpen ? "Cerrar subida" : "Subir fotografías"}</span>
+                            </Button>
                             <button
                                 type="button"
                                 onClick={() => setIsLookbookOpen(!isLookbookOpen)}
-                                className="text-muted-foreground hover:text-foreground transition-colors p-1 ml-1 cursor-pointer"
+                                className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer"
                                 title={isLookbookOpen ? "Minimizar" : "Desplegar"}
                                 aria-label={isLookbookOpen ? "Minimizar" : "Desplegar"}
                             >
@@ -371,141 +469,267 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
                 </CardHeader>
 
                 {isLookbookOpen && (
-                    <CardContent className="space-y-4 pt-1 px-4 sm:px-6 pb-5">
-                        {/* ÁREA EXCLUSIVA PARA AGREGAR FOTOGRAFÍA (DRAG & DROP O IMPORTAR) */}
-                        <div className="bg-muted/20 border border-border/70 rounded-xl p-3 sm:p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                    <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                                        <Plus className="w-3.5 h-3.5 text-primary" />
-                                        Agregar Fotografía a la Galería
-                                    </Label>
-                                    <InfoTooltip text="Arrastra y suelta imágenes o haz clic para importar fotos de cortes reales para el sitio web y la app móvil." />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Label htmlFor="galeria-activo-toggle" className="text-[11px] font-medium cursor-pointer text-muted-foreground">
-                                        {newLookbookActivo ? 'Visible' : 'Oculto'}
-                                    </Label>
-                                    <Switch
-                                        id="galeria-activo-toggle"
-                                        checked={newLookbookActivo}
-                                        onCheckedChange={setNewLookbookActivo}
-                                        className="scale-90"
-                                    />
+                    <CardContent className="space-y-4 pt-2 px-4 sm:px-6 pb-5">
+                        {/* ÁREA DE SUBIDA COLAPSABLE 1:1 CON SELECTOR DE PLATAFORMA */}
+                        {isUploadOpen && (
+                            <div className="bg-muted/15 border border-border/70 rounded-xl p-3.5 sm:p-4 animate-in fade-in duration-200">
+                                <div className="flex flex-col sm:flex-row items-start gap-4">
+                                    {/* Contenedor 1:1 cuadrado */}
+                                    <div className="w-44 sm:w-48 aspect-square shrink-0 mx-auto sm:mx-0">
+                                        <ImageUploader
+                                            folder="inspiracion_alfa"
+                                            currentImageUrl={newLookbookImage}
+                                            onUpload={(url) => setNewLookbookImage(url)}
+                                            onUploadEnd={(url) => {
+                                                handleAddLookbookItem(url);
+                                            }}
+                                            onRemove={() => setNewLookbookImage('')}
+                                            onUploadStateChange={setIsUploadingLookbook}
+                                            multiple={true}
+                                            showPreview={true}
+                                            showRemove={true}
+                                            objectFit="cover"
+                                            className="w-full h-full aspect-square border-2 border-dashed rounded-xl bg-background/50 hover:bg-background/80 transition-all cursor-pointer shadow-2xs"
+                                        />
+                                    </div>
+
+                                    {/* Opciones de subida y destino */}
+                                    <div className="flex-1 w-full space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <Badge variant="outline" className="text-[10px] font-semibold text-blue-400 border-blue-500/30 bg-blue-500/10 py-0.5 px-2">
+                                                Formato Oficial: Cuadrado 1:1 (ej. 1080 × 1080 px)
+                                            </Badge>
+
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Label htmlFor="galeria-activo-toggle" className="text-[11px] font-medium cursor-pointer text-muted-foreground">
+                                                    {newLookbookActivo ? 'Visible al subir' : 'Pausado al subir'}
+                                                </Label>
+                                                <Switch
+                                                    id="galeria-activo-toggle"
+                                                    checked={newLookbookActivo}
+                                                    onCheckedChange={setNewLookbookActivo}
+                                                    className="scale-90"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label className="text-xs font-semibold text-foreground">
+                                                Mostrar fotografía en:
+                                            </Label>
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewLookbookDestino('ambas')}
+                                                    className={cn(
+                                                        "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                        newLookbookDestino === 'ambas'
+                                                            ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                            : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                    )}
+                                                >
+                                                    <Smartphone className="w-3.5 h-3.5" />
+                                                    <Globe className="w-3.5 h-3.5" />
+                                                    <span>Ambas (App y Web)</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewLookbookDestino('app')}
+                                                    className={cn(
+                                                        "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                        newLookbookDestino === 'app'
+                                                            ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                            : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                    )}
+                                                >
+                                                    <Smartphone className="w-3.5 h-3.5" />
+                                                    <span>Solo App Móvil</span>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewLookbookDestino('web')}
+                                                    className={cn(
+                                                        "px-3 py-1.5 text-xs rounded-lg border font-medium transition-all cursor-pointer flex items-center gap-1.5",
+                                                        newLookbookDestino === 'web'
+                                                            ? "bg-[#202A49] text-white border-[#202A49] shadow-2xs"
+                                                            : "bg-background text-muted-foreground border-border/70 hover:text-foreground hover:bg-muted/40"
+                                                    )}
+                                                >
+                                                    <Globe className="w-3.5 h-3.5" />
+                                                    <span>Solo Sitio Web</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                                            <p className="text-[11px] text-muted-foreground">
+                                                Formatos: JPG, PNG, WEBP. Arrastra una o varias fotos en formato cuadrado (1:1).
+                                            </p>
+                                            {newLookbookImage && (
+                                                <Button
+                                                    type="button"
+                                                    variant="alfa"
+                                                    onClick={() => handleAddLookbookItem()}
+                                                    className="text-xs h-7 px-3 shrink-0 flex items-center gap-1.5"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                    Agregar
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                        )}
 
-                            <ImageUploader
-                                folder="inspiracion_alfa"
-                                currentImageUrl={newLookbookImage}
-                                onUpload={(url) => setNewLookbookImage(url)}
-                                onUploadEnd={(url) => {
-                                    handleAddLookbookItem(url);
-                                }}
-                                onRemove={() => setNewLookbookImage('')}
-                                onUploadStateChange={setIsUploadingLookbook}
-                                multiple={true}
-                                className="w-full h-44 sm:h-52 border-2 border-dashed rounded-xl bg-background/50 hover:bg-background/80 transition-all cursor-pointer shadow-2xs"
-                            />
-
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5 px-0.5">
-                                <span>Formatos: JPG, PNG, WEBP. Arrastra una o varias fotos, o haz clic para importar.</span>
-                                {newLookbookImage && (
-                                    <Button
-                                        type="button"
-                                        variant="alfa"
-                                        onClick={() => handleAddLookbookItem()}
-                                        className="text-xs h-7.5 px-3.5 shrink-0 flex items-center gap-1.5"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        Agregar a la Galería
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* LISTA DE FOTOGRAFÍAS EN LA GALERÍA */}
-                        <div className="space-y-2.5 pt-1">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5">
-                                    <h4 className="text-xs font-semibold text-foreground">
-                                        Fotografías en la Galería ({lookbookItems.length})
-                                    </h4>
-                                    <InfoTooltip text="Puedes activar u ocultar cualquier fotografía en el sitio web y la app móvil sin eliminarla." />
-                                </div>
-                            </div>
-
+                        {/* CUADRÍCULA DE FOTOGRAFÍAS (PAGINADA) */}
+                        <div className="space-y-3 pt-1">
                             {loadingLookbook ? (
-                                <div className="py-8 flex justify-center">
+                                <div className="py-12 flex justify-center">
                                     <Loader2 className="w-5 h-5 animate-spin text-primary" />
                                 </div>
-                            ) : lookbookItems.length === 0 ? (
-                                <div className="border border-dashed border-border/80 rounded-lg p-6 text-center bg-muted/10 space-y-1.5">
-                                    <ImageIcon className="w-7 h-7 mx-auto text-muted-foreground/60" />
-                                    <p className="text-xs font-medium text-foreground">No hay fotos en la galería</p>
+                            ) : filteredItems.length === 0 ? (
+                                <div className="border border-dashed border-border/80 rounded-xl p-8 text-center bg-muted/10 space-y-2">
+                                    <ImageIcon className="w-8 h-8 mx-auto text-muted-foreground/50" />
+                                    <p className="text-xs font-semibold text-foreground">No hay fotos en esta vista</p>
                                     <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                                        Arrastra o importa fotografías de cortes reales arriba para que tus clientes se inspiren en el sitio web y en la app móvil.
+                                        {activeFilter === 'all'
+                                            ? 'Haz clic en "Subir fotografías" para agregar imágenes en formato 1:1.'
+                                            : 'No hay fotografías con el filtro seleccionado.'}
                                     </p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-                                    {lookbookItems.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className={cn(
-                                                "group relative rounded-xl border bg-card overflow-hidden shadow-2xs transition-all hover:shadow-md flex flex-col justify-between",
-                                                !item.activo && "opacity-60 bg-muted/20 border-border/60"
-                                            )}
-                                        >
-                                            <div className="relative aspect-square w-full bg-muted/30 overflow-hidden">
-                                                <img
-                                                    src={item.imagenUrl}
-                                                    alt="Fotografía de la galería"
-                                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                    loading="lazy"
-                                                />
-                                                <div className="absolute top-2 right-2">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "text-[10px] font-medium backdrop-blur-md shadow-xs py-0 px-1.5 leading-tight",
-                                                            item.activo
-                                                                ? "text-[#202A49] dark:text-slate-100 bg-white/90 dark:bg-black/80 border-[#202A49]/30 dark:border-white/20"
-                                                                : "text-muted-foreground bg-white/80 border-border dark:bg-black/70"
-                                                        )}
+                                <>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3">
+                                        {paginatedItems.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className={cn(
+                                                    "group relative rounded-xl border border-border/60 bg-card overflow-hidden shadow-2xs transition-all hover:shadow-md flex flex-col justify-between",
+                                                    !item.activo && "opacity-60 bg-muted/20"
+                                                )}
+                                            >
+                                                <div className="relative aspect-square w-full bg-muted/30 overflow-hidden">
+                                                    <img
+                                                        src={item.imagenUrl}
+                                                        alt="Corte de cabello"
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                        loading="lazy"
+                                                    />
+
+                                                    {/* Botón flotante para ver imagen completa (Zoom) */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewImage(item.imagenUrl)}
+                                                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+                                                        title="Ver imagen completa (1:1)"
                                                     >
-                                                        {item.activo ? "Visible" : "Oculto"}
-                                                    </Badge>
+                                                        <div className="p-2 rounded-full bg-black/70 text-white backdrop-blur-xs hover:scale-110 transition-transform shadow-lg">
+                                                            <Eye className="w-4 h-4 text-white" />
+                                                        </div>
+                                                    </button>
+
+                                                    {/* Badge de destino en esquina superior izquierda (clic para alternar App & Web / App / Web) */}
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleCycleDestino(item.id);
+                                                        }}
+                                                        title="Clic para cambiar dónde se muestra (App & Web / Solo App / Solo Web)"
+                                                        className="absolute top-1.5 left-1.5 z-10 cursor-pointer"
+                                                    >
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-[9px] font-medium backdrop-blur-md py-0 px-1.5 leading-tight shadow-xs text-white bg-black/70 border-white/20 hover:bg-[#202A49] transition-colors"
+                                                        >
+                                                            {item.mostrarEnApp !== false && item.mostrarEnWeb !== false
+                                                                ? "App & Web"
+                                                                : item.mostrarEnApp !== false
+                                                                    ? "Solo App"
+                                                                    : "Solo Web"}
+                                                        </Badge>
+                                                    </button>
+
+                                                    {/* Badge de estado en esquina superior derecha */}
+                                                    <div className="absolute top-1.5 right-1.5 pointer-events-none">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "text-[9px] font-medium backdrop-blur-md py-0 px-1.5 leading-tight shadow-xs",
+                                                                item.activo
+                                                                    ? "text-white bg-black/70 border-white/20"
+                                                                    : "text-slate-400 bg-black/70 border-white/10"
+                                                            )}
+                                                        >
+                                                            {item.activo ? "Visible" : "Oculto"}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+
+                                                {/* Barra de control inferior limpia y discreta */}
+                                                <div className="p-1.5 px-2 flex items-center justify-between bg-muted/20 border-t border-border/50">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <Switch
+                                                            checked={item.activo}
+                                                            onCheckedChange={(val) => handleToggleLookbookItem(item.id, val)}
+                                                            title={item.activo ? "Visible (clic para pausar)" : "Oculto (clic para activar)"}
+                                                            className="scale-75 origin-left"
+                                                        />
+                                                        <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                                                            {item.activo ? 'Activo' : 'Pausado'}
+                                                        </span>
+                                                    </div>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleStartDeleteLookbook(item)}
+                                                        className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded-md hover:bg-white/10 cursor-pointer"
+                                                        title="Eliminar de la galería"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
+                                        ))}
+                                    </div>
 
-                                            <div className="p-2 flex items-center justify-between bg-background border-t border-border/60">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Switch
-                                                        checked={item.activo}
-                                                        onCheckedChange={(val) => handleToggleLookbookItem(item.id, val)}
-                                                        title={item.activo ? "Visible en Web y App (clic para pausar)" : "Oculto (clic para activar)"}
-                                                        className="scale-75 origin-left"
-                                                    />
-                                                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
-                                                        {item.activo ? 'Activo' : 'Pausado'}
-                                                    </span>
-                                                </div>
-
+                                    {/* CONTROLES DE PAGINACIÓN */}
+                                    {totalPages > 1 && (
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-border/50 text-xs">
+                                            <span className="text-muted-foreground text-xs font-sans">
+                                                Mostrando {((currentPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} de {filteredItems.length} cortes
+                                            </span>
+                                            <div className="flex items-center gap-1.5">
                                                 <Button
                                                     type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleStartDeleteLookbook(item)}
-                                                    className="h-6 w-6 text-muted-foreground hover:text-red-600 hover:bg-red-500/10 rounded-md transition-colors cursor-pointer"
-                                                    title="Eliminar de la galería"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="h-7.5 px-2.5 text-xs gap-1 cursor-pointer disabled:opacity-40"
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                                    <span>Anterior</span>
+                                                </Button>
+                                                <span className="px-2 font-semibold text-foreground text-xs">
+                                                    {currentPage} / {totalPages}
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="h-7.5 px-2.5 text-xs gap-1 cursor-pointer disabled:opacity-40"
+                                                >
+                                                    <span>Siguiente</span>
+                                                    <ChevronRight className="w-3.5 h-3.5" />
                                                 </Button>
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -519,17 +743,17 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
                                 onClick={handleSaveLookbook}
                                 disabled={isSavingLookbook}
                                 variant="alfa"
-                                className="text-xs sm:text-sm px-5 h-9 w-full sm:w-auto flex items-center gap-2 cursor-pointer"
+                                className="text-xs px-5 h-8.5 w-full sm:w-auto flex items-center gap-1.5 cursor-pointer font-semibold"
                             >
                                 {isSavingLookbook ? (
                                     <>
-                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                        Guardando Galería...
+                                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                                        Guardando...
                                     </>
                                 ) : (
                                     <>
-                                        <Save className="w-3.5 h-3.5 mr-1.5" />
-                                        Guardar Galería de Cortes
+                                        <Save className="w-3.5 h-3.5 mr-1" />
+                                        Guardar
                                     </>
                                 )}
                             </Button>
@@ -604,6 +828,45 @@ export function GaleriaCortesManager({ className, onSaveSuccess }: GaleriaCortes
                             </Button>
                         </div>
                     </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal de vista previa (Zoom 1:1) */}
+            <Dialog open={previewImage !== null} onOpenChange={(open) => !open && setPreviewImage(null)}>
+                <DialogContent
+                    hideCloseButton={true}
+                    className="max-w-md sm:max-w-lg p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500"
+                >
+                    <div className="p-3.5 sm:p-4 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex items-center justify-between border-b border-[#2d3a60]/60 relative overflow-hidden">
+                        <div className="header-light-beam" aria-hidden="true" />
+                        <div className="relative z-10 flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2">
+                                <ImageIcon className="h-4 w-4 text-slate-300 shrink-0" />
+                                <DialogTitle className="text-sm font-bold text-white tracking-tight">
+                                    Vista Previa del Corte (Formato 1:1)
+                                </DialogTitle>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setPreviewImage(null)}
+                                className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                                aria-label="Cerrar vista previa"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                    {previewImage && (
+                        <div className="p-4 bg-black/90 flex items-center justify-center">
+                            <div className="relative aspect-square w-full rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
+                                <img
+                                    src={previewImage}
+                                    alt="Vista previa del corte"
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

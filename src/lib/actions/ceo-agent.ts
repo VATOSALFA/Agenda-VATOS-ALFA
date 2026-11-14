@@ -359,6 +359,42 @@ export async function processCeoAgentMessage({
   const historySnap = await msgsCol.orderBy('creado_en', 'desc').limit(14).get();
   const recentDocs = historySnap.docs.reverse();
 
+  // Consultar configuración de Janeth CEO en settings/sofia
+  let ceoActive = true;
+  let ceoCustomInstructions = '';
+  try {
+    const sofiaSnap = await db.collection('settings').doc('sofia').get();
+    if (sofiaSnap.exists) {
+      const sofiaData = sofiaSnap.data();
+      if (sofiaData?.ceoActive === false) {
+        ceoActive = false;
+      }
+      if (typeof sofiaData?.ceoCustomInstructions === 'string') {
+        ceoCustomInstructions = sofiaData.ceoCustomInstructions.trim();
+      }
+    }
+  } catch (e) {
+    // Continuar con valores por defecto
+  }
+
+  if (!ceoActive) {
+    const pausedMsg =
+      '**Janeth CEO** se encuentra actualmente en pausa desde **Configuración → Asistente Janeth → Janeth CEO**. Puedes reactivar el interruptor en cualquier momento para reanudar las consultas ejecutivas.';
+    const savedReplyRef = await msgsCol.add({
+      rol: 'assistant',
+      contenido: pausedMsg,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+    return {
+      sessionId: activeSessionId,
+      audioTranscription: null,
+      messageId: savedReplyRef.id,
+      reply: pausedMsg,
+      subagentsInvoked: [],
+      propuestaAccion: null,
+    };
+  }
+
   // Cargar memorias estratégicas activas
   const memoriasSnap = await db.collection('ceo_memoria').limit(15).get();
   const memoriasTexto = memoriasSnap.docs
@@ -428,7 +464,7 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
   * **CERO ASTERISCOS MÚLTIPLES O VACÍOS:** NUNCA escribas '****' ni '***'. Para dar énfasis o negrita, usa exclusivamente doble asterisco '**texto**'.
   * **VIÑETAS LIMPIAS:** Utiliza siempre el punto medio '• ' para listas o conceptos clave (no uses guiones '-' como viñeta).
   * **CERO COMILLAS INVERTIDAS INNECESARIAS:** No encierres números de códigos ni nombres en comillas invertidas (backticks) como \`audit_logs\` o \`9389\`; escríbelos de forma natural y limpia como **código 9389** o bitácora de auditoría.
-- **Estilo Ejecutivo Impecable:** Sé directa, eficiente, ejecutiva, elegante y estructurada, sin caracteres técnicos de relleno.`;
+- **Estilo Ejecutivo Impecable:** Sé directa, eficiente, ejecutiva, elegante y estructurada, sin caracteres técnicos de relleno.${ceoCustomInstructions ? `\n\n### DIRECTRICES PERSONALIZADAS DE DIRECCIÓN GENERAL (CONFIGURACIÓN):\n${ceoCustomInstructions}` : ''}`;
 
   const historyText = recentDocs
     .slice(0, -1)

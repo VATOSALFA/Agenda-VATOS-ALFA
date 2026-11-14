@@ -2172,7 +2172,7 @@ export default function CashBoxPage() {
                     handleSearch();
                 }}
                 dateRange={activeFilters.dateRange}
-                localId={activeFilters.localId}
+                localId={selectedLocalId !== 'todos' ? selectedLocalId : activeFilters.localId}
             />
             {
                 selectedSale && (

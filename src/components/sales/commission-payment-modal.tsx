@@ -28,7 +28,7 @@ import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { Info, Loader2, X, Percent } from 'lucide-react';
-import type { Sale, Profesional, Service, Product, Egreso, SaleItem } from '@/lib/types';
+import type { Sale, Profesional, Service, Product, Egreso, SaleItem, Local } from '@/lib/types';
 import { Checkbox } from '../ui/checkbox';
 import { cn } from '@/lib/utils';
 import { startOfDay, endOfDay, format } from 'date-fns';
@@ -47,12 +47,14 @@ interface CommissionRowData {
     professionalId: string;
     professionalName: string;
     totalSales: number;
-    totalServiceCommission: number; // New field
-    totalProductCommission: number; // New field
-    totalCommission: number; // Keeps total logic for backward compatibility/total sum
+    totalServiceCommission: number;
+    totalProductCommission: number;
+    totalCommission: number;
     totalTips: number;
+    cashRetained: number;
     saleItemIds: { saleId: string; itemIndex: number }[];
     tipSaleIds: string[];
+    cashRetainedSaleIds: string[];
 }
 
 export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dateRange, localId }: CommissionPaymentModalProps) {
@@ -83,6 +85,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
+    const { data: locales } = useFirestoreQuery<Local>('locales');
 
     const isLoading = salesLoading || professionalsLoading || servicesLoading || productsLoading;
 
@@ -101,6 +104,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
             const salesMap = new Map<string, Sale>();
             sales.forEach(s => {
+                if (s.pago_estado === 'Pendiente' || (s.pago_estado as string) === 'pendiente') {
+                    return;
+                }
                 // If this sale was absorbed into another sale (e.g. advance liquidated at POS), ignore it to avoid duplicate commissions
                 if ((s as any).absorbed_in_sale_id) {
                     return;
@@ -151,7 +157,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     docSnaps.forEach(sDoc => {
                         if (sDoc && sDoc.exists()) {
                             const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                            if (!(saleData as any).absorbed_in_sale_id) {
+                            if (!(saleData as any).absorbed_in_sale_id && saleData.pago_estado !== 'Pendiente' && (saleData.pago_estado as string) !== 'pendiente') {
                                 salesMap.set(saleData.id, saleData);
                             }
                         }
@@ -172,11 +178,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                             const linkedSnap = await getDocs(qLinked);
                             linkedSnap.forEach(sDoc => {
                                 const saleData = { id: sDoc.id, ...sDoc.data() } as Sale;
-                                if ((saleData as any).absorbed_in_sale_id) {
+                                if ((saleData as any).absorbed_in_sale_id || saleData.pago_estado === 'Pendiente' || (saleData.pago_estado as string) === 'pendiente') {
                                     return;
                                 }
-                                const hasFinalSale = Array.from(salesMap.values()).some(
-                                    existing => existing.reservationId === saleData.reservationId && existing.tipo_venta !== 'anticipo' && !existing.id.startsWith('deposit_')
+                                const isDepositCandidate = saleData.tipo_venta === 'anticipo' || saleData.id.startsWith('deposit_');
+                                const hasFinalSale = isDepositCandidate && Array.from(salesMap.values()).some(
+                                    existing => existing.reservationId === saleData.reservationId && existing.tipo_venta !== 'anticipo' && existing.tipo_venta !== 'extra_estacion' && !existing.id.startsWith('deposit_')
                                 );
                                 if (!hasFinalSale && !salesMap.has(saleData.id)) {
                                     salesMap.set(saleData.id, saleData);
@@ -212,7 +219,46 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
         const commissionsByProfessional: Record<string, CommissionRowData> = {};
 
+        const ensureProfessionalEntry = (profId: string, profName: string) => {
+            if (!commissionsByProfessional[profId]) {
+                commissionsByProfessional[profId] = {
+                    professionalId: profId,
+                    professionalName: profName,
+                    totalSales: 0,
+                    totalServiceCommission: 0,
+                    totalProductCommission: 0,
+                    totalCommission: 0,
+                    totalTips: 0,
+                    cashRetained: 0,
+                    saleItemIds: [],
+                    tipSaleIds: [],
+                    cashRetainedSaleIds: [],
+                };
+            }
+        };
+
         combinedSales.forEach(sale => {
+            if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
+                return;
+            }
+            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
+            if (sale.monto_pagado_real !== undefined && (sale.total - totalCovered) > 1) {
+                return;
+            }
+
+            // Sucursal Automatizada (Sin Recepcionista): Descuento automático de efectivo cobrado en estación individual
+            const retainedCash = Number(sale.efectivo_retenido_barbero || 0);
+            if (retainedCash > 0 && !sale.efectivo_descontado_en_comision && sale.cobrado_por_barbero_id) {
+                const collectorProf = professionalMap.get(sale.cobrado_por_barbero_id);
+                if (collectorProf) {
+                    ensureProfessionalEntry(collectorProf.id, collectorProf.name);
+                    commissionsByProfessional[collectorProf.id].cashRetained += retainedCash;
+                    if (!commissionsByProfessional[collectorProf.id].cashRetainedSaleIds.includes(sale.id)) {
+                        commissionsByProfessional[collectorProf.id].cashRetainedSaleIds.push(sale.id);
+                    }
+                }
+            }
+
             const saleTip = (sale as any).propina || 0;
             const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
             const professionalsInSale = allSellersInSale.filter(id => id && professionalMap.has(id));
@@ -229,19 +275,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
 
                     const professional = professionalMap.get(profId);
                     if (professional) {
-                        if (!commissionsByProfessional[profId]) {
-                            commissionsByProfessional[profId] = {
-                                professionalId: profId,
-                                professionalName: professional.name,
-                                totalSales: 0,
-                                totalServiceCommission: 0,
-                                totalProductCommission: 0,
-                                totalCommission: 0,
-                                totalTips: 0,
-                                saleItemIds: [],
-                                tipSaleIds: [],
-                            };
-                        }
+                        ensureProfessionalEntry(profId, professional.name);
                         commissionsByProfessional[profId].totalTips += tipPerProfessional;
                         if (!commissionsByProfessional[profId].tipSaleIds.includes(sale.id)) {
                             commissionsByProfessional[profId].tipSaleIds.push(sale.id);
@@ -251,35 +285,12 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             }
 
             sale.items?.forEach((item, itemIndex) => {
-                // Filter out non-completed payments for commissions
-                if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') return;
-
-                // Safety check: specific for online/partial payments that might have been marked 'Pagado' incorrectly
-                // If it has a tracked 'monto_pagado_real' that is less than the total, it's not fully paid.
-                // We allow a small epsilon for floating point issues.
-                const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
-                if (sale.monto_pagado_real !== undefined && (sale.total - totalCovered) > 1) {
-                    return;
-                }
-
                 if (!item.barbero_id || item.commissionPaid) return;
 
                 const professional = professionalMap.get(item.barbero_id);
                 if (!professional) return;
 
-                if (!commissionsByProfessional[professional.id]) {
-                    commissionsByProfessional[professional.id] = {
-                        professionalId: professional.id,
-                        professionalName: professional.name,
-                        totalSales: 0,
-                        totalServiceCommission: 0,
-                        totalProductCommission: 0,
-                        totalCommission: 0,
-                        totalTips: 0,
-                        saleItemIds: [],
-                        tipSaleIds: [],
-                    };
-                }
+                ensureProfessionalEntry(professional.id, professional.name);
 
                 const itemPrice = item.subtotal || item.precio || 0;
                 const itemDiscount = item.descuento?.monto || 0;
@@ -321,7 +332,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             });
         });
 
-        const commissionList = Object.values(commissionsByProfessional).filter(c => c.totalCommission > 0 || c.totalTips > 0);
+        const commissionList = Object.values(commissionsByProfessional).filter(
+            c => c.totalCommission > 0 || c.totalTips > 0 || c.cashRetained > 0
+        );
         setCommissionData(commissionList);
         const validProfIds = new Set(commissionList.map(c => c.professionalId));
         setSelectedProfessionals(prev => prev.filter(id => validProfIds.has(id)));
@@ -367,33 +380,72 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             const professionalsToPay = commissionData.filter(c => selectedProfessionals.includes(c.professionalId));
             const tipsToUpdate = new Map<string, Set<string>>();
             const salesToUpdate = new Map<string, Sale>();
+            const cashSettledSalesMap = new Map<string, string>(); // saleId -> egresoId
             const professionalMapForSave = new Map(professionals.map(p => [p.id, p]));
+            const localMapForSave = new Map((locales || []).map(l => [l.id, l]));
+            const selectedLocalObj = localId && localId !== 'todos' ? localMapForSave.get(localId) : undefined;
 
             for (const comm of professionalsToPay) {
-                const totalPayment = comm.totalCommission + comm.totalTips;
-                if (totalPayment > 0) {
-                    // Create expense record
+                const grossTotal = Math.round((comm.totalCommission + comm.totalTips) * 100) / 100;
+                const cashDeducted = Math.round((comm.cashRetained || 0) * 100) / 100;
+                const netTransferToBarber = Math.max(0, Math.round((grossTotal - cashDeducted) * 100) / 100);
+                const saldoAFavorSucursal = Math.max(0, Math.round((cashDeducted - grossTotal) * 100) / 100);
+
+                if (grossTotal > 0 || cashDeducted > 0) {
+                    const profObj = professionalMapForSave.get(comm.professionalId);
+                    const profLocalObj = profObj?.local_id ? localMapForSave.get(profObj.local_id) : undefined;
+                    const isSmartBranchSettlement =
+                        selectedLocalObj?.modoOperacion === 'sin_recepcionista' ||
+                        profLocalObj?.modoOperacion === 'sin_recepcionista' ||
+                        cashDeducted > 0;
+
+                    const effectiveEgresoLocalId =
+                        localId && localId !== 'todos'
+                            ? localId
+                            : (profObj?.local_id && profObj.local_id !== 'todos'
+                                ? profObj.local_id
+                                : (locales?.find(l => l.id && l.id !== 'todos')?.id || localId));
+
                     const egresoRef = doc(collection(db, 'egresos'));
-                    batch.set(egresoRef, {
+
+                    const baseComment = `Pago a ${comm.professionalName} (Comisión Servicios: $${comm.totalServiceCommission.toFixed(2)}, Comisión Productos: $${comm.totalProductCommission.toFixed(2)}, Propina: $${comm.totalTips.toFixed(2)})`;
+                    const stationSuffix = cashDeducted > 0
+                        ? ` [Descuento efectivo estación: -$${cashDeducted.toFixed(2)} | ${saldoAFavorSucursal > 0 ? `Barbero entrega diferencia: $${saldoAFavorSucursal.toFixed(2)}` : `Neto transferido: $${netTransferToBarber.toFixed(2)}`}]`
+                        : '';
+
+                    const egresoPayload: Record<string, any> = {
                         fecha: serverTimestamp(),
-                        monto: totalPayment,
+                        monto: grossTotal,
                         concepto: 'Pago de Comisión y Propinas',
                         aQuien: comm.professionalId,
-                        local_id: localId,
-                        comentarios: `Pago a ${comm.professionalName} (Comisión Servicios: $${comm.totalServiceCommission.toFixed(2)}, Comisión Productos: $${comm.totalProductCommission.toFixed(2)}, Propina: $${comm.totalTips.toFixed(2)}) el ${formattedDate}`,
+                        local_id: effectiveEgresoLocalId,
+                        comentarios: `${baseComment}${stationSuffix} el ${formattedDate}`,
                         commission_payment_details: {
                             professionalId: comm.professionalId,
                             saleItemIds: comm.saleItemIds,
-                            tipSaleIds: comm.tipSaleIds
+                            tipSaleIds: comm.tipSaleIds,
+                            ...(comm.cashRetainedSaleIds.length > 0 ? { cashRetainedSaleIds: comm.cashRetainedSaleIds } : {})
                         }
-                    });
+                    };
+
+                    if (isSmartBranchSettlement) {
+                        egresoPayload.source = 'finanzas';
+                        egresoPayload.comisionServicios = Math.round(comm.totalServiceCommission * 100) / 100;
+                        egresoPayload.comisionProductos = Math.round(comm.totalProductCommission * 100) / 100;
+                        egresoPayload.propina = Math.round(comm.totalTips * 100) / 100;
+                        egresoPayload.comisionBruta = grossTotal;
+                        egresoPayload.efectivoRetenidoDescontado = cashDeducted;
+                        egresoPayload.montoNetoTransferido = netTransferToBarber;
+                        egresoPayload.saldoAFavorSucursal = saldoAFavorSucursal;
+                    }
+
+                    batch.set(egresoRef, egresoPayload);
 
                     // Mark items as paid (accumulate changes in salesToUpdate map declared outside the loop)
                     comm.saleItemIds.forEach(idPair => {
                         if (!salesToUpdate.has(idPair.saleId)) {
                             const originalSale = combinedSales.find(s => s.id === idPair.saleId);
                             if (originalSale) {
-                                // Deep copy to avoid modifying original state
                                 salesToUpdate.set(idPair.saleId, JSON.parse(JSON.stringify(originalSale)));
                             }
                         }
@@ -411,36 +463,50 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         }
                         tipsToUpdate.get(saleId)!.add(comm.professionalId);
                     });
+
+                    // Mark station cash sales as settled in payroll
+                    comm.cashRetainedSaleIds.forEach(saleId => {
+                        cashSettledSalesMap.set(saleId, egresoRef.id);
+                    });
                 }
             }
 
-            // Apply all sales updates accumulated across all paid professionals
+            // Consolidate all updates per saleId into a single patch object so no field update overwrites another
+            const mergedSalePatches = new Map<string, Record<string, any>>();
+
             salesToUpdate.forEach((updatedSale, saleId) => {
-                const saleRef = doc(db, 'ventas', saleId);
-                batch.update(saleRef, { items: updatedSale.items });
+                const patch = mergedSalePatches.get(saleId) || {};
+                patch.items = updatedSale.items;
+                mergedSalePatches.set(saleId, patch);
             });
 
-            // Apply all tip updates
             tipsToUpdate.forEach((professionalIdsSet, saleId) => {
-                const saleRef = doc(db, 'ventas', saleId);
+                const patch = mergedSalePatches.get(saleId) || {};
                 const professionalIds = Array.from(professionalIdsSet);
-                
-                // Determine if everyone in the sale has been paid for their tip
                 const originalSale = combinedSales.find(s => s.id === saleId);
                 const allSellersInSale = Array.from(new Set(originalSale?.items?.map(i => i.barbero_id).filter(Boolean)));
                 const validProfessionalsIds = allSellersInSale.filter(id => id && professionalMapForSave.has(id));
-                
                 const isEveryonePaid = validProfessionalsIds.every(id => professionalIds.includes(id));
 
-                batch.update(saleRef, { 
-                    tipsPaidTo: professionalIds,
-                    tipPaid: isEveryonePaid
-                });
+                patch.tipsPaidTo = professionalIds;
+                patch.tipPaid = isEveryonePaid;
+                mergedSalePatches.set(saleId, patch);
+            });
+
+            cashSettledSalesMap.forEach((egresoId, saleId) => {
+                const patch = mergedSalePatches.get(saleId) || {};
+                patch.efectivo_descontado_en_comision = true;
+                patch.comision_liquidacion_egreso_id = egresoId;
+                mergedSalePatches.set(saleId, patch);
+            });
+
+            mergedSalePatches.forEach((patch, saleId) => {
+                batch.update(doc(db, 'ventas', saleId), patch);
             });
 
             await batch.commit();
 
-            toast({ title: 'Comisiones y propinas pagadas', description: `Se han registrado ${professionalsToPay.length} egresos.` });
+            toast({ title: 'Comisiones y propinas liquidadas', description: `Se han registrado ${professionalsToPay.length} liquidaciones con éxito.` });
             onFormSubmit();
             onOpenChange(false);
         } catch (error) {
@@ -461,10 +527,27 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         setSelectedProfessionals(checked ? commissionData.map(c => c.professionalId) : []);
     }
 
+    const hasAnyCashRetained = useMemo(
+        () => commissionData.some(c => c.cashRetained > 0),
+        [commissionData]
+    );
+
     const overallTotalToPay = useMemo(() => {
         return commissionData
             .filter(c => selectedProfessionals.includes(c.professionalId))
-            .reduce((acc, curr) => acc + curr.totalCommission + curr.totalTips, 0);
+            .reduce((acc, curr) => {
+                const netForProf = curr.totalCommission + curr.totalTips - (curr.cashRetained || 0);
+                return acc + Math.max(0, netForProf);
+            }, 0);
+    }, [commissionData, selectedProfessionals]);
+
+    const overallCashToRecover = useMemo(() => {
+        return commissionData
+            .filter(c => selectedProfessionals.includes(c.professionalId))
+            .reduce((acc, curr) => {
+                const diff = (curr.cashRetained || 0) - (curr.totalCommission + curr.totalTips);
+                return acc + Math.max(0, diff);
+            }, 0);
     }, [commissionData, selectedProfessionals]);
 
     return (
@@ -498,7 +581,9 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         <Info className="h-4 w-4" />
                         <AlertTitle>Revisión de Pagos</AlertTitle>
                         <AlertDescription>
-                            El sistema ha calculado las comisiones y propinas pendientes de pago para el periodo seleccionado. Al presionar "Pagar", se generará un egreso por el total para cada profesional seleccionado.
+                            {hasAnyCashRetained
+                                ? 'El sistema calculó las comisiones y propinas pendientes descontando automáticamente el efectivo cobrado por cada barbero en su estación individual.'
+                                : 'El sistema ha calculado las comisiones y propinas pendientes de pago para el periodo seleccionado. Al presionar "Pagar", se generará un egreso por el total para cada profesional seleccionado.'}
                         </AlertDescription>
                     </Alert>
 
@@ -507,45 +592,74 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                         <div className="overflow-x-auto w-full border rounded-xl scrollbar-thin overscroll-contain touch-pan-y">
                             <Table className="min-w-[600px] sm:min-w-full">
                                 <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[50px]">
+                                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                        <TableHead className="w-[50px] py-1 px-3">
                                             <Checkbox
                                                 checked={commissionData.length > 0 && selectedProfessionals.length === commissionData.length}
                                                 onCheckedChange={(checked) => handleSelectAll(!!checked)}
                                             />
                                         </TableHead>
-                                        <TableHead>Profesional</TableHead>
-                                        <TableHead className="text-right whitespace-nowrap">Comisión Servicios</TableHead>
-                                        <TableHead className="text-right whitespace-nowrap">Comisión Productos</TableHead>
-                                        <TableHead className="text-right whitespace-nowrap">Propina</TableHead>
-                                        <TableHead className="text-right whitespace-nowrap">Total a Pagar</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold">Profesional</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right whitespace-nowrap">Comisión Servicios</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right whitespace-nowrap">Comisión Productos</TableHead>
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right whitespace-nowrap">Propina</TableHead>
+                                        {hasAnyCashRetained && (
+                                            <TableHead className="py-1 px-3 text-xs font-semibold text-right whitespace-nowrap">(-) Efectivo Estación</TableHead>
+                                        )}
+                                        <TableHead className="py-1 px-3 text-xs font-semibold text-right whitespace-nowrap">
+                                            {hasAnyCashRetained ? 'Neto a Liquidar' : 'Total a Pagar'}
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" /></TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={hasAnyCashRetained ? 7 : 6} className="text-center h-24"><Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" /></TableCell></TableRow>
                                     ) : commissionData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground">No hay comisiones ni propinas pendientes para el periodo seleccionado.</TableCell></TableRow>
-                                    ) : commissionData.map((row) => (
-                                        <TableRow key={row.professionalId}>
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedProfessionals.includes(row.professionalId)}
-                                                    onCheckedChange={(checked) => handleSelectProfessional(row.professionalId, checked)}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="font-medium whitespace-nowrap">{row.professionalName}</TableCell>
-                                            <TableCell className="text-right">${row.totalServiceCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right">${row.totalProductCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right">${row.totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right font-semibold text-primary">${(row.totalCommission + row.totalTips).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </TableRow>
-                                    ))}
+                                        <TableRow><TableCell colSpan={hasAnyCashRetained ? 7 : 6} className="text-center h-24 text-xs text-muted-foreground">No hay comisiones ni propinas pendientes para el periodo seleccionado.</TableCell></TableRow>
+                                    ) : commissionData.map((row) => {
+                                        const grossRow = row.totalCommission + row.totalTips;
+                                        const netRow = Math.round((grossRow - (row.cashRetained || 0)) * 100) / 100;
+                                        return (
+                                            <TableRow key={row.professionalId} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40 font-sans">
+                                                <TableCell className="py-1.5 px-3">
+                                                    <Checkbox
+                                                        checked={selectedProfessionals.includes(row.professionalId)}
+                                                        onCheckedChange={(checked) => handleSelectProfessional(row.professionalId, checked)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs font-medium whitespace-nowrap">{row.professionalName}</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right">${row.totalServiceCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right">${row.totalProductCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="py-1.5 px-3 text-xs text-right">${row.totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                {hasAnyCashRetained && (
+                                                    <TableCell className="py-1.5 px-3 text-xs text-right font-medium text-foreground/80">
+                                                        {row.cashRetained > 0
+                                                            ? `-$${row.cashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                            : '$0.00'}
+                                                    </TableCell>
+                                                )}
+                                                <TableCell className={cn("py-1.5 px-3 text-xs text-right font-semibold whitespace-nowrap", netRow >= 0 ? "text-primary" : "text-red-400")}>
+                                                    {netRow >= 0
+                                                        ? `$${netRow.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                        : `Entrega $${Math.abs(netRow).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
                                 </TableBody>
                                 <TableFooter>
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="text-right font-bold text-base whitespace-nowrap">Total a Pagar Seleccionado</TableCell>
-                                        <TableCell className="text-right font-bold text-base text-primary whitespace-nowrap">${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    <TableRow className="font-sans">
+                                        <TableCell colSpan={hasAnyCashRetained ? 6 : 5} className="py-2 px-3 text-right font-bold text-sm whitespace-nowrap">
+                                            {hasAnyCashRetained ? 'Neto a Transferir Seleccionado' : 'Total a Pagar Seleccionado'}
+                                            {overallCashToRecover > 0 && (
+                                                <span className="block text-[11px] font-medium text-red-400">
+                                                    Efectivo a recuperar de estaciones: ${overallCashToRecover.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="py-2 px-3 text-right font-bold text-base text-primary whitespace-nowrap">
+                                            ${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </TableCell>
                                     </TableRow>
                                 </TableFooter>
                             </Table>
@@ -555,7 +669,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     {/* VISTA MÓVIL: TARJETAS TOUCH */}
                     <div className="sm:hidden space-y-2.5">
                         <div className="flex items-center justify-between p-2.5 bg-muted/20 border border-border/40 rounded-xl">
-                            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
+                            <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none font-sans">
                                 <Checkbox
                                     checked={commissionData.length > 0 && selectedProfessionals.length === commissionData.length}
                                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
@@ -577,12 +691,13 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                             commissionData.map((row) => {
                                 const isSelected = selectedProfessionals.includes(row.professionalId);
                                 const totalStaff = row.totalCommission + row.totalTips;
+                                const netStaff = Math.round((totalStaff - (row.cashRetained || 0)) * 100) / 100;
                                 return (
                                     <div
                                         key={row.professionalId}
                                         onClick={() => handleSelectProfessional(row.professionalId, !isSelected)}
                                         className={cn(
-                                            "p-3 rounded-xl border transition-all cursor-pointer",
+                                            "p-3 rounded-xl border transition-all cursor-pointer font-sans",
                                             isSelected
                                                 ? "border-blue-500/60 bg-blue-500/5 shadow-sm"
                                                 : "border-border/60 bg-card/60 hover:bg-muted/10"
@@ -598,9 +713,13 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                                 <span className="font-semibold text-sm text-foreground truncate">{row.professionalName}</span>
                                             </div>
                                             <div className="text-right shrink-0">
-                                                <span className="text-[10px] text-muted-foreground block leading-tight">Total</span>
-                                                <span className="text-sm font-bold text-foreground">
-                                                    ${totalStaff.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                <span className="text-[10px] text-muted-foreground block leading-tight">
+                                                    {row.cashRetained > 0 ? 'Neto' : 'Total'}
+                                                </span>
+                                                <span className={cn("text-sm font-bold", netStaff >= 0 ? "text-foreground" : "text-red-400")}>
+                                                    {netStaff >= 0
+                                                        ? `$${netStaff.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                        : `Entrega $${Math.abs(netStaff).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                                 </span>
                                             </div>
                                         </div>
@@ -618,18 +737,31 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                                                 <span className="font-medium text-foreground">${row.totalTips.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                             </div>
                                         </div>
+                                        {row.cashRetained > 0 && (
+                                            <div className="mt-2 pt-1.5 border-t border-border/40 flex items-center justify-between text-[11px]">
+                                                <span className="text-muted-foreground">(-) Efectivo retenido estación:</span>
+                                                <span className="font-semibold text-foreground">-${row.cashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })
                         )}
                     </div>
                 </div>
-                <div className="p-3 sm:p-4 bg-muted/20 border-t border-border/40 flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                <div className="p-3 sm:p-4 bg-muted/20 border-t border-border/40 flex items-center justify-between sm:justify-end gap-2 shrink-0 font-sans">
                     <div className="sm:hidden flex flex-col">
-                        <span className="text-[10px] text-muted-foreground uppercase font-semibold">Total a Pagar</span>
+                        <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                            {hasAnyCashRetained ? 'Neto a Transferir' : 'Total a Pagar'}
+                        </span>
                         <span className="text-sm font-black text-foreground">
                             ${overallTotalToPay.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
+                        {overallCashToRecover > 0 && (
+                            <span className="text-[10px] font-semibold text-red-400">
+                                Recuperar: ${overallCashToRecover.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="outline" onClick={() => onOpenChange(false)} className="rounded-xl h-9 text-xs sm:text-sm">Cancelar</Button>
@@ -640,7 +772,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                             className="px-4 sm:px-6 font-semibold h-9 text-xs sm:text-sm"
                         >
                             {isProcessing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Pagar ({selectedProfessionals.length})
+                            {hasAnyCashRetained ? `Liquidar (${selectedProfessionals.length})` : `Pagar (${selectedProfessionals.length})`}
                         </Button>
                     </div>
                 </div>

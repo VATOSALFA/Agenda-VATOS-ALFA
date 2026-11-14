@@ -56,6 +56,16 @@ Este repositorio cuenta con directrices de diseño y arquitectura de software qu
      - Barra (thumb) en hover / interacción: Azul Acento Móvil vibrante (`#3B82F6` / `#2563EB`).
      - Botones nativos de flechas eliminados (`::-webkit-scrollbar-button { display: none !important; }`).
      - Soporte estándar W3C/Firefox (`scrollbar-width: thin; scrollbar-color: rgba(59, 130, 246, 0.45) transparent;`).
+9. **Estándar Oficial de Vistas de Configuración, Tarjetas de Beneficios y Portadas 16:9:**
+   - **Encabezado dinámico y limpio:** La cabecera superior muestra únicamente el título de la sección o del beneficio activo (ej. `Pase Alfa`, `Regalo de cumpleaños`, `Alfa Coins`). PROHIBIDO migas de pan como `App Móvil VATOS ALFA /` o párrafos explicativos largos.
+   - **Botón único de retorno:** En la esquina superior derecha (`ChevronLeft` + `Regresar a la lista`), bare icon sin caja ni borde. NUNCA duplicar dentro de las tarjetas ni en el pie de página.
+   - **Tarjeta de edición sin redundancias:** La primera fila de la tarjeta contiene ÚNICAMENTE el switch `Visible / Pausado` alineado a la derecha, sin texto en la izquierda ni títulos repetitivos como "Editar: [Nombre]".
+   - **Fotografías y portadas 16:9:** Contenedor panorámico `16:9` (`1280×720 px`, `aspect-video`), con botón flotante de ojo (`showPreview={true}`) para ver la imagen completa en modal oficial con borde azul.
+   - **Botón Guardar:** Variante `variant="alfa"` con `<Save className="w-3.5 h-3.5 mr-1.5" /> Guardar` sin textos largos.
+10. **Estándar Oficial de Campos de Texto Extensos / Plantillas (Edición en Modal Maximizado):**
+   - Queda estrictamente prohibido incrustar campos de texto extensos (`<Textarea>`) directamente abiertos en formularios de configuración, ya que saturan la interfaz, generan scroll vertical innecesario y fatiga visual.
+   - Todo texto largo (mensajes de plantilla, políticas, términos, prompts maestros, descripciones extensas) debe presentarse en una **fila compacta y limpia con un botón "Editar"** y contador sutil de caracteres.
+   - Al presionar **"Editar"**, se despliega el modal oficial maximizado (`Dialog` con borde azul `border-2 border-blue-500`, `.header-light-beam`, contador dinámico de palabras/caracteres, chips clicables de etiquetas dinámicas si aplica, y botón *"Aplicar y Guardar Ahora"*).
 
 ---
 

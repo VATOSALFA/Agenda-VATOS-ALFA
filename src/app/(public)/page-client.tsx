@@ -181,7 +181,13 @@ export default function LandingPageClient() {
     // Filter active promotions (active and not expired)
     const d = new Date();
     const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const activePromotions = promotions?.filter((p: any) => p.active && (!p.endDate || today <= p.endDate)) || [];
+    const activePromotions = promotions?.filter((p: any) => {
+        if (!p.active || (p.endDate && today > p.endDate)) return false;
+        if (p.mostrarEnWeb === false) return false;
+        const name = (p.name || p.titulo || '').toLowerCase();
+        if (p.id === 'DSVwbmEtiK1xJzJjwrqu' || p.id === 'promo_pase_alfa' || p.es_pase_alfa === true || name.includes('décima va por la casa') || name.includes('decima va por la casa')) return false;
+        return true;
+    }) || [];
 
     // Sort and filter services
     const sortedServices = services?.filter((s: any) => s.active && s.visible_en_web !== false).sort((a: any, b: any) => (a.order ?? 999) - (b.order ?? 999)) || [];
@@ -229,11 +235,25 @@ export default function LandingPageClient() {
             try {
                 const appMovilRef = doc(db, 'configuracion', 'app_movil');
                 const appSnap = await getDoc(appMovilRef);
-                if (appSnap.exists() && Array.isArray(appSnap.data().inspiracion_alfa) && appSnap.data().inspiracion_alfa.length > 0) {
-                    const activeItems = appSnap.data().inspiracion_alfa.filter((item: any) => item.activo !== false);
-                    if (activeItems.length > 0 && isMounted) {
-                        setCortesReales(activeItems);
-                        return;
+                if (appSnap.exists()) {
+                    const appData = appSnap.data();
+                    if (Array.isArray(appData.inspiracion_alfa_web)) {
+                        const webItems = appData.inspiracion_alfa_web.filter(
+                            (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                        );
+                        if (isMounted) {
+                            setCortesReales(webItems);
+                            return;
+                        }
+                    }
+                    if (Array.isArray(appData.inspiracion_alfa) && appData.inspiracion_alfa.length > 0) {
+                        const activeItems = appData.inspiracion_alfa.filter(
+                            (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                        );
+                        if (activeItems.length > 0 && isMounted) {
+                            setCortesReales(activeItems);
+                            return;
+                        }
                     }
                 }
             } catch (appErr) {
@@ -245,7 +265,9 @@ export default function LandingPageClient() {
                 const docRef = doc(db, 'configuracion', 'inspiracion_alfa');
                 const snap = await getDoc(docRef);
                 if (snap.exists() && Array.isArray(snap.data().items) && snap.data().items.length > 0) {
-                    const activeItems = snap.data().items.filter((item: any) => item.activo !== false);
+                    const activeItems = snap.data().items.filter(
+                        (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                    );
                     if (activeItems.length > 0 && isMounted) {
                         setCortesReales(activeItems);
                         return;
@@ -1154,13 +1176,15 @@ export default function LandingPageClient() {
             }
 
             {/* 4. Beneficios Exclusivos y Pase Alfa Club (Estilo App Móvil) */}
-            <AlfaBenefitsSection
-                paseAlfaData={paseAlfaConfig}
-                onBookBenefit={(_benefit) => {
-                    router.push('/reservar');
-                }}
-                onDownloadApp={handleAppDownloadClick}
-            />
+            {paseAlfaConfig?.mostrar_en_web !== false && (
+                <AlfaBenefitsSection
+                    paseAlfaData={paseAlfaConfig}
+                    onBookBenefit={(_benefit) => {
+                        router.push('/reservar');
+                    }}
+                    onDownloadApp={handleAppDownloadClick}
+                />
+            )}
 
             {/* 5. Promociones Especiales y Ofertas en Formato Vertical */}
             {activePromotions && activePromotions.length > 0 && (

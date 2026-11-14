@@ -1,9 +1,13 @@
 {
-  "silent": true,
-  "showModal": false,
-  "preserveVersion": true,
-  "version": "1792975331594",
-  "title": "",
-  "summary": "",
-  "notes": []
+  "silent": false,
+  "showModal": true,
+  "preserveVersion": false,
+  "title": "Actualización Mayor de Agenda y App",
+  "summary": "Nuevas funcionalidades, unificación de Asistente Janeth y mejoras de rendimiento.",
+  "notes": [
+    "Unificación de Asistente Janeth con control independiente de 3 perfiles (Clientes, Administradora y CEO).",
+    "Generador de códigos temporales de 4 dígitos para recepción y bitácora de auditoría en Reportes.",
+    "Nuevos permisos de visualización para Garantías y Buzón en roles de usuario.",
+    "Corrección en liquidación de comisiones de sucursal y optimizaciones en la agenda."
+  ]
 }

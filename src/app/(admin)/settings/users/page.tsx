@@ -30,7 +30,7 @@ import { deleteUser } from '@/lib/actions/delete-user';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
-import { allPermissionCategories, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
+import { allPermissionCategories, allPermissions, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 
@@ -118,7 +118,9 @@ export default function UsersPage() {
                     return {
                         ...initialRole,
                         id: firestoreRole.id,
-                        permissions: firestoreRole.permissions,
+                        permissions: initialRole.title === 'Administrador general'
+                            ? allPermissions.map(p => p.key)
+                            : (firestoreRole.permissions || []),
                         historyRestrictionDays: firestoreRole.historyRestrictionDays
                     };
                 }

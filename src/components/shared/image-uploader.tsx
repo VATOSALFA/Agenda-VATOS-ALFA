@@ -31,6 +31,7 @@ interface ImageUploaderProps {
   compact?: boolean;
   showPreview?: boolean;
   showRemove?: boolean;
+  aspectRatio?: '16/9' | 'square' | 'auto';
 }
 
 export interface OptimizeImageOptions {
@@ -190,12 +191,15 @@ export function ImageUploader({
   compact = false,
   showPreview = false,
   showRemove = false,
+  aspectRatio = 'square',
 }: ImageUploaderProps) {
   
   const [isUploading, setIsUploading] = useState(false);
   const [uploadCount, setUploadCount] = useState(0);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const { toast } = useToast();
+
+  const is16x9 = aspectRatio === '16/9' || className?.includes('aspect-video');
 
   const handleUploadFiles = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
@@ -303,7 +307,12 @@ export function ImageUploader({
       );
     }
     return (
-        <div className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center w-40 h-40 min-w-[10rem] min-h-[10rem] max-w-[10rem] max-h-[10rem] bg-muted/10 shrink-0', className)}>
+        <div className={cn(
+            is16x9
+              ? 'flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl text-center w-full aspect-video bg-muted/10 shrink-0'
+              : 'flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center w-40 h-40 min-w-[10rem] min-h-[10rem] max-w-[10rem] max-h-[10rem] bg-muted/10 shrink-0',
+            className
+        )}>
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
             <p className="mt-3 text-xs font-medium text-muted-foreground">
                 {uploadCount > 1 ? `Subiendo ${uploadCount} fotografías...` : 'Subiendo imagen...'}
@@ -319,7 +328,9 @@ export function ImageUploader({
           className={cn(
             compact 
               ? 'relative w-20 h-20 min-w-[5rem] min-h-[5rem] max-w-[5rem] max-h-[5rem] rounded-xl overflow-hidden group cursor-pointer border border-border/80 bg-background shrink-0 shadow-2xs' 
-              : 'relative w-40 h-40 min-w-[10rem] min-h-[10rem] max-w-[10rem] max-h-[10rem] rounded-lg overflow-hidden group cursor-pointer border border-border/80 bg-muted/20 shrink-0', 
+              : is16x9
+                ? 'relative w-full aspect-video rounded-xl overflow-hidden group cursor-pointer border border-border/80 bg-slate-950/90 shrink-0 shadow-2xs'
+                : 'relative w-40 h-40 min-w-[10rem] min-h-[10rem] max-w-[10rem] max-h-[10rem] rounded-lg overflow-hidden group cursor-pointer border border-border/80 bg-muted/20 shrink-0', 
             className
           )}
           {...getRootProps()}
@@ -455,9 +466,15 @@ export function ImageUploader({
   return (
     <div
       {...getRootProps()}
-      className={cn('flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 cursor-pointer hover:border-primary transition-colors bg-muted/5', className, {
-        'border-primary bg-primary/10 scale-[0.99]': isDragActive,
-      })}
+      className={cn(
+        is16x9
+          ? 'flex flex-col items-center justify-center p-4 sm:p-6 border-2 border-dashed rounded-xl text-center w-full aspect-video cursor-pointer hover:border-primary transition-colors bg-muted/5'
+          : 'flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-lg text-center h-40 w-40 cursor-pointer hover:border-primary transition-colors bg-muted/5',
+        className,
+        {
+          'border-primary bg-primary/10 scale-[0.99]': isDragActive,
+        }
+      )}
     >
       <input {...getInputProps()} />
       <UploadCloud className={cn("h-7 w-7 mb-2 text-muted-foreground transition-transform", isDragActive && "scale-110 text-primary")} />

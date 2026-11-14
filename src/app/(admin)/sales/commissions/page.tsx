@@ -148,18 +148,27 @@ export default function CommissionsPage() {
             : format(dateRange.from, "dd/MM/yyyy", { locale: es })) 
         : "Periodo no definido";
 
+    const hasStationCashRetained = (overallSummary.totalCashRetained || 0) > 0;
+
     const triggerDownload = () => {
         if (summaryByProfessional.length === 0) {
             toast({ title: "No hay datos para exportar", variant: "destructive" });
             return;
         }
 
-        const dataForExcel = summaryByProfessional.map(row => ({
-            'Periodo': periodString,
-            'Profesional / Staff': row.professionalName,
-            'Venta total': row.totalSales,
-            'Monto comisión': row.totalCommission,
-        }));
+        const dataForExcel = summaryByProfessional.map(row => {
+            const baseRow: Record<string, string | number> = {
+                'Periodo': periodString,
+                'Profesional / Staff': row.professionalName,
+                'Venta total': row.totalSales,
+                'Monto comisión': row.totalCommission,
+            };
+            if (hasStationCashRetained) {
+                baseRow['Efectivo retenido en estación'] = row.cashRetainedByBarber || 0;
+                baseRow['Neto a liquidar'] = row.netPayable ?? row.totalCommission;
+            }
+            return baseRow;
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
@@ -425,10 +434,22 @@ export default function CommissionsPage() {
                                 {breakdownText}
                             </p>
                         </div>
-                        <div className="text-lg font-bold tracking-tight text-blue-500 dark:text-blue-400 shrink-0">
+                        <div className="text-lg font-bold tracking-tight text-blue-500 dark:text-blue-400 shrink-0 font-sans">
                             ${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                     </div>
+                    {hasStationCashRetained && (
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-border/40 font-sans">
+                            <span className="text-muted-foreground">
+                                Efectivo estación: <strong className="text-foreground">-${overallSummary.totalCashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                            </span>
+                            <span className={cn("font-bold", overallSummary.totalNetPayable >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400")}>
+                                {overallSummary.totalNetPayable >= 0
+                                    ? `Neto: $${overallSummary.totalNetPayable.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                    : `Por recuperar: $${Math.abs(overallSummary.totalNetPayable).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            </span>
+                        </div>
+                    )}
 
                     <div className="border-t border-border/50" />
 
@@ -503,12 +524,22 @@ export default function CommissionsPage() {
                             <DollarSign className="h-4 w-4 text-[#C5A880]" />
                         </div>
                         <div className="mt-2">
-                            <div className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+                            <div className="text-xl sm:text-2xl font-bold tracking-tight text-foreground font-sans">
                                 ${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </div>
                             <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-snug line-clamp-2">
                                 Sobre un total de {breakdownText}
                             </p>
+                            {hasStationCashRetained && (
+                                <p className="text-[11px] text-muted-foreground mt-1.5 pt-1.5 border-t border-border/40 font-sans flex items-center justify-between gap-2">
+                                    <span>Efectivo estaciones: <strong className="text-foreground">-${overallSummary.totalCashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                    <span className={cn("font-bold", overallSummary.totalNetPayable >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400")}>
+                                        {overallSummary.totalNetPayable >= 0
+                                            ? `Neto: $${overallSummary.totalNetPayable.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                            : `Recuperar: $${Math.abs(overallSummary.totalNetPayable).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                    </span>
+                                </p>
+                            )}
                         </div>
                     </Card>
                 </div>
@@ -546,24 +577,33 @@ export default function CommissionsPage() {
                                         <TableHead className="py-1 px-3 text-xs font-semibold">Periodo</TableHead>
                                         <TableHead className="py-1 px-3 text-xs font-semibold text-right">Venta total</TableHead>
                                         <TableHead className="py-1 px-3 text-xs font-semibold text-right">Monto comisión</TableHead>
+                                        {hasStationCashRetained && (
+                                            <>
+                                                <TableHead className="py-1 px-3 text-xs font-semibold text-right">Efectivo estación</TableHead>
+                                                <TableHead className="py-1 px-3 text-xs font-semibold text-right">Neto a liquidar</TableHead>
+                                            </>
+                                        )}
                                         <TableHead className="py-1 px-3 text-xs font-semibold text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {isLoading ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center h-28">
+                                            <TableCell colSpan={hasStationCashRetained ? 7 : 5} className="text-center h-28">
                                                 <Loader2 className="mx-auto h-6 w-6 animate-spin text-slate-400" />
                                                 <span className="text-xs text-muted-foreground mt-2 block">Calculando comisiones...</span>
                                             </TableCell>
                                         </TableRow>
                                     ) : summaryByProfessional.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center h-28 text-xs text-muted-foreground">
+                                            <TableCell colSpan={hasStationCashRetained ? 7 : 5} className="text-center h-28 text-xs text-muted-foreground">
                                                 No hay datos de comisiones para el período seleccionado.
                                             </TableCell>
                                         </TableRow>
-                                    ) : summaryByProfessional.map((row) => (
+                                    ) : summaryByProfessional.map((row) => {
+                                        const retained = row.cashRetainedByBarber || 0;
+                                        const netVal = row.netPayable ?? row.totalCommission;
+                                        return (
                                         <TableRow key={row.professionalId} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
                                             <TableCell className="py-1.5 px-3 font-semibold text-xs text-foreground">
                                                 {row.professionalName}
@@ -571,12 +611,26 @@ export default function CommissionsPage() {
                                             <TableCell className="py-1.5 px-3 text-xs text-muted-foreground">
                                                 {periodString}
                                             </TableCell>
-                                            <TableCell className="py-1.5 px-3 text-right text-xs font-medium">
+                                            <TableCell className="py-1.5 px-3 text-right text-xs font-medium font-sans">
                                                 ${row.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
-                                            <TableCell className="py-1.5 px-3 text-right text-xs font-bold text-blue-500 dark:text-blue-400">
+                                            <TableCell className="py-1.5 px-3 text-right text-xs font-bold text-blue-500 dark:text-blue-400 font-sans">
                                                 ${row.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
+                                            {hasStationCashRetained && (
+                                                <>
+                                                    <TableCell className="py-1.5 px-3 text-right text-xs font-medium text-foreground/80 font-sans">
+                                                        {retained > 0
+                                                            ? `-$${retained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                            : '$0.00'}
+                                                    </TableCell>
+                                                    <TableCell className={cn("py-1.5 px-3 text-right text-xs font-bold font-sans", netVal >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400")}>
+                                                        {netVal >= 0
+                                                            ? `$${netVal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                            : `Entrega $${Math.abs(netVal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                    </TableCell>
+                                                </>
+                                            )}
                                             <TableCell className="py-1.5 px-3 text-right">
                                                 <button 
                                                     type="button" 
@@ -588,18 +642,31 @@ export default function CommissionsPage() {
                                                 </button>
                                             </TableCell>
                                         </TableRow>
-                                    ))}
+                                        );
+                                    })}
                                 </TableBody>
                                 <TableFooter className="bg-muted/30 border-t border-border/60 font-bold">
                                     <TableRow className="h-9 hover:bg-transparent">
                                         <TableCell className="py-1.5 px-3 font-bold text-xs">Totales</TableCell>
                                         <TableCell className="py-1.5 px-3"></TableCell>
-                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs">
+                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs font-sans">
                                             ${overallSummary.totalSales.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
-                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-500 dark:text-blue-400">
+                                        <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-500 dark:text-blue-400 font-sans">
                                             ${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
+                                        {hasStationCashRetained && (
+                                            <>
+                                                <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-foreground font-sans">
+                                                    -${overallSummary.totalCashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </TableCell>
+                                                <TableCell className={cn("py-1.5 px-3 text-right font-bold text-xs font-sans", overallSummary.totalNetPayable >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400")}>
+                                                    {overallSummary.totalNetPayable >= 0
+                                                        ? `$${overallSummary.totalNetPayable.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                        : `Entrega $${Math.abs(overallSummary.totalNetPayable).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                </TableCell>
+                                            </>
+                                        )}
                                         <TableCell className="py-1.5 px-3"></TableCell>
                                     </TableRow>
                                 </TableFooter>
@@ -638,7 +705,7 @@ export default function CommissionsPage() {
                                                 </button>
                                             </div>
 
-                                            <div className="flex items-center justify-between text-xs pt-0.5">
+                                            <div className="flex items-center justify-between text-xs pt-0.5 font-sans">
                                                 <div>
                                                     <span className="text-[11px] text-muted-foreground mr-1.5">Venta:</span>
                                                     <span className="font-medium text-foreground text-xs">
@@ -652,11 +719,29 @@ export default function CommissionsPage() {
                                                     </span>
                                                 </div>
                                             </div>
+                                            {(row.cashRetainedByBarber || 0) > 0 && (
+                                                <div className="flex items-center justify-between text-xs pt-1 border-t border-border/40 font-sans">
+                                                    <div>
+                                                        <span className="text-[11px] text-muted-foreground mr-1">Efectivo estación:</span>
+                                                        <span className="font-medium text-foreground">
+                                                            -${(row.cashRetainedByBarber || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[11px] text-muted-foreground mr-1">Neto:</span>
+                                                        <span className={cn("font-bold", (row.netPayable ?? row.totalCommission) >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400")}>
+                                                            {(row.netPayable ?? row.totalCommission) >= 0
+                                                                ? `$${(row.netPayable ?? row.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                                : `Entrega $${Math.abs(row.netPayable ?? row.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
 
                                     {/* Barra de Totales en Móvil */}
-                                    <div className="p-3 bg-muted/20 border-t border-border/60 flex items-center justify-between text-xs">
+                                    <div className="p-3 bg-muted/20 border-t border-border/60 flex items-center justify-between text-xs font-sans">
                                         <span className="font-semibold text-muted-foreground">Totales del período</span>
                                         <div className="text-right space-y-0.5">
                                             <div className="text-[11px] text-muted-foreground">
@@ -665,6 +750,17 @@ export default function CommissionsPage() {
                                             <div className="font-bold text-sm text-blue-500 dark:text-blue-400">
                                                 Comisión: ${overallSummary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </div>
+                                            {hasStationCashRetained && (
+                                                <div className="text-[11px] text-muted-foreground pt-0.5">
+                                                    Efectivo estación: <strong className="text-foreground">-${overallSummary.totalCashRetained.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                                    {' · '}
+                                                    <strong className={overallSummary.totalNetPayable >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400"}>
+                                                        {overallSummary.totalNetPayable >= 0
+                                                            ? `Neto: $${overallSummary.totalNetPayable.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                                            : `Recuperar: $${Math.abs(overallSummary.totalNetPayable).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                                                    </strong>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

@@ -21,10 +21,11 @@ import {
   Tag,
   Smartphone,
   PartyPopper,
-  Crown,
   Image as ImageIcon,
   MessageSquareWarning,
   BarChart3,
+  SlidersHorizontal,
+  Bell,
 } from "lucide-react";
 
 interface SettingsLayoutProps {
@@ -37,13 +38,22 @@ const sidebarNavItems = [
   { title: "Locales", href: "/settings/locales", icon: MapPin },
   { title: "Sitio Web", href: "/settings/sitio-web", icon: Globe },
   { title: "Reglas de Reservas", href: "/settings/booking-rules", icon: CalendarClock },
-  { title: "Garantías y Retoques", href: "/settings/garantias", icon: ShieldCheck },
-  { title: "Asistente Janet", href: "/settings/sofia", icon: Bot },
+  { title: "Garantías", href: "/settings/garantias", icon: ShieldCheck },
+  {
+    title: "Asistente Janeth",
+    href: "/settings/sofia",
+    icon: Bot,
+    children: [
+      { title: "Janeth Clientes", href: "/settings/sofia?tab=clientes", icon: Users },
+      { title: "Janeth Administradora", href: "/settings/sofia?tab=administradora", icon: SlidersHorizontal },
+      { title: "Janeth CEO", href: "/settings/sofia?tab=ceo", icon: Sparkles },
+    ],
+  },
   { title: "Pagos", href: "/settings/pagos", icon: CreditCard },
   { title: "Emails", href: "/settings/emails", icon: Mail },
   { title: "Clientes", href: "/settings/clients-settings", icon: Users },
   { title: "Usuarios", href: "/settings/users", icon: ShieldCheck },
-  { title: "Códigos de autorización", href: "/settings/auth-codes", icon: KeyRound },
+  { title: "Códigos Maestros", href: "/settings/auth-codes", icon: KeyRound },
   { title: "Promociones", href: "/settings/promotions", icon: Tag },
   {
     title: "App Móvil",
@@ -51,13 +61,10 @@ const sidebarNavItems = [
     icon: Smartphone,
     children: [
       { title: "Pase Alfa", href: "/settings/mobile-app?tab=pase_alfa", icon: Sparkles },
-      { title: "Niveles", href: "/settings/mobile-app?tab=niveles", icon: Crown },
-      { title: "Galería", href: "/settings/mobile-app?tab=galeria", icon: ImageIcon },
-      { title: "Promociones", href: "/settings/mobile-app?tab=promociones", icon: Tag },
-      { title: "Buzón", href: "/settings/mobile-app?tab=buzon", icon: MessageSquareWarning },
       { title: "Uso & Tiendas", href: "/settings/mobile-app?tab=metricas", icon: BarChart3 },
     ],
   },
+  { title: "Galería", href: "/settings/galeria", icon: ImageIcon },
   { title: "Temporadas", href: "/settings/temporadas", icon: PartyPopper },
 ];
 

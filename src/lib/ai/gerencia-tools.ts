@@ -3181,6 +3181,7 @@ export const consultarArqueoCajaSucursalTool = ai.defineTool(
     };
 
     let salesCash = 0;
+    let salesCashEstacionesBarberos = 0;
     let salesTarjeta = 0;
     let salesTransferencia = 0;
     let salesAlfaCoins = 0;
@@ -3189,12 +3190,13 @@ export const consultarArqueoCajaSucursalTool = ai.defineTool(
 
     salesSnap.forEach((doc) => {
       const s = doc.data();
-      if (s.estado_venta === 'cancelada') return;
+      if (s.estado_venta === 'cancelada' || s.pago_estado === 'Pendiente' || s.pago_estado === 'pendiente') return;
       if (!isAfterCut(s.fecha_hora_venta)) return;
 
       totalVentasCount++;
       const metodo = (s.metodo_pago || '').toLowerCase();
       const totalVenta = Number(s.total || 0);
+      const isBarberStationCash = s.modalidad_sucursal === 'sin_recepcionista' || Number(s.efectivo_retenido_barbero || 0) > 0;
 
       const priorDeposit =
         s.deposit_paid_at && !isAfterCut(s.deposit_paid_at)
@@ -3206,10 +3208,18 @@ export const consultarArqueoCajaSucursalTool = ai.defineTool(
           s.monto_pagado_real !== undefined && s.monto_pagado_real < totalVenta
             ? Number(s.monto_pagado_real)
             : Math.max(0, totalVenta - priorDeposit);
-        salesCash += amount;
+        if (isBarberStationCash) {
+          salesCashEstacionesBarberos += Number(s.efectivo_retenido_barbero || amount);
+        } else {
+          salesCash += amount;
+        }
       } else if (metodo === 'combinado') {
         const combCash = Number(s.detalle_pago_combinado?.efectivo || 0);
-        salesCash += Math.max(0, combCash - priorDeposit);
+        if (isBarberStationCash) {
+          salesCashEstacionesBarberos += Math.max(0, combCash - priorDeposit);
+        } else {
+          salesCash += Math.max(0, combCash - priorDeposit);
+        }
         salesTarjeta += Number(s.detalle_pago_combinado?.tarjeta || s.detalle_pago_combinado?.terminal || 0);
         salesTransferencia += Number(s.detalle_pago_combinado?.transferencia || 0);
       } else if (
@@ -3267,6 +3277,9 @@ export const consultarArqueoCajaSucursalTool = ai.defineTool(
       arqueoEnVivo: {
         fondoBaseInicial: round2(baseCash),
         ventasEfectivoCobrado: round2(salesCash),
+        ...(salesCashEstacionesBarberos > 0
+          ? { efectivoEnEstacionesIndividualesBarberos: round2(salesCashEstacionesBarberos) }
+          : {}),
         ingresosManualesCaja: round2(ingresosCash),
         egresosCajaChica: round2(egresosCash),
         efectivoTeoricoEnCajon: efectivoTeoricoEnCaja,

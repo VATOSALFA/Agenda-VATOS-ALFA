@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,11 +15,7 @@ import type { Client, CanjeBeneficio } from '@/lib/types';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
-import { NivelesAlfaManager } from '@/components/admin/niveles-alfa-manager';
-import { GaleriaCortesManager } from '@/components/admin/galeria-cortes-manager';
 import { AppDownloadLinksCard } from '@/components/admin/app-download-links-card';
-import { BuzonClientesManager } from '@/components/admin/buzon-clientes-manager';
-import PromotionsManager from '../promotions/promotions-manager';
 import { cn } from '@/lib/utils';
 import {
     Loader2,
@@ -32,34 +28,16 @@ import {
     Download,
     ArrowUpRight,
     Search,
-    Crown,
-    MessageSquareWarning,
-    Image as ImageIcon,
+    ChevronLeft,
 } from 'lucide-react';
 
 const TAB_META: Record<string, { title: string; subtitle: string }> = {
     pase_alfa: {
-        title: 'Pase Alfa',
+        title: 'PASE ALFA',
         subtitle: 'Administra el programa Pase Alfa, días multiplicadores y beneficios exclusivos de la app móvil.',
     },
-    niveles: {
-        title: 'Niveles & Rangos',
-        subtitle: 'Configura los criterios de visitas, gasto y recompensas de los niveles VIP.',
-    },
-    galeria: {
-        title: 'Galería',
-        subtitle: 'Gestiona el catálogo de cortes y estilos visibles en la aplicación móvil.',
-    },
-    promociones: {
-        title: 'Promociones',
-        subtitle: 'Sincroniza promociones activas entre el sitio web y la app móvil.',
-    },
-    buzon: {
-        title: 'Buzón',
-        subtitle: 'Revisa y atiende opiniones, sugerencias y quejas enviadas desde la app.',
-    },
     metricas: {
-        title: 'Uso & Tiendas',
+        title: 'USO Y TIENDAS',
         subtitle: 'Consulta enlaces de descarga, adopción y métricas de clientes con app móvil.',
     },
 };
@@ -69,9 +47,23 @@ function MobileAppSettingsContent() {
     const tabParam = searchParams.get('tab');
     const resolvedTab = tabParam && TAB_META[tabParam] ? tabParam : 'pase_alfa';
     const [activeTab, setActiveTab] = useState(resolvedTab);
+    const [editingBenefitState, setEditingBenefitState] = useState<{ isEditing: boolean; onBack: () => void; title?: string }>({
+        isEditing: false,
+        onBack: () => {},
+        title: '',
+    });
+
+    const handleEditingChange = useCallback((isEditing: boolean, onBack: () => void, title?: string) => {
+        setEditingBenefitState((prev) => {
+            if (prev.isEditing === isEditing && prev.title === title) return prev;
+            return { isEditing, onBack, title };
+        });
+    }, []);
 
     useEffect(() => {
         setActiveTab(resolvedTab);
+        // Al cambiar de tab, resetear el estado de edición
+        setEditingBenefitState({ isEditing: false, onBack: () => {} });
     }, [resolvedTab]);
 
     const currentMeta = TAB_META[activeTab] || TAB_META.pase_alfa;
@@ -128,45 +120,31 @@ function MobileAppSettingsContent() {
         );
     }, [appClients, searchAppClient]);
 
+    const displayTitle = (activeTab === 'pase_alfa' && editingBenefitState.isEditing && editingBenefitState.title)
+        ? editingBenefitState.title
+        : currentMeta.title;
+
     return (
         <div className="space-y-5 max-w-7xl pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-border/60">
-                <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="text-xl font-bold tracking-tight text-foreground">App Móvil VATOS ALFA</h2>
-                        <span className="text-muted-foreground/50">/</span>
-                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{currentMeta.title}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        {currentMeta.subtitle}
-                    </p>
-                </div>
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-border/60">
+                <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">{displayTitle}</h2>
+
+                {activeTab === 'pase_alfa' && editingBenefitState.isEditing && (
+                    <button
+                        type="button"
+                        onClick={editingBenefitState.onBack}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-foreground transition-colors cursor-pointer select-none"
+                    >
+                        <ChevronLeft className="w-4 h-4 text-slate-400" />
+                        <span>Regresar a la lista</span>
+                    </button>
+                )}
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 {/* PASE ALFA TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB) */}
                 <TabsContent value="pase_alfa" className="mt-0 space-y-4">
-                    <PaseAlfaManager />
-                </TabsContent>
-
-                {/* NIVELES & RANGOS TAB (ADMINISTRACIÓN DE CRITERIOS VISITAS/GASTO Y CLUB ALFA) */}
-                <TabsContent value="niveles" className="mt-5 space-y-4">
-                    <NivelesAlfaManager />
-                </TabsContent>
-
-                {/* GALERÍA DE CORTES TAB */}
-                <TabsContent value="galeria" className="mt-5 space-y-4">
-                    <GaleriaCortesManager />
-                </TabsContent>
-
-                {/* PROMOCIONES TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB Y /settings/promotions) */}
-                <TabsContent value="promociones" className="mt-5 space-y-4">
-                    <PromotionsManager hideHeader />
-                </TabsContent>
-
-                {/* BUZÓN DE OPINIONES, SUGERENCIAS Y QUEJAS DE CLIENTES */}
-                <TabsContent value="buzon" className="mt-5 space-y-4">
-                    <BuzonClientesManager />
+                    <PaseAlfaManager onEditingChange={handleEditingChange} />
                 </TabsContent>
 
                 {/* MÉTRICAS, USO Y ENLACES DE TIENDAS TAB */}

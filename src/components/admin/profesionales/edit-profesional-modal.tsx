@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import type { Profesional, Schedule, Service, ServiceCategory, Local } from '@/lib/types';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Copy, Plus, Trash2, UploadCloud, User, X, Clock, Camera, Globe, Check, AlertCircle } from 'lucide-react';
+import { Loader2, Copy, Plus, Trash2, UploadCloud, User, X, Clock, Camera, Globe, Check, AlertCircle, Tablet, KeyRound } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -164,12 +164,20 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
     useEffect(() => {
         if (isOpen) {
             const defaultValues = profesional ?
-                { ...profesional, schedule: profesional.schedule || defaultSchedule, publicName: profesional.publicName || '' }
+                {
+                    ...profesional,
+                    schedule: profesional.schedule || defaultSchedule,
+                    publicName: profesional.publicName || '',
+                    numeroEstacion: profesional.numeroEstacion || '',
+                    pinEstacion: profesional.pinEstacion || '',
+                }
                 : {
                     name: '', publicName: '', email: '', active: true, acceptsOnline: true, services: [],
                     schedule: defaultSchedule,
                     biography: '', avatarUrl: '', order: 0,
-                    local_id: locales.length > 0 ? locales[0].id : ''
+                    local_id: locales.length > 0 ? locales[0].id : '',
+                    numeroEstacion: '',
+                    pinEstacion: '',
                 };
             form.reset(defaultValues);
         }
@@ -556,6 +564,58 @@ export function EditProfesionalModal({ profesional, isOpen, onClose, onDataSaved
                                             )}
                                         />
                                     </div>
+
+                                    {/* Estación y PIN (Visible solo si la sucursal asignada opera Sin Recepcionista o ya tiene PIN) */}
+                                    {(() => {
+                                        const assignedLocalObj = locales.find(l => l.id === form.watch('local_id'));
+                                        const showStationConfig =
+                                            assignedLocalObj?.modoOperacion === 'sin_recepcionista' ||
+                                            Boolean(profesional?.pinEstacion || profesional?.numeroEstacion);
+                                        if (!showStationConfig) return null;
+                                        return (
+                                            <div className="rounded-xl border border-blue-500/30 bg-muted/15 p-3 sm:p-3.5 space-y-2.5">
+                                                <div className="flex items-center gap-2">
+                                                    <Tablet className="h-4 w-4 text-blue-400 shrink-0" />
+                                                    <div>
+                                                        <span className="text-xs sm:text-sm font-semibold text-foreground block">
+                                                            Mini-Tablet de Estación (Modo Sin Recepcionista)
+                                                        </span>
+                                                        <p className="text-[11px] text-muted-foreground hidden sm:block">
+                                                            Identifica la silla del barbero en el Kiosco y su PIN rápido de 4 dígitos para desbloquear su estación.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="numeroEstacion" className="text-xs font-semibold text-foreground">
+                                                            N.° o Nombre de Estación
+                                                        </Label>
+                                                        <Input
+                                                            id="numeroEstacion"
+                                                            {...form.register('numeroEstacion' as any)}
+                                                            placeholder="Ej. 1, 2, VIP..."
+                                                            className="h-8 text-xs font-sans bg-background border-border/60"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor="pinEstacion" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                                                            <KeyRound className="h-3.5 w-3.5 text-slate-400" />
+                                                            PIN de Estación (4 dígitos)
+                                                        </Label>
+                                                        <Input
+                                                            id="pinEstacion"
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            maxLength={4}
+                                                            {...form.register('pinEstacion' as any)}
+                                                            placeholder="Ej. 4829"
+                                                            className="h-8 text-xs font-mono tracking-widest bg-background border-border/60"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Sección de Servicios Asignados */}
                                     <div className="space-y-3 pt-3 border-t border-border/40">

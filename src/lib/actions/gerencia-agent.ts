@@ -401,6 +401,48 @@ export async function processGerenciaAgentMessage({
   const historySnap = await msgsCol.orderBy('creado_en', 'desc').limit(12).get();
   const recentDocs = historySnap.docs.reverse();
 
+  // Consultar configuración de Janeth Administradora en settings/sofia
+  let gerenciaActive = true;
+  let gerenciaCustomInstructions = '';
+  try {
+    const sofiaSnap = await db.collection('settings').doc('sofia').get();
+    if (sofiaSnap.exists) {
+      const sofiaData = sofiaSnap.data();
+      if (sofiaData?.gerenciaActive === false) {
+        gerenciaActive = false;
+      }
+      if (typeof sofiaData?.gerenciaCustomInstructions === 'string') {
+        gerenciaCustomInstructions = sofiaData.gerenciaCustomInstructions.trim();
+      }
+    }
+  } catch (e) {
+    // Continuar con valores por defecto
+  }
+
+  if (!gerenciaActive) {
+    const pausedMsg =
+      'Hola Bety, en este momento **Janeth Administradora** se encuentra en pausa temporal por mantenimiento y actualización desde Configuración General. En breve volverá a estar en línea.';
+    const savedReplyRef = await msgsCol.add({
+      rol: 'assistant',
+      contenido: pausedMsg,
+      herramientasUsadas: [],
+      propuestaAccion: null,
+      creado_en: FieldValue.serverTimestamp(),
+    });
+    return {
+      sessionId: activeSessionId,
+      audioTranscription: null,
+      message: {
+        id: savedReplyRef.id,
+        rol: 'assistant' as const,
+        contenido: pausedMsg,
+        creado_en: new Date().toISOString(),
+        herramientasUsadas: [],
+        propuestaAccion: null,
+      },
+    };
+  }
+
   const historyText = recentDocs
     .slice(0, -1)
     .map((d) => {
@@ -621,7 +663,7 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
   * **CERO ASTERISCOS MÚLTIPLES O VACÍOS:** NUNCA escribas '****' ni '***'. Usa únicamente doble asterisco '**texto**'.
   * **VIÑETAS LIMPIAS:** Utiliza siempre el punto medio '• ' para listas.
   * **CERO BACKTICKS EN CÓDIGOS:** Escribe los códigos y términos de forma natural (ej. **código 9389**) sin comillas invertidas.
-- Sé práctica, cálida, ejecutiva y directa, tratando a Beatriz como la administradora de confianza de la sucursal.`;
+- Sé práctica, cálida, ejecutiva y directa, tratando a Beatriz como la administradora de confianza de la sucursal.${gerenciaCustomInstructions ? `\n\n### INSTRUCCIONES PERSONALIZADAS DEL ADMINISTRADOR GENERAL (CONFIGURACIÓN):\n${gerenciaCustomInstructions}` : ''}`;
 
   const tools = getGerenciaAgentTools();
   let responseText = '';

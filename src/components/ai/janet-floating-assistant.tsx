@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { getAuth } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -281,7 +282,7 @@ interface FloatingButtonPos {
 }
 
 export function JanetFloatingAssistant() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, db } = useAuth();
   const { toast } = useToast();
 
   const isGeneralOwner =
@@ -291,6 +292,26 @@ export function JanetFloatingAssistant() {
 
   const isBranchManager = user?.role === 'Administrador local';
   const canUseAssistant = isGeneralOwner || isBranchManager;
+
+  // Estado de encendido/pausa configurado en Configuración -> Asistente Janeth
+  const [gerenciaEnabled, setGerenciaEnabled] = useState(true);
+  const [ceoEnabled, setCeoEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!db || !canUseAssistant) return;
+    const unsub = onSnapshot(
+      doc(db, 'settings', 'sofia'),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setGerenciaEnabled(data?.gerenciaActive !== false);
+          setCeoEnabled(data?.ceoActive !== false);
+        }
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [db, canUseAssistant]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -898,7 +919,11 @@ export function JanetFloatingAssistant() {
     }
   }, [isCameraModalOpen, cameraFacingMode, capturedCameraDataUrl, startCameraStream, stopCameraStream]);
 
-  if (authLoading || !canUseAssistant) {
+  const isAssistantPausedForCurrentUser =
+    (isBranchManager && !gerenciaEnabled) ||
+    (isGeneralOwner && !ceoEnabled && !gerenciaEnabled);
+
+  if (authLoading || !canUseAssistant || isAssistantPausedForCurrentUser) {
     return null;
   }
 

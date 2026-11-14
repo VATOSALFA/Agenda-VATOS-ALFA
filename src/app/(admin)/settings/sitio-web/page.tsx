@@ -1,26 +1,20 @@
 'use client';
 
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
-import { Loader2, Plus, Trash2, Globe, ListChecks, ShieldCheck, Image as ImageIcon, Award, Tag, Maximize2, FileText, X, Star, ExternalLink } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { Loader2, FileText, X, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { ImageUploader } from '@/components/shared/image-uploader';
-import { cn } from '@/lib/utils';
-import { GaleriaCortesManager } from '@/components/admin/galeria-cortes-manager';
-import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
-import PromotionsManager from '@/app/(admin)/settings/promotions/promotions-manager';
 
 const customerFields = [
     { id: 'email', label: 'Correo electrónico' },
@@ -30,32 +24,40 @@ const customerFields = [
     { id: 'notes', label: 'Notas del cliente' },
 ];
 
-export default function SitioWebPage() {
+function SitioWebContent() {
     const { toast } = useToast();
     const { db } = useAuth();
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [activeTab, setActiveTab] = useState('general');
 
     const [expandedEditor, setExpandedEditor] = useState<{
         open: boolean;
         title: string;
         description: string;
-        field: 'privacyText' | 'termsText';
+        field: 'slogan' | 'heroDescription' | 'description' | 'termsText' | 'privacyText';
+        maxLength?: number;
     }>({
         open: false,
         title: '',
         description: '',
-        field: 'termsText',
+        field: 'slogan',
     });
     const [expandedText, setExpandedText] = useState('');
+    const [isGoogleReviewsOpen, setIsGoogleReviewsOpen] = useState(false);
+    const [isCustomerFieldsOpen, setIsCustomerFieldsOpen] = useState(false);
 
-    const openExpandedEditor = (title: string, description: string, field: 'privacyText' | 'termsText') => {
+    const openExpandedEditor = (
+        title: string,
+        description: string,
+        field: 'slogan' | 'heroDescription' | 'description' | 'termsText' | 'privacyText',
+        maxLength?: number
+    ) => {
         setExpandedText(form.getValues(field) || '');
         setExpandedEditor({
             open: true,
             title,
             description,
             field,
+            maxLength,
         });
     };
 
@@ -178,408 +180,313 @@ export default function SitioWebPage() {
 
     return (
         <div className="flex-1 space-y-4 max-w-5xl pb-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-2.5 border-b border-border/60">
-                <div>
-                    <h2 className="text-xl font-bold tracking-tight text-foreground">Sitio Web</h2>
-                    <p className="text-xs text-muted-foreground">
-                        Configura el portal de agendamiento online, políticas, galería de cortes, Pase Alfa y promociones.
-                    </p>
-                </div>
+            <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-border/60">
+                <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">SITIO WEB</h2>
             </div>
 
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-                    <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 h-auto p-1 bg-muted/20 border border-border/60 rounded-xl">
-                        <TabsTrigger
-                            value="general"
-                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
-                        >
-                            <Globe className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span>General</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="politicas"
-                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
-                        >
-                            <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span>Políticas</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="galeria"
-                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
-                        >
-                            <ImageIcon className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span>Galería</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="pase_alfa"
-                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer"
-                        >
-                            <Award className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span>Pase Alfa</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="promociones"
-                            className="flex items-center justify-center gap-1.5 py-2 px-2 text-xs sm:text-sm font-semibold rounded-lg data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all cursor-pointer col-span-2 sm:col-span-1"
-                        >
-                            <Tag className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span>Promociones</span>
-                        </TabsTrigger>
-                    </TabsList>
-
-                    {/* 1. GENERAL (ENCABEZADO + CAMPOS DE CLIENTE) */}
-                    <TabsContent value="general" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
-                        {/* 1. ENCABEZADO Y SLOGAN */}
-                        <Card className="border border-border/70 shadow-xs overflow-hidden">
-                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-                                <div className="flex items-center gap-2">
-                                    <Globe className="h-4 w-4 text-slate-400 shrink-0" />
-                                    <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                        Encabezado y Slogan del Portal
-                                    </CardTitle>
-                                </div>
-                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                                    Personaliza el título principal y la descripción visible para tus clientes al entrar a agendar.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-3 sm:p-5 space-y-3.5">
-                                <div className="space-y-1">
-                                    <div className="flex justify-between items-center">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Título Principal (Slogan)
-                                        </Label>
-                                        <span className="text-[11px] text-muted-foreground font-sans">
-                                            {(form.watch('slogan') || '').length}/80 caracteres
-                                        </span>
-                                    </div>
-                                    <Input
-                                        placeholder="Tu slogan principal (ej. No es solo un corte. Es tu mejor versión.)"
-                                        maxLength={80}
-                                        className="h-8 text-xs sm:text-sm"
-                                        {...form.register('slogan')}
-                                    />
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex justify-between items-center">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Subtítulo (Descripción de bienvenida)
-                                        </Label>
-                                        <span className="text-[11px] text-muted-foreground font-sans">
-                                            {(form.watch('heroDescription') || '').length}/250 caracteres
-                                        </span>
-                                    </div>
-                                    <Textarea
-                                        placeholder="Agenda tu cita en segundos con nuestros Master Barbers. Cortes clásicos, fades de alta precisión y el tradicional ritual de toalla caliente."
-                                        maxLength={250}
-                                        rows={3}
-                                        className="text-xs sm:text-sm resize-none"
-                                        {...form.register('heroDescription')}
-                                    />
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Texto visible inmediatamente debajo del título principal en el Hero. Máximo 250 caracteres.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <div className="flex justify-between items-center">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Descripción (Debajo del Hero)
-                                        </Label>
-                                        <span className="text-[11px] text-muted-foreground font-sans">
-                                            {(form.watch('description') || '').length}/450 caracteres
-                                        </span>
-                                    </div>
-                                    <Textarea
-                                        placeholder="En VATOS ALFA Barber Shop dominamos desde los cortes clásicos y desvanecidos (fades) más limpios, hasta el perfilado de barba con el tradicional ritual de toalla caliente..."
-                                        maxLength={450}
-                                        rows={4}
-                                        className="text-xs sm:text-sm resize-none"
-                                        {...form.register('description')}
-                                    />
-                                    <p className="text-[11px] text-muted-foreground">
-                                        Párrafo informativo que se muestra en la página web inmediatamente abajo del Hero. Máximo 450 caracteres.
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* 1.1 CALIFICACIÓN Y OPINIONES DE GOOGLE MAPS */}
-                        <Card className="border border-border/70 shadow-xs overflow-hidden">
-                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Star className="h-4 w-4 text-[#C5A880] shrink-0 fill-[#C5A880]" />
-                                        <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                            Calificación y Opiniones en Google Maps
-                                        </CardTitle>
-                                    </div>
-                                    <a
-                                        href="https://www.google.com/maps/place/?q=place_id:ChIJxQ4hagBb04URwQM4y5UsX-U"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1 font-medium"
-                                    >
-                                        Ver en Google Maps <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                </div>
-                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                                    Configura las estrellas y el número de reseñas reales visibles en los chips de prueba social del sitio web.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-3 sm:p-5 space-y-3.5">
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="space-y-1">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Calificación (Estrellas)
-                                        </Label>
-                                        <Input
-                                            type="number"
-                                            step="0.1"
-                                            min="1"
-                                            max="5"
-                                            placeholder="4.5"
-                                            className="h-8 text-xs sm:text-sm font-sans"
-                                            {...form.register('googleRating', { valueAsNumber: true })}
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Ej: 4.5 (se refleja en estrellas doradas).
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Total de Opiniones Reales
-                                        </Label>
-                                        <Input
-                                            type="number"
-                                            step="1"
-                                            min="0"
-                                            placeholder="102"
-                                            className="h-8 text-xs sm:text-sm font-sans"
-                                            {...form.register('googleReviewCount', { valueAsNumber: true })}
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Ej: 102 opiniones en Google.
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-xs font-semibold text-foreground">
-                                            Google Place ID
-                                        </Label>
-                                        <Input
-                                            placeholder="ChIJxQ4hagBb04URwQM4y5UsX-U"
-                                            className="h-8 text-xs sm:text-sm font-mono"
-                                            {...form.register('googlePlaceId')}
-                                        />
-                                        <p className="text-[10px] text-muted-foreground">
-                                            ID del negocio en Google Maps.
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* 2. CAMPOS REQUERIDOS AL AGENDAR (TABLA COMPACTA - REGLA 6) */}
-                        <Card className="border border-border/70 shadow-xs overflow-hidden">
-                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-                                <div className="flex items-center gap-2">
-                                    <ListChecks className="h-4 w-4 text-slate-400 shrink-0" />
-                                    <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                        Datos Solicitados al Cliente
-                                    </CardTitle>
-                                </div>
-                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                                    Elige qué datos pedir al cliente en el formulario de reserva online y cuáles son obligatorios.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
-                                            <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Campo de Registro</TableHead>
-                                            <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Solicitar</TableHead>
-                                            <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Obligatorio</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {customerFields.map(field => (
-                                            <TableRow key={field.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
-                                                <TableCell className="py-1.5 px-3.5 text-xs font-medium text-foreground">
-                                                    {field.label}
-                                                </TableCell>
-                                                <TableCell className="py-1.5 px-3 text-center">
-                                                    <Switch
-                                                        className="scale-90"
-                                                        checked={form.watch(`customerFields.${field.id}.use`)}
-                                                        onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.use`, checked)}
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="py-1.5 px-3 text-center">
-                                                    <Switch
-                                                        className="scale-90"
-                                                        checked={form.watch(`customerFields.${field.id}.required`)}
-                                                        onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.required`, checked)}
-                                                    />
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    {/* 2. POLÍTICAS Y AVISO LEGAL */}
-                    <TabsContent value="politicas" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
-                        <Card className="border border-border/70 shadow-xs overflow-hidden">
-                            <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <ShieldCheck className="h-4 w-4 text-slate-400 shrink-0" />
-                                        <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                            Políticas y Términos Legales
-                                        </CardTitle>
-                                    </div>
-                                    <Controller
-                                        control={form.control}
-                                        name="privacyPolicyEnabled"
-                                        render={({ field }) => (
-                                            <Switch
-                                                id="privacyPolicyEnabled"
-                                                checked={field.value}
-                                                onCheckedChange={field.onChange}
-                                            />
-                                        )}
-                                    />
-                                </div>
-                                <CardDescription className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                                    Obliga al cliente a aceptar tus políticas de cancelación y términos antes de reservar.
-                                </CardDescription>
-                            </CardHeader>
-
-                            <CardContent className="p-3 sm:p-5 space-y-4">
-                                {!form.watch('privacyPolicyEnabled') && (
-                                    <div className="p-2.5 rounded-lg border border-border/60 bg-muted/20 text-xs text-muted-foreground">
-                                        La casilla de aceptación obligatoria al reservar está desactivada, pero los textos de abajo siguen visibles públicamente en <strong>/terminos</strong> y <strong>/privacidad</strong>.
-                                    </div>
+                {/* 1. CAMPOS DE TEXTO DEL PORTAL EN FILAS LIMPIAS (ABREN MODAL) */}
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardContent className="p-0 divide-y divide-border/60">
+                        {/* Fila 1: Título Principal (Slogan) */}
+                        <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-foreground">
+                                    Título Principal (Slogan)
+                                </span>
+                                {form.watch('slogan') && (
+                                    <span className="text-[10px] text-muted-foreground font-sans hidden sm:inline">
+                                        ({(form.watch('slogan') || '').length}/80)
+                                    </span>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
-                                    {/* Aviso de Privacidad */}
-                                    <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <h4 className="text-xs font-semibold text-foreground">Aviso de Privacidad</h4>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => openExpandedEditor(
-                                                    'Aviso de Privacidad Integral',
-                                                    'Este texto se actualiza en tiempo real en /privacidad, en el modal de reserva y en la App Móvil.',
-                                                    'privacyText'
-                                                )}
-                                                className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 cursor-pointer"
-                                            >
-                                                <Maximize2 className="w-3 h-3" />
-                                                Maximizar
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
-                                            <Input
-                                                placeholder="https://vatosalfa.com/privacidad"
-                                                className="h-8 text-xs font-sans"
-                                                {...form.register('privacyUrl')}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] text-muted-foreground">Texto Oficial del Aviso de Privacidad</Label>
-                                            <Textarea
-                                                placeholder="Escribe aquí tu aviso de privacidad..."
-                                                rows={8}
-                                                className="text-xs resize-y font-sans leading-relaxed"
-                                                {...form.register('privacyText')}
-                                            />
-                                        </div>
-                                    </div>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openExpandedEditor(
+                                    'Título Principal (Slogan)',
+                                    'Personaliza el lema principal que encabeza el portal web de reservas.',
+                                    'slogan',
+                                    80
+                                )}
+                                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Editar
+                            </Button>
+                        </div>
 
-                                    {/* Términos y Condiciones */}
-                                    <div className="space-y-2 p-3.5 rounded-xl border border-border/60 bg-muted/5">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <h4 className="text-xs font-semibold text-foreground">Términos y Condiciones Generales</h4>
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => openExpandedEditor(
-                                                    'Términos y Condiciones Generales de Servicio',
-                                                    'Este texto se actualiza en tiempo real en /terminos, en el modal de reserva y en la App Móvil.',
-                                                    'termsText'
-                                                )}
-                                                className="h-6 px-2 text-[11px] text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 gap-1 cursor-pointer"
-                                            >
-                                                <Maximize2 className="w-3 h-3" />
-                                                Maximizar
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] text-muted-foreground">URL Externa (opcional)</Label>
-                                            <Input
-                                                placeholder="https://vatosalfa.com/terminos"
-                                                className="h-8 text-xs font-sans"
-                                                {...form.register('termsUrl')}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[11px] text-muted-foreground">Texto Oficial de Términos y Condiciones</Label>
-                                            <Textarea
-                                                placeholder="Escribe aquí tus términos y condiciones..."
-                                                rows={8}
-                                                className="text-xs resize-y font-sans leading-relaxed"
-                                                {...form.register('termsText')}
-                                            />
-                                        </div>
-                                    </div>
+                        {/* Fila 2: Subtítulo (Descripción de bienvenida) */}
+                        <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-foreground">
+                                    Subtítulo (Descripción de bienvenida)
+                                </span>
+                                {form.watch('heroDescription') && (
+                                    <span className="text-[10px] text-muted-foreground font-sans hidden sm:inline">
+                                        ({(form.watch('heroDescription') || '').length}/250)
+                                    </span>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openExpandedEditor(
+                                    'Subtítulo (Descripción de bienvenida)',
+                                    'Texto visible inmediatamente debajo del título principal en el Hero.',
+                                    'heroDescription',
+                                    250
+                                )}
+                                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Editar
+                            </Button>
+                        </div>
+
+                        {/* Fila 3: Descripción (Debajo del Hero) */}
+                        <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-foreground">
+                                    Descripción (Debajo del Hero)
+                                </span>
+                                {form.watch('description') && (
+                                    <span className="text-[10px] text-muted-foreground font-sans hidden sm:inline">
+                                        ({(form.watch('description') || '').length}/450)
+                                    </span>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openExpandedEditor(
+                                    'Descripción (Debajo del Hero)',
+                                    'Párrafo informativo que se muestra en la página web inmediatamente abajo del Hero.',
+                                    'description',
+                                    450
+                                )}
+                                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Editar
+                            </Button>
+                        </div>
+
+                        {/* Fila 4: Términos y Condiciones */}
+                        <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-foreground">
+                                    Términos y Condiciones Generales
+                                </span>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openExpandedEditor(
+                                    'Términos y Condiciones Generales de Servicio',
+                                    'Este texto se actualiza en tiempo real en /terminos, en el modal de reserva y en la App Móvil.',
+                                    'termsText'
+                                )}
+                                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Editar
+                            </Button>
+                        </div>
+
+                        {/* Fila 5: Aviso de Privacidad */}
+                        <div className="p-3 sm:px-4 sm:py-2.5 flex items-center justify-between gap-3 hover:bg-muted/10 transition-colors">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-xs font-semibold text-foreground">
+                                    Aviso de Privacidad
+                                </span>
+                                {form.watch('privacyPolicyEnabled') && (
+                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-sans font-medium text-blue-400 border-blue-500/40 bg-blue-500/10">
+                                        Aceptación requerida
+                                    </Badge>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => openExpandedEditor(
+                                    'Aviso de Privacidad Integral',
+                                    'Este texto se actualiza en tiempo real en /privacidad, en el modal de reserva y en la App Móvil.',
+                                    'privacyText'
+                                )}
+                                className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                            >
+                                Editar
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* 2. CALIFICACIÓN Y OPINIONES DE GOOGLE MAPS (SIN ICONO, MINIMIZABLE) */}
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                    Calificación y Opiniones en Google Maps
+                                </CardTitle>
+                                <a
+                                    href="https://www.google.com/maps/place/?q=place_id:ChIJxQ4hagBb04URwQM4y5UsX-U"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-500 hover:text-blue-400 flex items-center gap-1 font-medium ml-2"
+                                >
+                                    Ver en Google Maps <ExternalLink className="h-3 w-3" />
+                                </a>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsGoogleReviewsOpen(!isGoogleReviewsOpen)}
+                                className="p-1 rounded-md text-slate-400 hover:text-foreground transition-colors cursor-pointer"
+                                title={isGoogleReviewsOpen ? "Minimizar" : "Maximizar"}
+                                aria-label={isGoogleReviewsOpen ? "Minimizar" : "Maximizar"}
+                            >
+                                {isGoogleReviewsOpen ? (
+                                    <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                )}
+                            </button>
+                        </div>
+                    </CardHeader>
+                    {isGoogleReviewsOpen && (
+                        <CardContent className="p-3 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Calificación (Estrellas)
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        min="1"
+                                        max="5"
+                                        placeholder="4.5"
+                                        className="h-8 text-xs sm:text-sm font-sans"
+                                        {...form.register('googleRating', { valueAsNumber: true })}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Ej: 4.5 (se refleja en estrellas doradas).
+                                    </p>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Total de Opiniones Reales
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        step="1"
+                                        min="0"
+                                        placeholder="102"
+                                        className="h-8 text-xs sm:text-sm font-sans"
+                                        {...form.register('googleReviewCount', { valueAsNumber: true })}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        Ej: 102 opiniones en Google.
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-semibold text-foreground">
+                                        Google Place ID
+                                    </Label>
+                                    <Input
+                                        placeholder="ChIJxQ4hagBb04URwQM4y5UsX-U"
+                                        className="h-8 text-xs sm:text-sm font-mono"
+                                        {...form.register('googlePlaceId')}
+                                    />
+                                    <p className="text-[10px] text-muted-foreground">
+                                        ID del negocio en Google Maps.
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    )}
+                </Card>
 
-                    {/* 3. GALERÍA DE CORTES (ESPEJO CON APP MÓVIL) */}
-                    <TabsContent value="galeria" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
-                        <GaleriaCortesManager />
-                    </TabsContent>
+                {/* 3. CAMPOS REQUERIDOS AL AGENDAR (SIN ICONO, MINIMIZABLE) */}
+                <Card className="border border-border/70 shadow-xs overflow-hidden">
+                    <CardHeader className="py-2.5 px-3.5 sm:px-5 border-b border-border/50 bg-muted/10">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
+                                Datos Solicitados al Cliente
+                            </CardTitle>
+                            <button
+                                type="button"
+                                onClick={() => setIsCustomerFieldsOpen(!isCustomerFieldsOpen)}
+                                className="p-1 rounded-md text-slate-400 hover:text-foreground transition-colors cursor-pointer"
+                                title={isCustomerFieldsOpen ? "Minimizar" : "Maximizar"}
+                                aria-label={isCustomerFieldsOpen ? "Minimizar" : "Maximizar"}
+                            >
+                                {isCustomerFieldsOpen ? (
+                                    <ChevronUp className="h-4 w-4" />
+                                ) : (
+                                    <ChevronDown className="h-4 w-4" />
+                                )}
+                            </button>
+                        </div>
+                    </CardHeader>
+                    {isCustomerFieldsOpen && (
+                        <CardContent className="p-0 animate-in fade-in duration-200">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                        <TableHead className="py-1 px-3.5 text-xs font-semibold text-foreground">Campo de Registro</TableHead>
+                                        <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Solicitar</TableHead>
+                                        <TableHead className="py-1 px-3 text-center text-xs font-semibold text-foreground w-36">Obligatorio</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {customerFields.map(field => (
+                                        <TableRow key={field.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                            <TableCell className="py-1.5 px-3.5 text-xs font-medium text-foreground">
+                                                {field.label}
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-center">
+                                                <Switch
+                                                    className="scale-90"
+                                                    checked={form.watch(`customerFields.${field.id}.use`)}
+                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.use`, checked)}
+                                                />
+                                            </TableCell>
+                                            <TableCell className="py-1.5 px-3 text-center">
+                                                <Switch
+                                                    className="scale-90"
+                                                    checked={form.watch(`customerFields.${field.id}.required`)}
+                                                    onCheckedChange={(checked) => form.setValue(`customerFields.${field.id}.required`, checked)}
+                                                />
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    )}
+                </Card>
 
-                    {/* 4. PASE ALFA (ESPEJO CON APP MÓVIL) */}
-                    <TabsContent value="pase_alfa" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
-                        <PaseAlfaManager />
-                    </TabsContent>
-
-                    {/* 5. PROMOCIONES (ESPEJO CON APP MÓVIL) */}
-                    <TabsContent value="promociones" className="mt-0 focus-visible:outline-none data-[state=inactive]:hidden" forceMount>
-                        <PromotionsManager hideHeader />
-                    </TabsContent>
-                </Tabs>
-
-                {/* Botón Guardar Cambios (Alfa) - Solo visible en General y Políticas */}
-                {['general', 'politicas'].includes(activeTab) && (
-                    <div className="sticky bottom-0 z-10 py-3 bg-background/90 backdrop-blur-md border-t border-border/40 flex justify-end">
-                        <Button
-                            type="submit"
-                            variant="alfa"
-                            disabled={isSubmitting}
-                            className="h-9 px-6 text-xs font-semibold"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                                    Guardando...
-                                </>
-                            ) : (
-                                "Guardar Cambios"
-                            )}
-                        </Button>
-                    </div>
-                )}
+                {/* Botón Guardar Cambios (Alfa) */}
+                <div className="sticky bottom-0 z-10 py-3 bg-background/90 backdrop-blur-md border-t border-border/40 flex justify-end">
+                    <Button
+                        type="submit"
+                        variant="alfa"
+                        disabled={isSubmitting}
+                        className="h-9 px-6 text-xs font-semibold"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                Guardando...
+                            </>
+                        ) : (
+                            "Guardar Cambios"
+                        )}
+                    </Button>
+                </div>
             </form>
 
             {/* MODAL MAXIMIZADO DE EDICIÓN DE POLÍTICAS Y TÉRMINOS GENERALES */}
@@ -607,12 +514,20 @@ export default function SitioWebPage() {
                             </div>
                             <div className="flex items-center gap-2">
                                 <div className="hidden sm:flex items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
-                                        {expandedText.trim().split(/\s+/).filter(Boolean).length} palabras
-                                    </Badge>
-                                    <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
-                                        {expandedText.length} caracteres
-                                    </Badge>
+                                    {expandedEditor.maxLength ? (
+                                        <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
+                                            {expandedText.length}/{expandedEditor.maxLength} caracteres
+                                        </Badge>
+                                    ) : (
+                                        <>
+                                            <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
+                                                {expandedText.trim().split(/\s+/).filter(Boolean).length} palabras
+                                            </Badge>
+                                            <Badge variant="outline" className="text-[10px] text-slate-300 border-slate-700 font-normal font-sans">
+                                                {expandedText.length} caracteres
+                                            </Badge>
+                                        </>
+                                    )}
                                 </div>
                                 <button
                                     type="button"
@@ -629,9 +544,10 @@ export default function SitioWebPage() {
                     <div className="flex-1 flex flex-col min-h-0 space-y-2 p-4 sm:p-5 overflow-y-auto">
                         <Textarea
                             value={expandedText}
+                            maxLength={expandedEditor.maxLength}
                             onChange={(e) => setExpandedText(e.target.value)}
-                            placeholder="Escribe aquí el documento legal completo..."
-                            className="flex-1 min-h-[320px] sm:min-h-[420px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500"
+                            placeholder="Escribe aquí el texto..."
+                            className="flex-1 min-h-[220px] sm:min-h-[300px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500"
                         />
                     </div>
 
@@ -671,5 +587,19 @@ export default function SitioWebPage() {
                 </DialogContent>
             </Dialog>
         </div>
+    );
+}
+
+export default function SitioWebPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center py-16">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+            }
+        >
+            <SitioWebContent />
+        </Suspense>
     );
 }

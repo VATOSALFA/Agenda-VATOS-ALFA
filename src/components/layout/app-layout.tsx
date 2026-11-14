@@ -22,14 +22,17 @@ export default function AppLayout({ children }: AppLayoutProps) {
   if (loading) return null; // O un spinner si prefieres, pero el AuthContext ya maneja loading global
   if (!user) return null;
 
-  const isFullscreenPage = pathname === '/agenda/display';
+  const isFullscreenPage =
+    pathname === '/agenda/display' ||
+    pathname?.startsWith('/kiosco') ||
+    pathname?.startsWith('/estacion');
 
   if (isFullscreenPage) {
     return <main className="min-h-screen">{children}</main>;
   }
 
   const isAgenda = pathname?.startsWith('/agenda');
-  const mainBottomPadding = isAgenda ? 'pb-20 md:pb-0' : 'pb-24 md:pb-16';
+  const mainBottomPadding = isAgenda ? 'pb-20 xl:pb-0' : 'pb-24 xl:pb-16';
 
   return (
     <>

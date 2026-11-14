@@ -17,6 +17,7 @@ export interface CommissionsFilters {
 export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: number) {
     const [discountsAffectCommissions, setDiscountsAffectCommissions] = useState(true);
     const [commissionData, setCommissionData] = useState<CommissionRowData[]>([]);
+    const [cashRetainedByProfMap, setCashRetainedByProfMap] = useState<Record<string, { name: string; amount: number }>>({});
     const [isComputing, setIsComputing] = useState(true);
 
     // 1. Fetch Settings (Real-time listener)
@@ -156,8 +157,9 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                                 if ((saleData as any).absorbed_in_sale_id || saleData.pago_estado === 'Pendiente' || (saleData.pago_estado as string) === 'pendiente') {
                                     return;
                                 }
-                                const hasFinalSale = Array.from(salesMap.values()).some(
-                                    existing => existing.reservationId === saleData.reservationId && existing.tipo_venta !== 'anticipo' && !existing.id.startsWith('deposit_')
+                                const isDepositCandidate = saleData.tipo_venta === 'anticipo' || saleData.id.startsWith('deposit_');
+                                const hasFinalSale = isDepositCandidate && Array.from(salesMap.values()).some(
+                                    existing => existing.reservationId === saleData.reservationId && existing.tipo_venta !== 'anticipo' && existing.tipo_venta !== 'extra_estacion' && !existing.id.startsWith('deposit_')
                                 );
                                 if (!hasFinalSale && !salesMap.has(saleData.id)) {
                                     salesMap.set(saleData.id, saleData);
@@ -188,6 +190,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
     useEffect(() => {
         if (dataLoading || !professionals || !services || !products || !clients) {
             setCommissionData([]);
+            setCashRetainedByProfMap({});
             setIsComputing(true);
             return;
         }
@@ -203,6 +206,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
         }
 
         const commissionRows: CommissionRowData[] = [];
+        const nextCashRetainedMap: Record<string, { name: string; amount: number }> = {};
 
         filteredSales.forEach(sale => {
             // Strict check: Commissions are ONLY for fully paid sales
@@ -212,6 +216,20 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
             if (sale.pago_estado !== 'Pagado' && (sale.total - totalCovered) > 1) {
                 return;
+            }
+
+            // Sucursal Automatizada (Sin Recepcionista): Rastrear efectivo cobrado en estación individual por barbero
+            const retainedCash = Number(sale.efectivo_retenido_barbero || 0);
+            if (retainedCash > 0 && sale.cobrado_por_barbero_id) {
+                const collectorId = sale.cobrado_por_barbero_id;
+                if (activeFilters.professional === 'todos' || activeFilters.professional === collectorId) {
+                    const collectorProf = professionalMap.get(collectorId);
+                    const collectorName = collectorProf?.name || sale.cobrado_por_barbero_nombre || 'Barbero';
+                    if (!nextCashRetainedMap[collectorId]) {
+                        nextCashRetainedMap[collectorId] = { name: collectorName, amount: 0 };
+                    }
+                    nextCashRetainedMap[collectorId].amount += retainedCash;
+                }
             }
 
             const client = clientMap.get(sale.cliente_id);
@@ -273,8 +291,12 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                 }
             });
 
-            // Handle Tip
-            if (sale.propina && sale.propina > 0) {
+            // Handle Tip (en estación sin recepcionista, la propina en efectivo queda en mano del barbero y no es pasivo por liquidar)
+            const isStationCashTipKeptInHand =
+                sale.origen_cobro === 'estacion' &&
+                String((sale as any).propina_metodo || sale.metodo_pago || '').toLowerCase() === 'efectivo';
+
+            if (sale.propina && sale.propina > 0 && !isStationCashTipKeptInHand) {
                 const allSellersInSale = Array.from(new Set(sale.items?.map(i => i.barbero_id).filter(Boolean)));
                 const validProfessionalsIds = allSellersInSale.filter(id => id && professionalMap.has(id));
 
@@ -312,6 +334,7 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
         });
 
         setCommissionData(commissionRows);
+        setCashRetainedByProfMap(nextCashRetainedMap);
         setIsComputing(false);
 
     }, [combinedSales, professionals, services, products, clients, dataLoading, activeFilters, discountsAffectCommissions]);
@@ -326,6 +349,8 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                     professionalName: current.professionalName,
                     totalSales: 0,
                     totalCommission: 0,
+                    cashRetainedByBarber: 0,
+                    netPayable: 0,
                     details: []
                 };
             }
@@ -335,15 +360,38 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             return acc;
         }, {} as Record<string, ProfessionalCommissionSummary>);
 
+        Object.entries(cashRetainedByProfMap).forEach(([profId, info]) => {
+            if (!grouped[profId]) {
+                grouped[profId] = {
+                    professionalId: profId,
+                    professionalName: info.name,
+                    totalSales: 0,
+                    totalCommission: 0,
+                    cashRetainedByBarber: 0,
+                    netPayable: 0,
+                    details: []
+                };
+            }
+            grouped[profId].cashRetainedByBarber = Math.round(info.amount * 100) / 100;
+        });
+
+        Object.values(grouped).forEach(entry => {
+            const retained = Math.round((entry.cashRetainedByBarber || 0) * 100) / 100;
+            entry.cashRetainedByBarber = retained;
+            entry.netPayable = Math.round((entry.totalCommission - retained) * 100) / 100;
+        });
+
         return Object.values(grouped);
-    }, [commissionData]);
+    }, [commissionData, cashRetainedByProfMap]);
 
     const overallSummary = useMemo(() => {
         return summaryByProfessional.reduce((acc, current) => {
             acc.totalSales += current.totalSales;
             acc.totalCommission += current.totalCommission;
+            acc.totalCashRetained += (current.cashRetainedByBarber || 0);
+            acc.totalNetPayable += (current.netPayable ?? current.totalCommission);
             return acc;
-        }, { totalSales: 0, totalCommission: 0 });
+        }, { totalSales: 0, totalCommission: 0, totalCashRetained: 0, totalNetPayable: 0 });
     }, [summaryByProfessional]);
 
     const serviceSummary = useMemo(() => {

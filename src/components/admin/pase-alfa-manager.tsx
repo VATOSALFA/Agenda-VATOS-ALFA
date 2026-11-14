@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { db } from '@/lib/firebase-client';
 import { doc, setDoc, getDoc, collection, getDocs, Timestamp } from 'firebase/firestore';
@@ -30,7 +30,19 @@ import {
     Coins,
     Flame,
     CheckCircle2,
+    Crown,
+    Star,
+    Percent,
+    Check,
+    Scissors,
+    DollarSign,
 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    DEFAULT_NIVELES_CONFIG,
+    type NivelesClubConfig,
+    buildDefaultNivelesTerminos,
+} from '@/components/admin/niveles-alfa-manager';
 import {
     DEFAULT_MULTIPLICADOR_COINS_CONFIG,
     DAY_NAMES_ES,
@@ -39,7 +51,7 @@ import {
 } from '@/lib/benefit-security';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney } from '@/lib/utils';
 import { ImageUploader } from '@/components/shared/image-uploader';
 import {
     Dialog,
@@ -60,12 +72,14 @@ export interface PrivilegioVIP {
     terminos?: string;
     imagenUrl?: string | null;
     activo: boolean;
+    mostrarEnWeb?: boolean;
     fechaLimite?: string | null; // YYYY-MM-DD
     creado_el?: any;
 }
 
 export interface PaseAlfaConfig {
     activo: boolean;
+    mostrar_en_web?: boolean;
     titulo: string;
     subtitulo: string;
     sellosRequeridos: number;
@@ -143,16 +157,17 @@ const isPrivilegeExpired = (fechaLimite?: string | null): boolean => {
 interface PaseAlfaManagerProps {
     className?: string;
     onSaveSuccess?: () => void;
+    onEditingChange?: (isEditing: boolean, onBack: () => void, title?: string) => void;
 }
 
-export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerProps) {
+export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: PaseAlfaManagerProps) {
     const { user } = useAuth();
     const { toast } = useToast();
 
     // Estado principal del programa Pase Alfa
     const [paseAlfaForm, setPaseAlfaForm] = useState<PaseAlfaConfig>({
         activo: true,
-        titulo: 'Pase Alfa',
+        titulo: 'PASE ALFA',
         subtitulo: '',
         sellosRequeridos: 10,
         recompensa: '10.° Corte Totalmente Gratis',
@@ -161,6 +176,14 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
         terminos: '',
         imagenUrl: '',
     });
+
+    // Estado de configuración de Niveles (Alfa Member, Alfa Gold, Alfa Black VIP)
+    const [nivelesConfig, setNivelesConfig] = useState<NivelesClubConfig>(DEFAULT_NIVELES_CONFIG);
+    const [activeNivelTab, setActiveNivelTab] = useState<'member' | 'gold' | 'vip'>('gold');
+    const [newTierBenefitText, setNewTierBenefitText] = useState<string>('');
+    const [isNivelesAjustesOpen, setIsNivelesAjustesOpen] = useState(false);
+    const [focusedGastoKey, setFocusedGastoKey] = useState<string | null>(null);
+    const [rawGastoInput, setRawGastoInput] = useState<string>('');
 
     const [loadingPaseAlfa, setLoadingPaseAlfa] = useState(true);
     const [isSavingPaseAlfa, setIsSavingPaseAlfa] = useState(false);
@@ -188,6 +211,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
     const [newTerminos, setNewTerminos] = useState('');
     const [newImagenUrl, setNewImagenUrl] = useState('');
     const [newActivo, setNewActivo] = useState(true);
+    const [newMostrarEnWeb, setNewMostrarEnWeb] = useState(true);
     const [newHasExpiry, setNewHasExpiry] = useState(false);
     const [newFechaLimite, setNewFechaLimite] = useState('');
     const [newDatePickerOpen, setNewDatePickerOpen] = useState(false);
@@ -254,6 +278,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 if ((paseData || appMovilPaseData) && isMounted) {
                     setPaseAlfaForm({
                         activo: merged.activo !== undefined ? Boolean(merged.activo) : true,
+                        mostrar_en_web: merged.mostrar_en_web !== undefined ? Boolean(merged.mostrar_en_web) : true,
                         titulo: (merged.titulo || 'Pase Alfa').replace(/Pase Alfa Club/gi, 'Pase Alfa'),
                         subtitulo: merged.subtitulo || '',
                         sellosRequeridos: Number(merged.sellosRequeridos) || 10,
@@ -275,6 +300,39 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             mensaje_promo: typeof rawMult.mensaje_promo === 'string' && rawMult.mensaje_promo.trim()
                                 ? rawMult.mensaje_promo
                                 : DEFAULT_MULTIPLICADOR_COINS_CONFIG.mensaje_promo,
+                        });
+                    }
+
+                    const rawNiveles = merged.niveles_config || mData?.niveles_config || mData?.pase_alfa?.niveles_config;
+                    if (rawNiveles && typeof rawNiveles === 'object') {
+                        setNivelesConfig({
+                            activo: rawNiveles.activo !== undefined ? Boolean(rawNiveles.activo) : true,
+                            criterio: rawNiveles.criterio || 'ambos_opcional',
+                            titulo_tarjeta: rawNiveles.titulo_tarjeta || DEFAULT_NIVELES_CONFIG.titulo_tarjeta,
+                            descripcion_tarjeta: rawNiveles.descripcion_tarjeta || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta,
+                            imagenUrl: rawNiveles.imagenUrl || DEFAULT_NIVELES_CONFIG.imagenUrl,
+                            terminos: rawNiveles.terminos || buildDefaultNivelesTerminos(rawNiveles),
+                            member: {
+                                ...DEFAULT_NIVELES_CONFIG.member,
+                                ...(rawNiveles.member || {}),
+                                beneficios: Array.isArray(rawNiveles.member?.beneficios)
+                                    ? rawNiveles.member.beneficios
+                                    : DEFAULT_NIVELES_CONFIG.member.beneficios,
+                            },
+                            gold: {
+                                ...DEFAULT_NIVELES_CONFIG.gold,
+                                ...(rawNiveles.gold || {}),
+                                beneficios: Array.isArray(rawNiveles.gold?.beneficios)
+                                    ? rawNiveles.gold.beneficios
+                                    : DEFAULT_NIVELES_CONFIG.gold.beneficios,
+                            },
+                            vip: {
+                                ...DEFAULT_NIVELES_CONFIG.vip,
+                                ...(rawNiveles.vip || {}),
+                                beneficios: Array.isArray(rawNiveles.vip?.beneficios)
+                                    ? rawNiveles.vip.beneficios
+                                    : DEFAULT_NIVELES_CONFIG.vip.beneficios,
+                            },
                         });
                     }
 
@@ -357,6 +415,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
             const payload = {
                 activo: Boolean(paseAlfaForm.activo),
+                mostrar_en_web: paseAlfaForm.mostrar_en_web !== false,
                 titulo: paseAlfaForm.titulo.trim() || 'Pase Alfa',
                 subtitulo: paseAlfaForm.subtitulo.trim(),
                 sellosRequeridos: sellosNum,
@@ -396,59 +455,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 { merge: true }
             );
 
-            // 4. Sincronizar tarjeta de promoción de Pase Alfa
-            try {
-                const promosRef = collection(db, 'promociones');
-                const promosSnap = await getDocs(promosRef);
-
-                let targetPromoId: string | null = null;
-                promosSnap.docs.forEach((d) => {
-                    const data = d.data();
-                    const name = (data.name || data.titulo || data.title || '').toLowerCase();
-                    if (
-                        d.id === 'DSVwbmEtiK1xJzJjwrqu' ||
-                        d.id === 'promo_pase_alfa' ||
-                        data.es_pase_alfa === true ||
-                        name.includes('decima') ||
-                        name.includes('décima') ||
-                        name.includes('pase alfa')
-                    ) {
-                        targetPromoId = d.id;
-                    }
-                });
-
-                const promoData = {
-                    name: payload.titulo || 'La decima ES GRATIS',
-                    title: payload.titulo || 'La decima ES GRATIS',
-                    titulo: payload.titulo || 'La decima ES GRATIS',
-                    imageUrl: payload.imagenUrl || '',
-                    imagenUrl: payload.imagenUrl || '',
-                    description: payload.subtitulo
-                        ? `${payload.subtitulo}\n\nAcumula ${payload.sellosRequeridos} visitas en VATOS ALFA y en tu décima visita recibe ${payload.recompensa}.\n\nCada visita suma automáticamente a tu progreso desde nuestra app.`
-                        : `Acumula ${payload.sellosRequeridos} visitas en VATOS ALFA y en tu décima visita recibe ${payload.recompensa}.`,
-                    termsAndConditions: payload.terminos || '',
-                    terminos: payload.terminos || '',
-                    active: Boolean(payload.activo),
-                    activo: Boolean(payload.activo),
-                    es_pase_alfa: true,
-                    endDate: '2035-12-31',
-                    startDate: format(new Date(), 'yyyy-MM-dd'),
-                    updatedAt: Timestamp.now(),
-                };
-
-                if (targetPromoId) {
-                    await setDoc(doc(db, 'promociones', targetPromoId), promoData, { merge: true });
-                } else {
-                    await setDoc(doc(db, 'promociones', 'DSVwbmEtiK1xJzJjwrqu'), {
-                        ...promoData,
-                        createdAt: Timestamp.now(),
-                    }, { merge: true });
-                }
-            } catch (promoSyncErr) {
-                console.warn('Aviso sincronizando tarjeta en promociones:', promoSyncErr);
-            }
-
-            // 5. Auditoría
+            // 4. Auditoría
             await logAuditAction({
                 action: 'Modificar Pase Alfa',
                 details: `Sellos: ${payload.sellosRequeridos}, Premio: "${payload.recompensa}", Beneficios: ${payload.beneficios.length}`,
@@ -589,10 +596,12 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
         setNewTerminos('');
         setNewImagenUrl('');
         setNewActivo(true);
+        setNewMostrarEnWeb(true);
         setNewHasExpiry(false);
         setNewFechaLimite('');
         setEditingBenefitId('new');
         setIsBeneficiosOpen(true);
+        setIsNivelesAjustesOpen(false);
     };
 
     const handleStartEditBenefit = (b: PrivilegioVIP) => {
@@ -602,15 +611,74 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
         setNewTerminos(b.terminos || '');
         setNewImagenUrl(b.imagenUrl || '');
         setNewActivo(b.activo !== false);
+        setNewMostrarEnWeb(b.mostrarEnWeb !== false);
         setNewHasExpiry(Boolean(b.fechaLimite));
         setNewFechaLimite(b.fechaLimite || '');
         setEditingBenefitId(b.id);
         setIsBeneficiosOpen(true);
+        setIsNivelesAjustesOpen(false);
     };
 
     const handleCancelEditBenefit = () => {
         setEditingBenefitId(null);
     };
+
+    const updateNivelField = (tierKey: 'member' | 'gold' | 'vip', field: string, value: any) => {
+        setNivelesConfig((prev) => ({
+            ...prev,
+            [tierKey]: {
+                ...prev[tierKey],
+                [field]: value,
+            },
+        }));
+    };
+
+    const handleAddNivelBeneficio = (tierKey: 'member' | 'gold' | 'vip') => {
+        const text = newTierBenefitText.trim();
+        if (!text) return;
+        setNivelesConfig((prev) => ({
+            ...prev,
+            [tierKey]: {
+                ...prev[tierKey],
+                beneficios: [...(prev[tierKey].beneficios || []), text],
+            },
+        }));
+        setNewTierBenefitText('');
+    };
+
+    const removeNivelBeneficio = (tierKey: 'member' | 'gold' | 'vip', index: number) => {
+        setNivelesConfig((prev) => ({
+            ...prev,
+            [tierKey]: {
+                ...prev[tierKey],
+                beneficios: prev[tierKey].beneficios.filter((_, i) => i !== index),
+            },
+        }));
+    };
+
+    const onEditingChangeRef = useRef(onEditingChange);
+    useEffect(() => {
+        onEditingChangeRef.current = onEditingChange;
+    }, [onEditingChange]);
+
+    // Notificar al contenedor principal cuando se entra o sale de la edición de un beneficio
+    useEffect(() => {
+        setIsNivelesAjustesOpen(false);
+        if (editingBenefitId !== null) {
+            let title = 'Beneficio';
+            if (editingBenefitId === 'pase_alfa') {
+                title = (paseAlfaForm.titulo || 'PASE ALFA').toUpperCase();
+            } else if (editingBenefitId === 'new') {
+                title = 'Nuevo Beneficio';
+            } else {
+                const found = privilegios.find((p) => p.id === editingBenefitId);
+                title = (found?.titulo || newTitle || 'Beneficio').toUpperCase();
+            }
+            onEditingChangeRef.current?.(true, () => setEditingBenefitId(null), title);
+        } else {
+            onEditingChangeRef.current?.(false, () => {}, '');
+        }
+    }, [editingBenefitId, paseAlfaForm.titulo, privilegios, newTitle]);
 
     const handleSaveBenefit = async () => {
         if (!newTitle.trim()) {
@@ -637,6 +705,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 terminos: newTerminos.trim(),
                 imagenUrl: newImagenUrl.trim() || null,
                 activo: Boolean(newActivo),
+                mostrarEnWeb: newMostrarEnWeb !== false,
                 fechaLimite: newHasExpiry && newFechaLimite ? newFechaLimite : null,
                 creado_el:
                     editingBenefitId === 'new'
@@ -663,26 +732,110 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                 .map((b) => b.titulo.trim())
                 .filter(Boolean);
 
+            const isEditingCoins = (currentBenefit.titulo || '').toLowerCase().includes('alfa coin') ||
+                                   (currentBenefit.id || '').toLowerCase().includes('coin');
+            const isEditingNiveles = (currentBenefit.titulo || '').toLowerCase().includes('nivel') ||
+                                     (currentBenefit.id || '').toLowerCase().includes('nivel');
+
+            const cleanMultiplicador: MultiplicadorCoinsConfig = {
+                activo: Boolean(multiplicadorConfig.activo),
+                multiplicador: multiplicadorConfig.multiplicador === 3 ? 3 : 2,
+                dias_semana: [...multiplicadorConfig.dias_semana].sort((a, b) => a - b),
+                mensaje_promo: (multiplicadorConfig.mensaje_promo || '').trim() || `¡Hoy tus compras generan el ${multiplicadorConfig.multiplicador === 3 ? 'TRIPLE (3x)' : 'DOBLE (2x)'} de Alfa Coins en cualquier sucursal!`,
+            };
+
+            const cleanNivelesPayload: NivelesClubConfig = {
+                activo: Boolean(currentBenefit.activo),
+                criterio: nivelesConfig.criterio,
+                titulo_tarjeta: currentBenefit.titulo.trim() || 'NIVELES PASE ALFA',
+                descripcion_tarjeta: (currentBenefit.descripcion || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta || '').trim(),
+                imagenUrl: currentBenefit.imagenUrl || DEFAULT_NIVELES_CONFIG.imagenUrl,
+                terminos: (currentBenefit.terminos || buildDefaultNivelesTerminos(nivelesConfig)).trim(),
+                member: {
+                    id: 'member',
+                    nombre: nivelesConfig.member.nombre.trim() || 'Alfa Member',
+                    visitasMin: Math.max(0, Number(nivelesConfig.member.visitasMin) || 0),
+                    gastoMin: Math.max(0, Number(nivelesConfig.member.gastoMin) || 0),
+                    cashbackPct: Math.max(1, Number(nivelesConfig.member.cashbackPct) || 3),
+                    color: nivelesConfig.member.color || '#2563EB',
+                    colorTexto: nivelesConfig.member.colorTexto || '#FFFFFF',
+                    descripcion: nivelesConfig.member.descripcion.trim(),
+                    beneficios: (nivelesConfig.member.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                },
+                gold: {
+                    id: 'gold',
+                    nombre: nivelesConfig.gold.nombre.trim() || 'Alfa Gold',
+                    visitasMin: Math.max(1, Number(nivelesConfig.gold.visitasMin) || 12),
+                    gastoMin: Math.max(0, Number(nivelesConfig.gold.gastoMin) || 2400),
+                    cashbackPct: Math.max(1, Number(nivelesConfig.gold.cashbackPct) || 5),
+                    color: nivelesConfig.gold.color || '#C5A880',
+                    colorTexto: nivelesConfig.gold.colorTexto || '#0F172A',
+                    descripcion: nivelesConfig.gold.descripcion.trim(),
+                    beneficios: (nivelesConfig.gold.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                },
+                vip: {
+                    id: 'vip',
+                    nombre: nivelesConfig.vip.nombre.trim() || 'Alfa Black VIP',
+                    visitasMin: Math.max(2, Number(nivelesConfig.vip.visitasMin) || 24),
+                    gastoMin: Math.max(0, Number(nivelesConfig.vip.gastoMin) || 4800),
+                    cashbackPct: Math.max(1, Number(nivelesConfig.vip.cashbackPct) || 7),
+                    color: nivelesConfig.vip.color || '#0F172A',
+                    colorTexto: nivelesConfig.vip.colorTexto || '#F8FAFC',
+                    descripcion: nivelesConfig.vip.descripcion.trim(),
+                    beneficios: (nivelesConfig.vip.beneficios || []).map((b) => b.trim()).filter(Boolean),
+                },
+                actualizado_el: Timestamp.now(),
+                actualizado_por: user?.email || 'admin',
+            };
+
+            const simpleNivelesPayload = {
+                member: {
+                    nombre: cleanNivelesPayload.member.nombre,
+                    min: cleanNivelesPayload.member.visitasMin,
+                    max: cleanNivelesPayload.gold.visitasMin - 1,
+                },
+                gold: {
+                    nombre: cleanNivelesPayload.gold.nombre,
+                    min: cleanNivelesPayload.gold.visitasMin,
+                    max: cleanNivelesPayload.vip.visitasMin - 1,
+                },
+                vip: {
+                    nombre: cleanNivelesPayload.vip.nombre,
+                    min: cleanNivelesPayload.vip.visitasMin,
+                },
+            };
+
             // Sincronizar en los 3 documentos (usando objeto anidado pase_alfa para actualizar el mapa interno de app_movil)
             await Promise.all([
                 setDoc(doc(db, 'configuracion', 'pase_alfa'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
+                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
+                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
+                        ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                        ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
+                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
             ]);
+
+            if (isEditingNiveles) {
+                setNivelesConfig(cleanNivelesPayload);
+            }
 
             setPrivilegios(updatedList);
             setEditingBenefitId(null);
@@ -718,26 +871,37 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
             .map((item) => item.titulo.trim())
             .filter(Boolean);
 
+        const isNivelesBenefit = b.id === 'niveles_pase_alfa' || (b.titulo || '').toLowerCase().includes('nivel');
+        const nextNivelesConfig = isNivelesBenefit ? { ...nivelesConfig, activo: nextActive } : undefined;
+
         try {
             await Promise.all([
                 setDoc(doc(db, 'configuracion', 'pase_alfa'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
+                    ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
+                    ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
+                        ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
+                    ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
             ]);
+
+            if (nextNivelesConfig) {
+                setNivelesConfig(nextNivelesConfig);
+            }
 
             setPrivilegios(updatedList);
             toast({
@@ -805,278 +969,27 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
     return (
         <div className={cn("space-y-5", className)}>
-            {/* 1.5 CARD: PROMOCIÓN DÍAS DE ALFA COINS AL DOBLE (2x) O TRIPLE (3x) */}
+            {/* GESTOR DE BENEFICIOS / PRIVILEGIOS VIP */}
             <Card className="border border-border/70 shadow-xs transition-all">
-                <CardHeader
-                    onClick={() => setIsMultiplicadorOpen(!isMultiplicadorOpen)}
-                    className={cn(
-                        "py-3 px-3.5 sm:px-5 bg-muted/10 cursor-pointer hover:bg-muted/20 transition-colors select-none",
-                        isMultiplicadorOpen && "border-b border-border/50"
-                    )}
-                >
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                            <Flame className={cn("h-4 w-4 shrink-0", multiplicadorConfig.activo ? "text-blue-500" : "text-slate-400")} />
-                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                    Días de Alfa Coins al Doble (2x) o Triple (3x)
-                                </CardTitle>
-                                <InfoTooltip text="Elige qué días de la semana quieres multiplicar por 2x o 3x los Alfa Coins que ganan tus clientes por cada $1 MXN pagado en Caja." />
-                            </div>
-                            {(() => {
-                                const evalStatus = evaluateActiveCoinsMultiplier(multiplicadorConfig);
-                                if (evalStatus.isActiveToday) {
-                                    return (
-                                        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-[10px] py-0 px-2 font-bold">
-                                            ACTIVO HOY ({evalStatus.multiplier}x en Caja)
-                                        </Badge>
-                                    );
-                                }
-                                if (multiplicadorConfig.activo && multiplicadorConfig.dias_semana.length > 0) {
-                                    return (
-                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-blue-500/30 text-blue-600 dark:text-blue-400 bg-blue-500/10">
-                                            Programado ({multiplicadorConfig.multiplicador}x: {multiplicadorConfig.dias_semana.map((d) => DAY_NAMES_ES[d].slice(0, 3)).join(', ')})
-                                        </Badge>
-                                    );
-                                }
-                                return (
-                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-muted-foreground">
-                                        Inactivo
-                                    </Badge>
-                                );
-                            })()}
-                        </div>
-
-                        <div className="flex items-center gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <Switch
-                                checked={multiplicadorConfig.activo}
-                                onCheckedChange={(checked) =>
-                                    setMultiplicadorConfig((prev) => ({ ...prev, activo: checked }))
-                                }
-                                title={multiplicadorConfig.activo ? "Multiplicador Activo" : "Multiplicador Pausado"}
-                                aria-label="Activar promoción de Alfa Coins dobles o triples"
-                                className="scale-90"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setIsMultiplicadorOpen(!isMultiplicadorOpen)}
-                                className="text-slate-400 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted/50"
-                                title={isMultiplicadorOpen ? "Minimizar" : "Desplegar"}
-                            >
-                                {isMultiplicadorOpen ? (
-                                    <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </CardHeader>
-
-                {isMultiplicadorOpen && (
-                    <CardContent className="space-y-4 pt-3.5 px-3.5 sm:px-5 pb-5">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
-                            {/* SELECTOR 2X / 3X */}
-                            <div className="md:col-span-4 space-y-1.5">
-                                <Label className="text-xs font-semibold text-foreground">
-                                    Multiplicador de Alfa Coins
-                                </Label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setMultiplicadorConfig((prev) => ({
-                                            ...prev,
-                                            multiplicador: 2,
-                                            mensaje_promo: (prev.mensaje_promo || '').includes('TRIPLE')
-                                                ? '¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!'
-                                                : (prev.mensaje_promo || ''),
-                                        }))}
-                                        className={cn(
-                                            "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
-                                            multiplicadorConfig.multiplicador === 2
-                                                ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-xs"
-                                                : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
-                                        )}
-                                    >
-                                        <span className="text-base font-black tracking-tight">2x DOBLE</span>
-                                        <span className="text-[10px] opacity-80">$1 MXN = 2 Alfa Coins</span>
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setMultiplicadorConfig((prev) => ({
-                                            ...prev,
-                                            multiplicador: 3,
-                                            mensaje_promo: (prev.mensaje_promo || '').includes('DOBLE')
-                                                ? '¡Hoy tus compras generan el TRIPLE (3x) de Alfa Coins en cualquier sucursal!'
-                                                : (prev.mensaje_promo || ''),
-                                        }))}
-                                        className={cn(
-                                            "flex flex-col items-center justify-center p-2.5 rounded-xl border text-center transition-all cursor-pointer",
-                                            multiplicadorConfig.multiplicador === 3
-                                                ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-xs"
-                                                : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
-                                        )}
-                                    >
-                                        <span className="text-base font-black tracking-tight">3x TRIPLE</span>
-                                        <span className="text-[10px] opacity-80">$1 MXN = 3 Alfa Coins</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* SELECTOR DE DÍAS DE LA SEMANA */}
-                            <div className="md:col-span-8 space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-xs font-semibold text-foreground">
-                                        Días de la semana en que aplica la promoción
-                                    </Label>
-                                    <span className="text-[10px] text-muted-foreground">
-                                        Toca los días para activarlos o desactivarlos
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-7 gap-1.5">
-                                    {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
-                                        const isSelected = multiplicadorConfig.dias_semana.includes(dayIdx);
-                                        const isToday = new Date().getDay() === dayIdx;
-                                        return (
-                                            <button
-                                                key={dayIdx}
-                                                type="button"
-                                                onClick={() => handleToggleDayOfWeek(dayIdx)}
-                                                className={cn(
-                                                    "flex flex-col items-center justify-center py-2 px-1 rounded-xl border text-center transition-all cursor-pointer relative",
-                                                    isSelected
-                                                        ? "border-blue-500 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold shadow-2xs"
-                                                        : "border-border/60 bg-muted/15 text-muted-foreground hover:border-border/90"
-                                                )}
-                                            >
-                                                <span className="text-[11px] font-bold">
-                                                    {DAY_NAMES_ES[dayIdx].slice(0, 3)}
-                                                </span>
-                                                <span className="text-[9px] opacity-75 hidden sm:inline">
-                                                    {DAY_NAMES_ES[dayIdx]}
-                                                </span>
-                                                {isToday && (
-                                                    <span className="text-[8px] uppercase tracking-wider text-blue-500 font-extrabold mt-0.5">
-                                                        Hoy
-                                                    </span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* MENSAJE PROMOCIONAL PARA LA APP */}
-                        <div className="space-y-1">
-                            <Label className="text-xs font-semibold text-foreground">
-                                Mensaje de aviso en la App Móvil (Opcional)
-                            </Label>
-                            <Input
-                                value={multiplicadorConfig.mensaje_promo || ''}
-                                onChange={(e) => setMultiplicadorConfig((prev) => ({ ...prev, mensaje_promo: e.target.value }))}
-                                placeholder="Ej. ¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!"
-                                className="h-8.5 text-xs font-sans"
-                            />
-                        </div>
-
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2.5 border-t border-border/50">
-                            <span className="text-[11px] text-muted-foreground">
-                                En los días seleccionados, Caja abonará automáticamente <strong>{multiplicadorConfig.multiplicador} Alfa Coins por cada $1 MXN</strong> pagado y la App mostrará el distintivo activo.
-                            </span>
-                            <Button
-                                type="button"
-                                onClick={handleSaveMultiplicadorCoins}
-                                disabled={isSavingMultiplicador}
-                                variant="alfa"
-                                className="font-semibold text-xs px-5 h-9 w-full sm:w-auto cursor-pointer shrink-0"
-                            >
-                                {isSavingMultiplicador ? (
-                                    <>
-                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                                        Guardando...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Save className="w-3.5 h-3.5 mr-1.5" />
-                                        Guardar Días {multiplicadorConfig.multiplicador}x Alfa Coins
-                                    </>
-                                )}
-                            </Button>
-                        </div>
-                    </CardContent>
-                )}
-            </Card>
-
-            {/* 2. CARD: GESTOR DE BENEFICIOS / PRIVILEGIOS VIP */}
-            <Card className="border border-border/70 shadow-xs transition-all">
-                <CardHeader
-                    onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
-                    className={cn(
-                        "py-3 px-3.5 sm:px-5 bg-muted/10 cursor-pointer hover:bg-muted/20 transition-colors select-none",
-                        isBeneficiosOpen && "border-b border-border/50"
-                    )}
-                >
-                    <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                            <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
-                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                <CardTitle className="text-sm font-semibold tracking-tight text-foreground">
-                                    Beneficios Exclusivos (Privilegios VIP)
-                                </CardTitle>
-                                <InfoTooltip text="Configura las cortesías y beneficios del Pase Alfa. Se reflejan en el sitio web y en la app móvil." />
-                            </div>
-                            <Badge
-                                variant="outline"
-                                className="text-[10px] py-0 px-1.5 font-medium border-border/60 text-muted-foreground"
-                            >
-                                {privilegios.length + 1} beneficios
-                            </Badge>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            {editingBenefitId === null && (
-                                <Button
-                                    type="button"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        setIsBeneficiosOpen(true);
-                                        handleStartNewBenefit();
-                                    }}
-                                    variant="alfa"
-                                    className="font-semibold text-xs h-7.5 px-3 gap-1.5 cursor-pointer"
-                                >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Agregar Beneficio</span>
-                                </Button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => setIsBeneficiosOpen(!isBeneficiosOpen)}
-                                className="text-slate-400 hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted/50"
-                                title={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
-                                aria-label={isBeneficiosOpen ? "Minimizar" : "Desplegar"}
-                            >
-                                {isBeneficiosOpen ? (
-                                    <ChevronUp className="w-4 h-4" />
-                                ) : (
-                                    <ChevronDown className="w-4 h-4" />
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </CardHeader>
-
-                {isBeneficiosOpen && (
-                    <CardContent className="space-y-4 pt-3 px-3.5 sm:px-5 pb-5">
-                        {loadingPrivilegios ? (
-                            <div className="py-8 flex justify-center">
+                <CardContent className="space-y-4 p-3.5 sm:p-5">
+                    {loadingPrivilegios ? (
+                        <div className="py-8 flex justify-center">
                                 <Loader2 className="w-5 h-5 animate-spin text-primary" />
                             </div>
                         ) : editingBenefitId === null ? (
                             /* VISTA 1: LISTADO DE BENEFICIOS (INCLUYENDO PROGRAMA PASE ALFA) */
                             <div className="space-y-2.5">
+                                <div className="flex items-center justify-end pb-1">
+                                    <Button
+                                        type="button"
+                                        onClick={handleStartNewBenefit}
+                                        variant="alfa"
+                                        className="font-semibold text-xs h-7.5 px-3 gap-1.5 cursor-pointer"
+                                    >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Agregar Beneficio</span>
+                                    </Button>
+                                </div>
                                 <div className="grid gap-2.5">
                                     {/* PROGRAMA PASE ALFA (SIEMPRE PRIMER ELEMENTO) */}
                                     <div
@@ -1105,8 +1018,8 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
 
                                             <div className="space-y-0.5 min-w-0 flex-1">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <h5 className="font-semibold text-xs text-foreground truncate font-sans">
-                                                        {paseAlfaForm.titulo || 'PASE ALFA'}
+                                                    <h5 className="font-semibold text-xs text-foreground truncate font-sans uppercase">
+                                                        {paseAlfaForm.titulo ? paseAlfaForm.titulo.toUpperCase() : 'PASE ALFA'}
                                                     </h5>
                                                     <Badge
                                                         variant="outline"
@@ -1125,6 +1038,11 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     >
                                                         {paseAlfaForm.activo ? "Visible" : "Pausado"}
                                                     </Badge>
+                                                    {paseAlfaForm.mostrar_en_web === false && (
+                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-muted-foreground border-border bg-muted/20 font-sans">
+                                                            Oculto en Web
+                                                        </Badge>
+                                                    )}
                                                 </div>
 
                                                 <p className="text-[11px] text-muted-foreground line-clamp-1 font-sans">
@@ -1205,6 +1123,12 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                                     {item.activo && !isExpired ? "Visible" : isExpired ? "Expirado" : "Pausado"}
                                                                 </Badge>
 
+                                                                {item.mostrarEnWeb === false && (
+                                                                    <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-muted-foreground border-border bg-muted/20 font-sans">
+                                                                        Oculto en Web
+                                                                    </Badge>
+                                                                )}
+
                                                                 {item.fechaLimite && (
                                                                     <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-muted-foreground gap-1 font-sans">
                                                                         <CalendarDays className="w-2.5 h-2.5 text-slate-400" />
@@ -1261,25 +1185,21 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                         ) : editingBenefitId === 'pase_alfa' ? (
                             /* VISTA 2A: FORMULARIO DE EDICIÓN DEL PROGRAMA PASE ALFA */
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-border/50 gap-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-border/50">
                                     <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setEditingBenefitId(null)}
-                                            className="h-7.5 px-2 text-xs gap-1 text-slate-400 hover:text-white cursor-pointer"
-                                        >
-                                            <ChevronLeft className="w-4 h-4" />
-                                            <span>Volver a la lista</span>
-                                        </Button>
-                                        <div className="h-4 w-px bg-border/80" />
-                                        <h4 className="font-semibold text-xs sm:text-sm text-foreground">
-                                            Editar: {paseAlfaForm.titulo || 'Programa Pase Alfa'}
-                                        </h4>
+                                        <Label htmlFor="pase-alfa-form-web" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                                            {paseAlfaForm.mostrar_en_web !== false ? 'Visible en Sitio Web' : 'Oculto en Sitio Web'}
+                                        </Label>
+                                        <Switch
+                                            id="pase-alfa-form-web"
+                                            checked={paseAlfaForm.mostrar_en_web !== false}
+                                            onCheckedChange={(checked) =>
+                                                setPaseAlfaForm((prev) => ({ ...prev, mostrar_en_web: checked }))
+                                            }
+                                            className="scale-90"
+                                        />
                                     </div>
-
-                                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                                    <div className="flex items-center gap-2">
                                         <Label htmlFor="pase-alfa-form-active" className="text-xs font-medium cursor-pointer text-muted-foreground">
                                             {paseAlfaForm.activo ? 'Visible' : 'Pausado'}
                                         </Label>
@@ -1356,18 +1276,13 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                             />
                                         </div>
 
-                                        {/* INSTRUCCIONES DE ESCANEO (MODAL COMPACTO + BOTÓN ABRIR) */}
-                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
-                                            <div className="min-w-0 flex-1 space-y-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Label className="text-xs font-semibold text-foreground">
-                                                        Instrucciones de Escaneo (Modal QR)
-                                                    </Label>
-                                                    <InfoTooltip text="Instrucciones que ve el cliente al abrir su código QR en recepción para sellar su visita." />
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
-                                                    {paseAlfaForm.instrucciones?.trim() || 'Sin instrucciones configuradas.'}
-                                                </p>
+                                        {/* INSTRUCCIONES DE ESCANEO (SOLO TEXTO Y BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Instrucciones de Escaneo (Modal QR)
+                                                </Label>
+                                                <InfoTooltip text="Instrucciones que ve el cliente al abrir su código QR en recepción para sellar su visita." />
                                             </div>
                                             <Button
                                                 type="button"
@@ -1379,25 +1294,20 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     paseAlfaForm.instrucciones,
                                                     (val) => setPaseAlfaForm((prev) => ({ ...prev, instrucciones: val }))
                                                 )}
-                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                                className="h-7.5 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
                                             >
                                                 <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
                                                 <span>Abrir</span>
                                             </Button>
                                         </div>
 
-                                        {/* TÉRMINOS Y CONDICIONES DEL PASE (MODAL COMPACTO + BOTÓN ABRIR) */}
-                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
-                                            <div className="min-w-0 flex-1 space-y-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Label className="text-xs font-semibold text-foreground">
-                                                        Términos y Condiciones del Pase
-                                                    </Label>
-                                                    <InfoTooltip text="Reglas, restricciones y validez aplicables al Pase Alfa." />
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
-                                                    {paseAlfaForm.terminos?.trim() || 'Sin términos y condiciones configurados.'}
-                                                </p>
+                                        {/* TÉRMINOS Y CONDICIONES DEL PASE (SOLO TEXTO Y BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Términos y Condiciones del Pase
+                                                </Label>
+                                                <InfoTooltip text="Reglas, restricciones y validez aplicables al Pase Alfa." />
                                             </div>
                                             <Button
                                                 type="button"
@@ -1409,7 +1319,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     paseAlfaForm.terminos,
                                                     (val) => setPaseAlfaForm((prev) => ({ ...prev, terminos: val }))
                                                 )}
-                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                                className="h-7.5 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
                                             >
                                                 <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
                                                 <span>Abrir</span>
@@ -1435,23 +1345,16 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                             onRemove={() => setPaseAlfaForm((prev) => ({ ...prev, imagenUrl: '' }))}
                                             onUploadStateChange={setIsUploadingPaseAlfaImage}
                                             multiple={false}
-                                            objectFit="contain"
+                                            objectFit="cover"
+                                            aspectRatio="16/9"
+                                            showPreview={true}
+                                            showRemove={true}
                                             className="w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setEditingBenefitId(null)}
-                                        className="text-xs h-8.5 px-4 w-full sm:w-auto cursor-pointer"
-                                    >
-                                        Cancelar
-                                    </Button>
-
+                                <div className="flex items-center justify-end pt-3 border-t border-border/50">
                                     <Button
                                         type="button"
                                         onClick={handleSavePaseAlfa}
@@ -1472,7 +1375,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                         ) : (
                                             <>
                                                 <Save className="w-3.5 h-3.5 mr-1.5" />
-                                                Guardar Configuración del Pase Alfa
+                                                Guardar
                                             </>
                                         )}
                                     </Button>
@@ -1481,25 +1384,19 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                         ) : (
                             /* VISTA 2B: FORMULARIO DE CREACIÓN / EDICIÓN DE BENEFICIO */
                             <div className="space-y-4">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-border/50 gap-2">
+                                <div className="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-border/50">
                                     <div className="flex items-center gap-2">
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={handleCancelEditBenefit}
-                                            className="h-7.5 px-2 text-xs gap-1 text-slate-400 hover:text-white cursor-pointer"
-                                        >
-                                            <ChevronLeft className="w-4 h-4" />
-                                            <span>Volver a la lista</span>
-                                        </Button>
-                                        <div className="h-4 w-px bg-border/80" />
-                                        <h4 className="font-semibold text-xs sm:text-sm text-foreground">
-                                            {editingBenefitId === 'new' ? 'Crear Nuevo Beneficio' : `Editar: ${newTitle || 'Beneficio'}`}
-                                        </h4>
+                                        <Label htmlFor="benefit-form-web" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                                            {newMostrarEnWeb !== false ? 'Visible en Sitio Web' : 'Oculto en Sitio Web'}
+                                        </Label>
+                                        <Switch
+                                            id="benefit-form-web"
+                                            checked={newMostrarEnWeb !== false}
+                                            onCheckedChange={setNewMostrarEnWeb}
+                                            className="scale-90"
+                                        />
                                     </div>
-
-                                    <div className="flex items-center gap-2 self-end sm:self-auto">
+                                    <div className="flex items-center gap-2">
                                         <Label htmlFor="benefit-form-active" className="text-xs font-medium cursor-pointer text-muted-foreground">
                                             {newActivo ? 'Visible' : 'Pausado'}
                                         </Label>
@@ -1531,18 +1428,13 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                             />
                                         </div>
 
-                                        {/* DESCRIPCIÓN (COMPACTO + BOTÓN ABRIR) */}
-                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
-                                            <div className="min-w-0 flex-1 space-y-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Label className="text-xs font-semibold text-foreground">
-                                                        Descripción del beneficio
-                                                    </Label>
-                                                    <InfoTooltip text="Detalla qué incluye este beneficio para el cliente." />
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
-                                                    {newDescripcion?.trim() || 'Sin descripción configurada.'}
-                                                </p>
+                                        {/* DESCRIPCIÓN (SOLO TEXTO Y BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Descripción del beneficio
+                                                </Label>
+                                                <InfoTooltip text="Detalla qué incluye este beneficio para el cliente." />
                                             </div>
                                             <Button
                                                 type="button"
@@ -1554,25 +1446,20 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     newDescripcion,
                                                     (val) => setNewDescripcion(val)
                                                 )}
-                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                                className="h-7.5 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
                                             >
                                                 <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
                                                 <span>Abrir</span>
                                             </Button>
                                         </div>
 
-                                        {/* TÉRMINOS Y CONDICIONES (COMPACTO + BOTÓN ABRIR) */}
-                                        <div className="flex items-center justify-between gap-3 p-3 rounded-xl border border-border/60 bg-muted/15">
-                                            <div className="min-w-0 flex-1 space-y-0.5">
-                                                <div className="flex items-center gap-1.5">
-                                                    <Label className="text-xs font-semibold text-foreground">
-                                                        Términos y condiciones
-                                                    </Label>
-                                                    <InfoTooltip text="Condiciones o restricciones aplicables para hacer válido este beneficio." />
-                                                </div>
-                                                <p className="text-[11px] text-muted-foreground truncate font-sans">
-                                                    {newTerminos?.trim() || 'Sin términos y condiciones configurados.'}
-                                                </p>
+                                        {/* TÉRMINOS Y CONDICIONES (SOLO TEXTO Y BOTÓN ABRIR) */}
+                                        <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <Label className="text-xs font-semibold text-foreground">
+                                                    Términos y condiciones
+                                                </Label>
+                                                <InfoTooltip text="Condiciones o restricciones aplicables para hacer válido este beneficio." />
                                             </div>
                                             <Button
                                                 type="button"
@@ -1584,7 +1471,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                                     newTerminos,
                                                     (val) => setNewTerminos(val)
                                                 )}
-                                                className="h-8 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
+                                                className="h-7.5 px-3 text-xs font-semibold gap-1.5 shrink-0 cursor-pointer"
                                             >
                                                 <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
                                                 <span>Abrir</span>
@@ -1592,67 +1479,466 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                         </div>
 
                                         {/* FECHA LÍMITE DE VIGENCIA */}
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border bg-muted/15 border-border/60">
-                                            <div className="flex items-center gap-2">
+                                        <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                                            <div className="flex items-center gap-2 min-w-0">
                                                 <Switch
                                                     id="new-expiry-toggle"
                                                     checked={newHasExpiry}
                                                     onCheckedChange={setNewHasExpiry}
-                                                    className="scale-90"
+                                                    className="scale-90 shrink-0"
                                                 />
-                                                <div>
-                                                    <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-semibold text-foreground">
-                                                        Fecha límite de vigencia
-                                                    </Label>
-                                                    <p className="text-[11px] text-muted-foreground font-sans">
-                                                        {newHasExpiry ? 'El beneficio expirará automáticamente en la fecha indicada' : 'Permanente / Sin caducidad'}
-                                                    </p>
-                                                </div>
+                                                <Label htmlFor="new-expiry-toggle" className="text-xs cursor-pointer font-semibold text-foreground truncate">
+                                                    Fecha límite de vigencia
+                                                </Label>
                                             </div>
 
-                                            {newHasExpiry && (
-                                                <div className="flex items-center gap-2 animate-in fade-in duration-200">
-                                                    <Popover modal={true} open={newDatePickerOpen} onOpenChange={setNewDatePickerOpen}>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                className={cn(
-                                                                    "h-8 text-xs px-3 font-normal justify-start text-left bg-background font-sans",
-                                                                    !newFechaLimite && "text-muted-foreground"
-                                                                )}
-                                                            >
-                                                                <CalendarDays className="mr-1.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
-                                                                <span className="truncate">
-                                                                    {parseDateSafe(newFechaLimite)
-                                                                        ? format(parseDateSafe(newFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
-                                                                        : "Seleccionar fecha"}
-                                                                </span>
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0 z-[60] border-2 border-blue-500 rounded-xl shadow-xl" align="start">
-                                                            <Calendar
-                                                                mode="single"
-                                                                selected={parseDateSafe(newFechaLimite)}
-                                                                onSelect={(date) => {
-                                                                    if (date) {
-                                                                        setNewFechaLimite(format(date, 'yyyy-MM-dd'));
-                                                                        setNewDatePickerOpen(false);
-                                                                    }
-                                                                }}
-                                                                disabled={(date) => {
-                                                                    const today = new Date();
-                                                                    today.setHours(0, 0, 0, 0);
-                                                                    return date < today;
-                                                                }}
-                                                                initialFocus
-                                                                locale={es}
-                                                            />
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                </div>
+                                            {newHasExpiry ? (
+                                                <Popover modal={true} open={newDatePickerOpen} onOpenChange={setNewDatePickerOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            className={cn(
+                                                                "h-7.5 text-xs px-3 font-semibold justify-start text-left bg-background font-sans shrink-0 gap-1.5 cursor-pointer",
+                                                                !newFechaLimite && "text-muted-foreground"
+                                                            )}
+                                                        >
+                                                            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                                                            <span className="truncate">
+                                                                {parseDateSafe(newFechaLimite)
+                                                                    ? format(parseDateSafe(newFechaLimite)!, "dd 'de' MMM, yyyy", { locale: es })
+                                                                    : "Seleccionar fecha"}
+                                                            </span>
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-0 z-[60] border-2 border-blue-500 rounded-xl shadow-xl" align="end">
+                                                        <Calendar
+                                                            mode="single"
+                                                            selected={parseDateSafe(newFechaLimite)}
+                                                            onSelect={(date) => {
+                                                                if (date) {
+                                                                    setNewFechaLimite(format(date, 'yyyy-MM-dd'));
+                                                                    setNewDatePickerOpen(false);
+                                                                }
+                                                            }}
+                                                            disabled={(date) => {
+                                                                const today = new Date();
+                                                                today.setHours(0, 0, 0, 0);
+                                                                return date < today;
+                                                            }}
+                                                            initialFocus
+                                                            locale={es}
+                                                        />
+                                                    </PopoverContent>
+                                                </Popover>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground font-sans shrink-0">
+                                                    Permanente / Sin caducidad
+                                                </span>
                                             )}
                                         </div>
+
+                                        {/* SI ES EL BENEFICIO DE ALFA COINS: DÍAS DOBLES / TRIPLES INTEGRADO */}
+                                        {((newTitle || '').toLowerCase().includes('alfa coin') ||
+                                         (benefitId || '').toLowerCase().includes('coin') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('alfa coin')) && (
+                                            <div className="rounded-xl border border-border/80 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <Flame className={cn("h-4 w-4 shrink-0 transition-colors", multiplicadorConfig.activo ? "text-blue-500" : "text-slate-400")} />
+                                                        <div>
+                                                            <h5 className="text-xs font-bold text-foreground">
+                                                                Días de Alfa Coins al Doble (2x) o Triple (3x)
+                                                            </h5>
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Multiplica las monedas acumuladas en compras presenciales en sucursal.
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2 shrink-0">
+                                                        <Label htmlFor="coins-mult-toggle" className="text-xs font-medium cursor-pointer text-muted-foreground">
+                                                            {multiplicadorConfig.activo ? 'Activo' : 'Inactivo'}
+                                                        </Label>
+                                                        <Switch
+                                                            id="coins-mult-toggle"
+                                                            checked={multiplicadorConfig.activo}
+                                                            onCheckedChange={(checked) =>
+                                                                setMultiplicadorConfig((prev) => ({ ...prev, activo: checked }))
+                                                            }
+                                                            className="scale-90"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* CONTROLES EN FILA CÓMODA Y ELEGANTE */}
+                                                <div className={cn("space-y-3 transition-opacity", !multiplicadorConfig.activo && "opacity-50 pointer-events-none")}>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                                                        {/* MULTIPLICADOR: CONTROL SEGMENTADO */}
+                                                        <div className="sm:col-span-5 space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">
+                                                                Multiplicador
+                                                            </Label>
+                                                            <div className="flex p-1 rounded-xl bg-muted/40 border border-border/60 gap-1 w-full">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setMultiplicadorConfig((prev) => ({
+                                                                        ...prev,
+                                                                        multiplicador: 2,
+                                                                        mensaje_promo: (prev.mensaje_promo || '').includes('TRIPLE')
+                                                                            ? '¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!'
+                                                                            : (prev.mensaje_promo || ''),
+                                                                    }))}
+                                                                    className={cn(
+                                                                        "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                                                                        multiplicadorConfig.multiplicador === 2
+                                                                            ? "bg-[#202A49] text-white shadow-xs font-bold"
+                                                                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                                                    )}
+                                                                >
+                                                                    <span>2x Doble</span>
+                                                                    <span className="text-[10px] opacity-75 font-normal">($1 = 2)</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setMultiplicadorConfig((prev) => ({
+                                                                        ...prev,
+                                                                        multiplicador: 3,
+                                                                        mensaje_promo: (prev.mensaje_promo || '').includes('DOBLE')
+                                                                            ? '¡Hoy tus compras generan el TRIPLE (3x) de Alfa Coins en cualquier sucursal!'
+                                                                            : (prev.mensaje_promo || ''),
+                                                                    }))}
+                                                                    className={cn(
+                                                                        "flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                                                                        multiplicadorConfig.multiplicador === 3
+                                                                            ? "bg-[#202A49] text-white shadow-xs font-bold"
+                                                                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                                                                    )}
+                                                                >
+                                                                    <span>3x Triple</span>
+                                                                    <span className="text-[10px] opacity-75 font-normal">($1 = 3)</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* DÍAS DE LA SEMANA: PÍLDORAS CALENDARIO */}
+                                                        <div className="sm:col-span-7 space-y-1.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-xs font-semibold text-foreground">
+                                                                    Días de la semana
+                                                                </Label>
+                                                                <span className="text-[10px] text-muted-foreground">
+                                                                    Toca para activar
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid grid-cols-7 gap-1">
+                                                                {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                                                                    const isSelected = multiplicadorConfig.dias_semana.includes(dayIdx);
+                                                                    const isToday = new Date().getDay() === dayIdx;
+                                                                    return (
+                                                                        <button
+                                                                            key={dayIdx}
+                                                                            type="button"
+                                                                            onClick={() => handleToggleDayOfWeek(dayIdx)}
+                                                                            className={cn(
+                                                                                "h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex flex-col items-center justify-center",
+                                                                                isSelected
+                                                                                    ? "bg-blue-600 text-white border-blue-500 shadow-2xs font-bold"
+                                                                                    : "bg-muted/20 border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+                                                                            )}
+                                                                            title={DAY_NAMES_ES[dayIdx]}
+                                                                        >
+                                                                            <span className="leading-none">{DAY_NAMES_ES[dayIdx].slice(0, 3)}</span>
+                                                                            {isToday && (
+                                                                                <span className={cn(
+                                                                                    "w-1 h-1 rounded-full mt-0.5",
+                                                                                    isSelected ? "bg-white" : "bg-blue-500"
+                                                                                )} />
+                                                                            )}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* MENSAJE PROMOCIONAL */}
+                                                    <div className="space-y-1 pt-1">
+                                                        <Label className="text-xs font-semibold text-foreground">
+                                                            Mensaje de aviso en la App Móvil (Opcional)
+                                                        </Label>
+                                                        <Input
+                                                            value={multiplicadorConfig.mensaje_promo || ''}
+                                                            onChange={(e) => setMultiplicadorConfig((prev) => ({ ...prev, mensaje_promo: e.target.value }))}
+                                                            placeholder="Ej. ¡Hoy tus compras generan el DOBLE (2x) de Alfa Coins en cualquier sucursal!"
+                                                            className="h-8.5 text-xs font-sans"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* SI ES EL BENEFICIO DE NIVELES PASE ALFA: CONFIGURACIÓN COMPLETA DE ALFA MEMBER, ALFA GOLD Y ALFA VIP */}
+                                        {((newTitle || '').toLowerCase().includes('nivel') ||
+                                         (benefitId || '').toLowerCase().includes('nivel') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('nivel')) && (
+                                            <div className={cn(
+                                                "rounded-xl border border-border/60 bg-muted/15 transition-all",
+                                                isNivelesAjustesOpen ? "p-3 sm:p-3.5 space-y-3.5" : "p-2.5 sm:px-3.5 sm:py-2.5"
+                                            )}>
+                                                <div
+                                                    onClick={() => setIsNivelesAjustesOpen(!isNivelesAjustesOpen)}
+                                                    className="flex items-center justify-between cursor-pointer select-none group h-7.5"
+                                                >
+                                                    <h5 className="text-xs font-bold text-foreground tracking-wide uppercase">
+                                                        AJUSTE DE NIVELES
+                                                    </h5>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsNivelesAjustesOpen(!isNivelesAjustesOpen);
+                                                        }}
+                                                        className="text-slate-400 group-hover:text-white transition-colors h-7.5 w-7.5 flex items-center justify-center rounded-lg hover:bg-white/10 cursor-pointer"
+                                                        title={isNivelesAjustesOpen ? 'Minimizar' : 'Maximizar'}
+                                                    >
+                                                        {isNivelesAjustesOpen ? (
+                                                            <ChevronUp className="w-4 h-4" />
+                                                        ) : (
+                                                            <ChevronDown className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                </div>
+
+                                                {isNivelesAjustesOpen && (
+                                                    <div className="space-y-3.5 pt-3 border-t border-border/50">
+                                                        {/* CRITERIO DE ASCENSO */}
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-xs font-semibold text-foreground">Criterio de Ascenso de Nivel</Label>
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setNivelesConfig((prev) => ({ ...prev, criterio: 'ambos_opcional' }))}
+                                                                    className={cn(
+                                                                        "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between",
+                                                                        nivelesConfig.criterio === 'ambos_opcional'
+                                                                            ? "border-blue-500 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold shadow-xs"
+                                                                            : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-xs font-bold text-foreground">Visitas O Gasto Total</span>
+                                                                        {nivelesConfig.criterio === 'ambos_opcional' && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                                                    </div>
+                                                                    <span className="text-[10px] text-muted-foreground mt-0.5">El cliente sube al cumplir cualquiera de los 2</span>
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setNivelesConfig((prev) => ({ ...prev, criterio: 'visitas' }))}
+                                                                    className={cn(
+                                                                        "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between",
+                                                                        nivelesConfig.criterio === 'visitas'
+                                                                            ? "border-blue-500 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold shadow-xs"
+                                                                            : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-xs font-bold text-foreground">Solo por Visitas / Sellos</span>
+                                                                        {nivelesConfig.criterio === 'visitas' && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                                                    </div>
+                                                                    <span className="text-[10px] text-muted-foreground mt-0.5">Sube al completar los servicios requeridos</span>
+                                                                </button>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setNivelesConfig((prev) => ({ ...prev, criterio: 'gasto' }))}
+                                                                    className={cn(
+                                                                        "p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between",
+                                                                        nivelesConfig.criterio === 'gasto'
+                                                                            ? "border-blue-500 bg-blue-500/10 text-blue-500 dark:text-blue-400 font-semibold shadow-xs"
+                                                                            : "border-border/60 bg-muted/20 text-muted-foreground hover:border-border"
+                                                                    )}
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="text-xs font-bold text-foreground">Solo por Dinero Gastado ($)</span>
+                                                                        {nivelesConfig.criterio === 'gasto' && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                                                    </div>
+                                                                    <span className="text-[10px] text-muted-foreground mt-0.5">Sube por el total facturado en la barbería</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* PESTAÑAS DE LOS 3 NIVELES */}
+                                                        <div className="space-y-3 pt-1">
+                                                            <Tabs value={activeNivelTab} onValueChange={(val: any) => setActiveNivelTab(val)}>
+                                                                <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-muted/40 rounded-xl">
+                                                                    <TabsTrigger
+                                                                        value="member"
+                                                                        className="text-xs font-bold gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                                                                    >
+                                                                        <Award className="w-3.5 h-3.5" />
+                                                                        <span>{nivelesConfig.member.nombre || 'Alfa Member'}</span>
+                                                                    </TabsTrigger>
+                                                                    <TabsTrigger
+                                                                        value="gold"
+                                                                        className="text-xs font-bold gap-1.5 data-[state=active]:bg-[#C5A880] data-[state=active]:text-black"
+                                                                    >
+                                                                        <Star className="w-3.5 h-3.5" />
+                                                                        <span>{nivelesConfig.gold.nombre || 'Alfa Gold'}</span>
+                                                                    </TabsTrigger>
+                                                                    <TabsTrigger
+                                                                        value="vip"
+                                                                        className="text-xs font-bold gap-1.5 data-[state=active]:bg-[#10172b] data-[state=active]:text-white"
+                                                                    >
+                                                                        <Crown className="w-3.5 h-3.5 text-[#C5A880]" />
+                                                                        <span>{nivelesConfig.vip.nombre || 'Alfa Black VIP'}</span>
+                                                                    </TabsTrigger>
+                                                                </TabsList>
+
+                                                                {(['member', 'gold', 'vip'] as const).map((tierKey) => {
+                                                                    const tier = nivelesConfig[tierKey];
+                                                                    return (
+                                                                        <TabsContent key={tierKey} value={tierKey} className="space-y-3 mt-3">
+                                                                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-start">
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-xs font-semibold text-foreground h-5 flex items-center">
+                                                                                        Nombre del Nivel
+                                                                                    </Label>
+                                                                                    <Input
+                                                                                        value={tier.nombre}
+                                                                                        onChange={(e) => updateNivelField(tierKey, 'nombre', e.target.value)}
+                                                                                        className="h-8.5 text-xs font-semibold font-sans text-foreground w-full"
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-xs font-semibold text-foreground h-5 flex items-center">
+                                                                                        Visitas Mínimas
+                                                                                    </Label>
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        min={0}
+                                                                                        max={100}
+                                                                                        value={tier.visitasMin}
+                                                                                        disabled={tierKey === 'member'}
+                                                                                        onChange={(e) => updateNivelField(tierKey, 'visitasMin', Math.max(0, parseInt(e.target.value) || 0))}
+                                                                                        className="h-8.5 text-xs font-semibold font-sans text-foreground w-full"
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-xs font-semibold text-foreground h-5 flex items-center">
+                                                                                        Gasto mínimo
+                                                                                    </Label>
+                                                                                    <Input
+                                                                                        type="text"
+                                                                                        disabled={tierKey === 'member'}
+                                                                                        value={
+                                                                                            tierKey === 'member'
+                                                                                                ? '$ 0.00'
+                                                                                                : focusedGastoKey === tierKey
+                                                                                                    ? (rawGastoInput.startsWith('$') ? rawGastoInput : (rawGastoInput ? `$ ${rawGastoInput}` : '$ '))
+                                                                                                    : `$ ${formatMoney(tier.gastoMin || 0)}`
+                                                                                        }
+                                                                                        onFocus={() => {
+                                                                                            setFocusedGastoKey(tierKey);
+                                                                                            setRawGastoInput(tier.gastoMin ? String(tier.gastoMin) : '');
+                                                                                        }}
+                                                                                        onChange={(e) => {
+                                                                                            const val = e.target.value.replace(/[^0-9.]/g, '');
+                                                                                            setRawGastoInput(val);
+                                                                                            const num = parseFloat(val) || 0;
+                                                                                            updateNivelField(tierKey, 'gastoMin', Math.max(0, num));
+                                                                                        }}
+                                                                                        onBlur={() => {
+                                                                                            setFocusedGastoKey(null);
+                                                                                        }}
+                                                                                        className="h-8.5 text-xs font-semibold font-sans text-foreground w-full"
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-xs font-semibold text-foreground h-5 flex items-center">
+                                                                                        Retorno AlfaCoins
+                                                                                    </Label>
+                                                                                    <div className="relative flex items-center w-full">
+                                                                                        <Input
+                                                                                            type="number"
+                                                                                            min={1}
+                                                                                            max={50}
+                                                                                            step={0.5}
+                                                                                            value={tier.cashbackPct ?? (tierKey === 'member' ? 3 : tierKey === 'gold' ? 5 : 7)}
+                                                                                            onChange={(e) => updateNivelField(tierKey, 'cashbackPct', Math.max(0, parseFloat(e.target.value) || 0))}
+                                                                                            className="h-8.5 text-xs font-semibold font-sans text-foreground pr-7 w-full"
+                                                                                        />
+                                                                                        <span className="absolute right-2.5 text-xs text-muted-foreground font-semibold pointer-events-none select-none">%</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="space-y-1">
+                                                                                <Label className="text-xs font-semibold">Descripción del Estatus</Label>
+                                                                                <Input
+                                                                                    value={tier.descripcion}
+                                                                                    onChange={(e) => updateNivelField(tierKey, 'descripcion', e.target.value)}
+                                                                                    placeholder="Breve explicación de este rango para el cliente..."
+                                                                                    className="h-8.5 text-xs font-sans"
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="space-y-2">
+                                                                                <Label className="text-xs font-semibold">Beneficios exclusivos de este rango</Label>
+                                                                                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                                                                    {tier.beneficios.map((b, bIdx) => (
+                                                                                        <div key={bIdx} className="flex items-center gap-2 p-1.5 px-2.5 rounded-lg border border-border/60 bg-card text-xs">
+                                                                                            <Check className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                                                                                            <span className="flex-1 text-foreground">{b}</span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => removeNivelBeneficio(tierKey, bIdx)}
+                                                                                                className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                                                                                                title="Eliminar beneficio"
+                                                                                            >
+                                                                                                <Trash2 className="w-3 h-3" />
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 pt-1">
+                                                                                    <Input
+                                                                                        value={newTierBenefitText}
+                                                                                        onChange={(e) => setNewTierBenefitText(e.target.value)}
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                e.preventDefault();
+                                                                                                handleAddNivelBeneficio(tierKey);
+                                                                                            }
+                                                                                        }}
+                                                                                        placeholder={`Agregar beneficio para ${tier.nombre}...`}
+                                                                                        className="h-8 text-xs font-sans"
+                                                                                    />
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        variant="outline"
+                                                                                        size="sm"
+                                                                                        onClick={() => handleAddNivelBeneficio(tierKey)}
+                                                                                        className="h-8 w-8 p-0 flex items-center justify-center shrink-0 cursor-pointer rounded-lg border-border/70 hover:bg-muted/40 hover:text-foreground"
+                                                                                        title="Agregar beneficio"
+                                                                                    >
+                                                                                        <Plus className="w-4 h-4 text-slate-300" />
+                                                                                    </Button>
+                                                                                </div>
+                                                                            </div>
+                                                                        </TabsContent>
+                                                                    );
+                                                                })}
+                                                            </Tabs>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* COLUMNA DERECHA: FOTOGRAFÍA / IMAGEN */}
@@ -1673,24 +1959,17 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                             onRemove={() => setNewImagenUrl('')}
                                             onUploadStateChange={setIsUploadingBenefitImage}
                                             multiple={false}
-                                            objectFit="contain"
+                                            objectFit="cover"
+                                            aspectRatio="16/9"
+                                            showPreview={true}
+                                            showRemove={true}
                                             className="w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
                                         />
                                     </div>
                                 </div>
 
-                                {/* BOTONES GUARDAR / CANCELAR BENEFICIO */}
-                                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-3 border-t border-border/50">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleCancelEditBenefit}
-                                        className="text-xs h-8.5 px-4 w-full sm:w-auto cursor-pointer"
-                                    >
-                                        Cancelar
-                                    </Button>
-
+                                {/* BOTÓN GUARDAR BENEFICIO (CANCELAR ELIMINADO COMO SE SOLICITÓ) */}
+                                <div className="flex items-center justify-end pt-3 border-t border-border/50">
                                     <Button
                                         type="button"
                                         onClick={handleSaveBenefit}
@@ -1706,7 +1985,7 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                                         ) : (
                                             <>
                                                 <Save className="w-3.5 h-3.5 mr-1.5" />
-                                                {editingBenefitId === 'new' ? 'Guardar Nuevo Beneficio' : 'Guardar Cambios del Beneficio'}
+                                                Guardar
                                             </>
                                         )}
                                     </Button>
@@ -1714,7 +1993,6 @@ export function PaseAlfaManager({ className, onSaveSuccess }: PaseAlfaManagerPro
                             </div>
                         )}
                     </CardContent>
-                )}
             </Card>
 
             {/* MODAL DE CONFIRMACIÓN PARA ELIMINAR BENEFICIO (ESTILO OFICIAL VATOS ALFA) */}

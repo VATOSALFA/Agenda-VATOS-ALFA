@@ -129,6 +129,22 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
               <span>Total Comisiones</span>
               <span className="text-blue-500 dark:text-blue-400">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
+            {(summary.cashRetainedByBarber || 0) > 0 && (
+              <>
+                <div className="flex justify-between text-xs text-muted-foreground mt-1 font-sans">
+                  <span>(-) Efectivo retenido en estación</span>
+                  <span className="font-semibold text-foreground">-${(summary.cashRetainedByBarber || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold mt-1 pt-1 border-t border-border/40 font-sans">
+                  <span className="text-foreground">Neto a liquidar</span>
+                  <span className={(summary.netPayable ?? summary.totalCommission) >= 0 ? "text-blue-500 dark:text-blue-400" : "text-red-400"}>
+                    {(summary.netPayable ?? summary.totalCommission) >= 0
+                      ? `$${(summary.netPayable ?? summary.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      : `Entrega $${Math.abs(summary.netPayable ?? summary.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -181,6 +197,19 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                     <TableCell colSpan={1} className="py-1.5 px-3"></TableCell>
                     <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-blue-400 font-sans">${summary.totalCommission.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                   </TableRow>
+                  {(summary.cashRetainedByBarber || 0) > 0 && (
+                    <TableRow className="h-9 hover:bg-transparent border-t border-slate-800">
+                      <TableCell colSpan={4} className="py-1.5 px-3 text-right font-medium text-xs text-slate-300 font-sans">
+                        (-) Efectivo retenido en estación: <strong className="text-white">-${(summary.cashRetainedByBarber || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                      </TableCell>
+                      <TableCell className="py-1.5 px-3 text-right font-bold text-xs text-slate-300 uppercase tracking-wider">Neto</TableCell>
+                      <TableCell className={`py-1.5 px-3 text-right font-bold text-xs font-sans ${(summary.netPayable ?? summary.totalCommission) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                        {(summary.netPayable ?? summary.totalCommission) >= 0
+                          ? `$${(summary.netPayable ?? summary.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : `Entrega $${Math.abs(summary.netPayable ?? summary.totalCommission).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableFooter>
               </Table>
             </div>

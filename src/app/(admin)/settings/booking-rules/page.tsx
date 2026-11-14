@@ -147,6 +147,47 @@ export default function BookingRulesPage() {
   const [formAvisoToleranciaMinutos, setFormAvisoToleranciaMinutos] = useState<number>(5);
   const [formAvisoCanal, setFormAvisoCanal] = useState<'whatsapp' | 'pantalla' | 'ambos'>('whatsapp');
 
+  // Modal para edición limpia de descripciones de reglas
+  const [descModal, setDescModal] = useState<{
+    open: boolean;
+    title: string;
+    fieldKey:
+      | 'anticipo_monto_minimo_descripcion'
+      | 'anticipo_horario_apertura_descripcion'
+      | 'penalizacion_inasistencias_descripcion'
+      | 'cancelacion_politica_descripcion';
+    value: string;
+  }>({
+    open: false,
+    title: '',
+    fieldKey: 'anticipo_monto_minimo_descripcion',
+    value: '',
+  });
+
+  const openDescriptionModal = (
+    title: string,
+    fieldKey:
+      | 'anticipo_monto_minimo_descripcion'
+      | 'anticipo_horario_apertura_descripcion'
+      | 'penalizacion_inasistencias_descripcion'
+      | 'cancelacion_politica_descripcion'
+  ) => {
+    setDescModal({
+      open: true,
+      title,
+      fieldKey,
+      value: rules[fieldKey] || '',
+    });
+  };
+
+  const saveDescriptionModal = () => {
+    setRules((prev) => ({
+      ...prev,
+      [descModal.fieldKey]: descModal.value,
+    }));
+    setDescModal((prev) => ({ ...prev, open: false }));
+  };
+
   const toggleSection = (
     section: 'general' | 'openingHour' | 'antifraud' | 'cancellation' | 'timing' | 'agendaNotices' | 'customRules'
   ) => {
@@ -756,16 +797,11 @@ export default function BookingRulesPage() {
   }
 
   return (
-    <div className="space-y-2.5 pb-12">
+    <div className="space-y-3.5 pb-12 max-w-5xl">
       {/* HEADER DE LA PÁGINA */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
-        <div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground">Reglas de Reservas</h3>
-          <p className="text-xs text-muted-foreground">
-            Políticas de anticipos, escudo contra inasistencias (*no-shows*), tolerancias de agenda y cancelaciones.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+      <div className="flex items-center justify-between gap-3 pb-2.5 border-b border-border/60">
+        <h2 className="text-xl font-bold tracking-tight text-foreground uppercase">REGLAS DE RESERVAS</h2>
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             type="button"
             onClick={handleSave}
@@ -913,27 +949,30 @@ export default function BookingRulesPage() {
               </div>
 
               {/* CAMPO DE DESCRIPCIÓN Y NOTAS DE LA REGLA */}
-              <div className="col-span-1 md:col-span-2 space-y-1.5 pt-1">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                  Descripción y motivo de la regla (recordatorio del negocio)
-                </Label>
-                <Textarea
-                  rows={2}
-                  className="text-xs font-normal leading-relaxed resize-none"
-                  placeholder="Explica a qué se refiere esta regla general de anticipo..."
-                  value={rules.anticipo_monto_minimo_descripcion || ''}
-                  disabled={!rules.anticipo_monto_minimo_activo}
-                  onChange={(e) =>
-                    setRules((prev) => ({
-                      ...prev,
-                      anticipo_monto_minimo_descripcion: e.target.value,
-                    }))
-                  }
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Documenta la política general de anticipo por monto acumulado para claridad del equipo.
-                </p>
+              <div className="col-span-1 md:col-span-2 pt-1">
+                <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Descripción y motivo de la regla (recordatorio del negocio)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!rules.anticipo_monto_minimo_activo}
+                    onClick={() =>
+                      openDescriptionModal(
+                        'Descripción: Anticipo Automático por Monto Mínimo',
+                        'anticipo_monto_minimo_descripcion'
+                      )
+                    }
+                    className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                  >
+                    Editar
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -970,13 +1009,6 @@ export default function BookingRulesPage() {
               )}
             </div>
           </div>
-          {!openSections.openingHour && (
-            <p className="text-[11px] text-muted-foreground truncate mt-0.5 pl-6">
-              {rules.anticipo_horario_apertura_activo !== false
-                ? `Activo: Exige ${rules.anticipo_horario_apertura_porcentaje || 50}% de anticipo en todas las citas entre ${rules.anticipo_horario_apertura_hora || '10:00'} y ${rules.anticipo_horario_apertura_hora_fin || '10:30'} AM (Web, App y Agenda)`
-                : 'Desactivado: Las citas de apertura siguen únicamente las reglas generales de monto o servicio'}
-            </p>
-          )}
         </CardHeader>
 
         {openSections.openingHour && (
@@ -1044,27 +1076,30 @@ export default function BookingRulesPage() {
                 </p>
               </div>
 
-              <div className="col-span-1 md:col-span-2 space-y-1.5 pt-1">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                  Descripción y motivo de la regla (recordatorio del negocio)
-                </Label>
-                <Textarea
-                  rows={2}
-                  className="text-xs font-normal leading-relaxed resize-none"
-                  placeholder="Explica el motivo del anticipo en horario de apertura..."
-                  value={rules.anticipo_horario_apertura_descripcion || ''}
-                  disabled={rules.anticipo_horario_apertura_activo === false}
-                  onChange={(e) =>
-                    setRules((prev) => ({
-                      ...prev,
-                      anticipo_horario_apertura_descripcion: e.target.value,
-                    }))
-                  }
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Aplica en Página Web, App Móvil y Agenda Interna para proteger la puntualidad y asistencia del primer turno del día.
-                </p>
+              <div className="col-span-1 md:col-span-3 pt-1">
+                <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Descripción y motivo de la regla (recordatorio del negocio)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={rules.anticipo_horario_apertura_activo === false}
+                    onClick={() =>
+                      openDescriptionModal(
+                        'Descripción: Anticipo en Horario de Apertura',
+                        'anticipo_horario_apertura_descripcion'
+                      )
+                    }
+                    className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                  >
+                    Editar
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1165,27 +1200,30 @@ export default function BookingRulesPage() {
               </div>
 
               {/* CAMPO DE DESCRIPCIÓN Y NOTAS DE LA REGLA */}
-              <div className="col-span-1 md:col-span-2 space-y-1.5 pt-1">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                  Descripción y motivo de la regla (recordatorio del negocio)
-                </Label>
-                <Textarea
-                  rows={2}
-                  className="text-xs font-normal leading-relaxed resize-none"
-                  placeholder="Explica a qué se refiere esta regla para que no se olvide con el paso del tiempo..."
-                  value={rules.penalizacion_inasistencias_descripcion || ''}
-                  disabled={!rules.penalizacion_inasistencias_activa}
-                  onChange={(e) =>
-                    setRules((prev) => ({
-                      ...prev,
-                      penalizacion_inasistencias_descripcion: e.target.value,
-                    }))
-                  }
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Esta descripción documenta para todo el equipo de recepción y administración la razón de ser de este escudo contra inasistencias.
-                </p>
+              <div className="col-span-1 md:col-span-2 pt-1">
+                <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Descripción y motivo de la regla (recordatorio del negocio)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!rules.penalizacion_inasistencias_activa}
+                    onClick={() =>
+                      openDescriptionModal(
+                        'Descripción: Escudo Antifraude e Inasistencias',
+                        'penalizacion_inasistencias_descripcion'
+                      )
+                    }
+                    className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                  >
+                    Editar
+                  </Button>
+                </div>
               </div>
 
               {/* RESUMEN INFORMATIVO DE EXENCIÓN DE ANTICIPO Y PÉRDIDA AUTOMÁTICA A LAS 2 FALTAS */}
@@ -1201,13 +1239,13 @@ export default function BookingRulesPage() {
                 </div>
                 <ul className="list-disc pl-4 space-y-1 text-[11px] text-muted-foreground leading-relaxed">
                   <li>
-                    <strong className="text-foreground">Clientes Exentos de Anticipo:</strong> Los clientes marcados manualmente como <em>Exento de Anticipo</em> en la Base de Clientes (o vía Janet) quedan exentos de todas las reglas de anticipo (incluyendo franja de apertura 10:00-10:30 AM y servicios mayores a ${rules.anticipo_monto_minimo || 190} MXN).
+                    <strong className="text-foreground">Clientes Exentos de Anticipo:</strong> Los clientes marcados manualmente como <em>Exento de Anticipo</em> en la Base de Clientes (o vía Janeth) quedan exentos de todas las reglas de anticipo (incluyendo franja de apertura 10:00-10:30 AM y servicios mayores a ${rules.anticipo_monto_minimo || 190} MXN).
                   </li>
                   <li>
                     <strong className="text-foreground">Pérdida automática del beneficio a la 2.ª falta:</strong> Si un cliente exento acumula <strong>1 inasistencia (No asiste)</strong>, conserva su beneficio con advertencia; si acumula una <strong>2.ª inasistencia</strong>, el sistema revoca automáticamente su exención y vuelve a exigirle anticipo.
                   </li>
                   <li>
-                    <strong className="text-foreground">Exención por única ocasión en recepción:</strong> Para omitir el anticipo en una cita puntual sin marcar al cliente como exento permanente, recepción debe ingresar un <strong>Código de Autorización de 4 dígitos de un solo uso</strong> (generado en <em>Códigos de Autorización</em> o solicitándolo a Janet) junto con el motivo.
+                    <strong className="text-foreground">Exención por única ocasión en recepción:</strong> Para omitir el anticipo en una cita puntual sin marcar al cliente como exento permanente, recepción debe ingresar un <strong>Código de Autorización de 4 dígitos de un solo uso</strong> (generado en <em>Códigos de Autorización</em> o solicitándolo a Janeth) junto con el motivo.
                   </li>
                 </ul>
               </div>
@@ -1334,27 +1372,30 @@ export default function BookingRulesPage() {
               </div>
 
               {/* CAMPO DE DESCRIPCIÓN Y NOTAS DE LA REGLA */}
-              <div className="col-span-1 md:col-span-3 space-y-1.5 pt-1">
-                <Label className="text-xs font-semibold flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-                  Descripción y respaldo legal de la política (Términos y Condiciones)
-                </Label>
-                <Textarea
-                  rows={2}
-                  className="text-xs font-normal leading-relaxed resize-none"
-                  placeholder="Explica la política de cancelación y retención de anticipo..."
-                  value={rules.cancelacion_politica_descripcion || ''}
-                  disabled={!rules.cancelacion_politica_activa}
-                  onChange={(e) =>
-                    setRules((prev) => ({
-                      ...prev,
-                      cancelacion_politica_descripcion: e.target.value,
-                    }))
-                  }
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Esta política está alineada con la sección 4 de los Términos y Condiciones oficiales de VATOS ALFA visibles en el proceso de reserva online.
-                </p>
+              <div className="col-span-1 md:col-span-3 pt-1">
+                <div className="flex items-center justify-between gap-3 p-2.5 sm:px-3.5 sm:py-2.5 rounded-xl border border-border/60 bg-muted/15">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate">
+                      Descripción y respaldo legal de la política (Términos y Condiciones)
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!rules.cancelacion_politica_activa}
+                    onClick={() =>
+                      openDescriptionModal(
+                        'Descripción: Política de Cancelación y Retención',
+                        'cancelacion_politica_descripcion'
+                      )
+                    }
+                    className="h-7.5 px-3 text-xs font-semibold rounded-lg shrink-0 border-border/80 hover:bg-[#202A49] hover:text-white transition-colors cursor-pointer"
+                  >
+                    Editar
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -2610,6 +2651,67 @@ export default function BookingRulesPage() {
               {editingAvisoRuleId ? 'Actualizar Regla de Aviso' : 'Guardar Regla de Aviso'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL OFICIAL PARA DESCRIPCIONES DE REGLAS */}
+      <Dialog
+        open={descModal.open}
+        onOpenChange={(open) => !open && setDescModal((prev) => ({ ...prev, open: false }))}
+      >
+        <DialogContent
+          hideCloseButton={true}
+          className="p-0 overflow-hidden max-w-2xl w-[95vw] max-h-[85vh] flex flex-col rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)]"
+        >
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800 shrink-0">
+            <div className="header-light-beam" aria-hidden="true" />
+            <div className="relative z-10 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <FileText className="h-4 w-4 text-slate-300 shrink-0" />
+                <DialogTitle className="text-sm font-bold text-white tracking-tight">
+                  {descModal.title}
+                </DialogTitle>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDescModal((prev) => ({ ...prev, open: false }))}
+                className="p-1 text-slate-300 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-white/10 ml-2"
+                aria-label="Cerrar modal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col min-h-0 space-y-2 p-4 sm:p-5 overflow-y-auto">
+            <Textarea
+              value={descModal.value}
+              onChange={(e) => setDescModal((prev) => ({ ...prev, value: e.target.value }))}
+              placeholder="Explica a qué se refiere esta regla y su motivo..."
+              className="flex-1 min-h-[180px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500"
+            />
+          </div>
+
+          <div className="p-3 sm:p-4 bg-muted/15 border-t border-border/50 flex items-center justify-end gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDescModal((prev) => ({ ...prev, open: false }))}
+              className="h-8 text-xs cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="alfa"
+              size="sm"
+              onClick={saveDescriptionModal}
+              className="h-8 text-xs font-semibold cursor-pointer"
+            >
+              Aplicar Cambios
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

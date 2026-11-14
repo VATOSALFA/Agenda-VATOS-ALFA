@@ -1317,7 +1317,11 @@ export function NivelesAlfaManager() {
                                 currentImageUrl={config.imagenUrl || DEFAULT_NIVELES_IMAGE_URL}
                                 onUpload={(url) => setConfig((prev) => ({ ...prev, imagenUrl: url }))}
                                 onRemove={() => setConfig((prev) => ({ ...prev, imagenUrl: DEFAULT_NIVELES_IMAGE_URL }))}
-                                className="max-w-full"
+                                aspectRatio="16/9"
+                                showPreview={true}
+                                showRemove={true}
+                                objectFit="cover"
+                                className="w-full aspect-video border-2 border-dashed rounded-xl bg-slate-950/90 hover:bg-slate-950 transition-all cursor-pointer shadow-2xs"
                             />
                             <p className="text-[10px] text-muted-foreground leading-snug">
                                 Esta imagen se muestra en la tarjeta de niveles dentro de la sección Beneficios de la app móvil y del sitio web.

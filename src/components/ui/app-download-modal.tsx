@@ -73,7 +73,7 @@ export function AppDownloadModal({
                         <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
                             <div className="flex items-start gap-2">
                                 <Award className="w-4 h-4 text-[#C5A880] shrink-0 mt-0.5" />
-                                <span><strong className="text-foreground font-semibold">Pase Alfa Digital:</strong> Acumula sellos por tus cortes y obtén tu 10.ª visita totalmente gratis.</span>
+                                <span><strong className="text-foreground font-semibold">PASE ALFA:</strong> Acumula sellos por tus cortes y obtén tu 10.ª visita totalmente gratis.</span>
                             </div>
                             <div className="flex items-start gap-2">
                                 <Calendar className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />

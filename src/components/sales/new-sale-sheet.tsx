@@ -244,7 +244,7 @@ const ResumenCarrito = ({
         appliedBenefit,
     });
     return (
-    <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-auto md:h-full md:min-h-0 shrink-0 md:shrink overflow-hidden">
+    <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-full min-h-0 flex-1 overflow-hidden">
         {/* Cabecera del Ticket */}
         <div className="p-3 sm:p-3.5 border-b border-border/60 flex justify-between items-center shrink-0 bg-muted/20">
             <div className="flex items-center gap-2">
@@ -288,8 +288,8 @@ const ResumenCarrito = ({
             </div>
         )}
 
-        <ScrollArea className="flex-grow">
-            <div className="p-3 sm:p-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
+            <div className="p-3 sm:p-4 space-y-3 flex-1">
                 {cart.length === 0 ? (
                     <div className="text-center py-10 space-y-2">
                         <ShoppingCart className="h-8 w-8 text-slate-400 mx-auto opacity-40" />
@@ -437,7 +437,6 @@ const ResumenCarrito = ({
                     </>
                 )}
             </div>
-        </ScrollArea>
 
         {/* Acciones directas si aún no hay beneficio activo */}
         {!appliedBenefit && (
@@ -837,6 +836,7 @@ const ResumenCarrito = ({
                 </div>
             </div>
         )}
+        </div>
     </div>
     );
 };
@@ -2019,10 +2019,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setReservationId(initialData.reservationId || undefined);
             const initialCartItems: CartItem[] = initialData.items.map(item => {
                 const tipo = 'duration' in item ? 'servicio' : 'producto';
-                // Prioritize 'precio' (manually edited during reservation) over master price list
-                const precio = (item as any).precio || (tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price);
+                // Prioritize 'precio_original' or 'precio' over master price list
+                const precio = (item as any).precio_original || (item as any).precio || (tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price);
                 const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
                 const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
+                const rawDiscVal = (item as any).discountValue ?? (item as any).descuento_porcentaje;
                 return {
                     uniqueId: crypto.randomUUID(),
                     id: item.id,
@@ -2036,7 +2037,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     hora_inicio: (item as any).hora_inicio || null,
                     hora_fin: (item as any).hora_fin || null,
                     professional_lock: (item as any).professional_lock || null,
-                    duracion: (item as any).duracion || (item as any).duration || 0
+                    duracion: (item as any).duracion || (item as any).duration || 0,
+                    discountValue: rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? String(rawDiscVal) : undefined,
+                    discountType: (item as any).discountType || (rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? 'percentage' : undefined),
                 };
             });
             setCart(initialCartItems);
@@ -2059,7 +2062,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 );
             setAnticipoPagado(passedDeposit);
 
-            // Double security: If there is a reservationId, fetch reservation from DB to verify actual payment state
+            // Double security: If there is a reservationId, fetch reservation from DB to verify actual payment state and promotion discounts
             if (initialData.reservationId && db) {
                 getDoc(doc(db, 'reservas', initialData.reservationId)).then(snap => {
                     if (snap.exists()) {
@@ -2084,6 +2087,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         );
                         const dbDeposit = isResDepositPaid ? rawDbDeposit : 0;
                         setAnticipoPagado(dbDeposit);
+
+                        // Hydrate promotion discount from reservation if present
+                        const resPromoPct = Number(res.descuento_porcentaje || 0);
+                        const resDbItems = Array.isArray(res.items) ? res.items : [];
+                        const hasItemDiscounts = resDbItems.some((it: any) => Number(it.discountValue || it.descuento_porcentaje || 0) > 0);
+                        if (resPromoPct > 0 || hasItemDiscounts) {
+                            setCart(prev => prev.map(cartIt => {
+                                if (cartIt.tipo !== 'servicio') return cartIt;
+                                const matchDbIt = resDbItems.find((dIt: any) => dIt.id === cartIt.id || dIt.nombre === cartIt.nombre);
+                                const itemPct = Number(matchDbIt?.discountValue || matchDbIt?.descuento_porcentaje || resPromoPct || 0);
+                                if (itemPct <= 0) return cartIt;
+                                const origPrice = Number(matchDbIt?.precio_original || matchDbIt?.precio || cartIt.precio || 0);
+                                return {
+                                    ...cartIt,
+                                    precio: origPrice > 0 ? origPrice : cartIt.precio,
+                                    discountValue: String(itemPct),
+                                    discountType: (matchDbIt?.discountType as 'fixed' | 'percentage') || 'percentage',
+                                };
+                            }));
+                        }
                     }
                 }).catch(console.error);
             }
@@ -2251,7 +2274,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
                     }
 
-                    if (stampAdded || pointsEarned > 0) {
+                    const didLevelUp = Boolean(
+                        nivelesConfig?.activo !== false &&
+                        nextEvaluated.tierId !== prevEvaluated.tierId &&
+                        (nextEvaluated.tierId === 'gold' || nextEvaluated.tierId === 'vip')
+                    );
+
+                    if (stampAdded || pointsEarned > 0 || didLevelUp) {
                         const prevCoins = Number(
                             targetClient.alfaCoins ??
                             targetClient.alfa_coins ??
@@ -2275,6 +2304,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             multiplicador_aplicado: coinsMult,
                             coins_anteriores: prevCoins,
                             coins_actuales: newCoinsTotal,
+                            nivel_ascendido: didLevelUp,
+                            nivel_anterior: prevEvaluated.tierName,
+                            nivel_nuevo: nextEvaluated.tierName,
+                            nivel_nuevo_id: nextEvaluated.tierId,
                             fecha: new Date().toISOString(),
                         };
                     }
@@ -3970,7 +4003,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                                 {/* COLUMNA 1: CATÁLOGO */}
                                 <div className={cn(
-                                    "md:col-span-3 lg:col-span-2 flex flex-col gap-3 md:min-h-0 flex-1 overflow-hidden",
+                                    "md:col-span-3 lg:col-span-2 flex flex-col gap-3 min-h-0 flex-1 overflow-hidden",
                                     mobileTab === 'carrito' && "hidden md:flex"
                                 )} style={{ minHeight: 0 }}>
                                     <div className="flex-shrink-0">
@@ -4197,9 +4230,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                                 {/* COLUMNA 2: RESUMEN CARRITO */}
                                 <div className={cn(
-                                    "md:col-span-2 lg:col-span-1 flex flex-col md:min-h-0 flex-1 overflow-hidden",
+                                    "md:col-span-2 lg:col-span-1 flex flex-col min-h-0 flex-1 overflow-hidden",
                                     mobileTab === 'catalogo' && "hidden md:flex"
-                                )}>
+                                )} style={{ minHeight: 0 }}>
                                     <ResumenCarrito
                                         cart={cart}
                                         subtotal={subtotal}

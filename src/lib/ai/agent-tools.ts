@@ -1346,11 +1346,14 @@ export const anotarListaEsperaTool = ai.defineTool(
 export const reagendarCitaTool = ai.defineTool(
   {
     name: 'reagendar_cita',
-    description: 'Reagenda o cambia la fecha y hora de una cita existente de un cliente.',
+    description:
+      'Modifica o reagenda una cita existente de un cliente (permite cambiar el servicio por otro servicio o paquete conservando su horario si hay espacio, o cambiar fecha y hora) SIN cancelar ni crear una cita nueva.',
     inputSchema: z.object({
-      citaId: z.string().describe('ID de la reserva existente a reagendar'),
-      nuevaFecha: z.string().describe('Nueva fecha en formato AAAA-MM-DD'),
-      nuevaHora: z.string().describe('Nueva hora en formato HH:mm (ejemplo 16:30)'),
+      citaId: z.string().optional().describe('ID de la reserva existente a modificar o reagendar'),
+      telefono: z.string().optional().describe('Teléfono del cliente si no se tiene el citaId'),
+      nuevaFecha: z.string().optional().describe('Nueva fecha en formato AAAA-MM-DD (opcional si conserva la misma fecha)'),
+      nuevaHora: z.string().optional().describe('Nueva hora en formato HH:mm (opcional si solo desea cambiar el servicio manteniendo su hora actual)'),
+      nuevoServicio: z.string().optional().describe('Nombre o ID del nuevo servicio o paquete si el cliente desea cambiar el servicio de su cita'),
       profesionalId: z.string().optional().describe('ID opcional del barbero si desea cambiar de profesional'),
     }),
     outputSchema: z.object({
@@ -1358,59 +1361,131 @@ export const reagendarCitaTool = ai.defineTool(
       mensaje: z.string(),
     }),
   },
-  async ({ citaId, nuevaFecha, nuevaHora, profesionalId }) => {
+  async ({ citaId, telefono, nuevaFecha, nuevaHora, nuevoServicio, profesionalId }) => {
     try {
       const db = getDb();
-      await validateAgentBooking(nuevaFecha, nuevaHora);
-      const reservation = await getClientReservation(citaId);
+      const reservation = await getClientReservation(citaId, telefono);
       const ref = reservation.ref;
       const data = reservation.data();
+      const targetCitaId = reservation.id;
+
+      const targetFecha = nuevaFecha || data.fecha;
+      const targetHora = nuevaHora || data.hora_inicio;
+      await validateAgentBooking(targetFecha, targetHora);
+
       const originalProf = data.barbero_id || data.profesionalId;
       const finalProf = profesionalId || originalProf;
       const items: any[] = data.items || [];
-      if (items.some(item => item.barbero_id && item.barbero_id !== originalProf)) throw new Error('Esta cita incluye varios profesionales. Recepción debe coordinar el cambio.');
-      if (finalProf !== originalProf) throw new Error('Para cambiar de profesional en una cita existente, solicita apoyo de recepción para recalcular duración y servicios.');
+      if (items.some(item => item.barbero_id && item.barbero_id !== originalProf)) {
+        throw new Error('Esta cita incluye varios profesionales. Recepción debe coordinar el cambio.');
+      }
+
       const minutes = (time: string) => Number(time.split(':')[0]) * 60 + Number(time.split(':')[1]);
-      const duration = minutes(data.hora_fin || '') - minutes(data.hora_inicio || '');
-      if (!Number.isFinite(duration) || duration <= 0) throw new Error('No se pudo determinar la duración de la cita. Solicita apoyo de recepción.');
-      if (data.fecha === nuevaFecha && data.hora_inicio === nuevaHora) return { exito: true, mensaje: 'La cita ya está registrada en ese horario.' };
-      const slots = await getAvailableSlots({ date: nuevaFecha, professionalId: finalProf, durationMinutes: duration });
-      if (!('slots' in slots) || !slots.slots?.includes(nuevaHora)) throw new Error('Ese horario no está disponible para la duración completa de la cita. Consulta otro horario.');
-      const end = minutes(nuevaHora) + duration;
+      let duration = minutes(data.hora_fin || '') - minutes(data.hora_inicio || '');
+      let updatedServiceName = data.servicio || 'Corte de cabello';
+      let updatedServiceId = data.servicio_id || '';
+      let updatedPrice = Number(data.total || data.precio || 140);
+      let updatedItems = data.items;
+
+      if (nuevoServicio && nuevoServicio.trim()) {
+        const servicesSnap = await db.collection('servicios').get();
+        const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const qNorm = norm(nuevoServicio);
+        const matchedDoc = servicesSnap.docs.find(d => {
+          const sData = d.data();
+          const sName = norm(sData.name || sData.nombre || '');
+          return d.id === nuevoServicio || sName === qNorm || sName.includes(qNorm) || qNorm.includes(sName.replace(/^\d+\s+/, ''));
+        });
+
+        if (matchedDoc) {
+          const sData = matchedDoc.data();
+          updatedServiceId = matchedDoc.id;
+          updatedServiceName = sData.name || sData.nombre || nuevoServicio;
+          updatedPrice = Number(sData.price ?? sData.precio ?? updatedPrice);
+          const customDur = sData.durationPorProfesional?.[finalProf] ?? sData.duracionPorProfesional?.[finalProf];
+          duration = Number(customDur || sData.duration || sData.duracion || 30);
+          const endMinsTemp = minutes(targetHora) + duration;
+          const endTimeTemp = `${Math.floor(endMinsTemp / 60).toString().padStart(2, '0')}:${(endMinsTemp % 60).toString().padStart(2, '0')}`;
+          updatedItems = [
+            {
+              id: updatedServiceId,
+              nombre: updatedServiceName,
+              servicio: updatedServiceName,
+              precio: updatedPrice,
+              duracion: duration,
+              barbero_id: finalProf,
+              hora_inicio: targetHora,
+              hora_fin: endTimeTemp,
+              tipo: 'servicio',
+              cantidad: 1,
+            },
+          ];
+        }
+      }
+
+      if (!Number.isFinite(duration) || duration <= 0) {
+        duration = Number(data.duracion || 30);
+      }
+
+      const end = minutes(targetHora) + duration;
       const endTime = `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`;
+
       await db.runTransaction(async transaction => {
         const fresh = await transaction.get(ref);
         const current = fresh.data();
-        const sameDay = await transaction.get(db.collection('reservas').where('fecha', '==', nuevaFecha));
-        if (!current || !isUpcomingReservation(current) || current.fecha !== data.fecha || current.hora_inicio !== data.hora_inicio || current.hora_fin !== data.hora_fin || current.barbero_id !== data.barbero_id || current.cliente_id !== data.cliente_id || current.cliente_telefono !== data.cliente_telefono) throw new Error('La cita cambió durante la operación. Consulta sus datos nuevamente.');
-        const conflict = sameDay.docs.some(doc => {
-          const other = doc.data();
-          if (doc.id === citaId || /cancelad|no asiste/i.test(other.estado || '')) return false;
-          const sameBarber = other.barbero_id === finalProf || other.profesionalId === finalProf || other.items?.some((item: any) => item.barbero_id === finalProf);
-          return sameBarber && nuevaHora < other.hora_fin && endTime > other.hora_inicio;
+        const sameDay = await transaction.get(db.collection('reservas').where('fecha', '==', targetFecha));
+        if (!current || !isUpcomingReservation(current)) {
+          throw new Error('La cita cambió o ya no está activa. Consulta sus datos nuevamente.');
+        }
+        const conflict = sameDay.docs.some(docSnap => {
+          const other = docSnap.data();
+          if (docSnap.id === targetCitaId || /cancelad|no asiste/i.test(other.estado || '')) return false;
+          const sameBarber =
+            other.barbero_id === finalProf ||
+            other.profesionalId === finalProf ||
+            other.items?.some((item: any) => item.barbero_id === finalProf);
+          return sameBarber && targetHora < other.hora_fin && endTime > other.hora_inicio;
         });
-        if (conflict) throw new Error('El horario acaba de ocuparse. Consulta otra opción.');
-        transaction.update(ref, {
-          fecha: nuevaFecha,
-          hora_inicio: nuevaHora,
+        if (conflict) {
+          throw new Error(
+            `El servicio "${updatedServiceName}" requiere ${duration} minutos y a las ${targetHora} ya no hay espacio suficiente porque hay otra cita después. Por favor consulta los horarios disponibles para proponerle el más próximo.`
+          );
+        }
+
+        const anticipoPagado = Number(current.anticipo_pagado || current.anticipoPagado || 0);
+        const updatePayload: Record<string, any> = {
+          fecha: targetFecha,
+          hora_inicio: targetHora,
           hora_fin: endTime,
+          duracion: duration,
+          duracionMinutos: duration,
           barbero_id: finalProf,
           profesionalId: finalProf,
-          confirmada_por_cliente: false,
-          whatsappConfirmationSent: false,
+          servicio: updatedServiceName,
+          servicio_nombre: updatedServiceName,
+          ...(updatedServiceId ? { servicio_id: updatedServiceId } : {}),
+          total: updatedPrice,
+          totalAmount: updatedPrice,
+          precio: updatedPrice,
+          saldo_pendiente: Math.max(0, updatedPrice - anticipoPagado),
+          ...(updatedItems ? { items: updatedItems } : {}),
           etiqueta_recordatorio: 'reagendada',
           updated_at: new Date(),
-          notas: (current.notas || '') + ` | Reagendada a ${nuevaFecha} ${nuevaHora} por Asistente Virtual Janet`,
-        });
+          notas:
+            (current.notas || '') +
+            ` | Modificada (${updatedServiceName}, ${targetFecha} ${targetHora}-${endTime}) por Asistente Virtual Janet`,
+        };
+
+        transaction.update(ref, updatePayload);
       });
 
       return {
         exito: true,
-        mensaje: `¡Cita reagendada con éxito para el ${nuevaFecha} a las ${nuevaHora}!`,
+        mensaje: `¡Cita actualizada con éxito! Servicio: ${updatedServiceName} (${duration} min) para el ${targetFecha} de ${targetHora} a ${endTime} hrs. Total: $${updatedPrice.toFixed(2)} MXN.`,
       };
     } catch (e: any) {
       console.error('Error in reagendar_cita:', e);
-      return { exito: false, mensaje: e.message || 'Error al reagendar la cita.' };
+      return { exito: false, mensaje: e.message || 'Error al modificar o reagendar la cita.' };
     }
   }
 );

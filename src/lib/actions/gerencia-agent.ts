@@ -941,6 +941,7 @@ export async function executeApprovedGerenciaAction({
             transaction.update(reservationRef, {
               estado: resData.estado === 'Cancelado' ? 'Reservado' : resData.estado || 'Reservado',
               pago_estado: 'pendiente',
+              pagado: false,
               monto_anticipo: 0,
               anticipo_pagado: 0,
               anticipoPagado: 0,
@@ -948,18 +949,37 @@ export async function executeApprovedGerenciaAction({
               monto_pagado_real: 0,
               saldo_pendiente: Number(resData.total || resData.precio || 0),
               deposit_payment_id: null,
+              deposit_paid_at: null,
+              fecha_pago: null,
               metodo_pago_anticipo: null,
               anticipo_en_sucursal: true,
               tolerancia_anticipo_extendida: true,
             });
           } else {
-            const anticipo = Number(resData.anticipo_pagado || 0);
-            const total = Number(resData.total || 0);
+            const rawAnticipo = Number(resData.anticipo_pagado || resData.anticipoPagado || 0);
+            const hasSeparateDeposit = Boolean(
+              rawAnticipo > 0 &&
+              resData.deposit_payment_id &&
+              resData.deposit_payment_id !== saleRef.id
+            );
+            const anticipo = hasSeparateDeposit ? rawAnticipo : 0;
+            const total = Number(resData.total || resData.precio || 0);
             transaction.update(reservationRef, {
               estado: 'Reservado',
               pago_estado: anticipo > 0 ? 'deposit_paid' : 'pendiente',
+              pagado: false,
               saldo_pendiente: total > anticipo ? total - anticipo : total,
               monto_pagado: anticipo,
+              monto_pagado_real: anticipo,
+              monto_anticipo: anticipo,
+              anticipo_pagado: anticipo,
+              anticipoPagado: anticipo,
+              ...(anticipo === 0 ? {
+                deposit_payment_id: null,
+                deposit_paid_at: null,
+                fecha_pago: null,
+                metodo_pago_anticipo: null,
+              } : {}),
             });
           }
         }

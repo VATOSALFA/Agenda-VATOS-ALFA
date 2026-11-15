@@ -2116,8 +2116,8 @@ export default function BookingPage() {
                                                     <div className="mt-4 space-y-3 text-left">
                                                         {/* Opción A: Próximo horario con el profesional actual */}
                                                         {nextProSlot && (
-                                                            <div className="p-3.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100">
-                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">
+                                                            <div className="p-3.5 rounded-xl border-2 border-blue-500/40 bg-blue-500/10 text-foreground">
+                                                                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
                                                                     <Sparkles className="w-3.5 h-3.5" />
                                                                     <span>Horario más próximo con {professionals.find(p => p.id === preSelectedProId)?.publicName || professionals.find(p => p.id === preSelectedProId)?.name || 'tu barbero'}:</span>
                                                                 </div>
@@ -2126,7 +2126,7 @@ export default function BookingPage() {
                                                                 </p>
                                                                 <Button
                                                                     size="sm"
-                                                                    className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs h-8 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                                                                    className="w-full mt-2 bg-[#202A49] hover:bg-[#18223c] text-white font-semibold text-xs h-8 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
                                                                     onClick={() => {
                                                                         const [y, m, d] = nextProSlot.date.split('-').map(Number);
                                                                         const parsedDate = new Date(y, m - 1, d);
@@ -2160,7 +2160,7 @@ export default function BookingPage() {
                                                                                 </div>
                                                                                 <div className="min-w-0">
                                                                                     <p className="text-xs font-bold truncate text-foreground">{pro.publicName || pro.name}</p>
-                                                                                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Disponible hoy desde {earliestSlot} hrs ({slotsCount} {slotsCount === 1 ? 'turno' : 'turnos'})</p>
+                                                                                    <p className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">Disponible hoy desde {earliestSlot} hrs ({slotsCount} {slotsCount === 1 ? 'turno' : 'turnos'})</p>
                                                                                 </div>
                                                                             </div>
                                                                             <Button

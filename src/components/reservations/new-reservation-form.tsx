@@ -1041,7 +1041,13 @@ export function NewReservationForm({
           ? initialData.professional_lock
           : (isEditMode && (initialData.canal_reserva?.startsWith('web_publica') || initialData.origen?.startsWith('web_publica') || false))
       );
-      const existingPaidAmt = isEditMode ? Number(
+      const isPendingPaymentState = !initialData.pago_estado ||
+        initialData.pago_estado === 'pendiente' ||
+        initialData.pago_estado === 'Pendiente' ||
+        initialData.pago_estado === 'pendiente_anticipo' ||
+        initialData.pago_estado === 'pending_payment' ||
+        initialData.pago_estado === 'no_pagado';
+      const existingPaidAmt = (isEditMode && !isPendingPaymentState) ? Number(
         (initialData as any).anticipo_pagado ||
         (initialData as any).anticipoPagado ||
         (initialData as any).monto_pagado_real ||
@@ -1050,8 +1056,10 @@ export function NewReservationForm({
         0
       ) : 0;
       const isAlreadyPaidOrDeposit = Boolean(
-        isEditMode && (
+        isEditMode && !isPendingPaymentState && (
           initialData.pago_estado === 'Pagado' ||
+          initialData.pago_estado === 'deposit_paid' ||
+          initialData.pago_estado === 'anticipo_pagado' ||
           existingPaidAmt > 0
         )
       );
@@ -1068,6 +1076,41 @@ export function NewReservationForm({
       } else {
         setManualDepositAmount('');
         setManualDepositEnabled(false);
+      }
+
+      // Verificar en Firestore si el pago/anticipo realmente sigue activo en `ventas` y no fue eliminado
+      if (isEditMode && initialData.id && db && (isAlreadyPaidOrDeposit || Number((initialData as any).monto_pagado_real || (initialData as any).anticipo_pagado || 0) > 0)) {
+        const resId = String(initialData.id);
+        const verifyActiveSale = async () => {
+          try {
+            const activeSalesSnap = await getDocs(
+              query(collection(db, 'ventas'), where('reservationId', '==', resId))
+            );
+            const hasValidSale = activeSalesSnap.docs.some(d => {
+              const sData = d.data();
+              return sData.estado_venta !== 'cancelada' && sData.status !== 'cancelled';
+            });
+            if (!hasValidSale) {
+              setDepositPaid(false);
+              setManualDepositAmount('');
+              setManualDepositEnabled(false);
+              // Limpiar campos residuales en la reserva para que no revivan pagos eliminados
+              await updateDoc(doc(db, 'reservas', resId), {
+                pago_estado: 'pendiente',
+                pagado: false,
+                monto_pagado: 0,
+                monto_pagado_real: 0,
+                monto_anticipo: 0,
+                anticipo_pagado: 0,
+                anticipoPagado: 0,
+                deposit_payment_id: null,
+                deposit_paid_at: null,
+                fecha_pago: null,
+              }).catch(() => {});
+            }
+          } catch (_) {}
+        };
+        verifyActiveSale();
       }
       setIsDepositRuleExpanded(false);
       setIsSendLinkModalOpen(false);
@@ -1381,19 +1424,24 @@ export function NewReservationForm({
 
       const primaryBarberoId = itemsToSave.find((i: any) => i.barbero_id)?.barbero_id || (initialData as any)?.barbero_id || '';
 
-      const existingDepositPaidAmount = isEditMode
+      const isInitialPendingState = !initialData?.pago_estado ||
+        initialData?.pago_estado === 'pendiente' ||
+        initialData?.pago_estado === 'Pendiente' ||
+        initialData?.pago_estado === 'pendiente_anticipo' ||
+        initialData?.pago_estado === 'pending_payment' ||
+        initialData?.pago_estado === 'no_pagado';
+      const existingDepositPaidAmount = (isEditMode && !isInitialPendingState && depositPaid)
         ? Number((initialData as any)?.anticipo_pagado || (initialData as any)?.anticipoPagado || (initialData as any)?.monto_anticipo || (initialData as any)?.monto_pagado_real || 0)
         : 0;
-      const isInitialAlreadyPaid = isEditMode && (
+      const isInitialAlreadyPaid = Boolean(isEditMode && !isInitialPendingState && depositPaid && (
         initialData?.pago_estado === 'Pagado' ||
         initialData?.pago_estado === 'deposit_paid' ||
         initialData?.pago_estado === 'anticipo_pagado' ||
-        existingDepositPaidAmount > 0 ||
-        Boolean((initialData as any)?.deposit_paid_at || (initialData as any)?.deposit_payment_id)
-      );
+        existingDepositPaidAmount > 0
+      ));
       const rawEffectiveDepositPaid = data._depositPaidOverride !== undefined
         ? data._depositPaidOverride
-        : (depositPaid || isInitialAlreadyPaid);
+        : depositPaid;
       const itemsSumTotal = itemsToSave.reduce((acc: number, it: any) => acc + (Number(it.precio) || 0), 0);
       const totalPrecioNum = Math.max(Number(data.precio) || 0, itemsSumTotal);
 

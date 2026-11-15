@@ -954,7 +954,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                             {clientLevel}
                           </Badge>
                         </div>
-                        <h4 className="text-xl font-bold text-white mt-1">Pase Alfa Digital • {liveClient.nombre}</h4>
+                        <h4 className="text-xl font-bold text-white mt-1">PASE ALFA • {liveClient.nombre}</h4>
                         <p className="text-xs text-gray-300">
                           {stamps} de 10 visitas registradas en sucursales oficiales de VATOS ALFA Barber Shop
                         </p>

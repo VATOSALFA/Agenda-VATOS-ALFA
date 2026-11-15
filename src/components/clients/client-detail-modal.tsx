@@ -383,10 +383,10 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
   const clientLevel = hasAppLinked ? clientLevelInfo.nombre : 'Sin Nivel';
 
-  const attendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length : (client.citas_asistidas || 0);
-  const unattendedAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'No asiste').length : (client.citas_no_asistidas || 0);
-  const cancelledAppointments = (!reservationsLoading && reservations) ? reservations.filter(r => r.estado === 'Cancelado').length : (client.citas_canceladas || 0);
-  const totalAppointments = (!reservationsLoading && reservations) ? reservations.length : (client.citas_totales || 0);
+  const attendedAppointments = (!reservationsLoading && reservations) ? Math.max(reservations.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length, Number(liveClient.citas_asistidas || (liveClient as any).citasAsistidas || (liveClient as any).visitas_totales || 0)) : (liveClient.citas_asistidas || 0);
+  const unattendedAppointments = (!reservationsLoading && reservations) ? Math.max(reservations.filter(r => r.estado === 'No asiste').length, Number(liveClient.citas_no_asistidas || (liveClient as any).citasNoAsistidas || 0)) : (liveClient.citas_no_asistidas || 0);
+  const cancelledAppointments = (!reservationsLoading && reservations) ? Math.max(reservations.filter(r => r.estado === 'Cancelado').length, Number(liveClient.citas_canceladas || (liveClient as any).citasCanceladas || 0)) : (liveClient.citas_canceladas || 0);
+  const totalAppointments = (!reservationsLoading && reservations) ? Math.max(reservations.length, Number(liveClient.citas_totales || (liveClient as any).citasTotales || attendedAppointments + unattendedAppointments + cancelledAppointments || 0)) : (liveClient.citas_totales || 0);
 
   const SortableHeader = ({ label, sortKey, config, onSort, className, align = 'left' }: { 
     label: string; 
@@ -728,7 +728,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     {clientLevelInfo.nextNombre && (
                       <div className="text-[10px] text-slate-300 bg-white/5 rounded px-2 py-1 flex items-center justify-between">
                         <span className="text-slate-400">Próximo rango:</span>
-                        <span className="font-semibold text-amber-300">
+                        <span className="font-semibold text-blue-400">
                           {clientLevelInfo.faltanVisitas > 0 ? `${clientLevelInfo.faltanVisitas} visitas` : ''}
                           {clientLevelInfo.faltanVisitas > 0 && clientLevelInfo.faltaGasto > 0 ? ' o ' : ''}
                           {clientLevelInfo.faltaGasto > 0 ? `$${clientLevelInfo.faltaGasto.toLocaleString('es-MX')}` : ''}

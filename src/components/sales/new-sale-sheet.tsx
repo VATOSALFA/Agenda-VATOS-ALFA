@@ -405,7 +405,7 @@ const ResumenCarrito = ({
                                     <span className="flex items-center gap-1.5 flex-wrap">
                                         <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
                                         {activeCoinsMultiplier?.isActive && (
-                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-sans">
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 font-sans">
                                                 🔥 {activeCoinsMultiplier.shortBadge}
                                             </span>
                                         )}

@@ -156,9 +156,27 @@ export async function GET(
     }
 
     const db = getDb();
-    const resDoc = await db.collection('reservas').doc(reservationId).get();
+    let resDoc = await db.collection('reservas').doc(reservationId).get();
+
+    // Si se pasó el folio (ej. VA-312104) en vez del ID de documento de Firestore, buscar por folio
+    if (!resDoc.exists) {
+      const qFolio = await db
+        .collection('reservas')
+        .where('folio', '==', reservationId)
+        .limit(1)
+        .get();
+      if (!qFolio.empty) {
+        resDoc = qFolio.docs[0];
+      }
+    }
 
     if (!resDoc.exists) {
+      if (wantsJson) {
+        return NextResponse.json(
+          { error: 'Reserva no encontrada', reservationId },
+          { status: 404 }
+        );
+      }
       return new NextResponse(
         renderStatusHtml(
           'Cita no disponible',
@@ -170,11 +188,18 @@ export async function GET(
       );
     }
 
+    const resolvedDocId = resDoc.id;
     const resData = resDoc.data() || {};
     const estado = String(resData.estado || '').trim();
     const pagoEstado = String(resData.pago_estado || '').trim();
 
     if (estado === 'Cancelado' || estado === 'Cancelada' || estado === 'No_asiste') {
+      if (wantsJson) {
+        return NextResponse.json(
+          { error: 'Cita cancelada o caducada', reservationId: resolvedDocId },
+          { status: 410 }
+        );
+      }
       return new NextResponse(
         renderStatusHtml(
           'Enlace Caducado',
@@ -195,13 +220,27 @@ export async function GET(
           '¡Anticipo ya confirmado!',
           'El anticipo de tu cita ya fue registrado exitosamente. ¡Te esperamos en VATOS ALFA!',
           'Ver detalles',
-          `https://vatosalfa.com/reserva/confirmada?reservation_id=${reservationId}`
+          `https://vatosalfa.com/reserva/confirmada?reservation_id=${resolvedDocId}`
         ),
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
 
-    // Si ya existe un link generado hace menos de 25 minutos, reutilizarlo de inmediato
+    const itemsSum = Array.isArray(resData.items)
+      ? resData.items.reduce(
+          (acc: number, it: any) =>
+            acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1),
+          0
+        )
+      : 0;
+    const totalAmount = Number(resData.total || resData.precio || itemsSum || 0);
+    const depositAmount =
+      Number(resData.anticipo_esperado || resData.monto_anticipo || 0) ||
+      Math.round(totalAmount * 0.5) ||
+      100;
+    const targetAmount = mode === 'full' && totalAmount > 0 ? totalAmount : depositAmount;
+
+    // Si ya existe un link generado hace menos de 25 minutos Y por el mismo monto exacto, reutilizarlo de inmediato
     const existingLink =
       mode === 'full'
         ? resData.mercado_pago_link_total
@@ -209,11 +248,15 @@ export async function GET(
     const linkCreatedAtMs = Number(
       mode === 'full' ? resData.mercado_pago_link_total_ts : resData.mercado_pago_link_ts
     ) || 0;
+    const cachedLinkAmount = Number(
+      mode === 'full' ? resData.mercado_pago_link_total_amount : resData.mercado_pago_link_amount
+    ) || 0;
+    const sameAmount = !cachedLinkAmount || cachedLinkAmount === targetAmount;
 
-    if (existingLink && linkCreatedAtMs > 0 && Date.now() - linkCreatedAtMs < 25 * 60 * 1000) {
+    if (existingLink && sameAmount && linkCreatedAtMs > 0 && Date.now() - linkCreatedAtMs < 25 * 60 * 1000) {
       if (wantsJson) {
         return NextResponse.json({
-          id: mode === 'full' ? resData.mercado_pago_preference_id_total || reservationId : resData.mercado_pago_preference_id || reservationId,
+          id: mode === 'full' ? resData.mercado_pago_preference_id_total || resolvedDocId : resData.mercado_pago_preference_id || resolvedDocId,
           initPoint: existingLink,
         });
       }
@@ -231,25 +274,11 @@ export async function GET(
           'Error temporal de conexión',
           'No se pudo conectar con la pasarela de pago en este momento. Intenta de nuevo en unos segundos.',
           'Reintentar',
-          `https://vatosalfa.com/p/${reservationId}`
+          `https://vatosalfa.com/p/${resolvedDocId}`
         ),
         { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
-
-    const itemsSum = Array.isArray(resData.items)
-      ? resData.items.reduce(
-          (acc: number, it: any) =>
-            acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1),
-          0
-        )
-      : 0;
-    const totalAmount = Number(resData.total || resData.precio || itemsSum || 0);
-    const depositAmount =
-      Number(resData.anticipo_esperado || resData.monto_anticipo || 0) ||
-      Math.round(totalAmount * 0.5) ||
-      100;
-    const targetAmount = mode === 'full' && totalAmount > 0 ? totalAmount : depositAmount;
 
     const servicesText =
       Array.isArray(resData.items) && resData.items.length > 0
@@ -288,7 +317,7 @@ export async function GET(
             ? { phone: { area_code: '52', number: clientPhone } }
             : {}),
         },
-        external_reference: reservationId,
+        external_reference: resolvedDocId,
         statement_descriptor: 'VATOS ALFA',
         expires: true,
         expiration_date_from: new Date().toISOString(),
@@ -304,7 +333,7 @@ export async function GET(
         },
         auto_return: 'approved',
         metadata: {
-          reservation_id: reservationId,
+          reservation_id: resolvedDocId,
         },
         notification_url: 'https://vatosalfa.com/api/mercado-pago-webhook',
       },
@@ -313,18 +342,21 @@ export async function GET(
     if (prefResult.init_point) {
       await db
         .collection('reservas')
-        .doc(reservationId)
+        .doc(resolvedDocId)
         .update({
           ...(mode === 'full'
             ? {
                 mercado_pago_link_total: prefResult.init_point,
                 mercado_pago_preference_id_total: prefResult.id,
                 mercado_pago_link_total_ts: Date.now(),
+                mercado_pago_link_total_amount: targetAmount,
               }
             : {
                 mercado_pago_link: prefResult.init_point,
+                link_pago: prefResult.init_point,
                 mercado_pago_preference_id: prefResult.id,
                 mercado_pago_link_ts: Date.now(),
+                mercado_pago_link_amount: targetAmount,
               }),
           anticipo_esperado: depositAmount,
           requiere_anticipo: true,
@@ -333,7 +365,7 @@ export async function GET(
 
       if (wantsJson) {
         return NextResponse.json({
-          id: prefResult.id || reservationId,
+          id: prefResult.id || resolvedDocId,
           initPoint: prefResult.init_point,
           sandboxInitPoint: prefResult.sandbox_init_point,
         });

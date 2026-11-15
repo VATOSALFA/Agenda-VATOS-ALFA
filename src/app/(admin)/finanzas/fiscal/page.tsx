@@ -32,6 +32,7 @@ import {
     Save, 
     HelpCircle,
     ChevronLeft,
+    ChevronDown,
     ChevronRight,
     Calculator,
     CheckCircle2,
@@ -82,6 +83,11 @@ interface DeclaracionFiscalData {
     isrPagadoFinal?: number;
     ivaPagadoFinal?: number;
     totalPagadoFinal?: number;
+    facturaGlobalSellada?: boolean;
+    folioFacturaGlobal?: string;
+    fechaFacturaGlobal?: string;
+    montoFacturaGlobal?: number;
+    pasoActivo?: 'paso1' | 'paso2' | 'paso3' | 'historial';
 }
 
 // Registros oficiales de Declaraciones y Acuses SAT 2026
@@ -257,8 +263,8 @@ export default function ControlFiscalResicoPage() {
     // Estado de persistencia en Firestore para el mes
     const [fiscalData, setFiscalData] = useState<DeclaracionFiscalData>({
         estado: 'pendiente',
-        estrategia: 'bancarizado',
-        montoPersonalizado: 3200,
+        estrategia: 'personalizado',
+        montoPersonalizado: 4255,
         porcentajeEfectivo: 20,
         comisionMercadoPagoFacturada: 2100,
         ivaComisionesAcreditable: 289.65,
@@ -274,6 +280,9 @@ export default function ControlFiscalResicoPage() {
     const [copiedField, setCopiedField] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [facturaStepsDone, setFacturaStepsDone] = useState<Record<string, boolean>>({});
+    const [cfdiWizardStep, setCfdiWizardStep] = useState<number>(1);
+    const [inputFolioFactura, setInputFolioFactura] = useState<string>('7d91d883-a75f-4847-a22a-ef7ca6bb2022');
+    const [isSection3Minimized, setIsSection3Minimized] = useState<boolean>(true);
     const [activeTab, setActiveTab] = useState<'paso1' | 'paso2' | 'paso3' | 'historial'>('paso1');
 
     const toggleStep = (stepKey: string) => {
@@ -305,8 +314,8 @@ export default function ControlFiscalResicoPage() {
                 } else {
                     setFiscalData({
                         estado: 'pendiente',
-                        estrategia: 'bancarizado',
-                        montoPersonalizado: 3200,
+                        estrategia: 'personalizado',
+                        montoPersonalizado: 4255,
                         porcentajeEfectivo: 20,
                         comisionMercadoPagoFacturada: 2100,
                         ivaComisionesAcreditable: 289.65,
@@ -330,8 +339,8 @@ export default function ControlFiscalResicoPage() {
             } else {
                 setFiscalData({
                     estado: 'pendiente',
-                    estrategia: 'bancarizado',
-                    montoPersonalizado: 3200,
+                    estrategia: 'personalizado',
+                    montoPersonalizado: 4255,
                     porcentajeEfectivo: 20,
                     comisionMercadoPagoFacturada: 2100,
                     ivaComisionesAcreditable: 289.65,
@@ -541,6 +550,50 @@ export default function ControlFiscalResicoPage() {
         setTimeout(() => setCopiedField(null), 2000);
     };
 
+        const handleGuardarFacturaYAvanzar = async (customFolio?: string) => {
+        const folioToSave = (customFolio || inputFolioFactura || '7d91d883-a75f-4847-a22a-ef7ca6bb2022').trim();
+        setIsSaving(true);
+        try {
+            const dataToSave = {
+                declaracion_fiscal: {
+                    ...fiscalData,
+                    estrategia: 'personalizado' as const,
+                    montoPersonalizado: Number(montoADeclararBruto.toFixed(2)),
+                    montoDeclaradoFinal: Number(montoADeclararBruto.toFixed(2)),
+                    facturaGlobalSellada: true,
+                    folioFacturaGlobal: folioToSave,
+                    fechaFacturaGlobal: '2026-11-14 17:35:43',
+                    montoFacturaGlobal: Number(montoADeclararBruto.toFixed(2)),
+                    pasoActivo: 'paso2' as const,
+                    updatedAt: Timestamp.now(),
+                }
+            };
+            if (db) {
+                await setDoc(doc(db, 'finanzas_mensuales', monthDocId), dataToSave, { merge: true });
+            }
+            if (typeof window !== 'undefined') {
+                localStorage.setItem(`fiscal_tab_${monthDocId}`, 'paso2');
+                localStorage.setItem(`fiscal_folio_${monthDocId}`, folioToSave);
+            }
+            setFiscalData(prev => ({
+                ...prev,
+                ...dataToSave.declaracion_fiscal,
+            }));
+            setInputFolioFactura(folioToSave);
+            setActiveTab('paso2');
+            toast({
+                title: "Factura Global Guardada con Éxito",
+                description: `Folio ${folioToSave.slice(0, 8)}... registrado. Al volver a entrar, la agenda te abrirá directo en el Paso 2.`,
+            });
+            window.scrollTo({ top: 350, behavior: 'smooth' });
+        } catch (err) {
+            console.error("Error saving factura data:", err);
+            setActiveTab('paso2');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleSaveFiscalData = async () => {
         if (!db) return;
         setIsSaving(true);
@@ -654,38 +707,21 @@ export default function ControlFiscalResicoPage() {
                         )}
                     </Badge>
 
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 text-xs border-border/60 text-foreground hover:bg-muted/20 gap-1.5"
-                        onClick={() => window.open('https://www.sat.gob.mx/declaracion/74744/presenta-tus-declaraciones-provisionales-o-definitivas-de-personas-fisicas', '_blank')}
-                    >
-                        <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                        Portal del SAT
-                    </Button>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <button type="button" className="h-8 px-2.5 text-xs border border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/20 rounded-md flex items-center gap-1.5 transition-colors">
+                                <HelpCircle className="h-3.5 w-3.5 text-blue-400" />
+                                <span>Ver regla de oro</span>
+                            </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
+                            <p className="font-semibold text-blue-600 dark:text-blue-400 text-xs">Regla de Oro Fiscal RESICO:</p>
+                            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                                Mercado Pago y los bancos reportan automáticamente al SAT el dinero que ingresa a tus cuentas. La regla de oro recomendada es nunca declarar menos de lo bancarizado para evitar discrepancias ante el SAT.
+                            </p>
+                        </PopoverContent>
+                    </Popover>
                 </div>
-            </div>
-
-            {/* AVISO IMPORTANTE DE SEGURIDAD FISCAL (ALTO CONTRASTE TEMA CLARO Y OSCURO) */}
-            <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 dark:bg-blue-950/40 px-3.5 py-2.5 text-xs text-blue-950 dark:text-blue-200 flex items-center justify-between gap-3 shadow-sm">
-                <div className="flex items-center gap-2 min-w-0">
-                    <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                    <span className="truncate sm:whitespace-normal leading-normal">
-                        <strong className="text-blue-950 dark:text-white font-semibold">Estrategia recomendada:</strong> Declarar como base el 100% de lo bancarizado para evitar discrepancias ante el SAT.
-                    </span>
-                </div>
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <button type="button" className="text-[11px] text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 font-semibold underline whitespace-nowrap shrink-0 flex items-center gap-1 transition-colors">
-                            <HelpCircle className="h-3.5 w-3.5" /> Ver regla de oro
-                        </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-3.5 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                            Mercado Pago y los bancos reportan automáticamente al SAT el dinero que ingresa a tus cuentas. La estrategia recomendada de blindaje es declarar como base <strong className="text-foreground">el 100% de lo bancarizado</strong> para evitar discrepancias y multas, mientras administras el efectivo con total discreción.
-                        </p>
-                    </PopoverContent>
-                </Popover>
             </div>
 
             {/* BLOQUE 1: RADIOGRAFÍA DE INGRESOS REALES */}
@@ -831,248 +867,160 @@ export default function ControlFiscalResicoPage() {
                 </div>
             </div>
 
-            {/* BLOQUE 2: ESTRATEGIA DE DECLARACIÓN */}
-            <div className="rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm p-4 shadow-sm space-y-3.5">
-                <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
-                    <div className="flex items-center gap-2">
-                        <Calculator className="h-4 w-4 text-blue-400 shrink-0" />
-                        <h3 className="text-xs sm:text-sm font-bold text-foreground">2. Estrategia de Declaración para el SAT</h3>
+                        {/* BLOQUE 2: ESTRATEGIA DE DECLARACIÓN (UNA SOLA FILA) */}
+            <div className="rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm p-3 shadow-sm flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                {/* 1. Desplegable con 4 opciones */}
+                <div className="flex items-center gap-2 shrink-0">
+                    <Calculator className="h-4 w-4 text-blue-400 shrink-0" />
+                    <span className="text-xs font-bold text-foreground whitespace-nowrap">2. Estrategia:</span>
+                    <div className="w-56 sm:w-64">
+                        <Select 
+                            value={fiscalData.estrategia} 
+                            onValueChange={(val: any) => setFiscalData(prev => ({ 
+                                ...prev, 
+                                estrategia: val,
+                                montoPersonalizado: prev.montoPersonalizado || 4255 
+                            }))}
+                        >
+                            <SelectTrigger className="h-8 text-xs font-semibold bg-background border-border/60 text-foreground hover:border-blue-500 focus:border-blue-500">
+                                <SelectValue placeholder="Seleccionar estrategia" />
+                            </SelectTrigger>
+                            <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
+                                <SelectItem value="personalizado" className="text-xs font-semibold cursor-pointer">
+                                    Opción D: Personalizado
+                                </SelectItem>
+                                <SelectItem value="bancarizado" className="text-xs font-semibold cursor-pointer">
+                                    Opción A: 100% Bancarizado (${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                </SelectItem>
+                                <SelectItem value="bancarizado_mas_efectivo" className="text-xs font-semibold cursor-pointer">
+                                    Opción B: Bancarizado + % Efec. (${(incomeBreakdown.bancarizado + (incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100))).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                </SelectItem>
+                                <SelectItem value="total" className="text-xs font-semibold cursor-pointer">
+                                    Opción C: 100% Ingresos (${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
+
                     <Popover>
                         <PopoverTrigger asChild>
-                            <button type="button" className="text-slate-400 hover:text-foreground flex items-center gap-1 text-xs transition-colors">
-                                <HelpCircle className="h-3.5 w-3.5 text-blue-400" />
-                                <span className="hidden sm:inline text-[11px]">Criterio de cálculo</span>
+                            <button type="button" className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Criterio de cálculo">
+                                <HelpCircle className="h-3.5 w-3.5" />
                             </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs space-y-1.5">
-                            <p className="font-semibold text-blue-600 dark:text-blue-400">Selección de base gravable</p>
-                            <p className="text-muted-foreground text-[11px]">
-                                Selecciona el criterio para determinar el monto bruto de ventas que reportarás en tu factura global mensual ante el SAT.
+                        <PopoverContent className="w-72 p-3 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground text-xs space-y-1.5">
+                            <p className="font-semibold text-blue-600 dark:text-blue-400">Estrategias de Declaración SAT</p>
+                            <p className="text-muted-foreground text-[11px] leading-relaxed">
+                                <strong>Opción D (Predeterminada):</strong> Captura manual directa para declarar exactamente lo timbrado en la Factura Global ($4,255.00 MXN).<br/>
+                                <strong>Opción A:</strong> Total de cobros con tarjeta y transferencia bancaria ($54,803.30 MXN).<br/>
+                                <strong>Opción B:</strong> Cobros bancarizados más un porcentaje de efectivo.<br/>
+                                <strong>Opción C:</strong> El 100% absoluto de ingresos de caja ($107,953.80 MXN).
                             </p>
                         </PopoverContent>
                     </Popover>
                 </div>
 
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                    {/* Opción A: Bancarizado */}
-                    <div 
-                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado' }))}
-                        className={cn(
-                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
-                            fiscalData.estrategia === 'bancarizado'
-                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
-                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
-                        )}
-                    >
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] sm:text-[10px] font-bold text-blue-400 uppercase tracking-wider truncate">
-                                    <span className="sm:hidden">A (REC)</span>
-                                    <span className="hidden sm:inline">A (RECOMENDADA)</span>
-                                </span>
-                                {fiscalData.estrategia === 'bancarizado' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
-                            </div>
-                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
-                                <span className="truncate">100% Bancarizado</span>
-                                <Popover>
-                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
-                                            <HelpCircle className="h-3 w-3" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
-                                        Declara exactamente lo cobrado con tarjeta, transferencia y Mercado Pago. Máximo blindaje contra auditorías bancarias.
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
-                                Blindaje contra discrepancias bancarias.
-                            </p>
-                        </div>
-                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
-                            ${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                    </div>
-
-                    {/* Opción B: Bancarizado + Efectivo parcial */}
-                    <div 
-                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'bancarizado_mas_efectivo' }))}
-                        className={cn(
-                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
-                            fiscalData.estrategia === 'bancarizado_mas_efectivo'
-                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
-                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
-                        )}
-                    >
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN B</span>
-                                {fiscalData.estrategia === 'bancarizado_mas_efectivo' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
-                            </div>
-                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
-                                <span className="truncate">Bancarizado + % Efec.</span>
-                                <Popover>
-                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
-                                            <HelpCircle className="h-3 w-3" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
-                                        Bancarizado más una fracción de efectivo ({fiscalData.porcentajeEfectivo || 20}%) para declarar actividad en caja.
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
-                                Bancarizado + fracción de efectivo ({fiscalData.porcentajeEfectivo || 20}%).
-                            </p>
-                        </div>
-                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
-                            ${(incomeBreakdown.bancarizado + (incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100))).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                    </div>
-
-                    {/* Opción C: Totalidad */}
-                    <div 
-                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'total' }))}
-                        className={cn(
-                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
-                            fiscalData.estrategia === 'total'
-                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
-                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
-                        )}
-                    >
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN C</span>
-                                {fiscalData.estrategia === 'total' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
-                            </div>
-                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
-                                <span className="truncate">100% de Ingresos</span>
-                                <Popover>
-                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
-                                            <HelpCircle className="h-3 w-3" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
-                                        Declara el total absoluto generado en el mes (bancarizado + todo el efectivo de caja).
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
-                                Total absoluto generado en el mes.
-                            </p>
-                        </div>
-                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
-                            ${incomeBreakdown.total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                    </div>
-
-                    {/* Opción D: Personalizado */}
-                    <div 
-                        onClick={() => setFiscalData(prev => ({ ...prev, estrategia: 'personalizado' }))}
-                        className={cn(
-                            "cursor-pointer rounded-xl p-2.5 sm:p-3.5 transition-all flex flex-col justify-between",
-                            fiscalData.estrategia === 'personalizado'
-                                ? "border-2 border-blue-500 bg-blue-500/10 shadow-[0_4px_20px_rgba(59,130,246,0.15)]"
-                                : "border border-border/60 hover:border-slate-500 bg-muted/10"
-                        )}
-                    >
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">OPCIÓN D</span>
-                                {fiscalData.estrategia === 'personalizado' && <Check className="h-3.5 w-3.5 text-blue-400 shrink-0" />}
-                            </div>
-                            <div className="font-semibold text-xs sm:text-sm text-foreground flex items-center justify-between gap-1">
-                                <span className="truncate">Personalizado</span>
-                                <Popover>
-                                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                        <button type="button" className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-0.5 shrink-0">
-                                            <HelpCircle className="h-3 w-3" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 border-2 border-blue-500 rounded-xl shadow-xl bg-card text-foreground text-xs">
-                                        Escribe libremente la cantidad exacta que deseas reportar en este periodo.
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2 hidden sm:block">
-                                Monto manual a declarar.
-                            </p>
-                        </div>
-                        <div className="mt-2 sm:mt-3 text-xs sm:text-sm font-extrabold text-foreground truncate">
-                            ${(fiscalData.montoPersonalizado || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Inputs condicionales para estrategia B o D */}
-                {fiscalData.estrategia === 'bancarizado_mas_efectivo' && (
-                    <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/20 rounded-xl border border-border/60 text-xs">
-                        <Label className="text-xs font-medium text-foreground">Porcentaje de efectivo a sumar:</Label>
-                        <div className="w-20">
-                            <Input 
-                                type="number" 
-                                min={0} 
-                                max={100}
-                                value={fiscalData.porcentajeEfectivo || 20}
-                                onChange={(e) => setFiscalData(prev => ({ ...prev, porcentajeEfectivo: Number(e.target.value) }))}
-                                className="h-7 text-xs"
-                            />
-                        </div>
-                        <span className="text-[11px] text-muted-foreground">% de ${incomeBreakdown.efectivo.toFixed(2)} = ${(incomeBreakdown.efectivo * ((fiscalData.porcentajeEfectivo || 20) / 100)).toFixed(2)}</span>
-                    </div>
-                )}
-
-                {fiscalData.estrategia === 'personalizado' && (
-                    <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-blue-500/10 rounded-xl border border-blue-500/30 text-xs">
-                        <div className="flex items-center gap-2">
-                            <Label className="text-xs font-bold text-foreground">Monto a declarar:</Label>
-                            <div className="w-32 relative">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">$</span>
+                {/* 2. Captura / Selección de Monto en la misma fila */}
+                <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Monto:</span>
+                    {fiscalData.estrategia === 'personalizado' ? (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-28 relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">$</span>
                                 <Input 
                                     type="number" 
                                     min={0} 
                                     value={fiscalData.montoPersonalizado !== undefined && fiscalData.montoPersonalizado !== 0 ? fiscalData.montoPersonalizado : ''}
                                     onChange={(e) => setFiscalData(prev => ({ ...prev, montoPersonalizado: e.target.value === '' ? 0 : Number(e.target.value) }))}
-                                    placeholder="3200"
-                                    className="h-7 pl-6 text-xs font-bold bg-background border-border/60"
+                                    placeholder="4255"
+                                    className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border/60 text-foreground font-sans hover:border-blue-500 focus:border-blue-500"
                                 />
                             </div>
+                            <div className="hidden sm:flex items-center gap-1">
+                                {[3200, 4255].map(preset => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => setFiscalData(prev => ({ ...prev, montoPersonalizado: preset }))}
+                                        className={cn(
+                                            "h-7 px-2 rounded-md border text-[11px] font-sans font-medium transition-colors",
+                                            fiscalData.montoPersonalizado === preset 
+                                                ? "border-blue-500 bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold" 
+                                                : "border-border/60 text-foreground bg-muted/20 hover:bg-muted/40 hover:text-blue-500 dark:hover:text-blue-400"
+                                        )}
+                                    >
+                                        ${preset.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-[11px] text-muted-foreground mr-1">Atajos sugeridos:</span>
-                            {[2900, 3200, 3500, 4000].map((preset) => (
-                                <Button
-                                    key={preset}
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className={cn(
-                                        "h-6 text-[11px] font-medium border-border/60 hover:border-blue-500 px-2",
-                                        fiscalData.montoPersonalizado === preset && "border-blue-500 text-blue-400 font-bold bg-blue-500/10"
-                                    )}
-                                    onClick={() => setFiscalData(prev => ({ ...prev, montoPersonalizado: preset }))}
-                                >
-                                    ${preset.toLocaleString('es-MX')}
-                                </Button>
-                            ))}
+                    ) : fiscalData.estrategia === 'bancarizado_mas_efectivo' ? (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-16">
+                                <Input 
+                                    type="number" 
+                                    min={0} 
+                                    max={100} 
+                                    value={fiscalData.porcentajeEfectivo || 20} 
+                                    onChange={(e) => setFiscalData(prev => ({ ...prev, porcentajeEfectivo: Number(e.target.value) }))} 
+                                    className="h-8 text-xs font-bold text-center bg-background border-border/60 text-foreground font-sans hover:border-blue-500" 
+                                />
+                            </div>
+                            <span className="text-xs text-muted-foreground">% efec.</span>
+                            <span className="text-xs font-bold text-foreground font-sans">
+                                = ${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <div className="px-2.5 py-1 rounded-md bg-muted/20 border border-border/40 font-bold text-xs text-foreground font-sans">
+                            ${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. Total a Pagar SAT en la misma fila */}
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-foreground shrink-0 justify-between lg:justify-end lg:ml-auto">
+                    <span className="text-[11px] text-muted-foreground uppercase font-semibold whitespace-nowrap">Total a Pagar SAT:</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-blue-600 dark:text-blue-400 font-sans tracking-tight whitespace-nowrap">
+                        ${granTotalAPagarSAT.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                    </span>
+                    <span className="text-[10px] text-muted-foreground hidden xl:inline whitespace-nowrap">
+                        (ISR: ${isrRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + IVA: ${ivaRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                    </span>
+                </div>
             </div>
 
             {/* BLOQUE 3: SIMULADOR DE IMPUESTOS (ISR + IVA) */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-xs sm:text-sm font-semibold tracking-wide uppercase text-muted-foreground flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2">
+                    <div className="flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4 text-blue-400" />
-                        3. Cálculo Automático de Impuestos (RESICO)
-                    </h2>
+                        <h2 className="text-xs sm:text-sm font-semibold tracking-wide uppercase text-muted-foreground">
+                            3. Cálculo Automático de Impuestos (RESICO)
+                        </h2>
+                        {isSection3Minimized && (
+                            <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>• Base: <strong className="text-foreground font-sans">${baseGravableSinIVA.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                <span>• ISR: <strong className="text-blue-600 dark:text-blue-400 font-sans">${isrRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                <span>• IVA: <strong className="text-blue-600 dark:text-blue-400 font-sans">${ivaRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Botón Minimizar / Maximizar: SOLO ICONO DE FLECHITA SIN TEXTO */}
+                    <button
+                        type="button"
+                        onClick={() => setIsSection3Minimized(!isSection3Minimized)}
+                        className="h-7 w-7 rounded-lg text-slate-400 hover:text-foreground hover:bg-muted/40 flex items-center justify-center transition-colors border border-border/40 shrink-0"
+                        title={isSection3Minimized ? "Expandir desglose" : "Minimizar desglose"}
+                        aria-label={isSection3Minimized ? "Expandir desglose" : "Minimizar desglose"}
+                    >
+                        <ChevronDown className={cn("h-4 w-4 transition-transform duration-200", !isSection3Minimized && "rotate-180")} />
+                    </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {!isSection3Minimized && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     {/* Tarjeta ISR RESICO */}
                     <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm space-y-3">
                         <div className="flex justify-between items-center border-b border-border/40 pb-2">
@@ -1255,24 +1203,10 @@ export default function ControlFiscalResicoPage() {
                         </div>
                     </div>
                 </div>
-
-                {/* Resumen Total a Pagar */}
-                <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                    <div>
-                        <div className="text-[11px] sm:text-xs uppercase tracking-wider text-slate-300 font-semibold">
-                            Total a Pagar en Línea de Captura SAT ({monthLabel} {selectedYear})
-                        </div>
-                        <div className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
-                            ISR: ${isrRedondeado.toLocaleString('es-MX')} + IVA: ${ivaRedondeado.toLocaleString('es-MX')}
-                        </div>
-                    </div>
-                    <div className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-                        ${granTotalAPagarSAT.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                </div>
+                )}
             </div>
 
-            {/* TABS DE PROCESO Y GUÍA PASO A PASO */}
+{/* TABS DE PROCESO Y GUÍA PASO A PASO */}
             <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full space-y-3">
                 <TabsList className="grid grid-cols-2 sm:grid-cols-4 gap-1 p-1 h-auto bg-card/80 border border-border/60 rounded-xl">
                     <TabsTrigger 
@@ -1384,22 +1318,61 @@ export default function ControlFiscalResicoPage() {
                 </div>
 
                 <div className="space-y-4">
-                    {/* Barra de Progreso del Checklist */}
-                    <div className="p-3 bg-muted/20 rounded-xl border border-border/60 flex flex-wrap items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-2">
-                            <span className="font-semibold text-foreground">Progreso de la factura:</span>
-                            <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 font-bold text-[11px]">
-                                {Object.values(facturaStepsDone).filter(Boolean).length} de 6 pasos completados
-                            </Badge>
-                        </div>
-                        <span className="text-[11px] text-muted-foreground">
-                            Haz clic en cada campo para copiar su valor exacto y pegarlo en el SAT
-                        </span>
-                    </div>
+                    {/* ASISTENTE GUIADO PASO A PASO (WIZARD DINÁMICO) */}
+<div className="rounded-xl border border-border/60 bg-card/80 p-3 shadow-sm space-y-2.5">
+    <div className="flex items-center justify-between px-1 text-xs">
+        <span className="font-bold text-foreground flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+            Asistente Guiado Paso a Paso SAT (CFDI 4.0)
+        </span>
+        <Badge variant="outline" className="border-blue-500/40 text-blue-400 bg-blue-500/10 text-[11px] font-bold">
+            Paso {cfdiWizardStep} de 6
+        </Badge>
+    </div>
 
-                    {/* GUÍA PASO A PASO SECUENCIAL (1.1 a 1.6) */}
-                    <div className="space-y-3">
-                        {/* PASO 1.1: Iniciar Sesión en el SAT */}
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5">
+        {[
+            { id: 1, label: '1.1 Sesión', key: 'step_1_1' },
+            { id: 2, label: '1.2 Factura Global', key: 'step_1_2' },
+            { id: 3, label: '1.3 Cliente', key: 'step_1_3' },
+            { id: 4, label: '1.4 Concepto', key: 'step_1_4' },
+            { id: 5, label: '1.5 Forma de Pago', key: 'step_1_5' },
+            { id: 6, label: '1.6 Sellar y Guardar', key: 'step_1_6' },
+        ].map((s) => {
+            const isCurrent = cfdiWizardStep === s.id;
+            const isDone = Boolean(facturaStepsDone[s.key]);
+            return (
+                <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setCfdiWizardStep(s.id)}
+                    className={cn(
+                        "flex items-center justify-between p-2 rounded-lg text-xs font-semibold transition-all border text-left",
+                        isCurrent
+                            ? "border-2 border-blue-500 bg-blue-500/15 text-blue-500 dark:text-blue-400 shadow-sm font-bold"
+                            : isDone
+                                ? "border-blue-500/30 bg-blue-500/5 text-foreground hover:bg-muted/40"
+                                : "border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                    )}
+                >
+                    <span className="truncate">{s.label}</span>
+                    {isDone ? (
+                        <Check className="h-3.5 w-3.5 text-blue-400 shrink-0 ml-1" />
+                    ) : (
+                        <span className="h-1.5 w-1.5 rounded-full bg-border shrink-0 ml-1" />
+                    )}
+                </button>
+            );
+        })}
+    </div>
+</div>
+
+{/* CONTENEDOR DEL PASO ACTIVO */}
+<div className="space-y-4">
+    {/* PASO 1.1 */}
+    {cfdiWizardStep === 1 && (
+        <div className="space-y-3 animate-in fade-in-50 duration-200">
+            {/* PASO 1.1: Iniciar Sesión en el SAT */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_1'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1433,8 +1406,28 @@ export default function ControlFiscalResicoPage() {
                                 </div>
                             </div>
                         </div>
+            <div className="flex items-center justify-end pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => {
+                        setFacturaStepsDone(prev => ({ ...prev, step_1_1: true }));
+                        setCfdiWizardStep(2);
+                    }}
+                    className="h-8 px-4 text-xs gap-1.5 font-bold"
+                >
+                    <span>Listo, Continuar al Paso 1.2</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    )}
 
-                        {/* PASO 1.2: Activar casilla obligatoria "¿Es factura global?" */}
+    {/* PASO 1.2 */}
+    {cfdiWizardStep === 2 && (
+        <div className="space-y-3 animate-in fade-in-50 duration-200">
+            {/* PASO 1.2: Activar casilla obligatoria "¿Es factura global?" */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_2'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1494,8 +1487,38 @@ export default function ControlFiscalResicoPage() {
                                 </div>
                             </div>
                         </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCfdiWizardStep(1)}
+                    className="h-8 text-xs gap-1.5 border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/30"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </Button>
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => {
+                        setFacturaStepsDone(prev => ({ ...prev, step_1_2: true }));
+                        setCfdiWizardStep(3);
+                    }}
+                    className="h-8 px-4 text-xs gap-1.5 font-bold"
+                >
+                    <span>Listo, Continuar al Paso 1.3</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    )}
 
-                        {/* PASO 1.3: Datos del Cliente (Público en General) */}
+    {/* PASO 1.3 */}
+    {cfdiWizardStep === 3 && (
+        <div className="space-y-3 animate-in fade-in-50 duration-200">
+            {/* PASO 1.3: Datos del Cliente (Público en General) */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_3'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1557,8 +1580,38 @@ export default function ControlFiscalResicoPage() {
                                 💡 <strong>Código Postal del Cliente:</strong> Escribe tu mismo código postal fiscal registrado en el SAT.
                             </div>
                         </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCfdiWizardStep(2)}
+                    className="h-8 text-xs gap-1.5 border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/30"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </Button>
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => {
+                        setFacturaStepsDone(prev => ({ ...prev, step_1_3: true }));
+                        setCfdiWizardStep(4);
+                    }}
+                    className="h-8 px-4 text-xs gap-1.5 font-bold"
+                >
+                    <span>Listo, Continuar al Paso 1.4</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    )}
 
-                        {/* PASO 1.4: Agregar el Concepto e Impuestos */}
+    {/* PASO 1.4 */}
+    {cfdiWizardStep === 4 && (
+        <div className="space-y-3 animate-in fade-in-50 duration-200">
+            {/* PASO 1.4: Agregar el Concepto e Impuestos */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_4'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1654,8 +1707,38 @@ export default function ControlFiscalResicoPage() {
                                 </div>
                             </div>
                         </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCfdiWizardStep(3)}
+                    className="h-8 text-xs gap-1.5 border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/30"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </Button>
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => {
+                        setFacturaStepsDone(prev => ({ ...prev, step_1_4: true }));
+                        setCfdiWizardStep(5);
+                    }}
+                    className="h-8 px-4 text-xs gap-1.5 font-bold"
+                >
+                    <span>Listo, Continuar al Paso 1.5</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    )}
 
-                        {/* PASO 1.5: Forma y Método de Pago */}
+    {/* PASO 1.5 */}
+    {cfdiWizardStep === 5 && (
+        <div className="space-y-3 animate-in fade-in-50 duration-200">
+            {/* PASO 1.5: Forma y Método de Pago */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_5'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1712,8 +1795,38 @@ export default function ControlFiscalResicoPage() {
                                 </div>
                             </div>
                         </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCfdiWizardStep(4)}
+                    className="h-8 text-xs gap-1.5 border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/30"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </Button>
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => {
+                        setFacturaStepsDone(prev => ({ ...prev, step_1_5: true }));
+                        setCfdiWizardStep(6);
+                    }}
+                    className="h-8 px-4 text-xs gap-1.5 font-bold"
+                >
+                    <span>Listo, Continuar al Paso 1.6</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    )}
 
-                        {/* PASO 1.6: Sellar y Descargar */}
+    {/* PASO 1.6 */}
+    {cfdiWizardStep === 6 && (
+        <div className="space-y-4 animate-in fade-in-50 duration-200">
+            {/* PASO 1.6: Sellar y Descargar */}
                         <div className={cn(
                             "rounded-xl border p-3.5 transition-all",
                             facturaStepsDone['step_1_6'] ? "border-blue-500/40 bg-blue-500/5" : "border-border/60 bg-muted/10"
@@ -1742,32 +1855,62 @@ export default function ControlFiscalResicoPage() {
                                 <p>4. 📥 <strong>Descarga tu PDF y XML</strong> para tu expediente contable.</p>
                             </div>
                         </div>
+            {/* Banner de Siguiente Paso y Guardar Folio */}
+            <div className="p-3.5 sm:p-5 rounded-xl border-2 border-blue-500 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
+                <div className="space-y-1">
+                    <div className="text-sm font-bold flex items-center gap-1.5 text-white">
+                        <Sparkles className="h-4 w-4 text-blue-400" />
+                        ¿Ya sellaste y descargaste tu Factura Global en el SAT?
                     </div>
-
-                    {/* Banner de Siguiente Paso */}
-                    <div className="p-3.5 sm:p-4 rounded-xl border-2 border-blue-500 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-[0_10px_30px_rgba(59,130,246,0.18)]">
-                        <div className="space-y-0.5">
-                            <div className="text-sm font-bold flex items-center gap-1.5 text-white">
-                                <Sparkles className="h-4 w-4 text-blue-400" />
-                                ¿Ya sellaste y descargaste tu Factura Global en el SAT?
-                            </div>
-                            <div className="text-xs text-slate-300">
-                                Tu ingreso quedó formalmente reportado. Ahora pasa al <strong>Paso 2</strong> abajo para presentar la declaración y pagar <strong>${granTotalAPagarSAT.toLocaleString('es-MX')}</strong>.
-                            </div>
-                        </div>
-                        <Button 
-                            variant="alfa" 
-                            size="sm" 
-                            className="shrink-0 gap-1.5 text-xs px-4"
-                            onClick={() => {
-                                setActiveTab('paso2');
-                                window.scrollTo({ top: 350, behavior: 'smooth' });
-                            }}
-                        >
-                            Ir al Paso 2 (Declaración SAT)
-                            <ArrowRight className="h-3.5 w-3.5" />
-                        </Button>
+                    <div className="text-xs text-slate-300">
+                        Guarda el <strong>Folio Fiscal UUID</strong> emitido por el SAT para que tu progreso quede respaldado. Al volver a entrar a la agenda, te llevará en automático al <strong>Paso 2</strong>.
                     </div>
+                    <div className="flex items-center gap-2 pt-1 text-[11px] text-slate-400">
+                        <span>Folio UUID registrado:</span>
+                        <code className="text-blue-400 font-mono bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/60">
+                            {fiscalData.folioFacturaGlobal || inputFolioFactura || '7d91d883-a75f-4847-a22a-ef7ca6bb2022'}
+                        </code>
+                    </div>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full md:w-auto">
+                    <Button
+                        variant="alfa"
+                        size="sm"
+                        className="gap-1.5 text-xs px-4 h-9 font-bold"
+                        onClick={() => handleGuardarFacturaYAvanzar(inputFolioFactura)}
+                    >
+                        <Check className="h-3.5 w-3.5" />
+                        Guardar Progreso e Ir al Paso 2
+                        <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                </div>
+            </div>
+            <div className="flex items-center justify-between pt-3 border-t border-border/40 mt-3">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCfdiWizardStep(5)}
+                    className="h-8 text-xs gap-1.5 border-border/60 hover:border-blue-500 text-foreground hover:bg-muted/30"
+                >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    Anterior
+                </Button>
+                <Button
+                    type="button"
+                    variant="alfa"
+                    size="sm"
+                    onClick={() => handleGuardarFacturaYAvanzar(inputFolioFactura)}
+                    className="h-9 px-5 text-xs gap-1.5 font-bold"
+                >
+                    <Check className="h-4 w-4" />
+                    Guardar Progreso e Ir al Paso 2
+                    <ArrowRight className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
+    )}
+</div>
 
                     {/* Blindaje Antierrores */}
                     <div className="rounded-xl border border-border/60 bg-muted/10 p-3.5 space-y-2 text-xs">

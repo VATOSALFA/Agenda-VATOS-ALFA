@@ -75,7 +75,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { playStrongNotificationAlert, initAudioUnlock, getAudioSettings, setAudioSettings, applyFontSizeScale } from '@/lib/notification-sound';
 
 // Removed top-level mainNavLinks
@@ -474,6 +474,40 @@ export default function Header() {
     return () => unsubscribe();
   }, [db, user, canViewConversations, toast]);
 
+  // Recordatorio / Globito de tarea fiscal pendiente en Finanzas (SAT RESICO)
+  const [hasPendingFiscalTask, setHasPendingFiscalTask] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!db || !user || !canSee('ver_finanzas')) {
+      setHasPendingFiscalTask(false);
+      return;
+    }
+
+    const now = new Date();
+    const currentMonthIdx = now.getMonth();
+    const targetMonthIdx = currentMonthIdx === 0 ? 11 : currentMonthIdx - 1;
+    const targetYear = currentMonthIdx === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const targetMonthName = monthNamesNav[targetMonthIdx];
+    const targetMonthDocId = `${targetMonthName}_${targetYear}`;
+
+    const unsub = onSnapshot(doc(db, 'finanzas_mensuales', targetMonthDocId), (docSnap) => {
+      if (docSnap.exists()) {
+        const fiscal = docSnap.data()?.declaracion_fiscal;
+        if (fiscal && fiscal.estado === 'presentada') {
+          setHasPendingFiscalTask(false);
+        } else {
+          setHasPendingFiscalTask(true);
+        }
+      } else {
+        setHasPendingFiscalTask(true);
+      }
+    }, (err) => {
+      console.warn("Error listening to fiscal task in header:", err);
+    });
+
+    return () => unsub();
+  }, [db, user]);
+
   const mainNavLinks = useMemo(() => [
     ...(enableBarberDashboard ? [{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'ver_agenda' }] : []),
     { href: '/agenda', label: 'Agenda', icon: Calendar, permission: 'ver_agenda' },
@@ -571,6 +605,7 @@ export default function Header() {
         links: [
           { href: '/finanzas/resumen', label: 'Resumen Anual', icon: LineChart, permission: 'ver_finanzas' },
           { href: `/finanzas/${getCurrentMonthName()}`, label: 'Vista Mensual', icon: DollarSign, permission: 'ver_finanzas' },
+          { href: '/finanzas/fiscal', label: 'Control Fiscal RESICO', icon: Landmark, permission: 'ver_finanzas' },
         ]
       },
       {
@@ -819,6 +854,11 @@ export default function Header() {
                                   {pendingConversationsCount}
                                 </span>
                               )}
+                              {link.href === '/finanzas/fiscal' && hasPendingFiscalTask && (
+                                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center shadow-sm bg-blue-600 animate-pulse">
+                                  1
+                                </span>
+                              )}
                               <Icon className={cn(
                                 "h-4.5 w-4.5 mb-1 group-hover:scale-110 transition-transform duration-200",
                                 isPromo
@@ -1007,21 +1047,37 @@ export default function Header() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className={cn(
-                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0',
+                    'px-2 py-1.5 2xl:px-2.5 2xl:py-1.5 h-auto rounded-md transition-colors text-xs font-medium whitespace-nowrap shrink-0 relative flex items-center',
                     pathname.startsWith('/finanzas')
                       ? 'bg-secondary text-secondary-foreground font-semibold'
                       : 'text-gray-300 hover:bg-black/10 hover:text-primary-foreground'
                   )}>
-                    Finanzas <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
+                    <span>Finanzas</span>
+                    {hasPendingFiscalTask && (
+                      <span className="relative flex items-center justify-center ml-1">
+                        <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex items-center justify-center min-w-[15px] h-[15px] px-1 rounded-full bg-blue-600 text-white text-[9px] font-extrabold leading-none shadow-xs">
+                          1
+                        </span>
+                      </span>
+                    )}
+                    <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-70" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
+                <DropdownMenuContent className="w-60 border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-1.5" align="start">
                   {finanzasNavLinks.map((item) => (
                     canSee(item.permission!) && (
                       <DropdownMenuItem key={item.href} asChild>
-                        <Link href={item.href!}>
-                          {item.icon && <item.icon className="mr-2 h-4 w-4" />}
-                          <span>{item.label}</span>
+                        <Link href={item.href!} className="flex items-center justify-between w-full">
+                          <div className="flex items-center">
+                            {item.icon && <item.icon className="mr-2 h-4 w-4" />}
+                            <span>{item.label}</span>
+                          </div>
+                          {hasPendingFiscalTask && item.href === '/finanzas/fiscal' && (
+                            <span className="ml-auto inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-blue-600 text-white text-[9px] font-extrabold leading-none shadow-xs">
+                              1
+                            </span>
+                          )}
                         </Link>
                       </DropdownMenuItem>
                     )

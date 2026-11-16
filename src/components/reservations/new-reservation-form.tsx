@@ -1652,9 +1652,21 @@ export function NewReservationForm({
       // Sincronizar documento en `ventas` cuando se marca anticipo o pago completo en recepción
       const isSandboxBooking = isEditMode ? Boolean((initialData as any)?.isSandbox) : isTargetSandbox;
       if (!isSandboxBooking && effectiveDepositPaid && targetDepositAmount > 0 && reservationId) {
-        const depositSaleId = (initialData as any)?.deposit_payment_id || `deposit_${reservationId}_${Date.now()}`;
-        const saleRef = doc(db, 'ventas', depositSaleId);
-        const existingSaleSnap = await getDoc(saleRef).catch(() => null);
+        let depositSaleId = (initialData as any)?.deposit_payment_id || `deposit_${reservationId}_${Date.now()}`;
+        let saleRef = doc(db, 'ventas', depositSaleId);
+        let existingSaleSnap = await getDoc(saleRef).catch(() => null);
+
+        // Si no existe con el deposit_payment_id, verificar si ya existe una venta con reservationId
+        if (!existingSaleSnap || !existingSaleSnap.exists()) {
+          const directResSaleRef = doc(db, 'ventas', reservationId);
+          const directSnap = await getDoc(directResSaleRef).catch(() => null);
+          if (directSnap && directSnap.exists()) {
+            existingSaleSnap = directSnap;
+            depositSaleId = reservationId;
+            saleRef = directResSaleRef;
+          }
+        }
+
         if (!existingSaleSnap || !existingSaleSnap.exists()) {
           await setDoc(saleRef, {
             id: depositSaleId,

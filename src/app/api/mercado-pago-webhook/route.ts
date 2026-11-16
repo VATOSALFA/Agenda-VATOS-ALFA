@@ -325,7 +325,7 @@ async function processApprovedPayment(
                 canal_reserva: booking.canal_reserva || 'web_publica',
                 metodo_pago_anticipo: 'mercadopago',
                 payment_method: 'Pagos en linea',
-                deposit_payment_id: String(paymentInfo.id),
+                deposit_payment_id: targetId || external_reference || String(paymentInfo.id),
                 mercado_pago_id: String(paymentInfo.id),
                 deposit_paid_at: paidAtDate,
             };

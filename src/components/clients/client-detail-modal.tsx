@@ -56,6 +56,9 @@ interface Sale {
   items: { nombre: string; cantidad: number; precio_unitario: number; barbero_id?: string }[];
   pago_estado?: string;
   monto_pagado_real?: number;
+  tipo_venta?: string;
+  deposit_sale_id?: string;
+  anticipo_pagado?: number;
 }
 
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -286,7 +289,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
         const dateB = b.fecha_hora_venta?.seconds || 0;
         return (dateA - dateB) * dir;
       }
-      if (key === 'total') return ((a.total || 0) - (b.total || 0)) * dir;
+      if (key === 'total') {
+        const amountA = (a.monto_pagado_real !== undefined && a.monto_pagado_real !== null) ? a.monto_pagado_real : (a.total || 0);
+        const amountB = (b.monto_pagado_real !== undefined && b.monto_pagado_real !== null) ? b.monto_pagado_real : (b.total || 0);
+        return (amountA - amountB) * dir;
+      }
       if (key === 'metodo_pago') return (a.metodo_pago || '').localeCompare(b.metodo_pago || '') * dir;
       if (key === 'profesional') {
         const getNames = (s: Sale) => Array.from(new Set(s.items?.map(i => (i.barbero_id ? professionalMap.get(i.barbero_id) : null) || (i as any).barbero_nombre || (i as any).barbero || (s as any).barbero_nombre || (s as any).profesional_nombre).filter(Boolean))).join(', ');
@@ -892,8 +899,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                               <SortableHeader label="Fecha" sortKey="fecha" config={salesSortConfig} onSort={handleSalesSort} />
                               <TableHead className="py-1 px-3 text-xs font-semibold">Items</TableHead>
                               <SortableHeader label="Profesional" sortKey="profesional" config={salesSortConfig} onSort={handleSalesSort} />
+                              <TableHead className="py-1 px-3 text-xs font-semibold">Tipo de Pago</TableHead>
                               <SortableHeader label="Método de pago" sortKey="metodo_pago" config={salesSortConfig} onSort={handleSalesSort} />
-                              <SortableHeader label="Total" sortKey="total" config={salesSortConfig} onSort={handleSalesSort} align="right" />
+                              <SortableHeader label="Monto Pagado" sortKey="total" config={salesSortConfig} onSort={handleSalesSort} align="right" />
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -901,6 +909,13 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                               const professionalNames = Array.from(
                                 new Set(sale.items?.map(item => (item.barbero_id ? professionalMap.get(item.barbero_id) : null) || (item as any).barbero_nombre || (item as any).barbero || (sale as any).barbero_nombre || (sale as any).profesional_nombre).filter(Boolean))
                               ).join(', ') || 'N/A';
+
+                              const isAnticipo = sale.tipo_venta === 'anticipo' || sale.pago_estado === 'deposit_paid' || sale.id.startsWith('deposit_');
+                              const isLiquidacion = Boolean(sale.deposit_sale_id || ((sale as any).anticipo_pagado && !isAnticipo) || ((sale as any).anticipoPagado && !isAnticipo));
+                              const paidAmount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null)
+                                ? sale.monto_pagado_real
+                                : (isAnticipo && sale.total ? (sale.total / 2) : (sale.total ?? 0));
+                              const fullServiceTotal = sale.total ?? 0;
 
                               return (
                                 <TableRow key={sale.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
@@ -913,8 +928,36 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                     </ul>
                                   </TableCell>
                                   <TableCell className="py-1.5 px-3 text-xs">{professionalNames}</TableCell>
-                                  <TableCell className="py-1.5 px-3 text-xs capitalize">{sale.metodo_pago}</TableCell>
-                                  <TableCell className="py-1.5 px-3 text-xs text-right font-semibold">${(sale.total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                  <TableCell className="py-1.5 px-3 text-xs">
+                                    {isAnticipo ? (
+                                      <span className="inline-flex items-center text-xs font-semibold text-blue-400">
+                                        Anticipo (50%)
+                                      </span>
+                                    ) : isLiquidacion ? (
+                                      <span className="inline-flex items-center text-xs font-medium text-slate-300">
+                                        Liquidación (Saldo)
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center text-xs text-muted-foreground">
+                                        Pago Completo
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="py-1.5 px-3 text-xs capitalize text-foreground font-medium">
+                                    {sale.metodo_pago || 'N/A'}
+                                  </TableCell>
+                                  <TableCell className="py-1.5 px-3 text-xs text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="font-semibold text-foreground font-sans">
+                                        ${paidAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </span>
+                                      {(isAnticipo || isLiquidacion) && fullServiceTotal > paidAmount && (
+                                        <span className="text-[10px] text-muted-foreground leading-tight font-sans">
+                                          Total servicio: ${fullServiceTotal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </TableCell>
                                 </TableRow>
                               );
                             })}

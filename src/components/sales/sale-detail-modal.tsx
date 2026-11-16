@@ -199,6 +199,10 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
         }
     })();
 
+    const isAnticipoSale = sale.tipo_venta === 'anticipo' || sale.pago_estado === 'deposit_paid';
+    const transactionAmount = isAnticipoSale
+        ? ((sale.monto_pagado_real ?? (sale as any).anticipo_pagado ?? (sale as any).anticipoPagado ?? (sale.total ? sale.total / 2 : 0)) + (sale.propina || 0))
+        : ((sale.total || 0) + (sale.propina || 0));
     const totalConPropina = (sale.total || 0) + (sale.propina || 0);
 
     return (
@@ -336,9 +340,9 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                 <strong className="text-foreground font-semibold block">{paymentMethodLabel}</strong>
                             </div>
                             <div className="space-y-0.5">
-                                <span className="text-muted-foreground block text-[11px]">Total Transacción:</span>
+                                <span className="text-muted-foreground block text-[11px]">{isAnticipoSale ? "Monto Cobrado (Anticipo):" : "Total Transacción:"}</span>
                                 <strong className="text-foreground font-bold text-sm block">
-                                    ${totalConPropina.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    ${transactionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     {Boolean(sale.propina && sale.propina > 0) && (
                                         <span className="text-[10px] text-blue-400 font-normal ml-1">
                                             (incluye propina)

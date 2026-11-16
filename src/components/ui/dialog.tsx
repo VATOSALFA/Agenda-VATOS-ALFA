@@ -44,7 +44,7 @@ export function enforceModalStackIsolation() {
   );
   dialogs.forEach((dialogEl, idx) => {
     const isTopMost = idx === dialogs.length - 1;
-    const baseZ = 120 + idx * 20;
+    const baseZ = 200 + idx * 20;
     const prevSibling = dialogEl.previousElementSibling as HTMLElement | null;
     if (prevSibling && prevSibling.hasAttribute("data-state")) {
       prevSibling.style.zIndex = String(baseZ);
@@ -98,11 +98,11 @@ function DialogBodyScrollLock() {
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideCloseButton?: boolean }
->(({ className, children, hideCloseButton, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideCloseButton?: boolean; overlayClassName?: string }
+>(({ className, children, hideCloseButton, overlayClassName, ...props }, ref) => {
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={ref}
         data-lenis-prevent="true"

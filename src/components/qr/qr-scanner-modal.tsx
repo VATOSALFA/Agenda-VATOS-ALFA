@@ -1658,7 +1658,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl bg-[#0F172A] border border-[#C5A880]/30 text-white shadow-2xl p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-xl bg-[#0F172A] border border-[#C5A880]/30 text-white shadow-2xl p-0 overflow-hidden z-[200]" overlayClassName="z-[190]">
           {/* Header */}
           <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-[#C5A880]/30 relative overflow-hidden">
             {/* Haz de luz animado sutil */}
@@ -1666,9 +1666,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="h-9 w-9 rounded-xl bg-[#C5A880]/15 border border-[#C5A880]/40 flex items-center justify-center text-[#C5A880]">
-                  <QrCode className="h-5 w-5" />
-                </div>
+                <QrCode className="h-5 w-5 text-[#C5A880] shrink-0" />
                 <div>
                   <DialogTitle className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
                     Lector QR • VATOS ALFA

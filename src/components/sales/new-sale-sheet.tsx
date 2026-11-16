@@ -38,6 +38,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { useFeatures } from '@/hooks/use-features';
 import {
     Form,
@@ -1975,7 +1976,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             form.setValue('pago_tarjeta', 0);
             form.setValue('pago_transferencia', 0);
             form.setValue('propina', 0);
-            form.setValue('notas', '');
+            if (!form.getValues('notas')) {
+                form.setValue('notas', (initialData as any)?.notas || '');
+            }
 
             setAppliedBenefit((initialData as any)?.benefitRedeemed || null);
 
@@ -1990,7 +1993,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 form.setValue('local_id', initialData.local_id);
             }
             setReservationId(initialData.reservationId || undefined);
-            const initialCartItems: CartItem[] = initialData.items.map(item => {
+            const initialCartItems: CartItem[] = (initialData.items || []).map(item => {
                 const tipo = 'duration' in item ? 'servicio' : 'producto';
                 // Prioritize 'precio_original' or 'precio' over master price list
                 const precio = (item as any).precio_original || (item as any).precio || (tipo === 'servicio' ? (item as ServiceType).price : (item as Product).public_price);
@@ -2015,7 +2018,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     discountType: (item as any).discountType || (rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? 'percentage' : undefined),
                 };
             });
-            setCart(initialCartItems);
+            if (initialCartItems.length > 0) {
+                setCart(initialCartItems);
+            } else {
+                setCart(prev => (prev.length > 0 ? prev : []));
+            }
             const initPagoEstado = (initialData as any).pago_estado;
             const isInitDepositUnpaid =
                 initPagoEstado === 'pendiente_anticipo' ||
@@ -2088,7 +2095,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 setJuntosMinorsCount(Number((initialData as any).benefitRedeemed?.minorsCount || 0));
             }
             const hasPreloadedItems = Array.isArray(initialData.items) && initialData.items.length > 0;
-            setStep(initialData?.client?.id && hasPreloadedItems ? 2 : 1);
+            setStep(prev => {
+                if (initialData?.client?.id && (hasPreloadedItems || (cart && cart.length > 0))) return 2;
+                if (initialData?.client?.id && hasPreloadedItems) return 2;
+                return prev || 1;
+            });
         }
     }, [initialData, form, isOpen, db]);
 
@@ -3925,6 +3936,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             </div>
                         </div>
                         <div className="flex items-center gap-2 relative z-10">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                        className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors inline-flex"
+                                        aria-label="Escanear QR de cliente o beneficio"
+                                    >
+                                        <QrCode className="h-4 w-4 text-[#C5A880]" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                                    Escanear QR de cliente o beneficio
+                                </TooltipContent>
+                            </Tooltip>
                             <Button
                                 type="button"
                                 variant="ghost"
@@ -4030,9 +4058,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <FormItem>
                                                     <div className="flex justify-between items-center mb-1">
                                                         <FormLabel className="text-xs">Cliente *</FormLabel>
-                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs text-blue-500 hover:text-blue-400" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
-                                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                                        </Button>
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Button
+                                                                type="button"
+                                                                variant="link"
+                                                                size="sm"
+                                                                className="h-auto p-0 text-xs text-[#C5A880] hover:text-[#e4cfb4] font-semibold flex items-center gap-1"
+                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                                title="Escanear Pase Alfa para seleccionar cliente automáticamente"
+                                                            >
+                                                                <QrCode className="h-3.5 w-3.5 text-[#C5A880]" /> Escanear QR
+                                                            </Button>
+                                                            <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs text-blue-500 hover:text-blue-400" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
+                                                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                     <ClientCombobox
                                                         clients={clients}
@@ -4364,9 +4404,21 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 <FormItem>
                                                     <div className="flex justify-between items-center">
                                                         <FormLabel className="text-xs font-semibold">Cliente</FormLabel>
-                                                        <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
-                                                            <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
-                                                        </Button>
+                                                        <div className="flex items-center gap-2.5">
+                                                            <Button
+                                                                type="button"
+                                                                variant="link"
+                                                                size="sm"
+                                                                className="h-auto p-0 text-xs text-[#C5A880] hover:text-[#e4cfb4] font-semibold flex items-center gap-1"
+                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                                title="Escanear Pase Alfa para seleccionar cliente automáticamente"
+                                                            >
+                                                                <QrCode className="h-3.5 w-3.5 text-[#C5A880]" /> Escanear QR
+                                                            </Button>
+                                                            <Button type="button" variant="link" size="sm" className="h-auto p-0 text-xs text-blue-500 hover:text-blue-400" onClick={() => { setIsEditingClient(false); setIsClientModalOpen(true); }}>
+                                                                <UserPlus className="h-3 w-3 mr-1" /> Nuevo cliente
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                     <ClientCombobox
                                                         clients={clients}
@@ -4430,19 +4482,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2 shrink-0">
-                                                        <span className="text-[11px] font-medium text-foreground">
-                                                            {redeemPoints ? 'Aplicando' : 'Canjear'}
-                                                        </span>
-                                                        <Switch
-                                                            checked={redeemPoints}
-                                                            onCheckedChange={(val) => {
-                                                                setRedeemPoints(val);
-                                                                if (val && alfaCoinsToUse === null) {
-                                                                    setAlfaCoinsToUse(maxUsableAlfaCoins);
-                                                                }
-                                                            }}
-                                                            disabled={clientAlfaCoins <= 0}
-                                                        />
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                            className="h-7 px-2 text-[11px] font-semibold border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/20 hover:text-white rounded-lg flex items-center gap-1.5 transition-colors shrink-0"
+                                                            title="Escanear QR de la App de este cliente o beneficio"
+                                                        >
+                                                            <QrCode className="h-3.5 w-3.5 text-[#C5A880]" />
+                                                            <span className="hidden sm:inline">Escanear QR</span>
+                                                        </Button>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[11px] font-medium text-foreground">
+                                                                {redeemPoints ? 'Aplicando' : 'Canjear'}
+                                                            </span>
+                                                            <Switch
+                                                                checked={redeemPoints}
+                                                                onCheckedChange={(val) => {
+                                                                    setRedeemPoints(val);
+                                                                    if (val && alfaCoinsToUse === null) {
+                                                                        setAlfaCoinsToUse(maxUsableAlfaCoins);
+                                                                    }
+                                                                }}
+                                                                disabled={clientAlfaCoins <= 0}
+                                                            />
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -4485,6 +4550,34 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                         </div>
                                                     </div>
                                                 )}
+                                            </div>
+                                        )}
+
+                                        {/* Para clientes sin app o aún no vinculados, opción para escanear QR */}
+                                        {selectedClient && !hasAppDownloaded && (
+                                            <div className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Coins className="h-4 w-4 shrink-0 text-slate-400" />
+                                                    <div className="min-w-0">
+                                                        <span className="text-xs font-bold font-sans block truncate text-muted-foreground">
+                                                            ALFA COINS & BENEFICIOS
+                                                        </span>
+                                                        <p className="text-[10px] text-muted-foreground font-sans">
+                                                            Escanea el Pase Alfa o beneficio del cliente desde su app móvil
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                    className="h-7 px-2.5 text-[11px] font-semibold border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/20 hover:text-white rounded-lg flex items-center gap-1.5 shrink-0"
+                                                    title="Escanear QR del cliente o beneficio"
+                                                >
+                                                    <QrCode className="h-3.5 w-3.5 text-[#C5A880]" />
+                                                    <span>Escanear QR</span>
+                                                </Button>
                                             </div>
                                         )}
 

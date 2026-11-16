@@ -443,29 +443,33 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
           <div className="header-light-beam" aria-hidden="true" />
 
           <div className="relative z-10 flex items-center justify-between w-full">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <Avatar className="h-11 w-11 border-2 border-white/20 shadow-md shrink-0">
+            <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+              <Avatar className="h-10 w-10 sm:h-11 sm:w-11 border-2 border-white/20 shadow-md shrink-0">
                 <AvatarImage src={clientPhoto} alt={liveClient.nombre} className="object-cover" />
                 <AvatarFallback className="text-sm font-bold bg-[#1e293b] text-white">
                   {liveClient.nombre?.charAt(0)}{liveClient.apellido?.charAt(0)}
                 </AvatarFallback>
               </Avatar>
 
-              <div className="min-w-0 space-y-0.5">
-                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 truncate">
-                  <span>{liveClient.nombre} {liveClient.apellido}</span>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide flex flex-wrap items-center gap-1.5 min-w-0">
+                  <span className="truncate max-w-[170px] sm:max-w-none">{liveClient.nombre} {liveClient.apellido}</span>
                   {isClientExempt && (
-                    <Badge variant="outline" className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] px-2 py-0.5 font-bold">
-                      ★ EXENTO DE ANTICIPO
+                    <Badge
+                      variant="outline"
+                      className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] px-1.5 py-0.5 font-semibold shrink-0 whitespace-nowrap"
+                    >
+                      <span className="sm:hidden">★ Exento</span>
+                      <span className="hidden sm:inline">★ Exento de Anticipo</span>
                     </Badge>
                   )}
                   {freeCutReady && (
-                    <Badge className="bg-[#C5A880] text-black font-extrabold text-[10px] px-2 py-0.5 border-none shadow-sm shadow-[#C5A880]/30">
+                    <Badge className="bg-[#C5A880] text-black font-extrabold text-[10px] px-1.5 py-0.5 border-none shadow-sm shadow-[#C5A880]/30 shrink-0 whitespace-nowrap">
                       10.° CORTE GRATIS
                     </Badge>
                   )}
                   {isBirthdayMonth && (
-                    <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-[10px] px-2 py-0.5">
+                    <Badge className="bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40 text-[10px] px-1.5 py-0.5 shrink-0 whitespace-nowrap">
                       🎉 CUMPLEAÑOS
                     </Badge>
                   )}
@@ -506,7 +510,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
             </div>
 
             {/* Acciones del header y botón cerrar */}
-            <div className="flex items-center gap-2 shrink-0 ml-3">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-2 sm:ml-3">
               {onNewReservation && (
                 <>
                   <Button

@@ -2671,6 +2671,101 @@ exports.sendVatosAlfaEmailVerification = onRequest(
         return response.status(200).json({ data: { success: true }, success: true, message: 'Cuenta y datos eliminados correctamente' });
       }
 
+      // SOPORTE PARA RECUPERACIÓN / RESTABLECIMIENTO DE CONTRASEÑA
+      if (payload.action === 'reset_password') {
+        const targetEmail = payload.email ? String(payload.email).trim().toLowerCase() : null;
+        if (!targetEmail) {
+          return response.status(400).json({ error: { message: 'El correo electrónico es requerido.' } });
+        }
+
+        console.log(`[reset_password] Generando enlace de restablecimiento para: ${targetEmail}`);
+
+        // 1. Verificar si el usuario existe en Firebase Auth
+        let userRec = null;
+        try {
+          userRec = await admin.auth().getUserByEmail(targetEmail);
+        } catch (e) {
+          console.warn(`[reset_password] Usuario no encontrado en Auth para ${targetEmail}: ${e.message}`);
+          return response.status(404).json({
+            error: {
+              message: `No encontramos ninguna cuenta activa en la App con el correo ${targetEmail}. Si aún no te has registrado, puedes crear tu cuenta en la pestaña "Crear Cuenta".`
+            }
+          });
+        }
+
+        // 2. Generar enlace oficial de restablecimiento de contraseña
+        const resetLink = await admin.auth().generatePasswordResetLink(targetEmail);
+        console.log(`[reset_password] Enlace de restablecimiento generado con éxito.`);
+
+        // 3. Preparar el HTML con la línea de diseño oficial de Vatos Alfa
+        const clientName = userRec.displayName || payload.name || 'Caballero';
+        const htmlContent = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restablecer contraseña | Vatos Alfa Barber Shop</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0F172A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #0F172A; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 560px; background-color: #FFFFFF; border-radius: 16px; overflow: hidden; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35); border: 1px solid #E2E8F0;" cellspacing="0" cellpadding="0" border="0">
+          <tr>
+            <td style="background-color: #202A49; padding: 36px 24px; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+              <img src="https://vatosalfa.com/logo-header-blanco.png" alt="Vatos Alfa Barber Shop" width="230" style="width: 230px; max-width: 85%; height: auto; display: block; margin: 0 auto; border: 0;" />
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 40px 32px 32px 32px; text-align: center;">
+              <h2 style="font-size: 22px; font-weight: 700; color: #202A49; margin: 0 0 12px 0;">Recuperación de Contraseña</h2>
+              <p style="font-size: 14px; line-height: 24px; color: #475569; margin: 0 0 28px 0;">
+                Hola, <strong>${clientName}</strong>.<br>
+                Recibimos una solicitud para restablecer la contraseña de tu cuenta en la aplicación oficial de <strong>Vatos Alfa Barber Shop</strong>.<br><br>
+                Haz clic en el siguiente botón para crear tu nueva contraseña de forma segura:
+              </p>
+              <div style="margin: 32px 0 36px 0;">
+                <a href="${resetLink}" target="_blank" style="display: inline-block; background-color: #202A49; color: #FFFFFF !important; font-size: 15px; font-weight: 700; letter-spacing: 0.3px; text-decoration: none; padding: 16px 36px; border-radius: 10px; box-shadow: 0 6px 16px rgba(32, 42, 73, 0.3);">
+                  Restablecer mi Contraseña &rarr;
+                </a>
+              </div>
+              <p style="font-size: 12px; color: #94A3B8; line-height: 18px; margin: 24px 0 0 0;">
+                Si tú no solicitaste este cambio, puedes ignorar este correo; tu cuenta y contraseña actual permanecerán protegidas. El enlace expirará pronto por seguridad.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #F8FAFC; padding: 24px 20px; text-align: center; border-top: 1px solid #E2E8F0;">
+              <p style="font-size: 11px; color: #64748B; line-height: 18px; margin: 0;">
+                <strong>Vatos Alfa Barber Shop</strong><br>
+                Av. Cerro Sombrerete 1001, Col. Cipreses, Querétaro, Qro.<br>
+                WhatsApp Oficial: <a href="https://wa.me/524428727279" style="color: #202A49; text-decoration: underline; font-weight: 600;">442 872 7279</a><br><br>
+                &copy; 2026 Vatos Alfa. Todos los derechos reservados.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+        let apiKey = process.env.RESEND_API_KEY || "";
+        try { if (resendApiKey && resendApiKey.value()) apiKey = resendApiKey.value(); } catch (e) { }
+        const resend = new Resend(apiKey);
+
+        await resend.emails.send({
+          from: 'Vatos Alfa <contacto@vatosalfa.com>',
+          to: [targetEmail],
+          subject: '🔐 Restablece tu contraseña | Vatos Alfa Barber Shop',
+          html: htmlContent
+        });
+
+        console.log(`[reset_password] Correo de restablecimiento enviado exitosamente a ${targetEmail}`);
+        return response.status(200).json({ data: { success: true }, success: true });
+      }
+
       const email = payload.email ? String(payload.email).trim().toLowerCase() : null;
       const name = payload.name ? String(payload.name).trim() : 'Caballero';
 

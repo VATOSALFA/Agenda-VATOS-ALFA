@@ -38,7 +38,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import { useFeatures } from '@/hooks/use-features';
 import {
     Form,
@@ -3936,23 +3936,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             </div>
                         </div>
                         <div className="flex items-center gap-2 relative z-10">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
-                                        className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors inline-flex"
-                                        aria-label="Escanear QR de cliente o beneficio"
-                                    >
-                                        <QrCode className="h-4 w-4 text-[#C5A880]" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" className="text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
-                                    Escanear QR de cliente o beneficio
-                                </TooltipContent>
-                            </Tooltip>
+                            <TooltipProvider delayDuration={150}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                            className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors inline-flex"
+                                            aria-label="Escanear QR de cliente o beneficio"
+                                        >
+                                            <QrCode className="h-4 w-4 text-[#C5A880]" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="bottom" className="z-[250] text-xs bg-[#151b2e] text-white border-slate-700 shadow-xl">
+                                        Escanear QR de cliente o beneficio
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                             <Button
                                 type="button"
                                 variant="ghost"

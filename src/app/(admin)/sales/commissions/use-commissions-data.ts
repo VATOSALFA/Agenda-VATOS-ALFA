@@ -235,6 +235,17 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
             const client = clientMap.get(sale.cliente_id);
             const clientName = client ? `${client.nombre} ${client.apellido}` : (sale.cliente_nombre || 'Cliente desconocido');
 
+            const saleBenefitId = String((sale as any).beneficio_aplicado?.id || '').toLowerCase();
+            const saleBenefitTitle = String((sale as any).beneficio_aplicado?.titulo || '').toLowerCase();
+            const saleBenefitFolio = String((sale as any).beneficio_aplicado?.folio || '').toUpperCase();
+            const isFreeCutSale =
+                saleBenefitId === 'decimo_corte' ||
+                saleBenefitId === 'corte_gratis' ||
+                saleBenefitFolio.startsWith('VA-CORTE-') ||
+                saleBenefitTitle.includes('décimo') ||
+                saleBenefitTitle.includes('decimo') ||
+                saleBenefitTitle.includes('corte gratis');
+
             sale.items?.forEach(item => {
                 if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
                     return;
@@ -273,6 +284,15 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                         ? commissionBaseAmount * (commissionConfig.value / 100)
                         : commissionConfig.value;
 
+                    const isFreeCutItem =
+                        isFreeCutSale &&
+                        item.tipo === 'servicio' &&
+                        itemDiscount > 0 &&
+                        (
+                            String(itemName || '').toLowerCase().includes('corte') ||
+                            String(item.nombre || '').toLowerCase().includes('corte')
+                        );
+
                     commissionRows.push({
                         professionalId: professional.id,
                         professionalName: professional.name,
@@ -286,7 +306,8 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                             value: item.descuento.valor,
                             type: item.descuento.tipo,
                             amount: item.descuento.monto
-                        } : undefined
+                        } : undefined,
+                        ...(isFreeCutItem ? { isFreeCut: true } : {})
                     });
                 }
             });

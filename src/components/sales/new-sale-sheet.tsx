@@ -1992,7 +1992,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (initialData.local_id) {
                 form.setValue('local_id', initialData.local_id);
             }
-            setReservationId(initialData.reservationId || undefined);
+            setReservationId(prev => initialData.reservationId || (prev && (!initialData.items || initialData.items.length === 0) ? prev : undefined));
             const initialCartItems: CartItem[] = (initialData.items || []).map(item => {
                 const tipo = 'duration' in item ? 'servicio' : 'producto';
                 // Prioritize 'precio_original' or 'precio' over master price list
@@ -2103,6 +2103,25 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [initialData, form, isOpen, db]);
 
+    // Aplicar QR escaneado directamente sobre la venta en curso sin reiniciar reserva, carrito ni datos
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleApplyQrToSale = (e: Event) => {
+            const detail = (e as CustomEvent)?.detail;
+            if (!detail) return;
+            if (detail.client?.id) {
+                setSelectedClientId(detail.client.id);
+                form.setValue('cliente_id', detail.client.id);
+            }
+            if (detail.benefitRedeemed) {
+                setAppliedBenefit(detail.benefitRedeemed);
+                setJuntosMinorsCount(Number(detail.benefitRedeemed?.minorsCount || 0));
+            }
+        };
+        document.addEventListener('apply-qr-to-sale', handleApplyQrToSale);
+        return () => document.removeEventListener('apply-qr-to-sale', handleApplyQrToSale);
+    }, [isOpen, form]);
+
 
     const finalizeSaleProcess = async (clientId: string, localId: string, finalizedSaleId?: string) => {
         const targetClient = selectedClient || clients.find(c => c.id === clientId);
@@ -2143,7 +2162,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 );
 
                 const alreadyCountedToday = (targetClient as any).ultima_visita_fecha === todayStr;
-                const visitDelta = hasServiceInCart && !alreadyCountedToday ? 1 : 0;
+                const visitDelta = !isFreeCutRedemption && hasServiceInCart && !alreadyCountedToday ? 1 : 0;
 
                 loyaltySnapshot.consumo_real_sumado = realMoneySpent;
                 loyaltySnapshot.visita_asistida_sumada = visitDelta;
@@ -2232,13 +2251,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                     if (isFreeCutRedemption) {
                         updatePayload.cortes_acumulados = 0;
+                        updatePayload.cortesAcumulados = 0;
                         updatePayload.corte_gratis_disponible = false;
+                        updatePayload.corteGratisDisponible = false;
                         updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
                         nextStamps = 0;
                     } else if (stampsToAward > 0) {
                         nextStamps = Math.min(targetStampsConfig, currStamps + stampsToAward);
                         updatePayload.cortes_acumulados = nextStamps;
+                        updatePayload.cortesAcumulados = nextStamps;
                         updatePayload.corte_gratis_disponible = nextStamps >= targetStampsConfig;
+                        updatePayload.corteGratisDisponible = nextStamps >= targetStampsConfig;
                         updatePayload.ultimo_sello_fecha = todayStr;
                         updatePayload.visitas_elegibles_historicas = increment(1);
                         loyaltySnapshot.visita_elegible_sumada = 1;
@@ -3801,6 +3824,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         monto_pagado: grandTotal,
                         monto_pagado_real: grandTotal,
                         saldo_pendiente: 0,
+                        cobrado_en: serverTimestamp(),
+                        paid_at: serverTimestamp(),
                         whatsappConfirmationSent: true,
                         whatsappReminderSent: true,
                         whatsappReminderNotNeeded: true,
@@ -3943,7 +3968,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             type="button"
                                             variant="ghost"
                                             size="icon"
-                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner', { detail: { fromCashbox: true } }))}
                                             className="h-8 w-8 text-[#C5A880] hover:text-[#e4cfb4] hover:bg-white/10 rounded-lg transition-colors inline-flex"
                                             aria-label="Escanear QR de cliente o beneficio"
                                         >
@@ -4066,7 +4091,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 variant="link"
                                                                 size="sm"
                                                                 className="h-auto p-0 text-xs text-[#C5A880] hover:text-[#e4cfb4] font-semibold flex items-center gap-1"
-                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner', { detail: { fromCashbox: true } }))}
                                                                 title="Escanear Pase Alfa para seleccionar cliente automáticamente"
                                                             >
                                                                 <QrCode className="h-3.5 w-3.5 text-[#C5A880]" /> Escanear QR
@@ -4412,7 +4437,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                 variant="link"
                                                                 size="sm"
                                                                 className="h-auto p-0 text-xs text-[#C5A880] hover:text-[#e4cfb4] font-semibold flex items-center gap-1"
-                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                                onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner', { detail: { fromCashbox: true } }))}
                                                                 title="Escanear Pase Alfa para seleccionar cliente automáticamente"
                                                             >
                                                                 <QrCode className="h-3.5 w-3.5 text-[#C5A880]" /> Escanear QR
@@ -4488,7 +4513,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                            onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner', { detail: { fromCashbox: true } }))}
                                                             className="h-7 px-2 text-[11px] font-semibold border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/20 hover:text-white rounded-lg flex items-center gap-1.5 transition-colors shrink-0"
                                                             title="Escanear QR de la App de este cliente o beneficio"
                                                         >
@@ -4573,7 +4598,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner'))}
+                                                    onClick={() => document.dispatchEvent(new CustomEvent('open-qr-scanner', { detail: { fromCashbox: true } }))}
                                                     className="h-7 px-2.5 text-[11px] font-semibold border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/20 hover:text-white rounded-lg flex items-center gap-1.5 shrink-0"
                                                     title="Escanear QR del cliente o beneficio"
                                                 >

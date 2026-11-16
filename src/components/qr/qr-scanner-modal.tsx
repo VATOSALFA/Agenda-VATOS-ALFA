@@ -80,6 +80,7 @@ interface QRScannerModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onClientSelectedForSale?: (client: Client) => void;
+  fromCashbox?: boolean;
 }
 
 // Sonido nativo de escaneo usando Web Audio API (cero dependencias externas)
@@ -116,7 +117,7 @@ function playBeep(success = true) {
   } catch (_) {}
 }
 
-export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }: QRScannerModalProps) {
+export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, fromCashbox = false }: QRScannerModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const canViewPhone = React.useMemo(() => {
@@ -304,9 +305,50 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             }
           }
         } catch {
-          // No es JSON, puede ser texto plano (folio de beneficio, código de promo, id de cliente o teléfono)
+          // No es JSON, puede ser formato compacto (VA:P: / VA:T: / VA:B:) o texto plano
           const clean = decodedText.trim();
-          if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-') || clean.startsWith('VA-JUNTOS-')) {
+          if (clean.startsWith('VA:P:')) {
+            clientIdToSearch = clean.slice(5).trim();
+          } else if (clean.startsWith('VA:T:')) {
+            phoneToSearch = clean.slice(5).trim();
+          } else if (clean.startsWith('VA:B:')) {
+            const parts = clean.split(':');
+            const bId = parts[2] || 'beneficio_alfa';
+            const cId = parts[3] || '';
+            const bFolio = parts[4] || '';
+            const bSig = parts[5] || '';
+            const bRefCode = parts[6] || '';
+            const isRefB = bId === 'invita_amigo';
+            const isJuntosB = bId === 'juntos_es_mejor';
+            const schedJuntos = isJuntosB ? validateJuntosSchedule() : { isValid: true, reason: undefined };
+
+            clientIdToSearch = cId;
+            detectedBenefit = {
+              folio: bFolio,
+              benefitTitle:
+                bId === 'decimo_corte'
+                  ? '10.° Corte Gratis'
+                  : bId === 'regalo_cumpleanos'
+                  ? 'Regalo de Cumpleaños'
+                  : isRefB
+                  ? 'Invita a un Amigo'
+                  : isJuntosB
+                  ? 'JUNTOS ES MEJOR'
+                  : 'Beneficio Pase Alfa',
+              benefitId: bId,
+              isReferralBenefit: isRefB,
+              isJuntosBenefit: isJuntosB,
+              referralCode: bRefCode,
+              discount: isRefB ? REFERRAL_DISCOUNT_PERCENT : isJuntosB ? 0 : 100,
+              rewardCoins: isRefB ? REFERRAL_HOST_REWARD_COINS : isJuntosB ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
+              minPurchase: isRefB ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
+              signature: bSig,
+              year: new Date().getFullYear(),
+              isScheduleValid: schedJuntos.isValid,
+              scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
+              minorsCount: 0,
+            };
+          } else if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-') || clean.startsWith('VA-JUNTOS-')) {
             const isRefFolio = clean.startsWith('VA-REF-');
             const isJuntosFolio = clean.startsWith('VA-JUNTOS-');
             const schedJuntos = isJuntosFolio ? validateJuntosSchedule() : { isValid: true, reason: undefined };
@@ -604,18 +646,24 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
             const todayStr = format(new Date(), 'yyyy-MM-dd');
             const qRes = query(
               collection(db, 'reservas'),
-              where('fecha', '==', todayStr),
-              where('estado', 'in', ['Pendiente', 'Confirmada', 'Reservado', 'Asiste'])
+              where('fecha', '==', todayStr)
             );
             const snapRes = await getDocs(qRes);
+            const excludedStatuses = ['cancelado', 'cancelada', 'no asiste', 'no_asiste', 'completado', 'finalizado'];
+            const cleanClientPhone = (foundClient.telefono || '').replace(/\D/g, '').slice(-10);
             clientResForToday =
               snapRes.docs
                 .map(d => ({ id: d.id, ...d.data() }))
-                .find(
-                  (r: any) =>
+                .find((r: any) => {
+                  const st = String(r.estado || '').toLowerCase().trim();
+                  if (excludedStatuses.includes(st)) return false;
+                  if (r.pago_estado === 'Pagado') return false;
+                  const resPhone = String(r.telefono || r.cliente_telefono || '').replace(/\D/g, '').slice(-10);
+                  return (
                     r.cliente_id === foundClient?.id ||
-                    (foundClient?.telefono && r.telefono === foundClient.telefono)
-                ) || null;
+                    (cleanClientPhone && resPhone === cleanClientPhone)
+                  );
+                }) || null;
           } catch (e) {
             console.warn('Error buscando cita de hoy:', e);
           }
@@ -1432,15 +1480,40 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
       if (applyToCashbox) {
         onOpenChange(false);
-        document.dispatchEvent(
-          new CustomEvent('new-sale', {
-            detail: {
-              client: scannedClient || undefined,
-              benefitRedeemed: { ...scannedBenefit, folio },
-              items: [],
-            },
-          })
-        );
+        if (fromCashbox) {
+          document.dispatchEvent(
+            new CustomEvent('apply-qr-to-sale', {
+              detail: {
+                client: scannedClient || undefined,
+                benefitRedeemed: { ...scannedBenefit, folio },
+              },
+            })
+          );
+        } else {
+          const preloadedItems = todayReservation?.items && todayReservation.items.length > 0
+            ? todayReservation.items
+            : todayReservation?.servicios && todayReservation.servicios.length > 0
+            ? todayReservation.servicios.map((s: any) => ({
+                id: s.id,
+                nombre: s.nombre,
+                precio: s.precio,
+                cantidad: s.cantidad || 1,
+                tipo: 'servicio',
+                barbero_id: todayReservation.barbero_id || todayReservation.barberoId || '',
+              }))
+            : [];
+          document.dispatchEvent(
+            new CustomEvent('new-sale', {
+              detail: {
+                client: scannedClient || undefined,
+                benefitRedeemed: { ...scannedBenefit, folio },
+                items: preloadedItems,
+                reservationId: todayReservation?.id || undefined,
+                anticipoPagado: todayReservation?.anticipoPagado || 0,
+              },
+            })
+          );
+        }
       } else {
         setScannedBenefit({ ...scannedBenefit, isRedeemed: true });
       }
@@ -1490,6 +1563,18 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
         };
       }
 
+      if (fromCashbox) {
+        document.dispatchEvent(
+          new CustomEvent('apply-qr-to-sale', {
+            detail: {
+              client: scannedClient || undefined,
+              benefitRedeemed: safeBenefitToPass,
+            },
+          })
+        );
+        return;
+      }
+
       const preloadedItems = todayReservation?.items && todayReservation.items.length > 0
         ? todayReservation.items
         : todayReservation?.servicios && todayReservation.servicios.length > 0
@@ -1526,23 +1611,22 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
     const minPurchaseAmount = currentHaircutPrice * totalParticipants;
 
     onOpenChange(false);
+    const juntosPayload = {
+      ...scannedBenefit,
+      isJuntosBenefit: true,
+      benefitId: 'juntos_es_mejor',
+      benefitTitle: 'JUNTOS ES MEJOR',
+      juntosMode: 'minors',
+      minorsCount: safeMinors,
+      companionsWithApp: [],
+      rewardCoins: totalCoins,
+      minPurchase: minPurchaseAmount,
+    };
     document.dispatchEvent(
-      new CustomEvent('new-sale', {
-        detail: {
-          client: scannedClient,
-          benefitRedeemed: {
-            ...scannedBenefit,
-            isJuntosBenefit: true,
-            benefitId: 'juntos_es_mejor',
-            benefitTitle: 'JUNTOS ES MEJOR',
-            juntosMode: 'minors',
-            minorsCount: safeMinors,
-            companionsWithApp: [],
-            rewardCoins: totalCoins,
-            minPurchase: minPurchaseAmount,
-          },
-          items: [],
-        },
+      new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
+        detail: fromCashbox
+          ? { client: scannedClient, benefitRedeemed: juntosPayload }
+          : { client: scannedClient, benefitRedeemed: juntosPayload, items: [], reservationId: todayReservation?.id || undefined, anticipoPagado: todayReservation?.anticipoPagado || 0 },
       })
     );
   };
@@ -1603,23 +1687,22 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
       const totalParticipantsInTicket = separateTickets ? 1 : 1 + juntosCompanions.length;
 
       onOpenChange(false);
+      const juntosCompanionsPayload = {
+        ...scannedBenefit,
+        isJuntosBenefit: true,
+        benefitId: 'juntos_es_mejor',
+        benefitTitle: 'JUNTOS ES MEJOR',
+        juntosMode: separateTickets ? 'companions_separate_tickets' : 'companions_single_ticket',
+        minorsCount: 0,
+        companionsWithApp: juntosCompanions,
+        rewardCoins: JUNTOS_REWARD_COINS_PER_PERSON * totalParticipantsInTicket,
+        minPurchase: currentHaircutPrice * totalParticipantsInTicket,
+      };
       document.dispatchEvent(
-        new CustomEvent('new-sale', {
-          detail: {
-            client: scannedClient,
-            benefitRedeemed: {
-              ...scannedBenefit,
-              isJuntosBenefit: true,
-              benefitId: 'juntos_es_mejor',
-              benefitTitle: 'JUNTOS ES MEJOR',
-              juntosMode: separateTickets ? 'companions_separate_tickets' : 'companions_single_ticket',
-              minorsCount: 0,
-              companionsWithApp: juntosCompanions,
-              rewardCoins: JUNTOS_REWARD_COINS_PER_PERSON * totalParticipantsInTicket,
-              minPurchase: currentHaircutPrice * totalParticipantsInTicket,
-            },
-            items: [],
-          },
+        new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
+          detail: fromCashbox
+            ? { client: scannedClient, benefitRedeemed: juntosCompanionsPayload }
+            : { client: scannedClient, benefitRedeemed: juntosCompanionsPayload, items: [], reservationId: todayReservation?.id || undefined, anticipoPagado: todayReservation?.anticipoPagado || 0 },
         })
       );
     } catch (err: any) {
@@ -1655,6 +1738,19 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
   const requiredPaidStampsForGoal = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
   const freeCutAvailable = Boolean(scannedClient?.corte_gratis_disponible || clientStamps >= requiredPaidStampsForGoal);
 
+  const isBenefitDecimoCorte = Boolean(
+    scannedBenefit &&
+      !scannedBenefit.isBlocked &&
+      (scannedBenefit.benefitId === 'decimo_corte' ||
+        scannedBenefit.benefitId === 'corte_gratis' ||
+        String(scannedBenefit.folio || '').startsWith('VA-CORTE-'))
+  );
+  const isFreeCutRedemptionView = Boolean(
+    !isScanningCompanion &&
+      ((isBenefitDecimoCorte && !scannedBenefit?.isRedeemed) ||
+        (fromCashbox && Boolean(scannedClient) && freeCutAvailable && !scannedBenefit))
+  );
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -1666,13 +1762,19 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
 
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <QrCode className="h-5 w-5 text-[#C5A880] shrink-0" />
+                {isFreeCutRedemptionView ? (
+                  <Scissors className="h-5 w-5 text-[#C5A880] shrink-0" />
+                ) : (
+                  <QrCode className="h-5 w-5 text-[#C5A880] shrink-0" />
+                )}
                 <div>
                   <DialogTitle className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                    Lector QR • VATOS ALFA
+                    {isFreeCutRedemptionView ? 'DÉCIMO CORTE GRATIS' : 'Lector QR • VATOS ALFA'}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-[#C5A880]/90">
-                    Escanea el Pase Alfa o cupón del cliente desde su app móvil
+                    {isFreeCutRedemptionView
+                      ? 'Confirmación de canje de cortesía en caja'
+                      : 'Escanea el Pase Alfa o cupón del cliente desde su app móvil'}
                   </DialogDescription>
                 </div>
               </div>
@@ -1680,8 +1782,82 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
           </DialogHeader>
 
           <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
+            {/* VISTA SIMPLIFICADA: DÉCIMO CORTE GRATIS (SOLO CLIENTE + EQUIVALENCIA + APLICAR) */}
+            {isFreeCutRedemptionView && (
+              <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="bg-[#161E35] border border-[#C5A880]/40 rounded-2xl p-5 shadow-lg space-y-4">
+                  {/* Nombre del cliente */}
+                  <div className="flex items-center gap-3.5">
+                    <Avatar className="h-12 w-12 border-2 border-[#C5A880] shadow-md shrink-0">
+                      <AvatarImage
+                        src={scannedClient?.fotoUrl || scannedClient?.avatarUrl || (scannedClient as any)?.foto_perfil_url}
+                        alt={scannedClient?.nombre || scannedBenefit?.clientName || 'Cliente'}
+                        className="object-cover"
+                      />
+                      <AvatarFallback className="text-base font-bold bg-[#202A49] text-[#C5A880]">
+                        {(scannedClient?.nombre || scannedBenefit?.clientName || 'C').charAt(0)}
+                        {scannedClient?.apellido?.charAt(0) || ''}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                        Cliente
+                      </p>
+                      <h3 className="text-base font-bold text-white truncate">
+                        {scannedClient
+                          ? `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim()
+                          : (scannedBenefit?.clientName || 'Cliente Verificado')}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* Equivalencia del canje */}
+                  <div className="p-3.5 rounded-xl bg-[#0F172A]/85 border border-[#C5A880]/35 flex items-start gap-3">
+                    <Sparkles className="h-5 w-5 text-[#C5A880] shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+                        Equivalencia del canje
+                      </p>
+                      <p className="text-sm font-bold text-[#C5A880]">
+                        Décimo Corte Gratis
+                      </p>
+                      <p className="text-xs text-slate-300">
+                        Cubre el 100% del servicio individual de Corte de cabello (${formatMoney(currentHaircutPrice)} MXN).
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    disabled={isRedeemingBenefit}
+                    onClick={() => (scannedBenefit ? handleRedeemBenefit(true) : handleOpenInCashbox(true))}
+                    className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-md"
+                  >
+                    {isRedeemingBenefit ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                    ) : (
+                      <Scissors className="h-4 w-4 mr-1.5" />
+                    )}
+                    Aplicar en Caja
+                  </Button>
+                </div>
+
+                <div className="pt-1 text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetScanner}
+                    className="text-xs text-gray-400 hover:text-white"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                    Escanear otro código
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* VISTA 1: RESULTADO DE CLIENTE O BENEFICIO ESCANEADO */}
-            {!isScanningCompanion && (scannedClient || scannedBenefit) && (
+            {!isFreeCutRedemptionView && !isScanningCompanion && (scannedClient || scannedBenefit) && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                 {/* TARJETA DESTACADA DE BENEFICIO ESCANEADO */}
                 {scannedBenefit && (
@@ -2292,24 +2468,34 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                 )}
 
                 {/* Acciones Rápidas */}
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                {fromCashbox ? (
                   <Button
                     onClick={() => handleOpenInCashbox(freeCutAvailable)}
                     className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
                   >
-                    <CreditCard className="h-4 w-4 mr-1.5" />
-                    Cobrar en Caja de Ventas
+                    <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                    Aplicar en Caja
                   </Button>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <Button
+                      onClick={() => handleOpenInCashbox(freeCutAvailable)}
+                      className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
+                    >
+                      <CreditCard className="h-4 w-4 mr-1.5" />
+                      Cobrar en Caja de Ventas
+                    </Button>
 
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsDetailModalOpen(true)}
-                    className="w-full border-white/20 text-gray-200 hover:bg-white/10 text-xs h-10"
-                  >
-                    <User className="h-4 w-4 mr-1.5" />
-                    Ver Ficha Completa
-                  </Button>
-                </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDetailModalOpen(true)}
+                      className="w-full bg-transparent border-white/20 text-gray-200 hover:bg-white/10 text-xs h-10"
+                    >
+                      <User className="h-4 w-4 mr-1.5" />
+                      Ver Ficha Completa
+                    </Button>
+                  </div>
+                )}
                 </>
                 )}
 
@@ -2349,18 +2535,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
                       onClick={() => {
                         onOpenChange(false);
                         document.dispatchEvent(
-                          new CustomEvent('new-sale', {
-                            detail: {
-                              promoCode: scannedPromo.codigoDescuento,
-                              items: [],
-                            },
+                          new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
+                            detail: fromCashbox
+                              ? { promoCode: scannedPromo.codigoDescuento }
+                              : { promoCode: scannedPromo.codigoDescuento, items: [] },
                           })
                         );
                       }}
                       className="flex-1 bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10"
                     >
                       <CreditCard className="h-4 w-4 mr-1.5" />
-                      Aplicar en Caja de Ventas
+                      {fromCashbox ? 'Aplicar en Caja' : 'Aplicar en Caja de Ventas'}
                     </Button>
                     <Button
                       variant="outline"

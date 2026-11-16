@@ -25,6 +25,7 @@ export default function AppInitializer() {
   const [saleInitialData, setSaleInitialData] = useState<any>(null);
 
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [qrScannerFromCashbox, setQrScannerFromCashbox] = useState(false);
 
   const [saleTrigger, setSaleTrigger] = useState(0);
   const [queryKey, setQueryKey] = useState(0);
@@ -61,7 +62,9 @@ export default function AppInitializer() {
       setIsSaleSheetOpen(true);
       setSaleTrigger(prev => prev + 1);
     };
-    const handleOpenQrScanner = () => {
+    const handleOpenQrScanner = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setQrScannerFromCashbox(Boolean(customEvent?.detail?.fromCashbox));
       setIsQrScannerOpen(true);
     };
 
@@ -111,7 +114,11 @@ export default function AppInitializer() {
       {isQrScannerOpen && (
         <QRScannerModal
           isOpen={isQrScannerOpen}
-          onOpenChange={setIsQrScannerOpen}
+          onOpenChange={(open) => {
+            setIsQrScannerOpen(open);
+            if (!open) setQrScannerFromCashbox(false);
+          }}
+          fromCashbox={qrScannerFromCashbox}
         />
       )}
     </>

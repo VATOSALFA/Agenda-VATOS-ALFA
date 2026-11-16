@@ -607,6 +607,7 @@ export interface CommissionRowData {
     type: 'fixed' | 'percentage';
     amount: number;
   };
+  isFreeCut?: boolean;
 }
 
 export interface ProfessionalCommissionSummary {

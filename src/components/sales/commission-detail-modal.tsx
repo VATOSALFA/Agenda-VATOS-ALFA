@@ -99,11 +99,16 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                   <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-border/40">
                     <div>
                       <span className="text-muted-foreground block text-[11px]">Venta</span>
-                      <div className="font-medium flex items-center gap-1 mt-0.5 font-sans">
+                      <div className="font-medium flex items-center flex-wrap gap-1 mt-0.5 font-sans">
                         ${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         {detail.discountDetails && (
                           <span className="text-[10px] bg-muted/40 text-muted-foreground px-1.5 py-0.5 rounded border border-border/40 whitespace-nowrap font-medium">
                             {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
+                          </span>
+                        )}
+                        {detail.isFreeCut && (
+                          <span className="text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 px-1.5 py-0.5 rounded whitespace-nowrap">
+                            10° gratis
                           </span>
                         )}
                       </div>
@@ -176,10 +181,19 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                       <TableCell className="py-1.5 px-3 text-right font-sans">
                         <div className="flex flex-col items-end justify-center">
                           <span className="text-xs font-medium text-foreground">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          {detail.discountDetails && (
-                            <span className="text-[10px] text-muted-foreground font-medium bg-muted/40 px-1.5 py-0.5 rounded mt-0.5 border border-border/40 whitespace-nowrap">
-                              {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
-                            </span>
+                          {(detail.discountDetails || detail.isFreeCut) && (
+                            <div className="flex items-center gap-1 flex-wrap justify-end mt-0.5">
+                              {detail.discountDetails && (
+                                <span className="text-[10px] text-muted-foreground font-medium bg-muted/40 px-1.5 py-0.5 rounded border border-border/40 whitespace-nowrap">
+                                  {detail.discountDetails.type === 'percentage' ? `${detail.discountDetails.value}%` : `$${detail.discountDetails.value}`} dcto
+                                </span>
+                              )}
+                              {detail.isFreeCut && (
+                                <span className="text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                  10° gratis
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
                       </TableCell>

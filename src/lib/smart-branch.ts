@@ -788,7 +788,7 @@ export async function finalizeSmartSaleLoyalty(params: {
     : client;
 
   const alreadyCountedToday = (freshClient as any).ultima_visita_fecha === todayStr;
-  const visitDelta = hasServiceInCart && !alreadyCountedToday ? 1 : 0;
+  const visitDelta = realMoneySpent > 0 && hasServiceInCart && !alreadyCountedToday ? 1 : 0;
 
   const prevEvaluated = evaluateClientAlfaTier(freshClient, nivelesConfig, {
     forceEvaluateWhenPaused: true,

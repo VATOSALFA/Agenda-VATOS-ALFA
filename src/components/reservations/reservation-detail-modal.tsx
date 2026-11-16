@@ -50,6 +50,7 @@ import {
   KeyRound,
   ShieldCheck,
   AlertCircle,
+  FileText,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { validateAndConsumeAuthCode } from '@/lib/auth-code-validator';
@@ -407,6 +408,31 @@ export function ReservationDetailModal({
     }
     return null;
   }, [reservation.creado_en, (reservation as any).createdAt, (reservation as any).creada_el]);
+
+  // Notas o especificaciones enviadas por el cliente al agendar
+  const customerBookingNotes = useMemo(() => {
+    const direct =
+      (reservation as any).notas_cliente ||
+      (reservation as any).especificaciones ||
+      (reservation as any).comentarios_cliente;
+    if (direct && typeof direct === 'string' && direct.trim()) {
+      return direct.trim();
+    }
+    const rawNotas = (reservation.notas || '').trim();
+    if (!rawNotas) return '';
+    const lower = rawNotas.toLowerCase();
+    if (
+      lower === 'agendado desde app vatos alfa' ||
+      lower === 'agendado desde la web' ||
+      lower === 'agendada desde la web' ||
+      lower === 'agendado desde app' ||
+      lower === 'agendado por asistente virtual janet' ||
+      lower === 'agendado por janet'
+    ) {
+      return '';
+    }
+    return rawNotas;
+  }, [reservation.notas, (reservation as any).notas_cliente, (reservation as any).especificaciones, (reservation as any).comentarios_cliente]);
 
   if (!reservation) return null;
 
@@ -1529,6 +1555,19 @@ export function ReservationDetailModal({
                 );
               })()}
             </div>
+
+            {/* 3.1 NOTAS O ESPECIFICACIONES DEL CLIENTE */}
+            {customerBookingNotes && (
+              <div className="p-3 rounded-xl border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 text-xs space-y-1.5 shadow-2xs">
+                <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] uppercase tracking-wider">
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Notas o especificaciones del cliente</span>
+                </div>
+                <p className="text-foreground text-xs leading-relaxed pl-5 whitespace-pre-wrap font-medium">
+                  {customerBookingNotes}
+                </p>
+              </div>
+            )}
 
             {/* 4. DESGLOSE FINANCIERO / ANTICIPO */}
             {(depositAmount > 0 || (isAnticipoRequired && expectedDepositAmount > 0) || isDepositPaid || reservation.pago_estado === 'Pagado') && (

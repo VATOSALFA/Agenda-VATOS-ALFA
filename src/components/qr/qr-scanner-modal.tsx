@@ -1490,12 +1490,27 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale }
         };
       }
 
+      const preloadedItems = todayReservation?.items && todayReservation.items.length > 0
+        ? todayReservation.items
+        : todayReservation?.servicios && todayReservation.servicios.length > 0
+        ? todayReservation.servicios.map((s: any) => ({
+            id: s.id,
+            nombre: s.nombre,
+            precio: s.precio,
+            cantidad: s.cantidad || 1,
+            tipo: 'servicio',
+            barbero_id: todayReservation.barbero_id || todayReservation.barberoId || '',
+          }))
+        : [];
+
       document.dispatchEvent(
         new CustomEvent('new-sale', {
           detail: {
             client: scannedClient || undefined,
             benefitRedeemed: safeBenefitToPass,
-            items: [],
+            items: preloadedItems,
+            reservationId: todayReservation?.id || undefined,
+            anticipoPagado: todayReservation?.anticipoPagado || 0,
           },
         })
       );

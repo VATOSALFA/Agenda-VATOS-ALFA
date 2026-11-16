@@ -489,21 +489,27 @@ const ResumenCarrito = ({
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2 min-w-0">
                         {appliedBenefit.isReferralBenefit || appliedBenefit.isJuntosBenefit ? (
-                            <Users className={cn("h-4 w-4 shrink-0 mt-0.5", appliedBenefit.isReferralBlocked ? "text-red-400" : "text-[#C5A880]")} />
+                            <Users className={cn("h-4 w-4 shrink-0 mt-0.5", (appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? "text-red-400" : "text-[#C5A880]")} />
                         ) : (
-                            <Gift className="h-4 w-4 text-[#C5A880] shrink-0 mt-0.5" />
+                            <Gift className={cn("h-4 w-4 shrink-0 mt-0.5", appliedBenefit.isFreeCutBlocked ? "text-red-400" : "text-[#C5A880]")} />
                         )}
                         <div className="min-w-0">
-                            <p className={cn("font-bold text-xs", appliedBenefit.isReferralBlocked ? "text-red-400" : "text-[#C5A880]")}>
+                            <p className={cn("font-bold text-xs", (appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? "text-red-400" : "text-[#C5A880]")}>
                                 {appliedBenefit.isReferralBenefit
                                     ? (appliedBenefit.isReferralBlocked ? '⛔ Invitación Bloqueada' : `Invita a un Amigo (${REFERRAL_DISCOUNT_PERCENT}% Desc.)`)
                                     : appliedBenefit.isJuntosBenefit
                                     ? 'JUNTOS ES MEJOR (+400 Coins c/u)'
+                                    : appliedBenefit.isFreeCutBlocked
+                                    ? '⛔ Corte Gratis No Aplicable'
                                     : (appliedBenefit.benefitTitle || 'Beneficio Alfa Aplicado')}
                             </p>
                             {appliedBenefit.isReferralBlocked ? (
                                 <p className="text-[10px] text-red-300 leading-snug mt-0.5">
                                     {appliedBenefit.referralBlockReason}
+                                </p>
+                            ) : appliedBenefit.isFreeCutBlocked ? (
+                                <p className="text-[10px] text-red-300 leading-snug mt-0.5 font-medium">
+                                    {appliedBenefit.freeCutBlockReason}
                                 </p>
                             ) : appliedBenefit.isReferralBenefit && appliedBenefit.referrerName ? (
                                 <div className="space-y-0.5 mt-0.5">
@@ -544,11 +550,11 @@ const ResumenCarrito = ({
                     <div className="flex items-center gap-1 shrink-0">
                         <Badge className={cn(
                             "text-[10px] shrink-0 font-sans",
-                            appliedBenefit.isReferralBlocked
+                            (appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked)
                                 ? "bg-red-500/20 text-red-300 border-red-500/40"
                                 : "bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40"
                         )}>
-                            {appliedBenefit.isReferralBlocked ? 'No Elegible' : appliedBenefit.isReferralBenefit ? '-20% Amigo' : appliedBenefit.isJuntosBenefit ? '+Coins' : 'Canjeado en QR'}
+                            {(appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? 'No Elegible' : appliedBenefit.isReferralBenefit ? '-20% Amigo' : appliedBenefit.isJuntosBenefit ? '+Coins' : 'Canjeado en QR'}
                         </Badge>
                         {onRemoveBenefit && (
                             <button
@@ -665,128 +671,7 @@ const ResumenCarrito = ({
             </div>
         )}
 
-        {/* Puntos, Nivel y Privilegios de Lealtad Alfa Club (Solo usuarios con App descargada) */}
-        {client && hasAppDownloaded && (() => {
-            const clientCoins = Number(clientAlfaCoins ?? client.alfaCoins ?? client.alfa_coins ?? client.puntosLealtad ?? client.puntos_lealtad ?? client.puntos ?? 0);
-            const unitVal = Number(alfaCoinUnitValue || 0.03);
-            const cashEquivalent = Math.round(clientCoins * unitVal * 100) / 100;
-            const usableMax = maxUsableAlfaCoins !== undefined ? maxUsableAlfaCoins : Math.min(clientCoins, Math.max(0, Math.ceil((subtotal - totalDiscount - anticipoPagado) / unitVal)));
-            const coinsCurrentlySet = (alfaCoinsToUse !== null && alfaCoinsToUse !== undefined) ? alfaCoinsToUse : usableMax;
-            const isTiersActive = Boolean(clientLevelInfo?.activo);
-            const tierPerks: string[] = isTiersActive && Array.isArray(clientLevelInfo?.beneficios)
-                ? clientLevelInfo.beneficios.filter((b: string) => !/alfacoin/i.test(b) && !/tarjeta digital pase alfa/i.test(b))
-                : [];
-
-            return (
-                <div className={cn(
-                    "p-3 border rounded-xl mx-3 my-2 space-y-2 shrink-0 transition-all",
-                    clientCoins > 0 || (isTiersActive && clientLevelInfo?.tierId !== 'member')
-                        ? "border-[#C5A880]/30 bg-[#C5A880]/10"
-                        : "border-border/50 bg-muted/20"
-                )}>
-                    <div className="flex justify-between items-center gap-2">
-                        <div className="space-y-0.5 min-w-0 flex-1">
-                            <span className={cn("text-xs font-bold flex items-center gap-1.5 flex-wrap font-sans", clientCoins > 0 ? "text-[#C5A880]" : "text-muted-foreground")}>
-                                <Coins className={cn("h-3.5 w-3.5 shrink-0", clientCoins > 0 ? "text-[#C5A880]" : "text-slate-400")} />
-                                <span>ALFA COINS: {clientCoins}</span>
-                                {isTiersActive && clientLevelInfo?.tierName && (
-                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40">
-                                        {clientLevelInfo.tierId === 'vip' ? <Crown className="h-2.5 w-2.5" /> : <Award className="h-2.5 w-2.5" />}
-                                        {clientLevelInfo.tierName} • {clientLevelInfo.cashbackPct}%
-                                    </span>
-                                )}
-                            </span>
-                            <p className="text-[10px] text-muted-foreground font-sans">
-                                {clientCoins > 0 ? `Equivalente a $${formatMoney(cashEquivalent)} MXN ($${unitVal.toFixed(2)} c/u)` : 'Sin saldo para canjear'}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-[11px] font-medium text-foreground">
-                                {redeemPoints ? 'Aplicando' : 'Canjear'}
-                            </span>
-                            <Switch
-                                checked={redeemPoints}
-                                onCheckedChange={(val) => {
-                                    setRedeemPoints(val);
-                                    if (val && setAlfaCoinsToUse) {
-                                        setAlfaCoinsToUse(usableMax);
-                                    }
-                                }}
-                                disabled={clientCoins <= 0}
-                            />
-                        </div>
-                    </div>
-
-                    {isTiersActive && clientLevelInfo?.productDiscountPct > 0 && (
-                        <div className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center gap-2 text-[11px] text-blue-300 font-sans">
-                            <Percent className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                            <span>
-                                <strong>{clientLevelInfo.productDiscountPct}% Descuento en Productos</strong> aplicado automáticamente por su nivel {clientLevelInfo.tierName}.
-                            </span>
-                        </div>
-                    )}
-
-                    {isTiersActive && tierPerks.length > 0 && (
-                        <div className="pt-1.5 border-t border-[#C5A880]/20 space-y-1">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-[#C5A880] flex items-center gap-1 font-sans">
-                                <Sparkles className="h-3 w-3 shrink-0" /> Privilegios activos de {clientLevelInfo.tierName}:
-                            </p>
-                            <div className="space-y-0.5">
-                                {tierPerks.map((perk: string, idx: number) => (
-                                    <p key={idx} className="text-[10px] text-foreground/85 leading-snug flex items-start gap-1.5 font-sans">
-                                        <span className="text-[#C5A880] font-bold">•</span>
-                                        <span>{perk}</span>
-                                    </p>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {redeemPoints && clientCoins > 0 && (
-                        <div className="pt-2 border-t border-[#C5A880]/20 space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] text-muted-foreground">Monedas a canjear:</span>
-                                <div className="flex items-center gap-1.5">
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={usableMax}
-                                        value={coinsCurrentlySet}
-                                        onChange={(e) => {
-                                            const val = Number(e.target.value);
-                                            if (setAlfaCoinsToUse) {
-                                                if (isNaN(val) || val <= 0) {
-                                                    setAlfaCoinsToUse(0);
-                                                } else {
-                                                    setAlfaCoinsToUse(Math.min(val, usableMax));
-                                                }
-                                            }
-                                        }}
-                                        className="h-7 w-20 text-xs font-semibold text-right bg-background border-border/70 rounded-lg px-2 font-sans"
-                                    />
-                                    {usableMax > 0 && setAlfaCoinsToUse && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => setAlfaCoinsToUse(usableMax)}
-                                            className="h-7 px-2 text-[10px] font-bold text-[#C5A880] hover:bg-[#C5A880]/20 rounded-lg"
-                                        >
-                                            Máx ({usableMax})
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-[#C5A880] font-semibold text-xs font-sans">
-                                <span>Descuento aplicado:</span>
-                                <span>-${formatMoney(pointsDiscount || 0)} MXN</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        })()}
-
+        {/* Resumen Financiero y Totales */}
         {cart.length > 0 && (
             <div className="p-3 sm:p-4 border-t border-border/60 space-y-2.5 bg-gradient-to-b from-muted/10 to-muted/30 shrink-0">
                 <div className="space-y-1.5 text-xs">
@@ -1516,7 +1401,43 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         }
     }, [appliedBenefit?.isReferralBenefit, appliedBenefit?.isReferralBlocked, cart.length]);
 
-    // Aplicar automáticamente el descuento del 10.° Corte Gratis ("La Décima Va por la Casa") sobre el primer servicio en carrito
+    // Helper para identificar el servicio individual independiente de corte de cabello (excluyendo paquetes)
+    const isIndividualHaircutItem = useCallback((it: any) => {
+        if (it.tipo !== 'servicio') return false;
+        const name = (it.nombre || it.name || '').toLowerCase().trim();
+        const cat = (it.categoria || it.category || '').toLowerCase().trim();
+        const isPkg = it.esPaquete === true || it.es_paquete === true;
+        if (
+            isPkg ||
+            cat.includes('paquete') ||
+            cat.includes('combo') ||
+            /^[1-5]\s+/i.test(name) ||
+            name.includes('paquete') ||
+            name.includes('combo') ||
+            name.includes('el caballero alfa') ||
+            name.includes('renovación alfa') ||
+            name.includes('renovacion alfa') ||
+            name.includes('héroe en descanso') ||
+            name.includes('heroe en descanso') ||
+            name.includes('alfa superior') ||
+            name.includes('todo para el campeón') ||
+            name.includes('todo para el campeon')
+        ) {
+            return false;
+        }
+        return (
+            name.includes('corte de cabello') ||
+            name.includes('corte tradicional') ||
+            name.includes('corte clásico') ||
+            name.includes('corte clasico') ||
+            name === 'corte'
+        );
+    }, []);
+
+    // Aplicar automáticamente el descuento del 10.° Corte Gratis ("La Décima Va por la Casa")
+    // Regla Oficial: Aplica de forma estricta y exclusiva sobre el servicio individual independiente de "Corte de cabello".
+    // 1. Si en la cita se agregaron más servicios (barba, facial) o productos, el QR cubre únicamente el corte de cabello ($140 MXN).
+    // 2. Si el cliente agendó un Paquete combinado (ej. "El Caballero alfa"), el QR NO es válido porque no admite descomposición de paquetes.
     useEffect(() => {
         const isFreeCut =
             appliedBenefit?.benefitId === 'decimo_corte' ||
@@ -1524,22 +1445,74 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             String(appliedBenefit?.folio || '').startsWith('VA-CORTE');
         if (!isFreeCut) return;
 
+        const hasIndividualHaircut = cart.some(isIndividualHaircutItem);
+        const hasPackage = cart.some(item => {
+            const it = item as any;
+            if (it.tipo !== 'servicio') return false;
+            const name = (it.nombre || it.name || '').toLowerCase();
+            const cat = (it.categoria || it.category || '').toLowerCase();
+            return (
+                Boolean(it.esPaquete || it.es_paquete) ||
+                cat.includes('paquete') ||
+                cat.includes('combo') ||
+                name.includes('paquete') ||
+                name.includes('combo') ||
+                name.includes('el caballero alfa') ||
+                name.includes('renovación alfa') ||
+                name.includes('renovacion alfa') ||
+                name.includes('héroe en descanso') ||
+                name.includes('heroe en descanso') ||
+                name.includes('alfa superior') ||
+                name.includes('todo para el campeón') ||
+                name.includes('todo para el campeon')
+            );
+        });
+
+        if (!hasIndividualHaircut) {
+            if (hasPackage && !appliedBenefit.isFreeCutBlocked) {
+                setAppliedBenefit((prev: any) =>
+                    prev ? {
+                        ...prev,
+                        isFreeCutBlocked: true,
+                        freeCutBlockReason: '⚠️ No aplicable a Paquetes. El 10.° Corte Gratis aplica exclusivamente para el servicio individual independiente de Corte de cabello ($140.00 MXN).'
+                    } : prev
+                );
+                toast({
+                    variant: 'destructive',
+                    title: 'Beneficio No Válido para Paquetes',
+                    description: 'El 10.° corte gratis no aplica sobre paquetes ni combos. Requiere agregar el servicio individual independiente de Corte de cabello.',
+                });
+            }
+            return;
+        }
+
+        // Si hay corte individual, desbloquear si estaba bloqueado
+        if (appliedBenefit.isFreeCutBlocked) {
+            setAppliedBenefit((prev: any) =>
+                prev ? {
+                    ...prev,
+                    isFreeCutBlocked: false,
+                    freeCutBlockReason: undefined,
+                } : prev
+            );
+        }
+
         setCart(prev => {
             const alreadyApplied = prev.some(
-                it => it.tipo === 'servicio' && Number(it.discountValue) > 0
+                it => isIndividualHaircutItem(it) && Number(it.discountValue) > 0
             );
             if (alreadyApplied) return prev;
 
-            const firstServiceIdx = prev.findIndex(it => it.tipo === 'servicio');
-            if (firstServiceIdx === -1) return prev;
+            const haircutIdx = prev.findIndex(isIndividualHaircutItem);
+            if (haircutIdx === -1) return prev;
 
-            const targetItem = prev[firstServiceIdx];
-            const itemLineTotal = (Number(targetItem.precio) || 0) * (Number(targetItem.cantidad) || 1);
-            const freeCutDiscountAmt = Math.min(itemLineTotal, Number(currentHaircutPrice || 140));
+            const targetItem = prev[haircutIdx];
+            const itemPrice = Number(targetItem.precio) || 0;
+            const freeCutDiscountAmt = Math.min(itemPrice, Number(currentHaircutPrice || 140));
             if (freeCutDiscountAmt <= 0) return prev;
 
             return prev.map((it, idx) =>
-                idx === firstServiceIdx
+                idx === haircutIdx
                     ? {
                           ...it,
                           discountValue: String(freeCutDiscountAmt),
@@ -1548,7 +1521,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     : it
             );
         });
-    }, [appliedBenefit?.benefitId, appliedBenefit?.folio, cart.length, currentHaircutPrice]);
+    }, [appliedBenefit?.benefitId, appliedBenefit?.folio, appliedBenefit?.isFreeCutBlocked, cart, currentHaircutPrice, isIndividualHaircutItem, toast]);
 
     // Validación Zero-Trust cuando se selecciona al cliente en Caja con un código de referido activo
     useEffect(() => {

@@ -26,6 +26,7 @@ import {
   BarChart3,
   SlidersHorizontal,
   Bell,
+  Star,
 } from "lucide-react";
 
 interface SettingsLayoutProps {
@@ -61,6 +62,7 @@ const sidebarNavItems = [
     icon: Smartphone,
     children: [
       { title: "Pase Alfa", href: "/settings/mobile-app?tab=pase_alfa", icon: Sparkles },
+      { title: "Calificaciones", href: "/settings/mobile-app?tab=calificaciones", icon: Star },
       { title: "Uso & Tiendas", href: "/settings/mobile-app?tab=metricas", icon: BarChart3 },
     ],
   },

@@ -15,6 +15,7 @@ import type { Client, CanjeBeneficio } from '@/lib/types';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
+import { ServiceRatingsPanel } from '@/components/admin/service-ratings-panel';
 import { AppDownloadLinksCard } from '@/components/admin/app-download-links-card';
 import { cn } from '@/lib/utils';
 import {
@@ -35,6 +36,10 @@ const TAB_META: Record<string, { title: string; subtitle: string }> = {
     pase_alfa: {
         title: 'PASE ALFA',
         subtitle: 'Administra el programa Pase Alfa, días multiplicadores y beneficios exclusivos de la app móvil.',
+    },
+    calificaciones: {
+        title: 'CALIFICACIONES DE SERVICIO',
+        subtitle: 'Consulta las estrellas y comentarios enviados por clientes después de finalizar su cita.',
     },
     metricas: {
         title: 'USO Y TIENDAS',
@@ -145,6 +150,10 @@ function MobileAppSettingsContent() {
                 {/* PASE ALFA TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB) */}
                 <TabsContent value="pase_alfa" className="mt-0 space-y-4">
                     <PaseAlfaManager onEditingChange={handleEditingChange} />
+                </TabsContent>
+
+                <TabsContent value="calificaciones" className="mt-4 sm:mt-5 space-y-4">
+                    <ServiceRatingsPanel />
                 </TabsContent>
 
                 {/* MÉTRICAS, USO Y ENLACES DE TIENDAS TAB */}

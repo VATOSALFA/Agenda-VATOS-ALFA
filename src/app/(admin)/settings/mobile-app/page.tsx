@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import type { Client, CanjeBeneficio } from '@/lib/types';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
 import { PaseAlfaManager } from '@/components/admin/pase-alfa-manager';
-import { ServiceRatingsPanel } from '@/components/admin/service-ratings-panel';
 import { AppDownloadLinksCard } from '@/components/admin/app-download-links-card';
 import { cn } from '@/lib/utils';
 import {
@@ -37,10 +36,6 @@ const TAB_META: Record<string, { title: string; subtitle: string }> = {
         title: 'PASE ALFA',
         subtitle: 'Administra el programa Pase Alfa, días multiplicadores y beneficios exclusivos de la app móvil.',
     },
-    calificaciones: {
-        title: 'CALIFICACIONES DE SERVICIO',
-        subtitle: 'Consulta las estrellas y comentarios enviados por clientes después de finalizar su cita.',
-    },
     metricas: {
         title: 'USO Y TIENDAS',
         subtitle: 'Consulta enlaces de descarga, adopción y métricas de clientes con app móvil.',
@@ -48,10 +43,17 @@ const TAB_META: Record<string, { title: string; subtitle: string }> = {
 };
 
 function MobileAppSettingsContent() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const tabParam = searchParams.get('tab');
     const resolvedTab = tabParam && TAB_META[tabParam] ? tabParam : 'pase_alfa';
     const [activeTab, setActiveTab] = useState(resolvedTab);
+
+    useEffect(() => {
+        if (tabParam === 'calificaciones') {
+            router.replace('/admin/calificaciones');
+        }
+    }, [tabParam, router]);
     const [editingBenefitState, setEditingBenefitState] = useState<{ isEditing: boolean; onBack: () => void; title?: string }>({
         isEditing: false,
         onBack: () => {},
@@ -150,10 +152,6 @@ function MobileAppSettingsContent() {
                 {/* PASE ALFA TAB (SINCRONIZADO EN ESPEJO CON SITIO WEB) */}
                 <TabsContent value="pase_alfa" className="mt-0 space-y-4">
                     <PaseAlfaManager onEditingChange={handleEditingChange} />
-                </TabsContent>
-
-                <TabsContent value="calificaciones" className="mt-4 sm:mt-5 space-y-4">
-                    <ServiceRatingsPanel />
                 </TabsContent>
 
                 {/* MÉTRICAS, USO Y ENLACES DE TIENDAS TAB */}

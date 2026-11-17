@@ -724,18 +724,18 @@ export function parseAndValidateReferralCode(rawCode: string): ParsedReferralCod
   const namePrefix = parts[1] || '';
   const suffix = parts[2] || '';
 
-  // Bloquear códigos genéricos de cuentas invitado o manipulados
-  const blockedGenericCodes = ['ALFA-VIP-2025', 'ALFA-VIP-CLUB', 'ALFA-GUEST-0000', 'ALFA-INVIT-CLUB'];
-  const blockedSuffixes = ['CLUB', '2025', '2026', '0000'];
+  // Bloquear códigos genéricos de cuentas invitado, placeholders o manipulados
+  const blockedGenericCodes = ['ALFA-VIP-2025', 'ALFA-VIP-CLUB', 'ALFA-GUEST-0000', 'ALFA-INVIT-CLUB', 'ALFA-NOMBRE-XXXX'];
+  const blockedPrefixes = ['GUEST', 'INVIT', 'NOMBRE', 'NOMBR'];
+  const blockedSuffixes = ['CLUB', '2025', '2026', '0000', 'XXXX'];
 
   if (
     blockedGenericCodes.includes(clean) ||
+    blockedPrefixes.includes(namePrefix) ||
     blockedSuffixes.includes(suffix) ||
-    namePrefix === 'GUEST' ||
-    namePrefix === 'INVIT' ||
     namePrefix.length < 2 ||
-    namePrefix.length > 5 ||
-    !/^[A-Z]{2,5}$/.test(namePrefix) ||
+    namePrefix.length > 12 ||
+    !/^[A-Z]{2,12}$/.test(namePrefix) ||
     !/^[A-Z0-9]{4}$/.test(suffix)
   ) {
     return {
@@ -743,7 +743,7 @@ export function parseAndValidateReferralCode(rawCode: string): ParsedReferralCod
       fullCode: clean,
       namePrefix,
       suffix,
-      rejectionReason: '⛔ CÓDIGO NO AUTORIZADO: Este código corresponde a una sesión de invitado sin cuenta vinculada o fue generado artificialmente.',
+      rejectionReason: '⛔ CÓDIGO INCORRECTO: El formato o contenido del código no es válido. Usa el código oficial ALFA-NOMBRE-XXXX enviado desde la App.',
     };
   }
 
@@ -756,8 +756,8 @@ export function parseAndValidateReferralCode(rawCode: string): ParsedReferralCod
 }
 
 /**
- * Busca de forma estricta (Doble Factor: Prefijo de Nombre + Últimos 4 dígitos de Teléfono/ID)
- * al cliente anfitrión en la base de datos oficial. Impide adivinar códigos al azar.
+ * Busca de forma estricta (Doble Factor: Miembro activo de la App + Prefijo de Nombre + Últimos 4 dígitos de Teléfono/ID)
+ * al cliente anfitrión en la base de datos oficial. Impide adivinar códigos al azar o usar cuentas sin App.
  */
 export function findMatchingReferrerClient<T extends { id?: string; nombre?: string; telefono?: string }>(
   clients: T[],
@@ -769,14 +769,34 @@ export function findMatchingReferrerClient<T extends { id?: string; nombre?: str
   }
 
   const matched = clients.find(c => {
+    const explicitCode = String((c as any).codigo_referido || (c as any).referralCode || '').trim().toUpperCase();
+    if (explicitCode && explicitCode === parsed.fullCode) {
+      return true;
+    }
+
+    // Seguridad: Solo clientes registrados en la App Móvil pueden generar códigos de invitación válidos
+    if (!isClientWithApp(c as any)) {
+      return false;
+    }
+
     const clientNamePrefix = normalizeReferralNamePrefix(c.nombre);
+    const clientFirstWord = (c.nombre || '')
+      .trim()
+      .split(/\s+/)[0]
+      ?.normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z]/g, '')
+      .toUpperCase() || '';
+
     const cleanPhone = (c.telefono || '').replace(/\D/g, '');
     const phoneSuffix = cleanPhone.length >= 4 ? cleanPhone.slice(-4) : '';
     const cleanId = (c.id || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const idSuffix = cleanId.length >= 4 ? cleanId.slice(-4) : '';
 
-    // Doble factor obligatorio: DEBE coincidir el prefijo del nombre Y los 4 dígitos finales
-    const nameMatches = clientNamePrefix === parsed.namePrefix;
+    // Doble factor obligatorio: DEBE coincidir el nombre (prefijo 5 letras o primer nombre) Y los 4 dígitos finales
+    const nameMatches =
+      clientNamePrefix === parsed.namePrefix ||
+      (clientFirstWord.length >= 2 && clientFirstWord === parsed.namePrefix);
     const suffixMatches =
       (phoneSuffix && phoneSuffix === parsed.suffix) ||
       (!phoneSuffix && idSuffix && idSuffix === parsed.suffix);
@@ -788,7 +808,7 @@ export function findMatchingReferrerClient<T extends { id?: string; nombre?: str
     return {
       hostClient: null,
       parsed,
-      error: `⛔ CÓDIGO DE INVITACIÓN INVÁLIDO: El código "${parsed.fullCode}" no coincide con ningún miembro registrado en el sistema oficial de VATOS ALFA. Verifica que esté bien escrito.`,
+      error: `⛔ CÓDIGO INCORRECTO: El código "${parsed.fullCode}" no existe o no pertenece a un miembro activo de la App VATOS ALFA. Verifica que esté bien escrito.`,
     };
   }
 
@@ -839,13 +859,24 @@ export function validateInvitedClientEligibility(
 
   // 3. Bloqueo a Clientes con Historial Previo (Exclusivo Clientes Nuevos)
   const cortesAcumulados = Number(invitedClient.cortes_acumulados ?? invitedClient.cortesAcumulados ?? 0);
-  const visitasPrevias = Number(invitedClient.visitas ?? invitedClient.total_visitas ?? 0);
-  const gastoPrevio = Number(invitedClient.gasto_total ?? invitedClient.consumo_total ?? 0);
+  const visitasPrevias = Math.max(
+    Number(invitedClient.visitas ?? 0),
+    Number(invitedClient.total_visitas ?? 0),
+    Number(invitedClient.visitas_totales ?? 0),
+    Number(invitedClient.citas_asistidas ?? 0),
+    Number(invitedClient.citasAsistidas ?? 0),
+    Number(invitedClient.visitas_pase_alfa ?? 0)
+  );
+  const gastoPrevio = Math.max(
+    Number(invitedClient.gasto_total ?? 0),
+    Number(invitedClient.consumo_total ?? 0),
+    Number(invitedClient.consumoTotal ?? 0)
+  );
 
   if (cortesAcumulados > 0 || visitasPrevias > 0 || gastoPrevio > 0 || previousCompletedSalesCount > 0) {
     return {
       isEligible: false,
-      rejectionReason: `⛔ CLIENTE NO ELEGIBLE: "${invitedClient.nombre || 'Este cliente'}" ya cuenta con historial previo en VATOS ALFA (${Math.max(cortesAcumulados, visitasPrevias, previousCompletedSalesCount)} visita(s) / compras registradas). La promoción "Invita a un Amigo" (20% de descuento) es exclusiva para clientes nuevos en su primera visita.`,
+      rejectionReason: `⛔ CLIENTE NO ELEGIBLE (NO ES CLIENTE NUEVO): "${invitedClient.nombre || 'Este cliente'}" ya cuenta con historial previo en VATOS ALFA (${Math.max(cortesAcumulados, visitasPrevias, previousCompletedSalesCount)} visita(s) / compras registradas). La promoción "Invita a un Amigo" (20% de descuento) es exclusiva para clientes nuevos en su primera visita.`,
     };
   }
 

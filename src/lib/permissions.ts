@@ -100,6 +100,7 @@ export const allPermissionCategories: PermissionCategory[] = [
             { key: 'generar_codigos_anticipo', label: 'Generar Códigos de Anticipo (4 Dígitos)' },
             { key: 'ver_garantias', label: 'Ver Garantías' },
             { key: 'ver_buzon', label: 'Ver Buzón' },
+            { key: 'ver_calificaciones', label: 'Ver Calificaciones' },
             { key: 'ver_ajustes', label: 'Ver Ajustes' },
             { key: 'ver_nomina', label: 'Ver Nómina' },
         ]
@@ -147,7 +148,7 @@ export const initialRoles: Omit<Role, 'id'>[] = [
             'ver_productos', 'ver_inventario', 'ver_movimiento_stock', 'ver_venta_productos',
             'ver_reportes', 'ver_reporte_reservas', 'ver_reporte_ventas', 'ver_cierres_caja', 'ver_auditoria', 'ver_reporte_codigos',
             'ver_finanzas',
-            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'generar_codigos_anticipo', 'ver_garantias', 'ver_buzon', 'ver_ajustes',
+            'ver_profesionales', 'ver_servicios', 'ver_comisiones', 'generar_codigos_anticipo', 'ver_garantias', 'ver_buzon', 'ver_calificaciones', 'ver_ajustes',
             'ver_promociones',
             'ver_conversaciones', 'atender_chats'
         ],

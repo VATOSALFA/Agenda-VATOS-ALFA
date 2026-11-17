@@ -1195,6 +1195,13 @@ export default function InvoicedSalesPage() {
                                                 <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-blue-500/10 border border-blue-500/30 text-blue-400 capitalize">
                                                     {formatPaymentMethodName(sale)}
                                                 </span>
+                                                {(sale as any).beneficio_aplicado && (
+                                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-[#C5A880]/15 border border-[#C5A880]/40 text-[#C5A880]">
+                                                        {(sale as any).beneficio_aplicado.id === 'invita_amigo'
+                                                            ? 'Invita a un Amigo'
+                                                            : ((sale as any).beneficio_aplicado.titulo || 'Beneficio Alfa')}
+                                                    </span>
+                                                )}
                                             </div>
 
                                             <div className="flex items-center gap-1">
@@ -1332,11 +1339,22 @@ export default function InvoicedSalesPage() {
                                                     ${getSaleActualRevenue(sale).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </TableCell>
                                                 <TableCell className="py-2.5 px-3 text-xs">
-                                                    {sale.descuento?.valor ? (
-                                                        sale.descuento.tipo === 'percentage'
-                                                            ? `${sale.descuento.valor}%`
-                                                            : `$${sale.descuento.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-                                                    ) : '0.00%'}
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span>
+                                                            {sale.descuento?.valor ? (
+                                                                sale.descuento.tipo === 'percentage'
+                                                                    ? `${sale.descuento.valor}%`
+                                                                    : `$${sale.descuento.valor.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
+                                                            ) : '0.00%'}
+                                                        </span>
+                                                        {(sale as any).beneficio_aplicado && (
+                                                            <span className="w-fit text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[#C5A880]/15 border border-[#C5A880]/40 text-[#C5A880] whitespace-nowrap">
+                                                                {(sale as any).beneficio_aplicado.id === 'invita_amigo'
+                                                                    ? 'Invita a un Amigo'
+                                                                    : ((sale as any).beneficio_aplicado.titulo || 'Beneficio Alfa')}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="py-2.5 px-3 text-right">
                                                     <div className="flex justify-end items-center gap-1">

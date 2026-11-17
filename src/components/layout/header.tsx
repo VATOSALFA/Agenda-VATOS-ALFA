@@ -43,6 +43,7 @@ import {
   CheckCircle2,
   Sparkles,
   KeyRound,
+  Star,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -121,6 +122,7 @@ const adminNavLinks = [
   { href: '/admin/codigos-anticipo', label: 'Códigos de Anticipo', icon: KeyRound, permission: 'generar_codigos_anticipo' },
   { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_garantias' },
   { href: '/admin/buzon', label: 'Buzón', icon: MessageSquareWarning, permission: 'ver_buzon' },
+  { href: '/admin/calificaciones', label: 'Calificaciones', icon: Star, permission: 'ver_calificaciones' },
   { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
   { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
 ];
@@ -617,6 +619,7 @@ export default function Header() {
           { href: '/admin/codigos-anticipo', label: 'Códigos Anticipo', icon: KeyRound, permission: 'generar_codigos_anticipo' },
           { href: '/admin/garantias', label: 'Garantías', icon: ShieldCheck, permission: 'ver_garantias' },
           { href: '/admin/buzon', label: 'Buzón', icon: MessageSquareWarning, permission: 'ver_buzon' },
+          { href: '/admin/calificaciones', label: 'Calificaciones', icon: Star, permission: 'ver_calificaciones' },
           { href: '/admin/ajustes', label: 'Ajustes', icon: Settings, permission: 'ver_ajustes' },
           { href: '/admin/nomina', label: 'Nómina', icon: Tag, permission: 'ver_nomina' },
         ]

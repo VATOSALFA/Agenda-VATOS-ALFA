@@ -356,6 +356,11 @@ export class BluetoothPrinter {
             receipt += `Descuento:     -$${data.discount.toFixed(2)}\n`;
         }
 
+        if (data.benefitLabel) {
+            const benefitLines = this.wordWrap(`Beneficio: ${this.removeAccents(String(data.benefitLabel))}`, 32);
+            benefitLines.forEach(line => receipt += line + "\n");
+        }
+
         if (data.propina && data.propina > 0) {
             receipt += `Propina:       +$${data.propina.toFixed(2)}\n`;
         }

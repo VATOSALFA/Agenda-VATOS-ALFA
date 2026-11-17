@@ -65,6 +65,7 @@ import { ClientInput } from '../reservations/client-input';
 import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
+    parseAndValidateReferralCode,
     findMatchingReferrerClient,
     validateInvitedClientEligibility,
     REFERRAL_DISCOUNT_PERCENT,
@@ -230,7 +231,59 @@ const ResumenCarrito = ({
     juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140, targetStampsConfig = 9,
     activeCoinsMultiplier,
 }: any) => {
-    const [referralInput, setReferralInput] = useState('');
+    const [referralPrefixPart, setReferralPrefixPart] = useState('ALFA');
+    const [referralNamePart, setReferralNamePart] = useState('');
+    const [referralSuffixPart, setReferralSuffixPart] = useState('');
+    const [referralError, setReferralError] = useState<string | null>(null);
+    const [isValidatingReferral, setIsValidatingReferral] = useState(false);
+    const referralNameRef = useRef<HTMLInputElement>(null);
+    const referralSuffixRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setReferralError(null);
+    }, [client?.id, appliedBenefit]);
+
+    const handleTriggerReferralValidation = async () => {
+        if (!onApplyReferralCode || isValidatingReferral) return;
+        const prefix = (referralPrefixPart || 'ALFA').trim().toUpperCase();
+        const name = referralNamePart.trim().toUpperCase();
+        const suffix = referralSuffixPart.trim().toUpperCase();
+        const fullCode = `${prefix}-${name}-${suffix}`;
+
+        setIsValidatingReferral(true);
+        setReferralError(null);
+        try {
+            const res = await onApplyReferralCode(fullCode);
+            if (res && res.ok === false) {
+                setReferralError(res.error || 'Código incorrecto o no válido.');
+            } else {
+                setReferralPrefixPart('ALFA');
+                setReferralNamePart('');
+                setReferralSuffixPart('');
+                setReferralError(null);
+            }
+        } finally {
+            setIsValidatingReferral(false);
+        }
+    };
+
+    const handleReferralPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+        const pasted = (e.clipboardData?.getData('text') || '').trim().toUpperCase();
+        if (!pasted) return;
+        const cleanedParts = pasted.replace(/[^A-Z0-9-]/g, '').split('-').filter(Boolean);
+        if (cleanedParts.length >= 2) {
+            e.preventDefault();
+            if (cleanedParts.length === 3) {
+                setReferralPrefixPart(cleanedParts[0].slice(0, 4));
+                setReferralNamePart(cleanedParts[1].replace(/[^A-Z]/g, '').slice(0, 12));
+                setReferralSuffixPart(cleanedParts[2].replace(/[^A-Z0-9]/g, '').slice(0, 4));
+            } else if (cleanedParts.length === 2) {
+                setReferralNamePart(cleanedParts[0].replace(/[^A-Z]/g, '').slice(0, 12));
+                setReferralSuffixPart(cleanedParts[1].replace(/[^A-Z0-9]/g, '').slice(0, 4));
+            }
+            setReferralError(null);
+        }
+    };
     const nowPreview = new Date();
     const todayPreviewStr = `${nowPreview.getFullYear()}-${String(nowPreview.getMonth() + 1).padStart(2, '0')}-${String(nowPreview.getDate()).padStart(2, '0')}`;
     const realMoneyPreview = Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100);
@@ -441,40 +494,126 @@ const ResumenCarrito = ({
 
         {/* Acciones directas si aún no hay beneficio activo */}
         {!appliedBenefit && (
-            <div className="px-3 py-1.5 shrink-0 flex items-center gap-2">
+            <div className="px-3 py-1.5 shrink-0 space-y-1.5">
                 {onApplyReferralCode && (
-                    <div className="flex-1 flex items-center gap-1.5 bg-muted/20 border border-border/60 rounded-xl p-1.5">
-                        <Users className="h-3.5 w-3.5 text-[#C5A880] ml-1.5 shrink-0" />
-                        <Input
-                            value={referralInput}
-                            onChange={(e) => setReferralInput(e.target.value.toUpperCase())}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    if (referralInput.trim()) {
-                                        onApplyReferralCode(referralInput.trim());
-                                        setReferralInput('');
-                                    }
-                                }
-                            }}
-                            placeholder="Código Invita Amigo (ALFA-NOMBRE-XXXX)"
-                            className="h-7 text-[11px] border-0 bg-transparent focus-visible:ring-0 px-1.5 font-mono uppercase"
-                        />
-                        <Button
-                            type="button"
-                            size="sm"
-                            disabled={!referralInput.trim()}
-                            onClick={() => {
-                                if (referralInput.trim()) {
-                                    onApplyReferralCode(referralInput.trim());
-                                    setReferralInput('');
-                                }
-                            }}
-                            className="h-7 px-2.5 text-[10px] font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black rounded-lg shrink-0"
+                    <>
+                        <div
+                            className={cn(
+                                "flex items-center gap-1 bg-muted/20 border rounded-xl p-1.5 transition-colors",
+                                referralError ? "border-red-500/60 bg-red-500/5" : "border-border/60"
+                            )}
                         >
-                            -20%
-                        </Button>
-                    </div>
+                            <Users className="h-3.5 w-3.5 text-[#C5A880] ml-1 shrink-0" />
+                            <span className="text-[10px] font-semibold text-muted-foreground hidden sm:inline mr-1 shrink-0">
+                                Invita Amigo:
+                            </span>
+                            <div className="flex-1 flex items-center gap-1 min-w-0">
+                                <Input
+                                    value={referralPrefixPart}
+                                    maxLength={4}
+                                    onPaste={handleReferralPaste}
+                                    onChange={(e) => {
+                                        const val = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+                                        setReferralPrefixPart(val);
+                                        setReferralError(null);
+                                        if (val.length === 4) {
+                                            referralNameRef.current?.focus();
+                                        }
+                                    }}
+                                    placeholder="ALFA"
+                                    aria-label="Prefijo del código (4 letras)"
+                                    className="h-7 w-12 shrink-0 text-center text-[11px] font-mono font-bold uppercase px-1 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
+                                />
+                                <span className="font-mono font-bold text-xs text-muted-foreground select-none shrink-0">-</span>
+                                <Input
+                                    ref={referralNameRef}
+                                    value={referralNamePart}
+                                    maxLength={12}
+                                    onPaste={handleReferralPaste}
+                                    onChange={(e) => {
+                                        const raw = e.target.value.toUpperCase();
+                                        if (raw.includes('-') || raw.includes(' ')) {
+                                            const cleanName = raw.replace(/[^A-Z]/g, '').slice(0, 12);
+                                            setReferralNamePart(cleanName);
+                                            setReferralError(null);
+                                            if (cleanName.length >= 2) {
+                                                referralSuffixRef.current?.focus();
+                                            }
+                                            return;
+                                        }
+                                        setReferralNamePart(raw.replace(/[^A-Z]/g, '').slice(0, 12));
+                                        setReferralError(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Backspace' && !referralNamePart) {
+                                            // Keep prefix easily editable only if empty
+                                        } else if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            if (referralNamePart.length >= 2 && referralSuffixPart.length === 4) {
+                                                handleTriggerReferralValidation();
+                                            } else {
+                                                referralSuffixRef.current?.focus();
+                                            }
+                                        }
+                                    }}
+                                    placeholder="NOMBRE"
+                                    aria-label="Nombre en el código"
+                                    className="h-7 flex-1 min-w-[64px] text-center text-[11px] font-mono font-semibold uppercase px-1.5 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
+                                />
+                                <span className="font-mono font-bold text-xs text-muted-foreground select-none shrink-0">-</span>
+                                <Input
+                                    ref={referralSuffixRef}
+                                    value={referralSuffixPart}
+                                    maxLength={4}
+                                    onPaste={handleReferralPaste}
+                                    onChange={(e) => {
+                                        setReferralSuffixPart(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4));
+                                        setReferralError(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Backspace' && !referralSuffixPart) {
+                                            referralNameRef.current?.focus();
+                                        } else if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            if (
+                                                referralPrefixPart.trim().length === 4 &&
+                                                referralNamePart.trim().length >= 2 &&
+                                                referralSuffixPart.trim().length === 4
+                                            ) {
+                                                handleTriggerReferralValidation();
+                                            }
+                                        }
+                                    }}
+                                    placeholder="XXXX"
+                                    aria-label="Últimos 4 caracteres del código"
+                                    className="h-7 w-14 shrink-0 text-center text-[11px] font-mono font-bold uppercase px-1 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
+                                />
+                            </div>
+                            <Button
+                                type="button"
+                                size="sm"
+                                disabled={
+                                    isValidatingReferral ||
+                                    referralPrefixPart.trim().length !== 4 ||
+                                    referralNamePart.trim().length < 2 ||
+                                    referralSuffixPart.trim().length !== 4
+                                }
+                                onClick={handleTriggerReferralValidation}
+                                className="h-7 px-2.5 text-[10px] font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black rounded-lg shrink-0"
+                            >
+                                {isValidatingReferral ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                    'Validar'
+                                )}
+                            </Button>
+                        </div>
+                        {referralError && (
+                            <p className="text-[11px] text-red-400 font-medium px-1 leading-snug">
+                                {referralError}
+                            </p>
+                        )}
+                    </>
                 )}
             </div>
         )}
@@ -1531,28 +1670,41 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         let cancelled = false;
         const verifyClientEligibility = async () => {
             let previousSalesCount = 0;
+            let alreadyRedeemedReferral = false;
             try {
-                const qSales = query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id));
-                const snapSales = await getDocs(qSales);
+                const [snapSales, snapCanjes] = await Promise.all([
+                    getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id))),
+                    getDocs(query(collection(db, 'canjes_beneficios'), where('clienteId', '==', selectedClient.id))),
+                ]);
                 previousSalesCount = snapSales.docs.filter(d => {
-                    const st = (d.data().pago_estado || '').toLowerCase();
-                    return st !== 'cancelado' && st !== 'pendiente';
+                    const sd = d.data();
+                    const st = (sd.pago_estado || '').toLowerCase();
+                    return sd.estado !== 'cancelada' && st !== 'cancelado' && st !== 'pendiente';
                 }).length;
+                alreadyRedeemedReferral = snapCanjes.docs.some(d => {
+                    const cd = d.data();
+                    return cd.benefitId === 'invita_amigo' && cd.estado === 'canjeado';
+                });
             } catch (e) {
                 console.warn('Error verificando historial de ventas para referido:', e);
             }
 
             if (cancelled) return;
 
-            const eligibility = validateInvitedClientEligibility(
-                selectedClient,
-                {
-                    id: appliedBenefit.referrerId,
-                    nombre: appliedBenefit.referrerName,
-                    telefono: appliedBenefit.referrerPhone,
-                },
-                previousSalesCount
-            );
+            const eligibility = alreadyRedeemedReferral
+                ? {
+                      isEligible: false,
+                      rejectionReason: `⛔ BENEFICIO YA UTILIZADO: "${selectedClient.nombre || ''}" ya canjeó un código de invitación previamente.`,
+                  }
+                : validateInvitedClientEligibility(
+                      selectedClient,
+                      {
+                          id: appliedBenefit.referrerId,
+                          nombre: appliedBenefit.referrerName,
+                          telefono: appliedBenefit.referrerPhone,
+                      },
+                      previousSalesCount
+                  );
 
             if (!eligibility.isEligible) {
                 if (!appliedBenefit.isReferralBlocked || appliedBenefit.referralBlockReason !== eligibility.rejectionReason) {
@@ -1591,26 +1743,87 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [selectedClient, appliedBenefit?.isReferralBenefit, appliedBenefit?.referrerId, db, toast]);
 
     const handleApplyManualReferralCode = useCallback(
-        (rawCode: string) => {
-            const { hostClient, parsed, error } = findMatchingReferrerClient(clients || [], rawCode);
-            if (!hostClient || error) {
+        async (rawCode: string): Promise<{ ok: boolean; error?: string }> => {
+            // 1. Validar nomenclatura y bloquear códigos genéricos o de invitado
+            const formatCheck = parseAndValidateReferralCode(rawCode);
+            if (!formatCheck.isValidFormat) {
+                const msg = formatCheck.rejectionReason || '⛔ CÓDIGO INCORRECTO: Verifica el formato ALFA-NOMBRE-XXXX.';
                 toast({
                     variant: 'destructive',
-                    title: '⛔ Código de Invitación Inválido',
-                    description: error || 'No se encontró ningún cliente titular con ese código.',
+                    title: '⛔ Código Incorrecto',
+                    description: msg,
                 });
-                return;
+                return { ok: false, error: msg };
             }
 
+            // 2. Corroborar en la base de datos oficial que el código pertenezca a un miembro activo de la App
+            let clientsPool = clients || [];
+            let match = findMatchingReferrerClient(clientsPool, rawCode);
+
+            if ((!match.hostClient || match.error) && db) {
+                try {
+                    const freshSnap = await getDocs(collection(db, 'clientes'));
+                    clientsPool = freshSnap.docs.map(d => ({ id: d.id, ...d.data() } as Client));
+                    match = findMatchingReferrerClient(clientsPool, rawCode);
+                } catch (e) {
+                    console.warn('Error verificando código de invitación en Firestore:', e);
+                }
+            }
+
+            const { hostClient, parsed, error } = match;
+            if (!hostClient || error) {
+                const msg = error || `⛔ CÓDIGO INCORRECTO: El código "${formatCheck.fullCode}" no existe en VATOS ALFA.`;
+                toast({
+                    variant: 'destructive',
+                    title: '⛔ Código Incorrecto',
+                    description: msg,
+                });
+                return { ok: false, error: msg };
+            }
+
+            // 3. Corroborar que el cliente en caja cumpla las reglas (cliente nuevo, sin compras previas ni auto-invitación)
             if (selectedClient) {
-                const eligibility = validateInvitedClientEligibility(selectedClient, hostClient, 0);
-                if (!eligibility.isEligible) {
+                let previousSalesCount = 0;
+                let alreadyRedeemedReferral = false;
+
+                if (db && selectedClient.id) {
+                    try {
+                        const [snapSales, snapCanjes] = await Promise.all([
+                            getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id))),
+                            getDocs(query(collection(db, 'canjes_beneficios'), where('clienteId', '==', selectedClient.id))),
+                        ]);
+                        previousSalesCount = snapSales.docs.filter(d => {
+                            const sd = d.data();
+                            const st = (sd.pago_estado || '').toLowerCase();
+                            return sd.estado !== 'cancelada' && st !== 'cancelado' && st !== 'pendiente';
+                        }).length;
+                        alreadyRedeemedReferral = snapCanjes.docs.some(d => {
+                            const cd = d.data();
+                            return cd.benefitId === 'invita_amigo' && cd.estado === 'canjeado';
+                        });
+                    } catch (e) {
+                        console.warn('Error verificando historial del cliente invitado:', e);
+                    }
+                }
+
+                if (alreadyRedeemedReferral) {
+                    const msg = `⛔ BENEFICIO YA UTILIZADO: "${selectedClient.nombre}" ya utilizó un código de Invita a un Amigo previamente.`;
                     toast({
                         variant: 'destructive',
                         title: '⛔ Promoción No Aplicable',
+                        description: msg,
+                    });
+                    return { ok: false, error: msg };
+                }
+
+                const eligibility = validateInvitedClientEligibility(selectedClient, hostClient, previousSalesCount);
+                if (!eligibility.isEligible) {
+                    toast({
+                        variant: 'destructive',
+                        title: '⛔ Cliente No Elegible',
                         description: eligibility.rejectionReason,
                     });
-                    return;
+                    return { ok: false, error: eligibility.rejectionReason };
                 }
             }
 
@@ -1634,10 +1847,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
             toast({
                 title: '🎉 ¡Código de Invitación Validado!',
-                description: `Anfitrión: ${hostFullName}. Se aplicó ${REFERRAL_DISCOUNT_PERCENT}% de descuento en los servicios del nuevo cliente.`,
+                description: `Anfitrión: ${hostFullName}. Se aplicó ${REFERRAL_DISCOUNT_PERCENT}% de descuento en los servicios del cliente nuevo.`,
             });
+            return { ok: true };
         },
-        [clients, selectedClient, currentHaircutPrice, toast]
+        [clients, selectedClient, currentHaircutPrice, toast, db]
     );
 
     // Auto-detectar si el cliente seleccionado tiene un registro grupal pre-verificado de "Juntos es Mejor" (Tickets Separados) hoy
@@ -2706,6 +2920,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 tarjeta: watchedCard || 0,
                                 transferencia: watchedTransfer || 0
                             } : undefined,
+                            benefitLabel: (appliedBenefit && !appliedBenefit.isReferralBlocked && !appliedBenefit.isFreeCutBlocked)
+                                ? (appliedBenefit.isReferralBenefit
+                                    ? `Invita a un Amigo (-${REFERRAL_DISCOUNT_PERCENT}%${appliedBenefit.referralCode ? ` | ${appliedBenefit.referralCode}` : ''})`
+                                    : (appliedBenefit.benefitTitle || 'Beneficio Pase Alfa'))
+                                : undefined,
                             footerMessage: ticketFooterMessage
                         };
 
@@ -2934,11 +3153,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     saldo_pendiente: 0,
                     creado_en: Timestamp.now(),
                     anticipoPagado: anticipoPagado || 0,
-                    ...(appliedBenefit ? {
+                    ...(appliedBenefit && !appliedBenefit.isReferralBlocked && !appliedBenefit.isFreeCutBlocked ? {
                         beneficio_aplicado: {
                             id: appliedBenefit.benefitId || appliedBenefit.id || null,
                             titulo: appliedBenefit.benefitTitle || appliedBenefit.title || null,
                             folio: appliedBenefit.folio || null,
+                            codigo_referido: appliedBenefit.referralCode || null,
+                            referrer_id: appliedBenefit.referrerId || null,
+                            referrer_name: appliedBenefit.referrerName || null,
+                            descuento_porcentaje: appliedBenefit.isReferralBenefit ? REFERRAL_DISCOUNT_PERCENT : null,
                             canjeado_en: Timestamp.now()
                         }
                     } : {}),
@@ -3640,11 +3863,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         ),
                     saldo_pendiente: 0,
                     status: 'completed',
-                    ...(appliedBenefit ? {
+                    ...(appliedBenefit && !appliedBenefit.isReferralBlocked && !appliedBenefit.isFreeCutBlocked ? {
                         beneficio_aplicado: {
                             id: appliedBenefit.benefitId || appliedBenefit.id || null,
                             titulo: appliedBenefit.benefitTitle || appliedBenefit.title || null,
                             folio: appliedBenefit.folio || null,
+                            codigo_referido: appliedBenefit.referralCode || null,
+                            referrer_id: appliedBenefit.referrerId || null,
+                            referrer_name: appliedBenefit.referrerName || null,
+                            descuento_porcentaje: appliedBenefit.isReferralBenefit ? REFERRAL_DISCOUNT_PERCENT : null,
                             canjeado_en: Timestamp.now()
                         }
                     } : {}),

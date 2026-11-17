@@ -608,6 +608,7 @@ export interface CommissionRowData {
     amount: number;
   };
   isFreeCut?: boolean;
+  benefitLabel?: string;
 }
 
 export interface ProfessionalCommissionSummary {

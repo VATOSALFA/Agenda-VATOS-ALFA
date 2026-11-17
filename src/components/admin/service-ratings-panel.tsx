@@ -247,7 +247,7 @@ export function ServiceRatingsPanel() {
             <CardDescription className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Servicios de 5 Estrellas
             </CardDescription>
-            <CardTitle className="text-2xl font-bold text-emerald-600">{stats.fiveStars}</CardTitle>
+            <CardTitle className="text-2xl font-bold text-[#C5A880]">{stats.fiveStars}</CardTitle>
           </CardHeader>
         </Card>
       </div>
@@ -380,7 +380,7 @@ export function ServiceRatingsPanel() {
                             className={
                               isNew
                                 ? 'border-blue-300 bg-blue-100 text-blue-800'
-                                : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-border/60 bg-muted/40 text-muted-foreground'
                             }
                           >
                             {isNew ? 'Nueva' : 'Revisada'}

@@ -126,6 +126,13 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
             const pagosSnap = await getDoc(pagosRef);
             const ticketFooterMessage = pagosSnap.exists() ? pagosSnap.data().ticketFooterMessage : undefined;
 
+            const ben = (sale as any).beneficio_aplicado;
+            const benefitLabel = ben
+                ? (ben.id === 'invita_amigo' || String(ben.folio || '').startsWith('VA-REF-'))
+                    ? `Invita a un Amigo (-20%${ben.codigo_referido ? ` | ${ben.codigo_referido}` : ''})`
+                    : (ben.titulo || 'Beneficio Pase Alfa')
+                : undefined;
+
             const ticketData = {
                 storeName: localData?.name || empresa?.name || "VATOS ALFA",
                 storeAddress: localData?.address || empresa?.address || "",
@@ -136,6 +143,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 subtotal: subtotal,
                 anticipoPagado: (sale as any).anticipoPagado || 0,
                 discount: discountAmount,
+                benefitLabel,
                 total: sale.total,
                 footerMessage: ticketFooterMessage
             };
@@ -429,6 +437,19 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                     <TableRow className="hover:bg-transparent">
                                         <TableCell colSpan={2} className="text-right text-xs text-destructive font-medium">Descuento</TableCell>
                                         <TableCell className="text-right text-xs font-semibold text-destructive">-${discountAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    </TableRow>
+                                ) : null}
+
+                                {(sale as any).beneficio_aplicado ? (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={2} className="text-right text-xs text-[#C5A880] font-semibold">
+                                            Beneficio: {(sale as any).beneficio_aplicado.titulo || 'Beneficio Pase Alfa'}
+                                            {(sale as any).beneficio_aplicado.codigo_referido ? ` (${(sale as any).beneficio_aplicado.codigo_referido})` : ''}
+                                            {(sale as any).beneficio_aplicado.referrer_name ? ` • Anfitrión: ${(sale as any).beneficio_aplicado.referrer_name}` : ''}
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs font-bold text-[#C5A880]">
+                                            {(sale as any).beneficio_aplicado.id === 'invita_amigo' ? '-20%' : ((sale as any).beneficio_aplicado.folio || 'Canjeado')}
+                                        </TableCell>
                                     </TableRow>
                                 ) : null}
 

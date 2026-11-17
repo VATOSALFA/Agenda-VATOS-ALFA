@@ -245,6 +245,11 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                 saleBenefitTitle.includes('décimo') ||
                 saleBenefitTitle.includes('decimo') ||
                 saleBenefitTitle.includes('corte gratis');
+            const isReferralBenefitSale =
+                saleBenefitId === 'invita_amigo' ||
+                saleBenefitFolio.startsWith('VA-REF-') ||
+                saleBenefitTitle.includes('invita') ||
+                saleBenefitTitle.includes('amigo');
 
             sale.items?.forEach(item => {
                 if (activeFilters.professional !== 'todos' && item.barbero_id !== activeFilters.professional) {
@@ -292,6 +297,10 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                             String(itemName || '').toLowerCase().includes('corte') ||
                             String(item.nombre || '').toLowerCase().includes('corte')
                         );
+                    const isReferralItem =
+                        isReferralBenefitSale &&
+                        item.tipo === 'servicio' &&
+                        itemDiscount > 0;
 
                     commissionRows.push({
                         professionalId: professional.id,
@@ -307,7 +316,8 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
                             type: item.descuento.tipo,
                             amount: item.descuento.monto
                         } : undefined,
-                        ...(isFreeCutItem ? { isFreeCut: true } : {})
+                        ...(isFreeCutItem ? { isFreeCut: true } : {}),
+                        ...(isReferralItem ? { benefitLabel: 'Invita a un Amigo' } : {})
                     });
                 }
             });

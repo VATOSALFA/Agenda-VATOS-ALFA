@@ -1111,30 +1111,25 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       if (!container) return;
       container.innerHTML = '';
 
-      // Configuración dinámica de escaneo sin forzar dimensiones fijas que excedan el visor
-      const qrScanConfig = {
-        fps: 15,
-        qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-          if (minEdge <= 0) return { width: 180, height: 180 };
-          const size = Math.max(Math.floor(minEdge * 0.72), 120);
-          return {
-            width: Math.min(size, Math.max(120, viewfinderWidth - 10)),
-            height: Math.min(size, Math.max(120, viewfinderHeight - 10)),
-          };
-        },
+      // Configuración de escaneo de alta velocidad en todo el visor (sin obligar a centrar en cuadro pequeño)
+      const qrScanConfig: any = {
+        fps: 25,
+        disableFlip: false,
       };
 
-      // Determinar la lista de configuraciones a probar en orden de preferencia
+      // Determinar la lista de configuraciones a probar en orden de preferencia (con resolución HD y enfoque continuo)
       const targetCamId = forcedDeviceId !== undefined ? forcedDeviceId : selectedCameraId;
       const configsToTry: any[] = [];
       if (targetCamId) {
+        configsToTry.push({ deviceId: { exact: targetCamId }, width: { ideal: 1280 }, height: { ideal: 720 } });
         configsToTry.push({ deviceId: { exact: targetCamId } });
         configsToTry.push(targetCamId);
       }
-      // En móviles, cámara trasera como primera opción nativa
+      // En móviles/tablets, cámara trasera HD como primera opción nativa
+      configsToTry.push({ facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } });
       configsToTry.push({ facingMode: 'environment' });
       // Fallback a cámara frontal o webcam
+      configsToTry.push({ facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } });
       configsToTry.push({ facingMode: 'user' });
 
       let started = false;
@@ -1154,6 +1149,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         const html5QrCode = new Html5Qrcode(scannerContainerId, {
           formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           verbose: false,
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
         });
 
         try {
@@ -1169,6 +1167,18 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           );
           scannerRef.current = html5QrCode;
           started = true;
+
+          // Activar autoenfoque continuo por hardware si la cámara lo soporta
+          try {
+            const videoEl = container.querySelector('video') as HTMLVideoElement | null;
+            const stream = videoEl?.srcObject as MediaStream | null;
+            const track = stream?.getVideoTracks?.()?.[0];
+            const caps = track?.getCapabilities?.() as any;
+            if (track && caps?.focusMode && Array.isArray(caps.focusMode) && caps.focusMode.includes('continuous')) {
+              await track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as any] });
+            }
+          } catch (_) {}
+
           break;
         } catch (attemptErr: any) {
           lastError = attemptErr;

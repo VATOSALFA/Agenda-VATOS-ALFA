@@ -111,6 +111,11 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                             10° gratis
                           </span>
                         )}
+                        {detail.benefitLabel && (
+                          <span className="text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 px-1.5 py-0.5 rounded whitespace-nowrap">
+                            {detail.benefitLabel}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -181,7 +186,7 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                       <TableCell className="py-1.5 px-3 text-right font-sans">
                         <div className="flex flex-col items-end justify-center">
                           <span className="text-xs font-medium text-foreground">${detail.saleAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          {(detail.discountDetails || detail.isFreeCut) && (
+                          {(detail.discountDetails || detail.isFreeCut || detail.benefitLabel) && (
                             <div className="flex items-center gap-1 flex-wrap justify-end mt-0.5">
                               {detail.discountDetails && (
                                 <span className="text-[10px] text-muted-foreground font-medium bg-muted/40 px-1.5 py-0.5 rounded border border-border/40 whitespace-nowrap">
@@ -191,6 +196,11 @@ export function CommissionDetailModal({ isOpen, onOpenChange, summary, dateRange
                               {detail.isFreeCut && (
                                 <span className="text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 px-1.5 py-0.5 rounded whitespace-nowrap">
                                   10° gratis
+                                </span>
+                              )}
+                              {detail.benefitLabel && (
+                                <span className="text-[10px] font-bold bg-[#C5A880]/15 text-[#C5A880] border border-[#C5A880]/40 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                  {detail.benefitLabel}
                                 </span>
                               )}
                             </div>

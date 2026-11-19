@@ -67,7 +67,8 @@ function getResicoIsrRate(incomeWithoutVat: number): number {
 
 interface DeclaracionFiscalData {
     estado: 'pendiente' | 'presentada';
-    estrategia: 'bancarizado' | 'bancarizado_mas_efectivo' | 'total' | 'personalizado';
+    estrategia: 'bancarizado' | 'bancarizado_mas_efectivo' | 'total' | 'personalizado' | 'meta_impuesto';
+    metaImpuestoSAT?: number;
     montoPersonalizado?: number;
     porcentajeEfectivo?: number;
     comisionMercadoPagoFacturada?: number;
@@ -225,6 +226,25 @@ const OFFICIAL_SAT_DECLARATIONS_2026: Record<string, DeclaracionFiscalData> = {
         ivaPagadoFinal: 337,
         totalPagadoFinal: 374,
     },
+    octubre: {
+        estado: 'presentada',
+        estrategia: 'personalizado',
+        montoPersonalizado: 4255,
+        porcentajeEfectivo: 20,
+        comisionMercadoPagoFacturada: 268,
+        ivaComisionesAcreditable: 43,
+        ivaDevolucionesGastos: 5,
+        otrosGastosConFactura: 0,
+        ivaOtrosGastosAcreditable: 0,
+        folioOperacionSAT: '261510299924',
+        lineaCaptura: '0426 8CJ8 8500 5168 3200',
+        fechaPago: '2026-11-19',
+        notas: 'El pago lo hice con mercado pago el 19/11 (Operación 261510299924). CFDI Global PUE: $4,255 | ISR: $43 | IVA Causado: $681 - Retención IVA ($63) + IVA Devoluciones ($5) - IVA Acreditable Gastos ($43) = $580 | Total Pagado: $623.',
+        montoDeclaradoFinal: 4255,
+        isrPagadoFinal: 43,
+        ivaPagadoFinal: 580,
+        totalPagadoFinal: 623,
+    },
 };
 
 export default function ControlFiscalResicoPage() {
@@ -267,7 +287,7 @@ export default function ControlFiscalResicoPage() {
         montoPersonalizado: 4255,
         porcentajeEfectivo: 20,
         comisionMercadoPagoFacturada: 2100,
-        ivaComisionesAcreditable: 289.65,
+        ivaComisionesAcreditable: 0,
         ivaDevolucionesGastos: 0,
         otrosGastosConFactura: 0,
         ivaOtrosGastosAcreditable: 0,
@@ -318,7 +338,7 @@ export default function ControlFiscalResicoPage() {
                         montoPersonalizado: 4255,
                         porcentajeEfectivo: 20,
                         comisionMercadoPagoFacturada: 2100,
-                        ivaComisionesAcreditable: 289.65,
+                        ivaComisionesAcreditable: 0,
                         ivaDevolucionesGastos: 0,
                         otrosGastosConFactura: 0,
                         ivaOtrosGastosAcreditable: 0,
@@ -343,7 +363,7 @@ export default function ControlFiscalResicoPage() {
                     montoPersonalizado: 4255,
                     porcentajeEfectivo: 20,
                     comisionMercadoPagoFacturada: 2100,
-                    ivaComisionesAcreditable: 289.65,
+                    ivaComisionesAcreditable: 0,
                     ivaDevolucionesGastos: 0,
                     otrosGastosConFactura: 0,
                     ivaOtrosGastosAcreditable: 0,
@@ -887,7 +907,10 @@ export default function ControlFiscalResicoPage() {
                             </SelectTrigger>
                             <SelectContent className="border-2 border-blue-500 rounded-xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-card text-foreground">
                                 <SelectItem value="personalizado" className="text-xs font-semibold cursor-pointer">
-                                    Opción D: Personalizado
+                                    Opción D: Factura Personalizada ($)
+                                </SelectItem>
+                                <SelectItem value="meta_impuesto" className="text-xs font-semibold cursor-pointer">
+                                    Opción E: Fijar Impuesto a Pagar (Meta en $)
                                 </SelectItem>
                                 <SelectItem value="bancarizado" className="text-xs font-semibold cursor-pointer">
                                     Opción A: 100% Bancarizado (${incomeBreakdown.bancarizado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
@@ -954,6 +977,41 @@ export default function ControlFiscalResicoPage() {
                                 ))}
                             </div>
                         </div>
+                    ) : fiscalData.estrategia === 'meta_impuesto' ? (
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-24 relative">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">$</span>
+                                <Input 
+                                    type="number" 
+                                    min={0} 
+                                    value={fiscalData.metaImpuestoSAT !== undefined && fiscalData.metaImpuestoSAT !== 0 ? fiscalData.metaImpuestoSAT : ''}
+                                    onChange={(e) => setFiscalData(prev => ({ ...prev, metaImpuestoSAT: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                                    placeholder="350"
+                                    className="h-8 pl-6 pr-2 text-xs font-bold bg-background border-border/60 text-foreground font-sans hover:border-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <span className="text-[11px] text-muted-foreground">meta</span>
+                            <div className="hidden sm:flex items-center gap-1">
+                                {[300, 334, 350, 400].map(preset => (
+                                    <button
+                                        key={preset}
+                                        type="button"
+                                        onClick={() => setFiscalData(prev => ({ ...prev, metaImpuestoSAT: preset }))}
+                                        className={cn(
+                                            "h-7 px-2 rounded-md border text-[11px] font-sans font-medium transition-colors",
+                                            fiscalData.metaImpuestoSAT === preset 
+                                                ? "border-blue-500 bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold" 
+                                                : "border-border/60 text-foreground bg-muted/20 hover:bg-muted/40 hover:text-blue-500 dark:hover:text-blue-400"
+                                        )}
+                                    >
+                                        ${preset.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </button>
+                                ))}
+                            </div>
+                            <span className="text-xs font-bold text-foreground font-sans hidden md:inline ml-1">
+                                → Facturar: ${montoADeclararBruto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                        </div>
                     ) : fiscalData.estrategia === 'bancarizado_mas_efectivo' ? (
                         <div className="flex items-center gap-1.5">
                             <div className="w-16">
@@ -980,12 +1038,20 @@ export default function ControlFiscalResicoPage() {
 
                 {/* 3. Total a Pagar SAT en la misma fila */}
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-foreground shrink-0 justify-between lg:justify-end lg:ml-auto">
-                    <span className="text-[11px] text-muted-foreground uppercase font-semibold whitespace-nowrap">Total a Pagar SAT:</span>
+                    <span className="text-[11px] text-muted-foreground uppercase font-semibold whitespace-nowrap">
+                        {fiscalData.estado === 'presentada' ? 'Total Pagado SAT:' : 'Total a Pagar SAT:'}
+                    </span>
                     <span className="text-xs sm:text-sm font-extrabold text-blue-600 dark:text-blue-400 font-sans tracking-tight whitespace-nowrap">
-                        ${granTotalAPagarSAT.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                        ${(fiscalData.estado === 'presentada' && (fiscalData.totalPagadoFinal ?? 0) > 0 
+                            ? (fiscalData.totalPagadoFinal ?? 0) 
+                            : granTotalAPagarSAT).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
                     </span>
                     <span className="text-[10px] text-muted-foreground hidden xl:inline whitespace-nowrap">
-                        (ISR: ${isrRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + IVA: ${ivaRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                        (ISR: ${(fiscalData.estado === 'presentada' && fiscalData.isrPagadoFinal !== undefined 
+                            ? fiscalData.isrPagadoFinal 
+                            : isrRedondeado).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + IVA: ${(fiscalData.estado === 'presentada' && fiscalData.ivaPagadoFinal !== undefined 
+                            ? fiscalData.ivaPagadoFinal 
+                            : ivaRedondeado).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
                     </span>
                 </div>
             </div>
@@ -1000,9 +1066,9 @@ export default function ControlFiscalResicoPage() {
                         </h2>
                         {isSection3Minimized && (
                             <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>• Base: <strong className="text-foreground font-sans">${baseGravableSinIVA.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
-                                <span>• ISR: <strong className="text-blue-600 dark:text-blue-400 font-sans">${isrRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
-                                <span>• IVA: <strong className="text-blue-600 dark:text-blue-400 font-sans">${ivaRedondeado.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                <span>• Base: <strong className="text-foreground font-sans">${(fiscalData.estado === 'presentada' && fiscalData.montoDeclaradoFinal ? fiscalData.montoDeclaradoFinal : baseGravableSinIVA).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                <span>• ISR: <strong className="text-blue-600 dark:text-blue-400 font-sans">${(fiscalData.estado === 'presentada' && fiscalData.isrPagadoFinal !== undefined ? fiscalData.isrPagadoFinal : isrRedondeado).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                <span>• IVA: <strong className="text-blue-600 dark:text-blue-400 font-sans">${(fiscalData.estado === 'presentada' && fiscalData.ivaPagadoFinal !== undefined ? fiscalData.ivaPagadoFinal : ivaRedondeado).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
                             </div>
                         )}
                     </div>
@@ -1278,7 +1344,7 @@ export default function ControlFiscalResicoPage() {
                                 variant="alfa" 
                                 size="sm"
                                 className="h-9 px-4 text-xs gap-1.5"
-                                onClick={() => window.open('https://portal.facturaelectronica.sat.gob.mx/', '_blank')}
+                                onClick={() => window.open('https://portal.facturaelectronica.sat.gob.mx/', '_blank', 'noopener,noreferrer')}
                             >
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 Abrir Facturación CFDI 4.0 SAT
@@ -1287,7 +1353,7 @@ export default function ControlFiscalResicoPage() {
                                 variant="outline" 
                                 size="sm"
                                 className="h-9 text-xs border-border/60 text-foreground hover:bg-muted/20"
-                                onClick={() => window.open('https://www.sat.gob.mx/aplicacion/operacion/53027/genera-tu-factura-electronica', '_blank')}
+                                onClick={() => window.open('https://www.sat.gob.mx/portal/factura', '_blank', 'noopener,noreferrer')}
                             >
                                 <ExternalLink className="h-3.5 w-3.5 mr-1 text-slate-400" />
                                 Portal Alterno SAT
@@ -1969,10 +2035,19 @@ export default function ControlFiscalResicoPage() {
                             variant="alfa" 
                             size="sm"
                             className="h-9 px-4 text-xs gap-1.5 shrink-0"
-                            onClick={() => window.open('https://www.sat.gob.mx/declaracion/74744/presenta-tus-declaraciones-provisionales-o-definitivas-de-personas-fisicas', '_blank')}
+                            onClick={() => window.open('https://www.sat.gob.mx/portal/declaraciones', '_blank', 'noopener,noreferrer')}
                         >
                             <ExternalLink className="h-3.5 w-3.5" />
                             Abrir Declaraciones SAT
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="h-9 text-xs border-border/60 text-foreground hover:bg-muted/20"
+                            onClick={() => window.open('https://www.sat.gob.mx', '_blank', 'noopener,noreferrer')}
+                        >
+                            <ExternalLink className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                            Portal General SAT
                         </Button>
                     </div>
                 </div>
@@ -1996,45 +2071,225 @@ export default function ControlFiscalResicoPage() {
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="p-2 bg-background rounded-lg border border-border/40 space-y-1">
-                                    <div className="font-semibold text-foreground">1. Preguntas de la pestaña "Ingresos":</div>
-                                    <div className="text-[11px] text-muted-foreground space-y-0.5">
-                                        <div>• ¿Obtenidos a través de copropiedad?: <strong className="text-foreground">NO</strong></div>
-                                        <div>• ¿Tienes ingresos a disminuir?: <strong className="text-foreground">NO</strong></div>
-                                        <div>• ¿Tienes ingresos adicionales?: <strong className="text-foreground">NO</strong> <span className="text-[10px]">(Si el prellenado marca $0 porque no timbraste CFDI en el mes, pon <strong>SÍ</strong> → <em>"Ingresos no considerados en el prellenado"</em>)</span></div>
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-2">
+                                    <div className="font-semibold text-foreground">1. Pestaña "Ingresos" (6 campos del SAT en orden):</div>
+
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        {/* Campo 1 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <span className="text-foreground font-medium">1. *¿Los ingresos fueron obtenidos a través de copropiedad?</span>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 2 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">2. Total de ingresos efectivamente cobrados</div>
+                                            <div>
+                                                <strong className="text-foreground">Ya viene prellenado en automático por el SAT</strong> (campo gris bloqueado con la suma de las facturas emitidas y cobradas en el mes). No necesitas editarlo.
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 3 */}
+                                        <div className="flex items-start justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="space-y-0.5">
+                                                <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                    <span>3. Descuentos, devoluciones y bonificaciones (-)</span>
+                                                    <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                                </div>
+                                                <div>
+                                                    Viene en <strong className="text-foreground">0</strong>. Si aparece con el signo <span className="text-red-400 font-bold">!</span> rojo a un lado, da clic en su botón <strong className="text-foreground">CAPTURAR</strong>, coloca <strong className="text-foreground">0</strong> y guarda/cierra para quitar la alerta.
+                                                </div>
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 px-2.5 gap-1 font-sans font-bold border-border/60 hover:border-blue-500 shrink-0 text-xs"
+                                                onClick={() => copyToClipboard('0', 'isr_descuentos')}
+                                            >
+                                                {copiedField === 'isr_descuentos' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                                $0
+                                            </Button>
+                                        </div>
+
+                                        {/* Campo 4 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <span className="text-foreground font-medium">4. *¿Tienes ingresos a disminuir?</span>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 5 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-foreground font-medium">5. *¿Tienes ingresos adicionales?</span>
+                                                <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                    No
+                                                </Badge>
+                                            </div>
+                                            <div className="text-[10px]">
+                                                (Si el prellenado marcara $0 porque no timbraste CFDI en el mes, selecciona <strong className="text-foreground">Sí</strong> → <em>"Ingresos no considerados en el prellenado"</em>).
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 6 */}
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                                            <div className="space-y-0.5">
+                                                <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                    <span>6. Total de ingresos percibidos por la actividad (=)</span>
+                                                    <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                                </div>
+                                                <div>
+                                                    <strong className="text-foreground">Ya viene prellenado en automático</strong> (igual al campo 2), pero aparece con un signo <span className="text-red-400 font-bold">!</span> rojo. Da clic en su botón <strong className="text-foreground">CAPTURAR</strong>, pega <strong className="text-foreground">el mismo monto que aparece prellenado en este campo</strong> en tu actividad empresarial para que <em>"Monto por detallar"</em> quede en <strong className="text-foreground">0</strong>, y da clic en <strong className="text-foreground">Guardar / Cerrar</strong>.
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap sm:flex-col items-end gap-1.5 shrink-0">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 px-2.5 gap-1 font-sans font-bold border-border/60 hover:border-blue-500 shrink-0 text-xs"
+                                                    onClick={() => copyToClipboard(String(baseGravableRedondeadaSAT), 'isr_ingresos')}
+                                                    title="Copiar base sin IVA"
+                                                >
+                                                    {copiedField === 'isr_ingresos' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                                    ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}
+                                                </Button>
+                                                {Math.round(montoADeclararBruto) !== baseGravableRedondeadaSAT && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 px-2.5 gap-1 font-sans font-bold border-blue-500/40 text-blue-400 bg-blue-500/10 hover:border-blue-500 shrink-0 text-xs"
+                                                        onClick={() => copyToClipboard(String(Math.round(montoADeclararBruto)), 'isr_ingresos_bruto')}
+                                                        title="Copiar total prellenado del CFDI"
+                                                    >
+                                                        {copiedField === 'isr_ingresos_bruto' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-blue-400" />}
+                                                        ${Math.round(montoADeclararBruto).toLocaleString('es-MX')}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
+                                {/* Block 2: Pestaña Determinación */}
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-2">
+                                    <div className="font-semibold text-foreground">2. Pestaña "Determinación" (6 campos del SAT en orden):</div>
+
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        {/* Campo 1 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">1. Total de ingresos percibidos por la actividad</div>
+                                            <div>
+                                                <strong className="text-foreground">Prellenado en automático</strong> (viene de la pestaña <em>Ingresos</em>).
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 2 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <span className="text-foreground font-medium">2. Tasa aplicable (x)</span>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                {tasaIsr.toFixed(2)}%
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 3 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">3. Impuesto mensual (=)</div>
+                                            <div className="font-sans">
+                                                <strong className="text-foreground">Calculado en automático por el SAT</strong> (<strong className="text-foreground font-sans">${isrRedondeado.toLocaleString('es-MX')}</strong> o <strong className="text-foreground font-sans">${Math.round(Math.round(montoADeclararBruto) * (tasaIsr / 100)).toLocaleString('es-MX')}</strong>).
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 4 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <span className="text-foreground font-medium">4. Pagos efectuados con anterioridad</span>
+                                            <span className="text-muted-foreground font-sans">Viene en <strong className="text-foreground">0</strong> (dejar en <strong className="text-foreground">0</strong>)</span>
+                                        </div>
+
+                                        {/* Campo 5 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                <span>5. ISR retenido por personas morales (-)</span>
+                                                <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                            </div>
+                                            <div>
+                                                Si aparece con el signo <span className="text-red-400 font-bold">!</span> rojo, da clic en <strong className="text-foreground">VER DETALLE</strong>, coloca <strong className="text-foreground">0</strong> (si no aplica retención) o confirma el monto precargado y da clic en <strong className="text-foreground">Guardar / Cerrar</strong> para quitar la alerta.
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 6 */}
+                                        <div className="space-y-0.5">
+                                            <div className="text-foreground font-medium">6. Impuesto a cargo (=)</div>
+                                            <div>
+                                                <strong className="text-foreground">Calculado en automático por el SAT</strong>.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Block 3: Pestaña Pago */}
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-2">
+                                    <div className="font-semibold text-foreground">3. Pestaña "Pago" (Campos del SAT en orden):</div>
+
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        {/* Campos 1 y 2 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">1. A cargo y 2. Total de contribuciones (=)</div>
+                                            <div>
+                                                <strong className="text-foreground">Ya vienen prellenados en automático</strong> con tu impuesto a cargo.
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 3 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">3. Subsidio para el empleo</div>
+                                            <div>
+                                                <strong className="text-foreground">Dejar en blanco / vacío</strong> (no aplica si no tienes empleados con subsidio).
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 4 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                <span>4. *¿Tienes compensaciones por aplicar?</span>
+                                                <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                            </div>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 5 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                <span>5. *¿Tienes estímulos por aplicar?</span>
+                                                <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                            </div>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 6 */}
+                                        <div className="space-y-0.5">
+                                            <div className="text-foreground font-medium">6. Total de aplicaciones (=) y resumen inferior</div>
+                                            <div>
+                                                <em>(Total de contribuciones, Total de aplicaciones (-), Cantidad a cargo (=), Cantidad a pagar)</em>: <strong className="text-foreground">Se calculan solos en automático</strong>.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground gap-2">
                                     <div>
-                                        <div className="font-semibold text-foreground">2. Detallar ingresos ("Actividad empresarial"):</div>
-                                        <div className="text-[11px] text-muted-foreground">Da clic en "Detallar" y pega este monto para que "Monto por detallar" quede en 0:</div>
+                                        <div className="font-semibold">Cantidad a pagar de ISR (y siguiente paso en el SAT):</div>
+                                        <div className="text-[11px] text-muted-foreground font-sans">
+                                            Al quedar "✓ Pago" con palomita, da clic arriba en <strong>GUARDAR</strong> y luego en <strong>ADMINISTRACIÓN DE LA DECLARACIÓN</strong> para pasar al IVA.
+                                        </div>
                                     </div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
-                                        onClick={() => copyToClipboard(String(baseGravableRedondeadaSAT), 'isr_ingresos')}
-                                    >
-                                        {copiedField === 'isr_ingresos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}
-                                    </Button>
-                                </div>
-
-                                <div className="p-2 bg-background rounded-lg border border-border/40 space-y-1">
-                                    <div className="font-semibold text-foreground">3. Pestaña "Determinación":</div>
-                                    <div className="text-[11px] text-muted-foreground space-y-0.5">
-                                        <div>• ¿Tienes compensaciones por aplicar?: <strong className="text-foreground">NO</strong></div>
-                                        <div>• ¿Tienes estímulos por aplicar?: <strong className="text-foreground">NO</strong></div>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
-                                    <div>
-                                        <div className="font-semibold">4. ISR a pagar (Pestaña Pago):</div>
-                                        <div className="text-[11px] text-muted-foreground">Tasa {tasaIsr}% sobre ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}:</div>
-                                    </div>
-                                    <span className="font-extrabold text-sm text-blue-400">${isrRedondeado.toLocaleString('es-MX')}</span>
+                                    <span className="font-extrabold text-sm text-blue-400 font-sans shrink-0">${isrRedondeado.toLocaleString('es-MX')} / ${Math.round(Math.round(montoADeclararBruto) * (tasaIsr / 100)).toLocaleString('es-MX')}</span>
                                 </div>
                             </div>
                         </div>
@@ -2046,60 +2301,156 @@ export default function ControlFiscalResicoPage() {
                             </div>
 
                             <div className="space-y-2 text-xs">
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
-                                    <div>
-                                        <div className="font-semibold text-foreground">1. Actividades gravadas al 16% (Precargado):</div>
-                                        <div className="text-[11px] text-muted-foreground">Genera un IVA a cargo al 16% de <strong className="text-foreground">${ivaTrasladadoRedondeadoSAT.toLocaleString('es-MX')}</strong></div>
+                                {/* Block 1: Pestaña Determinación */}
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-2">
+                                    <div className="font-semibold text-foreground">1. Pestaña "Determinación" (Campos del SAT en orden):</div>
+
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        {/* Campo 1 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">1. Actividades gravadas a la tasa del 16%</div>
+                                            <div>
+                                                <strong className="text-foreground">Ya viene prellenado en automático por el SAT</strong> con tus facturas del mes.
+                                            </div>
+                                        </div>
+
+                                        {/* Campos 2, 3 y 4 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">2. Actividades gravadas a la tasa del 0%, 3. Actividades exentas y 4. Actividades no objeto del impuesto</div>
+                                            <div>
+                                                Vienen en <strong className="text-foreground font-sans">0</strong> (dejar en <strong className="text-foreground font-sans">0</strong>).
+                                            </div>
+                                        </div>
+
+                                        {/* Campos 5 y 6 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">5. IVA a cargo a la tasa del 16% y 6. Total de IVA a cargo (=)</div>
+                                            <div>
+                                                <strong className="text-foreground">Calculados en automático por el SAT</strong> (16%).
+                                            </div>
+                                        </div>
+
+                                        {/* Campos 7 y 8 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">7. IVA no cobrado por devoluciones, descuentos y bonificaciones de ventas (-) y 8. IVA retenido (-)</div>
+                                            <div>
+                                                <strong className="text-foreground">Prellenados en automático por el SAT</strong> (no mover).
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 9 */}
+                                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="space-y-1">
+                                                <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                    <span>9. *IVA acreditable del periodo (-)</span>
+                                                    <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                                </div>
+                                                <div>
+                                                    Da clic en su botón <strong className="text-foreground">CAPTURAR</strong>. En la ventana <strong>"IVA acreditable del periodo"</strong> que se abre, completa así los 5 campos:
+                                                </div>
+                                                <div className="pl-2 border-l-2 border-blue-500/30 space-y-0.5 text-[10.5px]">
+                                                    <div>• 1. IVA pagado en gastos y adquisiciones: <strong className="text-foreground">Ya viene prellenado arriba en gris por el SAT</strong> (ej. el IVA de tus facturas de gastos/comisiones del mes).</div>
+                                                    <div>• 2. *IVA acreditable por actividades gravadas a tasa 16% u 8% y tasa 0% (<span className="text-red-400 font-bold">!</span> rojo): <strong className="text-foreground">Escribe exactamente el mismo número que el SAT te precargó arriba</strong> en el campo 1.</div>
+                                                    <div>• 3. *IVA acreditable por actividades mixtas (+) (<span className="text-red-400 font-bold">!</span> rojo): Escribe <strong className="text-foreground font-sans">0</strong>.</div>
+                                                    <div>• 4. IVA acreditable del periodo (=) y 5. IVA no acreditable: Se calculan solos al presionar <strong className="text-foreground">Tab</strong>. Da clic en <strong className="text-foreground">CERRAR</strong>.</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap sm:flex-col items-end gap-1.5 shrink-0">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 px-2.5 gap-1 font-sans font-bold border-border/60 hover:border-blue-500 shrink-0 text-xs"
+                                                    onClick={() => copyToClipboard(String(ivaAcreditableIngresoRedondeado), 'iva_acreditable')}
+                                                    title="Copiar IVA acreditable estimado"
+                                                >
+                                                    {copiedField === 'iva_acreditable' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                                    ${ivaAcreditableIngresoRedondeado.toLocaleString('es-MX')}
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-7 px-2.5 gap-1 font-sans font-bold border-border/60 hover:border-blue-500 shrink-0 text-xs"
+                                                    onClick={() => copyToClipboard('0', 'iva_mixtas')}
+                                                    title="Copiar 0 para actividades mixtas"
+                                                >
+                                                    {copiedField === 'iva_mixtas' ? <Check className="h-3 w-3 text-blue-400" /> : <Copy className="h-3 w-3 text-slate-400" />}
+                                                    $0
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 10 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">10. IVA por devoluciones, descuentos y bonificaciones en gastos (+)</div>
+                                            <div>
+                                                <strong className="text-foreground">Prellenado en automático por el SAT</strong> (notas de egreso/bonificaciones).
+                                            </div>
+                                        </div>
+
+                                        {/* Campos 11, 12 y 13 */}
+                                        <div className="space-y-0.5">
+                                            <div className="text-foreground font-medium">11. Cantidad a cargo (=), 12. Acreditamiento del saldo a favor de periodos anteriores (-) <em className="font-normal text-muted-foreground">(dejar en blanco)</em> y 13. Impuesto a cargo (=)</div>
+                                            <div>
+                                                <strong className="text-foreground">Se calculan solos en automático</strong>.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
-                                        onClick={() => copyToClipboard(String(baseGravableRedondeadaSAT), 'iva_actividades')}
-                                    >
-                                        {copiedField === 'iva_actividades' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${baseGravableRedondeadaSAT.toLocaleString('es-MX')}
-                                    </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
-                                    <div>
-                                        <div className="font-semibold text-foreground">2. Determinación del IVA acreditable:</div>
-                                        <div className="text-[11px] text-muted-foreground">Da clic en "Capturar", copia el IVA de facturas recibidas en "IVA acreditable por actividades gravadas", pon 0 en inversiones y NO en otras cantidades:</div>
+                                {/* Block 2: Pestaña Pago */}
+                                <div className="p-2.5 bg-background rounded-lg border border-border/40 space-y-2">
+                                    <div className="font-semibold text-foreground">2. Pestaña "Pago" (Campos del SAT en orden):</div>
+
+                                    <div className="space-y-2 text-[11px] text-muted-foreground">
+                                        {/* Campos 1 y 2 */}
+                                        <div className="space-y-0.5 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium">1. A cargo y 2. Total de contribuciones (=)</div>
+                                            <div>
+                                                <strong className="text-foreground">Ya vienen prellenados en automático</strong> con el Impuesto a cargo de la pestaña anterior.
+                                            </div>
+                                        </div>
+
+                                        {/* Campo 3 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                <span>3. *¿Tienes compensaciones por aplicar?</span>
+                                                <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                            </div>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 4 */}
+                                        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/30">
+                                            <div className="text-foreground font-medium flex items-center gap-1.5 flex-wrap">
+                                                <span>4. *¿Tienes estímulos por aplicar?</span>
+                                                <span className="inline-flex items-center px-1.5 py-0 rounded border border-red-500/30 bg-red-500/10 text-red-400 font-sans font-bold text-[10px]">!</span>
+                                            </div>
+                                            <Badge variant="outline" className="border-border/60 text-foreground bg-muted/20 font-sans font-semibold text-[11px] shrink-0">
+                                                No
+                                            </Badge>
+                                        </div>
+
+                                        {/* Campo 5 */}
+                                        <div className="space-y-0.5">
+                                            <div className="text-foreground font-medium">5. Total de aplicaciones (=) y resumen inferior</div>
+                                            <div>
+                                                <em>(Total de contribuciones, Total de aplicaciones (-), Cantidad a cargo (=), Cantidad a pagar)</em>: <strong className="text-foreground">Se calculan solos en automático</strong>.
+                                            </div>
+                                        </div>
                                     </div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
-                                        onClick={() => copyToClipboard(String(ivaAcreditableIngresoRedondeado), 'iva_acreditable')}
-                                    >
-                                        {copiedField === 'iva_acreditable' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${ivaAcreditableIngresoRedondeado.toLocaleString('es-MX')}
-                                    </Button>
                                 </div>
 
-                                <div className="flex items-center justify-between p-2 bg-background rounded-lg border border-border/40 gap-2">
+                                {/* Block 3: Summary Bar */}
+                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground gap-2">
                                     <div>
-                                        <div className="font-semibold text-foreground">3. IVA devoluciones/bonificaciones en gastos:</div>
-                                        <div className="text-[11px] text-muted-foreground">Si hay notas de egreso MP precargadas, da clic en "Ver Detalle" y captura el mismo monto. Luego responde NO a otras cantidades, compensaciones y estímulos:</div>
+                                        <div className="font-semibold">Cantidad a pagar de IVA (y envío final en el SAT):</div>
+                                        <div className="text-[11px] text-muted-foreground font-sans">
+                                            Al quedar "✓ Pago" con palomita, da clic arriba en <strong>GUARDAR</strong>, luego en <strong>ADMINISTRACIÓN DE LA DECLARACIÓN</strong> y finalmente en <strong>ENVIAR DECLARACIÓN</strong> para descargar tu Acuse con Línea de Captura.
+                                        </div>
                                     </div>
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="h-8 gap-1.5 font-bold border-border/60 hover:border-blue-500 shrink-0"
-                                        onClick={() => copyToClipboard(String(ivaDevolucionesEgresoRedondeado), 'iva_egresos')}
-                                    >
-                                        {copiedField === 'iva_egresos' ? <Check className="h-3.5 w-3.5 text-blue-400" /> : <Copy className="h-3.5 w-3.5 text-slate-400" />}
-                                        ${ivaDevolucionesEgresoRedondeado.toLocaleString('es-MX')}
-                                    </Button>
-                                </div>
-
-                                <div className="flex items-center justify-between p-2 bg-blue-500/10 rounded-lg border border-blue-500/30 text-foreground">
-                                    <div>
-                                        <div className="font-semibold">4. IVA a cargo (A pagar):</div>
-                                        <div className="text-[11px] text-muted-foreground">${ivaTrasladadoRedondeadoSAT} - ${ivaAcreditableIngresoRedondeado}{ivaDevolucionesEgresoRedondeado > 0 ? ` + $${ivaDevolucionesEgresoRedondeado}` : ''}:</div>
-                                    </div>
-                                    <span className="font-extrabold text-sm text-blue-400">${ivaRedondeado.toLocaleString('es-MX')}</span>
+                                    <span className="font-extrabold text-sm text-blue-400 font-sans shrink-0">${ivaRedondeado.toLocaleString('es-MX')}</span>
                                 </div>
                             </div>
                         </div>

@@ -589,6 +589,67 @@ export const DEFAULT_REFERRAL_CONFIG: ReferralProgramConfig = {
   limite_mensual_invitaciones: 0,
 };
 
+export function buildDefaultDecimaDescripcion(
+  cfg: Partial<DecimaCorteConfig> = {},
+  sellosRequeridos: number = 10
+): string {
+  const c = { ...DEFAULT_DECIMA_CONFIG, ...cfg };
+  const diasStr = formatJuntosDaysEs(c.dias_semana);
+  const sellosParaDesbloquear = Math.max(1, sellosRequeridos - 1);
+  const consumoStr =
+    c.consumo_sello_tipo === 'monto_fijo'
+      ? `con consumo mínimo de $${c.consumo_sello_monto} MXN`
+      : 'con consumo igual o mayor a la tarifa vigente de corte de cabello';
+  const coberturaStr =
+    c.cobertura_tipo === 'monto_fijo'
+      ? `cubre hasta $${c.cobertura_monto} MXN`
+      : 'cubre el 100% del Corte de cabello regular vigente';
+
+  return (
+    `Acumula ${sellosParaDesbloquear} visitas elegibles (${consumoStr}) y tu ${sellosRequeridos}.° corte va por la casa.\n` +
+    `Canje válido ${diasStr}${c.exigir_cita_previa ? ' con cita previa agendada' : ''}.\n` +
+    `${c.solo_corte_individual ? 'Aplica exclusivamente para el servicio individual de Corte de cabello (no paquetes) y ' : ''}${coberturaStr}.`
+  );
+}
+
+export function buildDefaultCoinsDescripcion(
+  cfg: Partial<AlfaCoinsConfig> = {},
+  multCfg?: Partial<MultiplicadorCoinsConfig> | null
+): string {
+  const c = { ...DEFAULT_COINS_CONFIG, ...cfg };
+  const m = { activo: false, multiplicador: 2, dias_semana: [], ...(multCfg || {}) };
+  const multLine =
+    m.activo && Array.isArray(m.dias_semana) && m.dias_semana.length > 0
+      ? `\n¡Promoción activa! ${formatJuntosDaysEs(m.dias_semana)} acumulas ${m.multiplicador}x Alfa Coins en tus compras.`
+      : '';
+  const aplicableStr =
+    c.aplicable_en === 'servicios'
+      ? 'en servicios de barbería'
+      : c.aplicable_en === 'productos'
+      ? 'en productos de cuidado personal'
+      : 'en servicios y productos en sucursal';
+
+  return (
+    `Gana ${c.coins_por_peso} Alfa Coin por cada $1 MXN pagado en dinero real en sucursal y úsalos como descuento directo ${aplicableStr}.\n` +
+    `Puedes cubrir hasta el ${c.tope_descuento_pct}% de tu ticket${c.minimo_canje_coins > 0 ? ` (canje mínimo desde ${c.minimo_canje_coins} Alfa Coins)` : ''}.${multLine}`
+  );
+}
+
+export function buildDefaultReferralDescripcion(cfg: Partial<ReferralProgramConfig> = {}): string {
+  const c = { ...DEFAULT_REFERRAL_CONFIG, ...cfg };
+  const desc = Math.max(1, Math.min(100, Number(c.descuento_amigo_pct) || 20));
+  const coins = Math.max(1, Number(c.recompensa_anfitrion_coins) || 500);
+  const consumoStr =
+    c.consumo_minimo_tipo === 'monto_fijo'
+      ? `$${c.consumo_minimo_monto} MXN`
+      : 'un Corte de cabello vigente';
+
+  return (
+    `Invita a un amigo a VATOS ALFA Barber Shop: tu invitado recibe un ${desc}% de descuento en su primer servicio y tú ganas +${coins} Alfa Coins cuando complete su primera visita (consumo mínimo de ${consumoStr} antes de descuento).\n` +
+    `${Number(c.limite_mensual_invitaciones) > 0 ? `Hasta ${c.limite_mensual_invitaciones} invitados con recompensa al mes.` : '¡Comparte tu código por WhatsApp sin límite de invitados!'}`
+  );
+}
+
 export function buildDefaultDecimaTerminos(
   cfg: Partial<DecimaCorteConfig> = {},
   sellosRequeridos: number = 10
@@ -833,6 +894,30 @@ function parseHHMMToMinutes(hhmm: string, fallbackMins: number): number {
   const [h, m] = hhmm.trim().split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return fallbackMins;
   return h * 60 + m;
+}
+
+export function buildDefaultJuntosDescripcion(cfg: Partial<JuntosEsMejorConfig> = {}): string {
+  const c = { ...DEFAULT_JUNTOS_CONFIG, ...cfg };
+  const diasStr = formatJuntosDaysEs(c.dias_semana);
+  const horarioStr = `${formatJuntosHour12(c.hora_inicio)} a ${formatJuntosHour12(c.hora_fin)}`;
+  const coins = Math.max(1, Number(c.coins_por_persona) || 400);
+  const freqStr =
+    c.limite_frecuencia === 'diario'
+      ? 'Máximo 1 vez por día por cliente.'
+      : c.limite_frecuencia === 'mensual'
+      ? 'Máximo 1 vez por mes por cliente.'
+      : 'Máximo 1 vez por semana por cliente.';
+  const minStr =
+    c.consumo_minimo_tipo === 'monto_fijo'
+      ? `consumo mínimo de $${c.consumo_minimo_monto} MXN en dinero real por persona`
+      : 'consumo igual o mayor a la tarifa regular vigente de corte de cabello (dinero real)';
+
+  return (
+    `Ven con 1 o más acompañantes a cualquier sucursal de VATOS ALFA Barber Shop y cada participante recibe +${coins} Alfa Coins extra.\n` +
+    `Válido ${diasStr} de ${horarioStr}.\n` +
+    `Si vas con tus hijos menores de edad sin celular, sus monedas se abonan directo a tu cuenta en el mismo ticket.${c.retener_coins_tickets_separados ? ' En tickets separados entre amigos, las monedas se liberan cuando todos completen su pago hoy.' : ''}\n` +
+    `Aplica con ${minStr}. ${freqStr}${c.exigir_llegada_conjunta ? ' Exclusivo llegando juntos (no aplica en sala de espera).' : ''}`
+  );
 }
 
 export function buildDefaultJuntosResumen(cfg: Partial<JuntosEsMejorConfig> = {}): string {

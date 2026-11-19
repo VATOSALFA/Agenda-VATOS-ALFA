@@ -50,15 +50,19 @@ import {
     evaluateActiveCoinsMultiplier,
     type MultiplicadorCoinsConfig,
     DEFAULT_JUNTOS_CONFIG,
+    buildDefaultJuntosDescripcion,
     buildDefaultJuntosTerminos,
     type JuntosEsMejorConfig,
     DEFAULT_DECIMA_CONFIG,
+    buildDefaultDecimaDescripcion,
     buildDefaultDecimaTerminos,
     type DecimaCorteConfig,
     DEFAULT_COINS_CONFIG,
+    buildDefaultCoinsDescripcion,
     buildDefaultCoinsTerminos,
     type AlfaCoinsConfig,
     DEFAULT_REFERRAL_CONFIG,
+    buildDefaultReferralDescripcion,
     buildDefaultReferralTerminos,
     type ReferralProgramConfig,
 } from '@/lib/benefit-security';
@@ -869,22 +873,25 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
             };
 
             if (isEditingJuntos && (autoSyncJuntosTerms || !currentBenefit.terminos)) {
-                const syncedTerms = buildDefaultJuntosTerminos(cleanJuntosConfig);
-                currentBenefit.terminos = syncedTerms;
+                currentBenefit.descripcion = buildDefaultJuntosDescripcion(cleanJuntosConfig);
+                currentBenefit.terminos = buildDefaultJuntosTerminos(cleanJuntosConfig);
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
             }
             if (isEditingDecima && (autoSyncDecimaTerms || !currentBenefit.terminos)) {
+                currentBenefit.descripcion = buildDefaultDecimaDescripcion(cleanDecimaConfig, paseAlfaForm.sellosRequeridos || 10);
                 currentBenefit.terminos = buildDefaultDecimaTerminos(cleanDecimaConfig, paseAlfaForm.sellosRequeridos || 10);
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
             }
             if (isEditingCoins && (autoSyncCoinsTerms || !currentBenefit.terminos)) {
+                currentBenefit.descripcion = buildDefaultCoinsDescripcion(cleanCoinsConfig, cleanMultiplicador);
                 currentBenefit.terminos = buildDefaultCoinsTerminos(cleanCoinsConfig, cleanMultiplicador);
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
             }
             if (isEditingReferral && (autoSyncReferralTerms || !currentBenefit.terminos)) {
+                currentBenefit.descripcion = buildDefaultReferralDescripcion(cleanReferralConfig);
                 currentBenefit.terminos = buildDefaultReferralTerminos(cleanReferralConfig);
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
@@ -2043,10 +2050,13 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                 type="button"
                                                                 variant="outline"
                                                                 size="sm"
-                                                                onClick={() => setNewTerminos(buildDefaultCoinsTerminos(coinsConfig, multiplicadorConfig))}
+                                                                onClick={() => {
+                                                                    setNewDescripcion(buildDefaultCoinsDescripcion(coinsConfig, multiplicadorConfig));
+                                                                    setNewTerminos(buildDefaultCoinsTerminos(coinsConfig, multiplicadorConfig));
+                                                                }}
                                                                 className="h-7 px-2.5 text-[11px] font-semibold cursor-pointer"
                                                             >
-                                                                Regenerar T&C
+                                                                Regenerar Desc. y T&C
                                                             </Button>
                                                         </div>
                                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -2059,7 +2069,10 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                     onChange={(e) => {
                                                                         const next = { ...coinsConfig, coins_por_peso: Math.max(1, Number(e.target.value) || 1) };
                                                                         setCoinsConfig(next);
-                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        if (autoSyncCoinsTerms) {
+                                                                            setNewDescripcion(buildDefaultCoinsDescripcion(next, multiplicadorConfig));
+                                                                            setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        }
                                                                     }}
                                                                     className="h-8 text-xs font-sans"
                                                                 />
@@ -2074,7 +2087,10 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                     onChange={(e) => {
                                                                         const next = { ...coinsConfig, minimo_canje_coins: Math.max(0, Number(e.target.value) || 0) };
                                                                         setCoinsConfig(next);
-                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        if (autoSyncCoinsTerms) {
+                                                                            setNewDescripcion(buildDefaultCoinsDescripcion(next, multiplicadorConfig));
+                                                                            setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        }
                                                                     }}
                                                                     className="h-8 text-xs font-sans"
                                                                 />
@@ -2089,7 +2105,10 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                     onChange={(e) => {
                                                                         const next = { ...coinsConfig, tope_descuento_pct: Math.max(1, Math.min(100, Number(e.target.value) || 100)) };
                                                                         setCoinsConfig(next);
-                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        if (autoSyncCoinsTerms) {
+                                                                            setNewDescripcion(buildDefaultCoinsDescripcion(next, multiplicadorConfig));
+                                                                            setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        }
                                                                     }}
                                                                     className="h-8 text-xs font-sans"
                                                                 />
@@ -2107,7 +2126,10 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                     onClick={() => {
                                                                         const next = { ...coinsConfig, aplicable_en: opt.id as any };
                                                                         setCoinsConfig(next);
-                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        if (autoSyncCoinsTerms) {
+                                                                            setNewDescripcion(buildDefaultCoinsDescripcion(next, multiplicadorConfig));
+                                                                            setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                        }
                                                                     }}
                                                                     className={cn(
                                                                         "h-8 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer",
@@ -2144,6 +2166,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                 setJuntosConfig((prev) => {
                                                     const next = { ...prev, ...patch };
                                                     if (autoSyncJuntosTerms) {
+                                                        setNewDescripcion(buildDefaultJuntosDescripcion(next));
                                                         setNewTerminos(buildDefaultJuntosTerminos(next));
                                                     }
                                                     return next;
@@ -2175,10 +2198,13 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => setNewTerminos(buildDefaultJuntosTerminos(juntosConfig))}
+                                                            onClick={() => {
+                                                                setNewDescripcion(buildDefaultJuntosDescripcion(juntosConfig));
+                                                                setNewTerminos(buildDefaultJuntosTerminos(juntosConfig));
+                                                            }}
                                                             className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
                                                         >
-                                                            Regenerar T&C
+                                                            Regenerar Desc. y T&C
                                                         </Button>
                                                     </div>
 
@@ -2377,6 +2403,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                 setDecimaConfig((prev) => {
                                                     const next = { ...prev, ...patch };
                                                     if (autoSyncDecimaTerms) {
+                                                        setNewDescripcion(buildDefaultDecimaDescripcion(next, paseAlfaForm.sellosRequeridos || 10));
                                                         setNewTerminos(buildDefaultDecimaTerminos(next, paseAlfaForm.sellosRequeridos || 10));
                                                     }
                                                     return next;
@@ -2577,6 +2604,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                 setReferralConfig((prev) => {
                                                     const next = { ...prev, ...patch };
                                                     if (autoSyncReferralTerms) {
+                                                        setNewDescripcion(buildDefaultReferralDescripcion(next));
                                                         setNewTerminos(buildDefaultReferralTerminos(next));
                                                     }
                                                     return next;
@@ -2600,10 +2628,13 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                             type="button"
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => setNewTerminos(buildDefaultReferralTerminos(referralConfig))}
+                                                            onClick={() => {
+                                                                setNewDescripcion(buildDefaultReferralDescripcion(referralConfig));
+                                                                setNewTerminos(buildDefaultReferralTerminos(referralConfig));
+                                                            }}
                                                             className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
                                                         >
-                                                            Regenerar T&C
+                                                            Regenerar Desc. y T&C
                                                         </Button>
                                                     </div>
 

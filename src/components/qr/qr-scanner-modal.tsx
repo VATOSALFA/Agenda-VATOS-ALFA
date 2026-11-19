@@ -69,6 +69,10 @@ import {
   REFERRAL_HOST_REWARD_COINS,
   calculateReferralMinNetPurchase,
   validateJuntosSchedule,
+  isSameJuntosWeek,
+  isSameJuntosPeriod,
+  DEFAULT_JUNTOS_CONFIG,
+  type JuntosEsMejorConfig,
   JUNTOS_REWARD_COINS_PER_PERSON,
   getCurrentHaircutPrice,
   evaluateClientAlfaTier,
@@ -154,6 +158,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     Array<{ id: string; nombre: string; telefono?: string; folio?: string }>
   >([]);
   const [isScanningCompanion, setIsScanningCompanion] = useState<boolean>(false);
+  const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
 
   useEffect(() => {
     if (!db) return;
@@ -177,6 +182,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             bList = d.beneficios_detallados;
           }
           if (d.niveles_config) setNivelesConfig(d.niveles_config);
+          if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
         }
         if (snapApp.exists()) {
           const rawApp = snapApp.data();
@@ -188,6 +194,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           }
           const niv = rawApp.niveles_config || d.niveles_config || rawApp['pase_alfa.niveles_config'];
           if (niv) setNivelesConfig((prev: any) => prev || niv);
+          const jun = rawApp.juntos_config || d.juntos_config || rawApp['pase_alfa.juntos_config'];
+          if (jun && !snap.data()?.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...jun });
         }
         setBeneficiosList(bList);
       } catch (_) {}
@@ -200,6 +208,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         if (snap.exists()) {
           const d = snap.data();
           if (d.niveles_config) setNivelesConfig(d.niveles_config);
+          if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
           if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
           if (d.recompensa) setRewardName(d.recompensa);
           if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
@@ -542,14 +551,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             }
           }
 
-          // Verificar que el acompañante no haya canjeado ya hoy "Juntos es Mejor"
+          // Verificar que el acompañante no haya canjeado ya en el periodo configurado "Juntos es Mejor"
           const todayStr = format(new Date(), 'yyyy-MM-dd');
-          if ((compClient as any).ultimo_canje_juntos_fecha === todayStr) {
+          const compLastJuntos = (compClient as any).ultimo_canje_juntos_fecha;
+          const freqLabel = juntosConfig.limite_frecuencia === 'diario' ? 'hoy' : juntosConfig.limite_frecuencia === 'mensual' ? 'este mes' : 'esta semana';
+          if (isSameJuntosPeriod(compLastJuntos, todayStr, juntosConfig.limite_frecuencia)) {
             playBeep(false);
             toast({
               variant: 'destructive',
-              title: '⛔ Beneficio Ya Utilizado Hoy',
-              description: `${compClient.nombre} ya utilizó la promoción "Juntos es Mejor" el día de hoy.`,
+              title: '⛔ Límite de Frecuencia Alcanzado',
+              description: `${compClient.nombre} ya utilizó la promoción "Juntos es Mejor" ${freqLabel} (${compLastJuntos}).`,
             });
             return;
           }
@@ -710,8 +721,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               detectedBenefit.blockReason =
                 '⛔ CLIENTE NO ENCONTRADO: Este código QR no pertenece a ningún cliente registrado en el sistema oficial de VATOS ALFA.';
             } else if (!detectedBenefit.isBlocked) {
-              // 2. Validar día y horario oficial (Lunes, Martes y Miércoles de 10:00 a 14:00 hrs o cita iniciada en ese rango)
-              const schedResult = validateJuntosSchedule(new Date(), clientResForToday?.hora_inicio);
+              // 2. Validar día y horario oficial configurado desde Panel Pase Alfa
+              const schedResult = validateJuntosSchedule(new Date(), clientResForToday?.hora_inicio, juntosConfig);
               detectedBenefit.isScheduleValid = schedResult.isValid;
               detectedBenefit.scheduleWarning = schedResult.reason;
 
@@ -719,11 +730,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 detectedBenefit.isBlocked = true;
                 detectedBenefit.blockReason = schedResult.reason;
               } else {
-                // 3. Validar Anti-Farming: Máximo 1 canje de Juntos es Mejor por cliente por día
+                // 3. Validar Anti-Farming según frecuencia configurada (semanal / mensual / diario)
                 const todayStr = format(new Date(), 'yyyy-MM-dd');
-                if ((foundClient as any).ultimo_canje_juntos_fecha === todayStr) {
+                const lastJuntosDate = (foundClient as any).ultimo_canje_juntos_fecha;
+                const freqText = juntosConfig.limite_frecuencia === 'diario' ? 'hoy' : juntosConfig.limite_frecuencia === 'mensual' ? 'este mes' : 'esta semana';
+                if (isSameJuntosPeriod(lastJuntosDate, todayStr, juntosConfig.limite_frecuencia)) {
                   detectedBenefit.isBlocked = true;
-                  detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO HOY: El cliente "${foundClient.nombre}" ya utilizó la promoción "Juntos es Mejor" el día de hoy (${todayStr}). Solo se permite 1 canje por día de promoción.`;
+                  detectedBenefit.blockReason = `⛔ LÍMITE DE FRECUENCIA ALCANZADO: El cliente "${foundClient.nombre}" ya utilizó la promoción "Juntos es Mejor" ${freqText} (el ${lastJuntosDate}).`;
                 } else {
                   try {
                     const qCanjesHoy = query(
@@ -731,7 +744,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                       where('clienteId', '==', foundClient.id)
                     );
                     const snapCanjesHoy = await getDocs(qCanjesHoy);
-                    const usedToday = snapCanjesHoy.docs.some(dSnap => {
+                    let usedWeekDate = '';
+                    const usedThisPeriod = snapCanjesHoy.docs.some(dSnap => {
                       const d = dSnap.data();
                       if (d.estado !== 'canjeado') return false;
                       const isJuntosDoc =
@@ -739,13 +753,26 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         d.isJuntosBenefit === true ||
                         (d.folio || '').startsWith('VA-JUNTOS');
                       if (!isJuntosDoc) return false;
-                      if (d.fechaStr === todayStr) return true;
-                      const dt = d.fechaCanje?.toDate ? d.fechaCanje.toDate() : d.canjeadoEn?.toDate ? d.canjeadoEn.toDate() : null;
-                      return dt ? format(dt, 'yyyy-MM-dd') === todayStr : false;
+                      let dStr = d.fecha_canje_dia || d.fechaStr || '';
+                      if (!dStr) {
+                        const dt = d.fechaCanje?.toDate
+                          ? d.fechaCanje.toDate()
+                          : d.canjeadoEn?.toDate
+                          ? d.canjeadoEn.toDate()
+                          : d.fecha_aplicacion?.toDate
+                          ? d.fecha_aplicacion.toDate()
+                          : null;
+                        dStr = dt ? format(dt, 'yyyy-MM-dd') : '';
+                      }
+                      if (dStr && isSameJuntosPeriod(dStr, todayStr, juntosConfig.limite_frecuencia)) {
+                        usedWeekDate = dStr;
+                        return true;
+                      }
+                      return false;
                     });
-                    if (usedToday) {
+                    if (usedThisPeriod) {
                       detectedBenefit.isBlocked = true;
-                      detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO HOY: Ya existe un canje de "Juntos es Mejor" registrado hoy para ${foundClient.nombre}.`;
+                      detectedBenefit.blockReason = `⛔ LÍMITE DE FRECUENCIA ALCANZADO: Ya existe un canje de "Juntos es Mejor" registrado ${freqText} (${usedWeekDate}) para ${foundClient.nombre}.`;
                     }
                   } catch (_) {}
                 }
@@ -1617,8 +1644,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     if (!scannedBenefit || !scannedClient || scannedBenefit.isBlocked) return;
     const safeMinors = Math.max(1, juntosMinorsCount);
     const totalParticipants = 1 + safeMinors;
-    const totalCoins = JUNTOS_REWARD_COINS_PER_PERSON * totalParticipants;
-    const minPurchaseAmount = currentHaircutPrice * totalParticipants;
+    const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+    const juntosUnitMin = juntosConfig.consumo_minimo_tipo === 'monto_fijo'
+      ? (Number(juntosConfig.consumo_minimo_monto) || currentHaircutPrice)
+      : currentHaircutPrice;
+    const totalCoins = juntosCoins * totalParticipants;
+    const minPurchaseAmount = juntosUnitMin * totalParticipants;
 
     onOpenChange(false);
     const juntosPayload = {
@@ -1658,28 +1689,50 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const titularFullName = `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim();
 
+      const groupId = `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}`;
+      const allGroupMembers = [
+        {
+          id: scannedClient.id,
+          nombre: titularFullName,
+          telefono: scannedClient.telefono || '',
+          folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+        },
+        ...juntosCompanions,
+      ];
+
+      const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+      const juntosUnitMin = juntosConfig.consumo_minimo_tipo === 'monto_fijo'
+        ? (Number(juntosConfig.consumo_minimo_monto) || currentHaircutPrice)
+        : currentHaircutPrice;
+
       if (separateTickets) {
-        // Guardar autorización de grupo pre-verificada para los acompañantes que pagarán en su propio ticket hoy
+        // Guardar autorización de grupo pre-verificada para TODOS los integrantes (Titular + Acompañantes)
+        // Los Alfa Coins de cada integrante quedan en espera (si retener_coins_tickets_separados) hasta que TODOS completen su pago hoy.
         await Promise.all(
-          juntosCompanions.map(comp => {
-            const docId = `VA-JUNTOS-GRP-${todayStr}-${comp.id}`;
+          allGroupMembers.map(member => {
+            const docId = `VA-JUNTOS-GRP-${todayStr}-${member.id}`;
             return setDoc(
               doc(db, 'canjes_beneficios', docId),
               {
-                folio: comp.folio || docId,
+                folio: docId,
+                originalFolio: member.folio || docId,
+                grupoId: groupId,
+                grupoMiembros: allGroupMembers.map(m => ({ id: m.id, nombre: m.nombre })),
                 benefitId: 'juntos_es_mejor',
                 benefitTitle: 'JUNTOS ES MEJOR',
                 isJuntosBenefit: true,
                 juntosMode: 'companions_separate_tickets',
-                clienteId: comp.id,
-                clienteNombre: comp.nombre,
-                telefono: comp.telefono || '',
+                clienteId: member.id,
+                clienteNombre: member.nombre,
+                telefono: member.telefono || '',
                 grupoTitularId: scannedClient.id,
                 grupoTitularNombre: titularFullName,
                 fechaStr: todayStr,
                 anio: new Date().getFullYear(),
                 estado: 'pendiente_cobro_grupo',
-                rewardCoins: JUNTOS_REWARD_COINS_PER_PERSON,
+                pagado: false,
+                recompensaAcreditada: false,
+                rewardCoins: juntosCoins,
                 creadoEn: serverTimestamp(),
                 sucursal: 'Sombrerete',
               },
@@ -1690,7 +1743,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
         toast({
           title: '✓ Grupo Vinculado para Cobro Separado',
-          description: `Pasa a cobrar a ${titularFullName}. Al cobrar después a ${juntosCompanions.map(c => c.nombre).join(', ')}, su promoción se aplicará en automático.`,
+          description: `Cobra a ${titularFullName} y después a ${juntosCompanions.map(c => c.nombre).join(', ')}. Los +${juntosCoins} Alfa Coins de cada uno se acreditarán automáticamente cuando TODOS paguen su ticket hoy.`,
         });
       }
 
@@ -1699,14 +1752,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       onOpenChange(false);
       const juntosCompanionsPayload = {
         ...scannedBenefit,
+        folio: separateTickets ? `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}` : scannedBenefit.folio,
         isJuntosBenefit: true,
         benefitId: 'juntos_es_mejor',
         benefitTitle: 'JUNTOS ES MEJOR',
         juntosMode: separateTickets ? 'companions_separate_tickets' : 'companions_single_ticket',
+        juntosGroupId: separateTickets ? groupId : undefined,
         minorsCount: 0,
+        companions: separateTickets ? allGroupMembers.map(m => ({ id: m.id, name: m.nombre })) : juntosCompanions.map(c => ({ id: c.id, name: c.nombre, folio: c.folio })),
         companionsWithApp: juntosCompanions,
-        rewardCoins: JUNTOS_REWARD_COINS_PER_PERSON * totalParticipantsInTicket,
-        minPurchase: currentHaircutPrice * totalParticipantsInTicket,
+        rewardCoins: juntosCoins * totalParticipantsInTicket,
+        minPurchase: juntosUnitMin * totalParticipantsInTicket,
       };
       document.dispatchEvent(
         new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {

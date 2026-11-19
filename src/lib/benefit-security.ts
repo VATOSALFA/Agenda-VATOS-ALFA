@@ -529,14 +529,147 @@ export const REFERRAL_HOST_REWARD_COINS = 500;
 /** @deprecated Usa calculateReferralMinNetPurchase(currentHaircutPrice) para cálculo dinámico */
 export const REFERRAL_MIN_PURCHASE_MXN = 112;
 
+export interface DecimaCorteConfig {
+  activo: boolean;
+  dias_semana: number[]; // [1,2,3,4,5] = Lunes a Viernes
+  exigir_cita_previa: boolean;
+  solo_corte_individual: boolean; // No paquetes combinados
+  cobertura_tipo: 'corte_vigente' | 'monto_fijo';
+  cobertura_monto: number;
+  consumo_sello_tipo: 'corte_vigente' | 'monto_fijo';
+  consumo_sello_monto: number;
+  contar_como_visita_nivel: boolean; // false por defecto (el corte gratis no suma visita de nivel)
+}
+
+export const DEFAULT_DECIMA_CONFIG: DecimaCorteConfig = {
+  activo: true,
+  dias_semana: [1, 2, 3, 4, 5],
+  exigir_cita_previa: true,
+  solo_corte_individual: true,
+  cobertura_tipo: 'corte_vigente',
+  cobertura_monto: 140,
+  consumo_sello_tipo: 'corte_vigente',
+  consumo_sello_monto: 140,
+  contar_como_visita_nivel: false,
+};
+
+export interface AlfaCoinsConfig {
+  activo: boolean;
+  coins_por_peso: number; // default 1
+  minimo_canje_coins: number; // default 0
+  tope_descuento_pct: number; // default 100 (hasta 100% del ticket)
+  aplicable_en: 'ambos' | 'servicios' | 'productos'; // default 'ambos'
+}
+
+export const DEFAULT_COINS_CONFIG: AlfaCoinsConfig = {
+  activo: true,
+  coins_por_peso: 1,
+  minimo_canje_coins: 0,
+  tope_descuento_pct: 100,
+  aplicable_en: 'ambos',
+};
+
+export interface ReferralProgramConfig {
+  activo: boolean;
+  descuento_amigo_pct: number; // default 20
+  recompensa_anfitrion_coins: number; // default 500
+  consumo_minimo_tipo: 'corte_vigente' | 'monto_fijo';
+  consumo_minimo_monto: number;
+  solo_clientes_nuevos: boolean;
+  limite_mensual_invitaciones: number; // 0 = ilimitadas
+}
+
+export const DEFAULT_REFERRAL_CONFIG: ReferralProgramConfig = {
+  activo: true,
+  descuento_amigo_pct: 20,
+  recompensa_anfitrion_coins: 500,
+  consumo_minimo_tipo: 'corte_vigente',
+  consumo_minimo_monto: 140,
+  solo_clientes_nuevos: true,
+  limite_mensual_invitaciones: 0,
+};
+
+export function buildDefaultDecimaTerminos(
+  cfg: Partial<DecimaCorteConfig> = {},
+  sellosRequeridos: number = 10
+): string {
+  const c = { ...DEFAULT_DECIMA_CONFIG, ...cfg };
+  const diasStr = formatJuntosDaysEs(c.dias_semana);
+  const sellosParaDesbloquear = Math.max(1, sellosRequeridos - 1);
+  const coberturaStr =
+    c.cobertura_tipo === 'monto_fijo'
+      ? `hasta $${c.cobertura_monto} MXN`
+      : 'hasta el precio regular vigente del Corte de cabello';
+  const consumoSelloStr =
+    c.consumo_sello_tipo === 'monto_fijo'
+      ? `igual o mayor a $${c.consumo_sello_monto} MXN`
+      : 'igual o mayor a la tarifa vigente del Corte de cabello';
+
+  return `Promoción "LA DÉCIMA VA POR LA CASA (PASE ALFA)"
+1. Acumulación de Sellos. Al completar ${sellosParaDesbloquear} visitas elegibles pagadas en sucursal (consumo en servicios en dinero real ${consumoSelloStr}), se desbloquea tu ${sellosRequeridos}.° corte de cortesía gratis.
+2. Días Válidos para Canje. El corte gratis puede canjearse únicamente ${diasStr}.
+3. Cita Previa y Servicio Elegible. ${c.exigir_cita_previa ? 'Requiere contar con una cita agendada activa desde la app o sitio web.' : 'Aplica con cita previa o llegada directa sujeto a disponibilidad.'} ${c.solo_corte_individual ? 'Válido exclusivamente para el servicio individual de Corte de cabello (no aplica en Paquetes Alfa combinados).' : 'Aplica en servicios de corte.'}
+4. Cobertura del Beneficio. El código QR de cortesía cubre ${coberturaStr}. Cualquier servicio o producto adicional se liquida en caja.
+5. Progreso de Nivel. ${c.contar_como_visita_nivel ? 'El canje del corte gratis cuenta como visita para subir de nivel.' : 'Al tratarse de un servicio gratuito de cortesía, el canje no suma como visita pagada para el cálculo de nivel.'}
+6. Vigencia y Seguridad. Beneficio personal e intransferible mediante código QR oficial en recepción.`;
+}
+
+export function buildDefaultCoinsTerminos(
+  cfg: Partial<AlfaCoinsConfig> = {},
+  multCfg?: Partial<MultiplicadorCoinsConfig> | null
+): string {
+  const c = { ...DEFAULT_COINS_CONFIG, ...cfg };
+  const m = { activo: false, multiplicador: 2, dias_semana: [], ...(multCfg || {}) };
+  const aplicableStr =
+    c.aplicable_en === 'servicios'
+      ? 'únicamente en servicios de barbería'
+      : c.aplicable_en === 'productos'
+      ? 'únicamente en productos de cuidado personal'
+      : 'tanto en servicios de barbería como en productos en sucursal';
+  const multClause =
+    m.activo && Array.isArray(m.dias_semana) && m.dias_semana.length > 0
+      ? ` En días promocionales (${formatJuntosDaysEs(m.dias_semana)}), tus compras en dinero real acumulan ${m.multiplicador}x Alfa Coins.`
+      : '';
+
+  return `Programa de Monedero Digital "ALFA COINS"
+1. Acumulación. Obtienes ${c.coins_por_peso} Alfa Coin por cada $1 MXN pagado en dinero real en sucursal.${multClause}
+2. Valor de Canje según Nivel. El valor de cada Alfa Coin depende de tu nivel en Pase Alfa (Alfa Member 3% = $0.03 MXN, Alfa Gold 5% = $0.05 MXN, Alfa Black VIP 7% = $0.07 MXN).
+3. Reglas de Uso en Caja. ${c.minimo_canje_coins > 0 ? `Se requiere un mínimo de ${c.minimo_canje_coins} Alfa Coins para canjear en caja.` : 'Puedes canjear tus Alfa Coins desde cualquier saldo disponible.'} Puedes cubrir hasta el ${c.tope_descuento_pct}% del total del ticket, aplicable ${aplicableStr}.
+4. Restricciones. Los Alfa Coins son personales, no canjeables por dinero en efectivo ni transferibles. Los pagos cubiertos con Alfa Coins no generan nuevos sellos ni nuevas monedas.`;
+}
+
+export function buildDefaultReferralTerminos(cfg: Partial<ReferralProgramConfig> = {}): string {
+  const c = { ...DEFAULT_REFERRAL_CONFIG, ...cfg };
+  const desc = Math.max(1, Math.min(100, Number(c.descuento_amigo_pct) || 20));
+  const coins = Math.max(1, Number(c.recompensa_anfitrion_coins) || 500);
+  const consumoStr =
+    c.consumo_minimo_tipo === 'monto_fijo'
+      ? `igual o superior a $${c.consumo_minimo_monto} MXN`
+      : 'igual o superior a la tarifa regular vigente del Corte de cabello';
+  const limiteStr =
+    Number(c.limite_mensual_invitaciones) > 0
+      ? `Cada anfitrión podrá recibir recompensa por un máximo de ${c.limite_mensual_invitaciones} invitados nuevos al mes.`
+      : 'El titular de Pase Alfa podrá invitar a todos los amigos nuevos que desee sin límite.';
+
+  return `Promoción "INVITA A UN AMIGO (${desc}% DE DESCUENTO + ${coins} ALFA COINS)"
+1. Beneficio Bilateral. El amigo invitado recibe un ${desc}% de descuento en su primer servicio al presentar tu código de invitación en recepción. El anfitrión recibe +${coins} Alfa Coins cuando su invitado complete su primera visita válida.
+2. Elegibilidad del Invitado. ${c.solo_clientes_nuevos ? 'Exclusivo para clientes totalmente nuevos en VATOS ALFA Barber Shop sin visitas ni compras previas.' : 'Válido al presentar código de invitación en recepción.'}
+3. Consumo Mínimo. El invitado deberá realizar un consumo en servicios (antes del descuento) ${consumoStr} para liberar los +${coins} Alfa Coins del anfitrión.
+4. Límite de Invitaciones. ${limiteStr}
+5. Antifraude y Cancelaciones. Prohibidas las auto-invitaciones o cuentas duplicadas. Si la venta del invitado se cancela o elimina, el sistema revertirá los +${coins} Alfa Coins.`;
+}
+
 /**
- * Calcula el pago neto mínimo esperado (tras aplicar el 20% de descuento de bienvenida)
+ * Calcula el pago neto mínimo esperado (tras aplicar el descuento de bienvenida)
  * equivalente al consumo de un Corte de cabello vigente.
- * Ej: Corte $140 -> $112 MXN netos; Corte $160 -> $128 MXN netos.
  */
-export function calculateReferralMinNetPurchase(haircutPrice: number = 140): number {
+export function calculateReferralMinNetPurchase(
+  haircutPrice: number = 140,
+  discountPercent: number = REFERRAL_DISCOUNT_PERCENT
+): number {
   const safePrice = haircutPrice > 0 ? haircutPrice : 140;
-  return Math.round(safePrice * (1 - REFERRAL_DISCOUNT_PERCENT / 100) * 100) / 100;
+  const safePct = discountPercent > 0 && discountPercent <= 100 ? discountPercent : REFERRAL_DISCOUNT_PERCENT;
+  return Math.round(safePrice * (1 - safePct / 100) * 100) / 100;
 }
 
 export interface ReferralPurchaseEligibilityResult {
@@ -547,18 +680,20 @@ export interface ReferralPurchaseEligibilityResult {
 }
 
 /**
- * Evalúa dinámicamente si la compra del amigo invitado acredita los +500 Alfa Coins al anfitrión:
- * 1. El valor regular (antes del descuento) de los servicios consumidos debe ser >= al precio vigente de 1 Corte de cabello.
- * 2. El dinero real efectivamente pagado (total en caja + anticipo pagado) debe ser >= al corte con el 20% de descuento aplicado.
+ * Evalúa dinámicamente si la compra del amigo invitado acredita los Alfa Coins al anfitrión.
  */
 export function evaluateReferralPurchaseEligibility(params: {
   subtotal: number;
   realMoneyPaid: number;
   currentHaircutPrice?: number;
+  discountPercent?: number;
   cart?: Array<{ tipo?: string; precio?: number; cantidad?: number }>;
 }): ReferralPurchaseEligibilityResult {
   const requiredGrossService = Number(params.currentHaircutPrice) > 0 ? Number(params.currentHaircutPrice) : 140;
-  const requiredNetPaid = calculateReferralMinNetPurchase(requiredGrossService);
+  const requiredNetPaid = calculateReferralMinNetPurchase(
+    requiredGrossService,
+    params.discountPercent ?? REFERRAL_DISCOUNT_PERCENT
+  );
 
   const grossServicesInCart = Array.isArray(params.cart) && params.cart.length > 0
     ? params.cart.reduce((acc, it) => {
@@ -582,38 +717,238 @@ export function evaluateReferralPurchaseEligibility(params: {
 export const JUNTOS_REWARD_COINS_PER_PERSON = 400;
 
 /**
+ * Retorna la clave de semana natural (Lunes a Domingo) en formato 'YYYY-MM-DD' del lunes de esa semana,
+ * usando hora local para evitar desfases UTC.
+ */
+export function getJuntosWeekKey(dateInput: Date | string = new Date()): string {
+  let d: Date;
+  if (typeof dateInput === 'string') {
+    const clean = dateInput.trim().slice(0, 10);
+    const parts = clean.split('-').map(Number);
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      d = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
+    } else {
+      d = new Date(dateInput);
+    }
+  } else {
+    d = new Date(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate(), 12, 0, 0);
+  }
+  if (isNaN(d.getTime())) return '';
+  const day = d.getDay(); // 0=Dom, 1=Lun, ... 6=Sab
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+export interface JuntosEsMejorConfig {
+  activo: boolean;
+  dias_semana: number[]; // 0=Dom, 1=Lun, 2=Mar, 3=Mié, 4=Jue, 5=Vie, 6=Sáb
+  hora_inicio: string; // 'HH:mm' ej. '10:00'
+  hora_fin: string; // 'HH:mm' ej. '14:00'
+  tolerancia_caja_minutos: number; // ej. 30
+  coins_por_persona: number; // ej. 400
+  limite_frecuencia: 'semanal' | 'diario' | 'mensual';
+  exigir_llegada_conjunta: boolean;
+  retener_coins_tickets_separados: boolean;
+  consumo_minimo_tipo: 'corte_vigente' | 'monto_fijo';
+  consumo_minimo_monto: number;
+}
+
+export const DEFAULT_JUNTOS_CONFIG: JuntosEsMejorConfig = {
+  activo: true,
+  dias_semana: [1, 2, 3],
+  hora_inicio: '10:00',
+  hora_fin: '14:00',
+  tolerancia_caja_minutos: 30,
+  coins_por_persona: 400,
+  limite_frecuencia: 'semanal',
+  exigir_llegada_conjunta: true,
+  retener_coins_tickets_separados: true,
+  consumo_minimo_tipo: 'corte_vigente',
+  consumo_minimo_monto: 140,
+};
+
+/**
+ * Verifica si dos fechas caen dentro de la misma semana natural (Lunes a Domingo).
+ */
+export function isSameJuntosWeek(dateStrA?: string, dateStrB?: string | Date): boolean {
+  if (!dateStrA) return false;
+  const keyA = getJuntosWeekKey(dateStrA);
+  const keyB = getJuntosWeekKey(dateStrB || new Date());
+  return Boolean(keyA && keyB && keyA === keyB);
+}
+
+/**
+ * Verifica si un cliente ya utilizó "Juntos es Mejor" dentro del periodo configurado (diario, semanal o mensual).
+ */
+export function isSameJuntosPeriod(
+  dateStrA?: string,
+  dateStrB?: string | Date,
+  frequency: 'semanal' | 'diario' | 'mensual' = 'semanal'
+): boolean {
+  if (!dateStrA) return false;
+  const cleanA = dateStrA.trim().slice(0, 10);
+  let cleanB = '';
+  if (typeof dateStrB === 'string') {
+    cleanB = dateStrB.trim().slice(0, 10);
+  } else {
+    const d = dateStrB || new Date();
+    cleanB = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  if (!cleanA || !cleanB) return false;
+  if (frequency === 'diario') return cleanA === cleanB;
+  if (frequency === 'mensual') return cleanA.slice(0, 7) === cleanB.slice(0, 7);
+  return isSameJuntosWeek(cleanA, cleanB);
+}
+
+export function formatJuntosDaysEs(dias: number[] = [1, 2, 3]): string {
+  const names = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const sorted = [...new Set(dias)].filter(d => d >= 0 && d <= 6).sort((a, b) => {
+    const orderA = a === 0 ? 7 : a;
+    const orderB = b === 0 ? 7 : b;
+    return orderA - orderB;
+  });
+  if (sorted.length === 0) return 'Sin días configurados';
+  if (sorted.length === 7) return 'Todos los días';
+  if (sorted.length === 1) return names[sorted[0]];
+  const last = names[sorted[sorted.length - 1]];
+  const rest = sorted.slice(0, -1).map(d => names[d]);
+  return `${rest.join(', ')} y ${last}`;
+}
+
+export function formatJuntosHour12(hhmm: string = '10:00'): string {
+  const [hRaw, mRaw] = (hhmm || '10:00').split(':').map(Number);
+  const h = isNaN(hRaw) ? 10 : hRaw;
+  const m = isNaN(mRaw) ? 0 : mRaw;
+  const period = h >= 12 ? 'p. m.' : 'a. m.';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+function parseHHMMToMinutes(hhmm: string, fallbackMins: number): number {
+  if (!hhmm || !/^\d{1,2}:\d{2}/.test(hhmm.trim())) return fallbackMins;
+  const [h, m] = hhmm.trim().split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return fallbackMins;
+  return h * 60 + m;
+}
+
+export function buildDefaultJuntosResumen(cfg: Partial<JuntosEsMejorConfig> = {}): string {
+  const c = { ...DEFAULT_JUNTOS_CONFIG, ...cfg };
+  const diasStr = formatJuntosDaysEs(c.dias_semana);
+  const horarioStr = `${formatJuntosHour12(c.hora_inicio)} a ${formatJuntosHour12(c.hora_fin)}`;
+  const freqStr =
+    c.limite_frecuencia === 'diario'
+      ? '1 vez por día'
+      : c.limite_frecuencia === 'mensual'
+      ? '1 vez por mes'
+      : '1 vez por semana';
+  const minStr =
+    c.consumo_minimo_tipo === 'monto_fijo'
+      ? `$${c.consumo_minimo_monto} MXN en dinero real`
+      : 'tarifa regular vigente del corte de cabello (dinero real)';
+
+  return (
+    `• Días y horario: ${diasStr} de ${horarioStr}.\n` +
+    `• Si vas con tus hijos menores de edad (sin app): Muestra tu QR en recepción y acumula +${c.coins_por_persona} Alfa Coins por ti y +${c.coins_por_persona} Alfa Coins adicionales por cada hijo en tu misma cuenta (en el mismo ticket).\n` +
+    `• Si van entre amigos o familiares con app: Cada participante muestra su QR en recepción y recibe +${c.coins_por_persona} Alfa Coins en su propia cuenta${c.retener_coins_tickets_separados ? ' (en tickets separados se liberan cuando todos paguen hoy)' : ''}.\n` +
+    `• Consumo mínimo por persona: ${minStr}.\n` +
+    `• Límite: ${freqStr} por cliente.${c.exigir_llegada_conjunta ? ' Aplica únicamente llegando juntos (no aplica en sala de espera).' : ''}`
+  );
+}
+
+export function buildDefaultJuntosTerminos(cfg: Partial<JuntosEsMejorConfig> = {}): string {
+  const c = { ...DEFAULT_JUNTOS_CONFIG, ...cfg };
+  const diasStr = formatJuntosDaysEs(c.dias_semana);
+  const inicioStr = formatJuntosHour12(c.hora_inicio);
+  const finStr = formatJuntosHour12(c.hora_fin);
+  const tolMins = Math.max(0, Number(c.tolerancia_caja_minutos ?? 30));
+  const endMins = parseHHMMToMinutes(c.hora_fin, 840) + tolMins;
+  const tolH = Math.floor(endMins / 60) % 24;
+  const tolM = endMins % 60;
+  const tolStr = formatJuntosHour12(`${String(tolH).padStart(2, '0')}:${String(tolM).padStart(2, '0')}`);
+  const coins = Math.max(1, Number(c.coins_por_persona || 400));
+
+  const freqClause =
+    c.limite_frecuencia === 'diario'
+      ? 'máximo 1 vez por día por cliente'
+      : c.limite_frecuencia === 'mensual'
+      ? 'máximo 1 vez por mes calendario por cliente'
+      : 'máximo 1 vez por semana (de lunes a domingo) por cliente';
+
+  const consumoClause =
+    c.consumo_minimo_tipo === 'monto_fijo'
+      ? `igual o superior a $${c.consumo_minimo_monto} MXN`
+      : 'igual o superior a la tarifa regular vigente del Corte de cabello';
+
+  const llegadaClause = c.exigir_llegada_conjunta
+    ? 'Beneficio exclusivo para padres con hijos menores, familiares o amigos que lleguen juntos a la sucursal. No aplica entre clientes desconocidos o independientes que coincidan en sala de espera. El personal de recepción se reserva el derecho de validar la asistencia conjunta antes de escanear los códigos QR.'
+    : 'Aplica para padres con hijos menores, familiares o amigos que acudan juntos durante el horario participante.';
+
+  const ticketsSeparadosClause = c.retener_coins_tickets_separados
+    ? `Si los participantes con App eligen pagar por separado, los +${coins} Alfa Coins de cada integrante quedarán en espera y se acreditarán automáticamente hasta que TODOS los miembros vinculados del grupo completen el pago de su servicio ese mismo día. Si alguno no realiza su pago, la recompensa del grupo no se liberará.`
+    : `Si los participantes con App eligen pagar por separado, cada integrante recibirá sus +${coins} Alfa Coins al liquidar su propio ticket.`;
+
+  return `Promoción "JUNTOS ES MEJOR (+${coins} ALFA COINS POR PERSONA)"
+1. Días y Horario Oficial. Válido únicamente ${diasStr} de ${inicioStr} a ${finStr}${tolMins > 0 ? ` (aplica para citas agendadas cuyo inicio sea dentro de ese horario, con tolerancia de cobro en caja hasta las ${tolStr})` : ''}.
+2. Límite de Frecuencia por Cliente. Cada cliente podrá participar en la dinámica "Juntos es Mejor" ${freqClause}, tanto como titular como acompañante. Si un participante ya utilizó el beneficio dentro del periodo vigente, el sistema bloqueará automáticamente un nuevo canje.
+3. Asistencia Conjunta. ${llegadaClause}
+4. Modalidad Hijos Menores (sin App). El titular presenta su QR en recepción y acumula +${coins} Alfa Coins por su servicio más +${coins} Alfa Coins adicionales en su misma cuenta por cada hijo menor de edad que reciba servicio en esa visita (en el mismo ticket).
+5. Modalidad Amigos o Familiares (cada uno con App). Todos los participantes deben presentar su código QR oficial en recepción al inicio o al momento de pasar a caja para vincular el grupo. Recibirán +${coins} Alfa Coins en su propia cuenta al cumplir los requisitos.
+6. Cobro en Tickets Separados. ${ticketsSeparadosClause}
+7. Consumo Mínimo en Dinero Real. Por cada participante (titular, acompañante o menor) se requiere al menos 1 servicio y un pago efectivo en dinero real (sin usar Alfa Coins como forma de pago) ${consumoClause}.
+8. Cancelaciones y Uso Indebido. Si alguna de las ventas del grupo es cancelada o eliminada, el sistema revertirá automáticamente los Alfa Coins otorgados. Cualquier intento de simulación, cuentas duplicadas o manipulación anulará el beneficio.
+9. Vigencia y Aceptación. Válido en sucursales oficiales participantes de VATOS ALFA Barber Shop. No acumulable con otros cupones o descuentos. Al presentar tu código QR aceptas íntegramente estas condiciones.`;
+}
+
+/**
  * Valida si la fecha/hora actual (o la hora de inicio de la cita de hoy) corresponde a los días y horario
- * permitidos para "Juntos es Mejor": Lunes (1), Martes (2), Miércoles (3) de 10:00 a 14:00 hrs
- * (con tolerancia de salida en caja hasta las 14:30 hrs para citas de las 13:30-14:00).
+ * permitidos para "Juntos es Mejor" según la configuración dinámica del panel (por defecto L-M-X 10:00 a 14:00).
  */
 export function validateJuntosSchedule(
   date: Date = new Date(),
-  reservationStartTime?: string
+  reservationStartTime?: string,
+  config?: Partial<JuntosEsMejorConfig>
 ): {
   isValid: boolean;
   isDayValid: boolean;
   isTimeValid: boolean;
   reason?: string;
 } {
-  const day = date.getDay(); // 0 = Domingo, 1 = Lunes, 2 = Martes, 3 = Miércoles...
+  const c = { ...DEFAULT_JUNTOS_CONFIG, ...(config || {}) };
+  if (c.activo === false) {
+    return {
+      isValid: false,
+      isDayValid: false,
+      isTimeValid: false,
+      reason: '⛔ PROMOCIÓN INACTIVA: La promoción "Juntos es Mejor" se encuentra desactivada temporalmente desde Configuración.',
+    };
+  }
+
+  const day = date.getDay(); // 0 = Domingo, 1 = Lunes...
   const hours = date.getHours();
   const minutes = date.getMinutes();
   const timeInMinutes = hours * 60 + minutes;
 
-  const isDayValid = day === 1 || day === 2 || day === 3;
+  const allowedDays = Array.isArray(c.dias_semana) && c.dias_semana.length > 0 ? c.dias_semana : [1, 2, 3];
+  const isDayValid = allowedDays.includes(day);
 
-  // Verificar si la cita de hoy del cliente inició entre 10:00 (600) y 14:00 (840)
+  const startMins = parseHHMMToMinutes(c.hora_inicio, 600);
+  const endMins = parseHHMMToMinutes(c.hora_fin, 840);
+  const tolMins = Math.max(0, Number(c.tolerancia_caja_minutos ?? 30));
+
   let isReservationTimeValid = false;
   if (reservationStartTime && /^\d{1,2}:\d{2}/.test(reservationStartTime.trim())) {
     const [rH, rM] = reservationStartTime.trim().split(':').map(Number);
     if (!isNaN(rH) && !isNaN(rM)) {
       const resMins = rH * 60 + rM;
-      isReservationTimeValid = resMins >= 600 && resMins <= 840;
+      isReservationTimeValid = resMins >= startMins && resMins <= endMins;
     }
   }
 
-  // 10:00 am (600 mins) a 2:30 pm (870 mins tolerancia de cobro) o cita agendada en horario
-  const isTimeValid = (timeInMinutes >= 600 && timeInMinutes <= 870) || isReservationTimeValid;
+  const isTimeValid = (timeInMinutes >= startMins && timeInMinutes <= endMins + tolMins) || isReservationTimeValid;
 
   if (!isDayValid) {
     const daysEs = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -621,7 +956,7 @@ export function validateJuntosSchedule(
       isValid: false,
       isDayValid: false,
       isTimeValid,
-      reason: `⛔ DÍA NO VÁLIDO: La promoción "Juntos es Mejor" aplica únicamente Lunes, Martes y Miércoles. Hoy es ${daysEs[day]}.`,
+      reason: `⛔ DÍA NO VÁLIDO: La promoción "Juntos es Mejor" aplica únicamente ${formatJuntosDaysEs(allowedDays)}. Hoy es ${daysEs[day]}.`,
     };
   }
 
@@ -631,7 +966,7 @@ export function validateJuntosSchedule(
       isValid: false,
       isDayValid: true,
       isTimeValid: false,
-      reason: `⛔ HORARIO NO VÁLIDO: La promoción "Juntos es Mejor" aplica exclusivamente de 10:00 a. m. a 2:00 p. m. (Hora actual: ${timeStr} hrs).`,
+      reason: `⛔ HORARIO NO VÁLIDO: La promoción "Juntos es Mejor" aplica exclusivamente de ${formatJuntosHour12(c.hora_inicio)} a ${formatJuntosHour12(c.hora_fin)} (Hora actual: ${timeStr} hrs).`,
     };
   }
 
@@ -1518,6 +1853,7 @@ export interface SaleLoyaltySnapshot {
   referrer_recompensa_pendiente_id?: string;
   is_juntos_applied?: boolean;
   juntos_mode?: string;
+  juntos_group_pending?: boolean;
   juntos_titular_coins_awarded?: number;
   juntos_companions_awarded?: { id: string; coins: number; folio?: string }[];
   prev_ultimo_canje_juntos_fecha?: string;
@@ -2000,6 +2336,7 @@ export async function revertSaleLoyaltyAndBenefits(
       await updateDoc(doc(db, 'canjes_beneficios', appliedBenefitFolio), {
         estado: 'cancelado_por_venta_eliminada',
         utilizado_en_venta: false,
+        pagado: false,
         recompensaAcreditada: false,
         revertido_en: Timestamp.now(),
       }).catch(() => {});

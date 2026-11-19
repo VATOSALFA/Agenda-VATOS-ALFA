@@ -36,6 +36,7 @@ import {
     Check,
     Scissors,
     DollarSign,
+    Users,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -48,6 +49,18 @@ import {
     DAY_NAMES_ES,
     evaluateActiveCoinsMultiplier,
     type MultiplicadorCoinsConfig,
+    DEFAULT_JUNTOS_CONFIG,
+    buildDefaultJuntosTerminos,
+    type JuntosEsMejorConfig,
+    DEFAULT_DECIMA_CONFIG,
+    buildDefaultDecimaTerminos,
+    type DecimaCorteConfig,
+    DEFAULT_COINS_CONFIG,
+    buildDefaultCoinsTerminos,
+    type AlfaCoinsConfig,
+    DEFAULT_REFERRAL_CONFIG,
+    buildDefaultReferralTerminos,
+    type ReferralProgramConfig,
 } from '@/lib/benefit-security';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
@@ -197,6 +210,18 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
     const [isMultiplicadorOpen, setIsMultiplicadorOpen] = useState(false);
     const [isSavingMultiplicador, setIsSavingMultiplicador] = useState(false);
 
+    // Estado de Reglas Dinámicas de "Juntos es Mejor"
+    const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
+    const [autoSyncJuntosTerms, setAutoSyncJuntosTerms] = useState(true);
+
+    // Estado de Reglas Dinámicas de "La Décima va por la Casa", "Alfa Coins" e "Invita a un Amigo"
+    const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
+    const [autoSyncDecimaTerms, setAutoSyncDecimaTerms] = useState(true);
+    const [coinsConfig, setCoinsConfig] = useState<AlfaCoinsConfig>(DEFAULT_COINS_CONFIG);
+    const [autoSyncCoinsTerms, setAutoSyncCoinsTerms] = useState(true);
+    const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
+    const [autoSyncReferralTerms, setAutoSyncReferralTerms] = useState(true);
+
     // Estado de Beneficios VIP
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
     const [loadingPrivilegios, setLoadingPrivilegios] = useState(true);
@@ -301,6 +326,44 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                 ? rawMult.mensaje_promo
                                 : DEFAULT_MULTIPLICADOR_COINS_CONFIG.mensaje_promo,
                         });
+                    }
+
+                    const rawJuntos = merged.juntos_config || mData?.juntos_config || mData?.pase_alfa?.juntos_config;
+                    if (rawJuntos && typeof rawJuntos === 'object') {
+                        setJuntosConfig({
+                            activo: rawJuntos.activo !== undefined ? Boolean(rawJuntos.activo) : true,
+                            dias_semana: Array.isArray(rawJuntos.dias_semana)
+                                ? rawJuntos.dias_semana.map((d: any) => Number(d)).filter((d: number) => d >= 0 && d <= 6)
+                                : DEFAULT_JUNTOS_CONFIG.dias_semana,
+                            hora_inicio: rawJuntos.hora_inicio || DEFAULT_JUNTOS_CONFIG.hora_inicio,
+                            hora_fin: rawJuntos.hora_fin || DEFAULT_JUNTOS_CONFIG.hora_fin,
+                            tolerancia_caja_minutos: rawJuntos.tolerancia_caja_minutos !== undefined
+                                ? Number(rawJuntos.tolerancia_caja_minutos)
+                                : DEFAULT_JUNTOS_CONFIG.tolerancia_caja_minutos,
+                            coins_por_persona: Number(rawJuntos.coins_por_persona) || DEFAULT_JUNTOS_CONFIG.coins_por_persona,
+                            limite_frecuencia: rawJuntos.limite_frecuencia || DEFAULT_JUNTOS_CONFIG.limite_frecuencia,
+                            exigir_llegada_conjunta: rawJuntos.exigir_llegada_conjunta !== undefined
+                                ? Boolean(rawJuntos.exigir_llegada_conjunta)
+                                : DEFAULT_JUNTOS_CONFIG.exigir_llegada_conjunta,
+                            retener_coins_tickets_separados: rawJuntos.retener_coins_tickets_separados !== undefined
+                                ? Boolean(rawJuntos.retener_coins_tickets_separados)
+                                : DEFAULT_JUNTOS_CONFIG.retener_coins_tickets_separados,
+                            consumo_minimo_tipo: rawJuntos.consumo_minimo_tipo || DEFAULT_JUNTOS_CONFIG.consumo_minimo_tipo,
+                            consumo_minimo_monto: Number(rawJuntos.consumo_minimo_monto) || DEFAULT_JUNTOS_CONFIG.consumo_minimo_monto,
+                        });
+                    }
+
+                    const rawDecima = merged.decima_config || mData?.decima_config || mData?.pase_alfa?.decima_config;
+                    if (rawDecima && typeof rawDecima === 'object') {
+                        setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...rawDecima });
+                    }
+                    const rawCoins = merged.coins_config || mData?.coins_config || mData?.pase_alfa?.coins_config;
+                    if (rawCoins && typeof rawCoins === 'object') {
+                        setCoinsConfig({ ...DEFAULT_COINS_CONFIG, ...rawCoins });
+                    }
+                    const rawReferral = merged.referral_config || mData?.referral_config || mData?.pase_alfa?.referral_config;
+                    if (rawReferral && typeof rawReferral === 'object') {
+                        setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...rawReferral });
                     }
 
                     const rawNiveles = merged.niveles_config || mData?.niveles_config || mData?.pase_alfa?.niveles_config;
@@ -413,6 +476,18 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 .map((b) => b.titulo.trim())
                 .filter(Boolean);
 
+            const cleanDecimaConfig: DecimaCorteConfig = {
+                ...DEFAULT_DECIMA_CONFIG,
+                ...decimaConfig,
+                activo: Boolean(paseAlfaForm.activo),
+                dias_semana: [...decimaConfig.dias_semana].sort((a, b) => a - b),
+                cobertura_monto: Math.max(1, Number(decimaConfig.cobertura_monto) || 140),
+                consumo_sello_monto: Math.max(1, Number(decimaConfig.consumo_sello_monto) || 140),
+            };
+            const syncedPaseTerminos = autoSyncDecimaTerms
+                ? buildDefaultDecimaTerminos(cleanDecimaConfig, sellosNum)
+                : paseAlfaForm.terminos.trim();
+
             const payload = {
                 activo: Boolean(paseAlfaForm.activo),
                 mostrar_en_web: paseAlfaForm.mostrar_en_web !== false,
@@ -422,11 +497,12 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 recompensa: paseAlfaForm.recompensa.trim() || `${sellosNum}.° Corte Totalmente Gratis`,
                 puntosPorVisita: Math.max(0, Number(paseAlfaForm.puntosPorVisita) || 0),
                 instrucciones: paseAlfaForm.instrucciones.trim(),
-                terminos: paseAlfaForm.terminos.trim(),
+                terminos: syncedPaseTerminos,
                 imagenUrl: (paseAlfaForm.imagenUrl || '').trim() || null,
                 beneficios: activeTitles,
                 beneficios_detallados: privilegios,
                 multiplicador_coins_config: multiplicadorConfig,
+                decima_config: cleanDecimaConfig,
                 actualizado_el: Timestamp.now(),
                 actualizado_por: user?.email || 'admin',
             };
@@ -736,6 +812,54 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                    (currentBenefit.id || '').toLowerCase().includes('coin');
             const isEditingNiveles = (currentBenefit.titulo || '').toLowerCase().includes('nivel') ||
                                      (currentBenefit.id || '').toLowerCase().includes('nivel');
+            const isEditingJuntos = (currentBenefit.titulo || '').toLowerCase().includes('juntos') ||
+                                    (currentBenefit.id || '').toLowerCase().includes('juntos');
+            const isEditingDecima = (currentBenefit.titulo || '').toLowerCase().includes('décima') ||
+                                    (currentBenefit.titulo || '').toLowerCase().includes('decima') ||
+                                    (currentBenefit.id || '').toLowerCase().includes('decima');
+            const isEditingReferral = (currentBenefit.titulo || '').toLowerCase().includes('invita') ||
+                                      (currentBenefit.titulo || '').toLowerCase().includes('amigo') ||
+                                      (currentBenefit.id || '').toLowerCase().includes('ref');
+
+            const cleanDecimaConfig: DecimaCorteConfig = {
+                ...DEFAULT_DECIMA_CONFIG,
+                ...decimaConfig,
+                activo: Boolean(currentBenefit.activo),
+                dias_semana: [...decimaConfig.dias_semana].sort((a, b) => a - b),
+                cobertura_monto: Math.max(1, Number(decimaConfig.cobertura_monto) || 140),
+                consumo_sello_monto: Math.max(1, Number(decimaConfig.consumo_sello_monto) || 140),
+            };
+            const cleanCoinsConfig: AlfaCoinsConfig = {
+                ...DEFAULT_COINS_CONFIG,
+                ...coinsConfig,
+                activo: Boolean(currentBenefit.activo),
+                coins_por_peso: Math.max(1, Number(coinsConfig.coins_por_peso) || 1),
+                minimo_canje_coins: Math.max(0, Number(coinsConfig.minimo_canje_coins) || 0),
+                tope_descuento_pct: Math.max(1, Math.min(100, Number(coinsConfig.tope_descuento_pct) || 100)),
+            };
+            const cleanReferralConfig: ReferralProgramConfig = {
+                ...DEFAULT_REFERRAL_CONFIG,
+                ...referralConfig,
+                activo: Boolean(currentBenefit.activo),
+                descuento_amigo_pct: Math.max(1, Math.min(100, Number(referralConfig.descuento_amigo_pct) || 20)),
+                recompensa_anfitrion_coins: Math.max(1, Number(referralConfig.recompensa_anfitrion_coins) || 500),
+                consumo_minimo_monto: Math.max(1, Number(referralConfig.consumo_minimo_monto) || 140),
+                limite_mensual_invitaciones: Math.max(0, Number(referralConfig.limite_mensual_invitaciones) || 0),
+            };
+
+            const cleanJuntosConfig: JuntosEsMejorConfig = {
+                activo: Boolean(currentBenefit.activo),
+                dias_semana: [...juntosConfig.dias_semana].sort((a, b) => a - b),
+                hora_inicio: juntosConfig.hora_inicio || '10:00',
+                hora_fin: juntosConfig.hora_fin || '14:00',
+                tolerancia_caja_minutos: Math.max(0, Number(juntosConfig.tolerancia_caja_minutos ?? 30)),
+                coins_por_persona: Math.max(1, Number(juntosConfig.coins_por_persona) || 400),
+                limite_frecuencia: juntosConfig.limite_frecuencia || 'semanal',
+                exigir_llegada_conjunta: Boolean(juntosConfig.exigir_llegada_conjunta),
+                retener_coins_tickets_separados: Boolean(juntosConfig.retener_coins_tickets_separados),
+                consumo_minimo_tipo: juntosConfig.consumo_minimo_tipo || 'corte_vigente',
+                consumo_minimo_monto: Math.max(1, Number(juntosConfig.consumo_minimo_monto) || 140),
+            };
 
             const cleanMultiplicador: MultiplicadorCoinsConfig = {
                 activo: Boolean(multiplicadorConfig.activo),
@@ -743,6 +867,28 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 dias_semana: [...multiplicadorConfig.dias_semana].sort((a, b) => a - b),
                 mensaje_promo: (multiplicadorConfig.mensaje_promo || '').trim() || `¡Hoy tus compras generan el ${multiplicadorConfig.multiplicador === 3 ? 'TRIPLE (3x)' : 'DOBLE (2x)'} de Alfa Coins en cualquier sucursal!`,
             };
+
+            if (isEditingJuntos && (autoSyncJuntosTerms || !currentBenefit.terminos)) {
+                const syncedTerms = buildDefaultJuntosTerminos(cleanJuntosConfig);
+                currentBenefit.terminos = syncedTerms;
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
+            if (isEditingDecima && (autoSyncDecimaTerms || !currentBenefit.terminos)) {
+                currentBenefit.terminos = buildDefaultDecimaTerminos(cleanDecimaConfig, paseAlfaForm.sellosRequeridos || 10);
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
+            if (isEditingCoins && (autoSyncCoinsTerms || !currentBenefit.terminos)) {
+                currentBenefit.terminos = buildDefaultCoinsTerminos(cleanCoinsConfig, cleanMultiplicador);
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
+            if (isEditingReferral && (autoSyncReferralTerms || !currentBenefit.terminos)) {
+                currentBenefit.terminos = buildDefaultReferralTerminos(cleanReferralConfig);
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
 
             const cleanNivelesPayload: NivelesClubConfig = {
                 activo: Boolean(currentBenefit.activo),
@@ -810,18 +956,27 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 setDoc(doc(db, 'configuracion', 'pase_alfa'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
-                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
                     ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
+                    ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
+                    ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
+                    ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
-                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                    ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
                     ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload } : {}),
+                    ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
+                    ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
+                    ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
-                        ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador } : {}),
+                        ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
                         ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
+                        ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
+                        ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
+                        ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
@@ -1325,6 +1480,211 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                 <span>Abrir</span>
                                             </Button>
                                         </div>
+
+                                        {/* REGLAS DINÁMICAS DE LA DÉCIMA VA POR LA CASA (PASE ALFA) */}
+                                        {(() => {
+                                            const applyPaseDecimaPatch = (patch: Partial<DecimaCorteConfig>) => {
+                                                setDecimaConfig((prev) => {
+                                                    const next = { ...prev, ...patch };
+                                                    if (autoSyncDecimaTerms) {
+                                                        setPaseAlfaForm((pf) => ({
+                                                            ...pf,
+                                                            terminos: buildDefaultDecimaTerminos(next, pf.sellosRequeridos || 10),
+                                                        }));
+                                                    }
+                                                    return next;
+                                                });
+                                            };
+                                            const togglePaseDecimaDay = (dayIdx: number) => {
+                                                const exists = decimaConfig.dias_semana.includes(dayIdx);
+                                                const nextDays = exists
+                                                    ? decimaConfig.dias_semana.filter((d) => d !== dayIdx)
+                                                    : [...decimaConfig.dias_semana, dayIdx].sort((a, b) => a - b);
+                                                applyPaseDecimaPatch({ dias_semana: nextDays });
+                                            };
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Scissors className="h-4 w-4 shrink-0 text-blue-500" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground">
+                                                                    Reglas Operativas: La Décima va por la Casa
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Controla qué días se canjea, qué cubre, requisitos y Términos de la App.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                setPaseAlfaForm((pf) => ({
+                                                                    ...pf,
+                                                                    terminos: buildDefaultDecimaTerminos(decimaConfig, pf.sellosRequeridos || 10),
+                                                                }))
+                                                            }
+                                                            className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
+                                                        >
+                                                            Regenerar T&C
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <Label className="text-xs font-semibold text-foreground">Días válidos para canjear el corte gratis</Label>
+                                                        <div className="grid grid-cols-7 gap-1">
+                                                            {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                                                                const isSelected = decimaConfig.dias_semana.includes(dayIdx);
+                                                                return (
+                                                                    <button
+                                                                        key={dayIdx}
+                                                                        type="button"
+                                                                        onClick={() => togglePaseDecimaDay(dayIdx)}
+                                                                        className={cn(
+                                                                            "h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center justify-center",
+                                                                            isSelected
+                                                                                ? "bg-blue-600 text-white border-blue-500 font-bold"
+                                                                                : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        {DAY_NAMES_ES[dayIdx].slice(0, 3)}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Cobertura máxima del corte gratis</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyPaseDecimaPatch({ cobertura_tipo: 'corte_vigente' })}
+                                                                    className={cn(
+                                                                        "flex-1 h-8 px-2 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.cobertura_tipo === 'corte_vigente'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Corte vigente
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyPaseDecimaPatch({ cobertura_tipo: 'monto_fijo' })}
+                                                                    className={cn(
+                                                                        "h-8 px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.cobertura_tipo === 'monto_fijo'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Fijo $
+                                                                </button>
+                                                                {decimaConfig.cobertura_tipo === 'monto_fijo' && (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={decimaConfig.cobertura_monto}
+                                                                        onChange={(e) => applyPaseDecimaPatch({ cobertura_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                        className="h-8 w-20 text-xs font-sans"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Consumo mínimo para sumar sello</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyPaseDecimaPatch({ consumo_sello_tipo: 'corte_vigente' })}
+                                                                    className={cn(
+                                                                        "flex-1 h-8 px-2 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.consumo_sello_tipo === 'corte_vigente'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Corte vigente
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyPaseDecimaPatch({ consumo_sello_tipo: 'monto_fijo' })}
+                                                                    className={cn(
+                                                                        "h-8 px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.consumo_sello_tipo === 'monto_fijo'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Fijo $
+                                                                </button>
+                                                                {decimaConfig.consumo_sello_tipo === 'monto_fijo' && (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={decimaConfig.consumo_sello_monto}
+                                                                        onChange={(e) => applyPaseDecimaPatch({ consumo_sello_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                        className="h-8 w-20 text-xs font-sans"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2 pt-1 border-t border-border/40">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="pase-decima-cita" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Exigir cita previa agendada para mostrar QR
+                                                            </Label>
+                                                            <Switch
+                                                                id="pase-decima-cita"
+                                                                checked={decimaConfig.exigir_cita_previa}
+                                                                onCheckedChange={(v) => applyPaseDecimaPatch({ exigir_cita_previa: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="pase-decima-individual" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Solo Corte de cabello individual (no paquetes combinados)
+                                                            </Label>
+                                                            <Switch
+                                                                id="pase-decima-individual"
+                                                                checked={decimaConfig.solo_corte_individual}
+                                                                onCheckedChange={(v) => applyPaseDecimaPatch({ solo_corte_individual: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="pase-decima-visita" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Contar el corte gratis como visita para subir de nivel
+                                                            </Label>
+                                                            <Switch
+                                                                id="pase-decima-visita"
+                                                                checked={decimaConfig.contar_como_visita_nivel}
+                                                                onCheckedChange={(v) => applyPaseDecimaPatch({ contar_como_visita_nivel: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="pase-decima-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Términos y Condiciones automáticamente
+                                                            </Label>
+                                                            <Switch
+                                                                id="pase-decima-autosync"
+                                                                checked={autoSyncDecimaTerms}
+                                                                onCheckedChange={setAutoSyncDecimaTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* COLUMNA DERECHA: FOTOGRAFÍA */}
@@ -1674,9 +2034,680 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                             className="h-8.5 text-xs font-sans"
                                                         />
                                                     </div>
+
+                                                    {/* REGLAS OPERATIVAS DE ALFA COINS */}
+                                                    <div className="pt-3 border-t border-border/50 space-y-3">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label className="text-xs font-bold text-foreground">Reglas de Acumulación y Canje</Label>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => setNewTerminos(buildDefaultCoinsTerminos(coinsConfig, multiplicadorConfig))}
+                                                                className="h-7 px-2.5 text-[11px] font-semibold cursor-pointer"
+                                                            >
+                                                                Regenerar T&C
+                                                            </Button>
+                                                        </div>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] font-semibold text-foreground">Coins por $1 MXN</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    value={coinsConfig.coins_por_peso}
+                                                                    onChange={(e) => {
+                                                                        const next = { ...coinsConfig, coins_por_peso: Math.max(1, Number(e.target.value) || 1) };
+                                                                        setCoinsConfig(next);
+                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                    }}
+                                                                    className="h-8 text-xs font-sans"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] font-semibold text-foreground">Mínimo para canjear</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={0}
+                                                                    step={50}
+                                                                    value={coinsConfig.minimo_canje_coins}
+                                                                    onChange={(e) => {
+                                                                        const next = { ...coinsConfig, minimo_canje_coins: Math.max(0, Number(e.target.value) || 0) };
+                                                                        setCoinsConfig(next);
+                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                    }}
+                                                                    className="h-8 text-xs font-sans"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] font-semibold text-foreground">Tope pago con Coins (%)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    max={100}
+                                                                    value={coinsConfig.tope_descuento_pct}
+                                                                    onChange={(e) => {
+                                                                        const next = { ...coinsConfig, tope_descuento_pct: Math.max(1, Math.min(100, Number(e.target.value) || 100)) };
+                                                                        setCoinsConfig(next);
+                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                    }}
+                                                                    className="h-8 text-xs font-sans"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 gap-1.5">
+                                                            {[
+                                                                { id: 'ambos', label: 'Servicios y Productos' },
+                                                                { id: 'servicios', label: 'Solo Servicios' },
+                                                                { id: 'productos', label: 'Solo Productos' },
+                                                            ].map((opt) => (
+                                                                <button
+                                                                    key={opt.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const next = { ...coinsConfig, aplicable_en: opt.id as any };
+                                                                        setCoinsConfig(next);
+                                                                        if (autoSyncCoinsTerms) setNewTerminos(buildDefaultCoinsTerminos(next, multiplicadorConfig));
+                                                                    }}
+                                                                    className={cn(
+                                                                        "h-8 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer",
+                                                                        coinsConfig.aplicable_en === opt.id
+                                                                            ? "bg-blue-600 text-white border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    {opt.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2 pt-1">
+                                                            <Label htmlFor="coins-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Términos y Condiciones automáticamente
+                                                            </Label>
+                                                            <Switch
+                                                                id="coins-autosync"
+                                                                checked={autoSyncCoinsTerms}
+                                                                onCheckedChange={setAutoSyncCoinsTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         )}
+
+                                        {/* SI ES EL BENEFICIO JUNTOS ES MEJOR: REGLAS DINÁMICAS (DÍAS, HORARIO, COINS, LÍMITES Y T&C) */}
+                                        {((newTitle || '').toLowerCase().includes('juntos') ||
+                                         (benefitId || '').toLowerCase().includes('juntos') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('juntos')) && (() => {
+                                            const applyJuntosPatch = (patch: Partial<JuntosEsMejorConfig>) => {
+                                                setJuntosConfig((prev) => {
+                                                    const next = { ...prev, ...patch };
+                                                    if (autoSyncJuntosTerms) {
+                                                        setNewTerminos(buildDefaultJuntosTerminos(next));
+                                                    }
+                                                    return next;
+                                                });
+                                            };
+                                            const toggleJuntosDay = (dayIdx: number) => {
+                                                const exists = juntosConfig.dias_semana.includes(dayIdx);
+                                                const nextDays = exists
+                                                    ? juntosConfig.dias_semana.filter((d) => d !== dayIdx)
+                                                    : [...juntosConfig.dias_semana, dayIdx].sort((a, b) => a - b);
+                                                applyJuntosPatch({ dias_semana: nextDays });
+                                            };
+
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Users className="h-4 w-4 shrink-0 text-blue-500" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground">
+                                                                    Reglas Operativas y Términos Automáticos
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Al modificar cualquier regla, el Escáner QR, Caja y los Términos de la App se actualizan en automático.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setNewTerminos(buildDefaultJuntosTerminos(juntosConfig))}
+                                                            className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
+                                                        >
+                                                            Regenerar T&C
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* DÍAS DE LA SEMANA */}
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className="text-xs font-semibold text-foreground">
+                                                                Días válidos de la semana
+                                                            </Label>
+                                                            <span className="text-[10px] text-muted-foreground">Toca para activar/desactivar</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-7 gap-1">
+                                                            {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                                                                const isSelected = juntosConfig.dias_semana.includes(dayIdx);
+                                                                return (
+                                                                    <button
+                                                                        key={dayIdx}
+                                                                        type="button"
+                                                                        onClick={() => toggleJuntosDay(dayIdx)}
+                                                                        className={cn(
+                                                                            "h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center justify-center",
+                                                                            isSelected
+                                                                                ? "bg-blue-600 text-white border-blue-500 shadow-2xs font-bold"
+                                                                                : "bg-muted/20 border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+                                                                        )}
+                                                                        title={DAY_NAMES_ES[dayIdx]}
+                                                                    >
+                                                                        {DAY_NAMES_ES[dayIdx].slice(0, 3)}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* HORARIO Y TOLERANCIA */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Hora inicio</Label>
+                                                            <Input
+                                                                type="time"
+                                                                value={juntosConfig.hora_inicio}
+                                                                onChange={(e) => applyJuntosPatch({ hora_inicio: e.target.value })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Hora fin</Label>
+                                                            <Input
+                                                                type="time"
+                                                                value={juntosConfig.hora_fin}
+                                                                onChange={(e) => applyJuntosPatch({ hora_fin: e.target.value })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Tolerancia caja (min)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                max={120}
+                                                                value={juntosConfig.tolerancia_caja_minutos}
+                                                                onChange={(e) => applyJuntosPatch({ tolerancia_caja_minutos: Math.max(0, Number(e.target.value) || 0) })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* RECOMPENSA Y FRECUENCIA */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Alfa Coins por persona</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={10}
+                                                                step={50}
+                                                                value={juntosConfig.coins_por_persona}
+                                                                onChange={(e) => applyJuntosPatch({ coins_por_persona: Math.max(1, Number(e.target.value) || 400) })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Límite por cliente</Label>
+                                                            <div className="grid grid-cols-3 gap-1">
+                                                                {[
+                                                                    { id: 'semanal', label: '1x Semana' },
+                                                                    { id: 'mensual', label: '1x Mes' },
+                                                                    { id: 'diario', label: '1x Día' },
+                                                                ].map((opt) => (
+                                                                    <button
+                                                                        key={opt.id}
+                                                                        type="button"
+                                                                        onClick={() => applyJuntosPatch({ limite_frecuencia: opt.id as any })}
+                                                                        className={cn(
+                                                                            "h-8 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer",
+                                                                            juntosConfig.limite_frecuencia === opt.id
+                                                                                ? "bg-blue-600 text-white border-blue-500"
+                                                                                : "bg-muted/20 border-border/60 text-muted-foreground hover:text-foreground"
+                                                                        )}
+                                                                    >
+                                                                        {opt.label}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* CONSUMO MÍNIMO POR PERSONA */}
+                                                    <div className="space-y-1.5">
+                                                        <Label className="text-[11px] font-semibold text-foreground">Consumo mínimo por persona (en dinero real)</Label>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyJuntosPatch({ consumo_minimo_tipo: 'corte_vigente' })}
+                                                                className={cn(
+                                                                    "h-8.5 px-3 rounded-lg text-xs font-semibold border text-left transition-all cursor-pointer",
+                                                                    juntosConfig.consumo_minimo_tipo === 'corte_vigente'
+                                                                        ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                Tarifa vigente del Corte de cabello
+                                                            </button>
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyJuntosPatch({ consumo_minimo_tipo: 'monto_fijo' })}
+                                                                    className={cn(
+                                                                        "h-8.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer shrink-0",
+                                                                        juntosConfig.consumo_minimo_tipo === 'monto_fijo'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Monto fijo ($)
+                                                                </button>
+                                                                {juntosConfig.consumo_minimo_tipo === 'monto_fijo' && (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={juntosConfig.consumo_minimo_monto}
+                                                                        onChange={(e) => applyJuntosPatch({ consumo_minimo_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                        className="h-8.5 text-xs font-sans"
+                                                                        placeholder="140"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* CANDADOS ANTI-ABUSO Y AUTO-SYNC */}
+                                                    <div className="space-y-2 pt-1 border-t border-border/40">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="juntos-llegada" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Exigir llegada conjunta (prohibido en sala de espera)
+                                                            </Label>
+                                                            <Switch
+                                                                id="juntos-llegada"
+                                                                checked={juntosConfig.exigir_llegada_conjunta}
+                                                                onCheckedChange={(v) => applyJuntosPatch({ exigir_llegada_conjunta: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="juntos-retener" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Retener coins en tickets separados hasta que paguen todos
+                                                            </Label>
+                                                            <Switch
+                                                                id="juntos-retener"
+                                                                checked={juntosConfig.retener_coins_tickets_separados}
+                                                                onCheckedChange={(v) => applyJuntosPatch({ retener_coins_tickets_separados: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="juntos-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Términos y Condiciones automáticamente al cambiar reglas
+                                                            </Label>
+                                                            <Switch
+                                                                id="juntos-autosync"
+                                                                checked={autoSyncJuntosTerms}
+                                                                onCheckedChange={setAutoSyncJuntosTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* SI ES EL BENEFICIO LA DÉCIMA VA POR LA CASA: REGLAS DINÁMICAS */}
+                                        {((newTitle || '').toLowerCase().includes('décima') ||
+                                         (newTitle || '').toLowerCase().includes('decima') ||
+                                         (benefitId || '').toLowerCase().includes('decima') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('décima')) && (() => {
+                                            const applyDecimaPatch = (patch: Partial<DecimaCorteConfig>) => {
+                                                setDecimaConfig((prev) => {
+                                                    const next = { ...prev, ...patch };
+                                                    if (autoSyncDecimaTerms) {
+                                                        setNewTerminos(buildDefaultDecimaTerminos(next, paseAlfaForm.sellosRequeridos || 10));
+                                                    }
+                                                    return next;
+                                                });
+                                            };
+                                            const toggleDecimaDay = (dayIdx: number) => {
+                                                const exists = decimaConfig.dias_semana.includes(dayIdx);
+                                                const nextDays = exists
+                                                    ? decimaConfig.dias_semana.filter((d) => d !== dayIdx)
+                                                    : [...decimaConfig.dias_semana, dayIdx].sort((a, b) => a - b);
+                                                applyDecimaPatch({ dias_semana: nextDays });
+                                            };
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Scissors className="h-4 w-4 shrink-0 text-blue-500" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground">
+                                                                    Reglas Operativas: La Décima va por la Casa
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Controla qué días se canjea, qué cubre, requisitos y Términos de la App.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setNewTerminos(buildDefaultDecimaTerminos(decimaConfig, paseAlfaForm.sellosRequeridos || 10))}
+                                                            className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
+                                                        >
+                                                            Regenerar T&C
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <Label className="text-xs font-semibold text-foreground">Días válidos para canjear el corte gratis</Label>
+                                                        <div className="grid grid-cols-7 gap-1">
+                                                            {[1, 2, 3, 4, 5, 6, 0].map((dayIdx) => {
+                                                                const isSelected = decimaConfig.dias_semana.includes(dayIdx);
+                                                                return (
+                                                                    <button
+                                                                        key={dayIdx}
+                                                                        type="button"
+                                                                        onClick={() => toggleDecimaDay(dayIdx)}
+                                                                        className={cn(
+                                                                            "h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer border flex items-center justify-center",
+                                                                            isSelected
+                                                                                ? "bg-blue-600 text-white border-blue-500 font-bold"
+                                                                                : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                        )}
+                                                                    >
+                                                                        {DAY_NAMES_ES[dayIdx].slice(0, 3)}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Cobertura máxima del corte gratis</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyDecimaPatch({ cobertura_tipo: 'corte_vigente' })}
+                                                                    className={cn(
+                                                                        "flex-1 h-8 px-2 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.cobertura_tipo === 'corte_vigente'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Corte vigente
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyDecimaPatch({ cobertura_tipo: 'monto_fijo' })}
+                                                                    className={cn(
+                                                                        "h-8 px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.cobertura_tipo === 'monto_fijo'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Fijo $
+                                                                </button>
+                                                                {decimaConfig.cobertura_tipo === 'monto_fijo' && (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={decimaConfig.cobertura_monto}
+                                                                        onChange={(e) => applyDecimaPatch({ cobertura_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                        className="h-8 w-20 text-xs font-sans"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Consumo mínimo para sumar sello</Label>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyDecimaPatch({ consumo_sello_tipo: 'corte_vigente' })}
+                                                                    className={cn(
+                                                                        "flex-1 h-8 px-2 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.consumo_sello_tipo === 'corte_vigente'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Corte vigente
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => applyDecimaPatch({ consumo_sello_tipo: 'monto_fijo' })}
+                                                                    className={cn(
+                                                                        "h-8 px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer",
+                                                                        decimaConfig.consumo_sello_tipo === 'monto_fijo'
+                                                                            ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                            : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                    )}
+                                                                >
+                                                                    Fijo $
+                                                                </button>
+                                                                {decimaConfig.consumo_sello_tipo === 'monto_fijo' && (
+                                                                    <Input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        value={decimaConfig.consumo_sello_monto}
+                                                                        onChange={(e) => applyDecimaPatch({ consumo_sello_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                        className="h-8 w-20 text-xs font-sans"
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2 pt-1 border-t border-border/40">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="decima-cita" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Exigir cita previa agendada para mostrar QR
+                                                            </Label>
+                                                            <Switch
+                                                                id="decima-cita"
+                                                                checked={decimaConfig.exigir_cita_previa}
+                                                                onCheckedChange={(v) => applyDecimaPatch({ exigir_cita_previa: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="decima-individual" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Solo Corte de cabello individual (no paquetes combinados)
+                                                            </Label>
+                                                            <Switch
+                                                                id="decima-individual"
+                                                                checked={decimaConfig.solo_corte_individual}
+                                                                onCheckedChange={(v) => applyDecimaPatch({ solo_corte_individual: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="decima-visita" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Contar el corte gratis como visita para subir de nivel
+                                                            </Label>
+                                                            <Switch
+                                                                id="decima-visita"
+                                                                checked={decimaConfig.contar_como_visita_nivel}
+                                                                onCheckedChange={(v) => applyDecimaPatch({ contar_como_visita_nivel: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="decima-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Términos y Condiciones automáticamente
+                                                            </Label>
+                                                            <Switch
+                                                                id="decima-autosync"
+                                                                checked={autoSyncDecimaTerms}
+                                                                onCheckedChange={setAutoSyncDecimaTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* SI ES EL BENEFICIO INVITA A UN AMIGO: REGLAS DINÁMICAS */}
+                                        {((newTitle || '').toLowerCase().includes('invita') ||
+                                         (newTitle || '').toLowerCase().includes('amigo') ||
+                                         (benefitId || '').toLowerCase().includes('ref') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('invita')) && (() => {
+                                            const applyRefPatch = (patch: Partial<ReferralProgramConfig>) => {
+                                                setReferralConfig((prev) => {
+                                                    const next = { ...prev, ...patch };
+                                                    if (autoSyncReferralTerms) {
+                                                        setNewTerminos(buildDefaultReferralTerminos(next));
+                                                    }
+                                                    return next;
+                                                });
+                                            };
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Award className="h-4 w-4 shrink-0 text-blue-500" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground">
+                                                                    Reglas Operativas: Invita a un Amigo
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Configura el descuento del invitado, recompensa del anfitrión y Términos.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setNewTerminos(buildDefaultReferralTerminos(referralConfig))}
+                                                            className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
+                                                        >
+                                                            Regenerar T&C
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Descuento al invitado (%)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={1}
+                                                                max={100}
+                                                                value={referralConfig.descuento_amigo_pct}
+                                                                onChange={(e) => applyRefPatch({ descuento_amigo_pct: Math.max(1, Math.min(100, Number(e.target.value) || 20)) })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Coins al anfitrión</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={10}
+                                                                step={50}
+                                                                value={referralConfig.recompensa_anfitrion_coins}
+                                                                onChange={(e) => applyRefPatch({ recompensa_anfitrion_coins: Math.max(1, Number(e.target.value) || 500) })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">Límite mensual (0=ilimitado)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                value={referralConfig.limite_mensual_invitaciones}
+                                                                onChange={(e) => applyRefPatch({ limite_mensual_invitaciones: Math.max(0, Number(e.target.value) || 0) })}
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <Label className="text-[11px] font-semibold text-foreground">Consumo mínimo del invitado (antes de descuento)</Label>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyRefPatch({ consumo_minimo_tipo: 'corte_vigente' })}
+                                                                className={cn(
+                                                                    "flex-1 h-8.5 px-3 rounded-lg text-xs font-semibold border cursor-pointer",
+                                                                    referralConfig.consumo_minimo_tipo === 'corte_vigente'
+                                                                        ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                Tarifa vigente del Corte de cabello
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => applyRefPatch({ consumo_minimo_tipo: 'monto_fijo' })}
+                                                                className={cn(
+                                                                    "h-8.5 px-3 rounded-lg text-xs font-semibold border cursor-pointer",
+                                                                    referralConfig.consumo_minimo_tipo === 'monto_fijo'
+                                                                        ? "bg-blue-600/15 text-blue-400 border-blue-500"
+                                                                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                )}
+                                                            >
+                                                                Monto fijo ($)
+                                                            </button>
+                                                            {referralConfig.consumo_minimo_tipo === 'monto_fijo' && (
+                                                                <Input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    value={referralConfig.consumo_minimo_monto}
+                                                                    onChange={(e) => applyRefPatch({ consumo_minimo_monto: Math.max(1, Number(e.target.value) || 140) })}
+                                                                    className="h-8.5 w-24 text-xs font-sans"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2 pt-1 border-t border-border/40">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="ref-nuevo" className="text-[11px] font-medium text-foreground cursor-pointer">
+                                                                Exclusivo para clientes nuevos (sin historial previo)
+                                                            </Label>
+                                                            <Switch
+                                                                id="ref-nuevo"
+                                                                checked={referralConfig.solo_clientes_nuevos}
+                                                                onCheckedChange={(v) => applyRefPatch({ solo_clientes_nuevos: v })}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label htmlFor="ref-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Términos y Condiciones automáticamente
+                                                            </Label>
+                                                            <Switch
+                                                                id="ref-autosync"
+                                                                checked={autoSyncReferralTerms}
+                                                                onCheckedChange={setAutoSyncReferralTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* SI ES EL BENEFICIO DE NIVELES PASE ALFA: CONFIGURACIÓN COMPLETA DE ALFA MEMBER, ALFA GOLD Y ALFA VIP */}
                                         {((newTitle || '').toLowerCase().includes('nivel') ||

@@ -87,6 +87,11 @@ import {
   formatJuntosDaysEs,
   formatJuntosHour12,
   type ClientTodayJuntosStatus,
+  DEFAULT_CUMPLEANOS_CONFIG,
+  resolveClientBirthdayGifts,
+  formatBirthdayOptionSummary,
+  type CumpleanosBenefitConfig,
+  type BirthdayGiftOption,
 } from '@/lib/benefit-security';
 
 interface QRScannerModalProps {
@@ -185,6 +190,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
   const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
   const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
+  const [cumpleanosConfig, setCumpleanosConfig] = useState<CumpleanosBenefitConfig>(DEFAULT_CUMPLEANOS_CONFIG);
+  const [selectedBirthdayOptionId, setSelectedBirthdayOptionId] = useState<string>('');
 
   useEffect(() => {
     if (!db) return;
@@ -211,6 +218,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
           if (d.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...d.decima_config });
           if (d.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...d.referral_config });
+          if (d.cumpleanos_config) setCumpleanosConfig({ ...DEFAULT_CUMPLEANOS_CONFIG, ...d.cumpleanos_config });
         }
         if (snapApp.exists()) {
           const rawApp = snapApp.data();
@@ -228,6 +236,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (dec && !snap.data()?.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...dec });
           const refCfg = rawApp.referral_config || d.referral_config || rawApp['pase_alfa.referral_config'];
           if (refCfg && !snap.data()?.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...refCfg });
+          const cumpCfg = rawApp.cumpleanos_config || d.cumpleanos_config || rawApp['pase_alfa.cumpleanos_config'];
+          if (cumpCfg && !snap.data()?.cumpleanos_config) setCumpleanosConfig({ ...DEFAULT_CUMPLEANOS_CONFIG, ...cumpCfg });
         }
         setBeneficiosList(bList);
       } catch (_) {}
@@ -243,6 +253,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
           if (d.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...d.decima_config });
           if (d.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...d.referral_config });
+          if (d.cumpleanos_config) setCumpleanosConfig({ ...DEFAULT_CUMPLEANOS_CONFIG, ...d.cumpleanos_config });
           if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
           if (d.recompensa) setRewardName(d.recompensa);
           if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
@@ -627,7 +638,14 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             const hostFullName = hostClient
               ? `${hostClient.nombre} ${hostClient.apellido || ''}`.trim()
               : '';
-            const dynamicMinNet = calculateReferralMinNetPurchase(currentHaircutPrice);
+            const refDiscountPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
+            const refHostCoins = Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
+            const refBaseMin =
+              referralConfig.consumo_minimo_tipo === 'monto_fijo' && Number(referralConfig.consumo_minimo_monto || 0) > 0
+                ? Number(referralConfig.consumo_minimo_monto)
+                : currentHaircutPrice;
+            const dynamicMinNet = Math.round(refBaseMin * (1 - refDiscountPct / 100) * 100) / 100;
+            const isRefPaused = referralConfig.activo === false;
 
             detectedBenefit = {
               folio: `VA-REF-${suffixPart}-${Date.now().toString().slice(-4)}`,
@@ -638,15 +656,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               referrerId: hostClient?.id || '',
               referrerName: hostFullName || 'No identificado',
               referrerPhone: hostClient?.telefono || '',
-              discount: REFERRAL_DISCOUNT_PERCENT,
-              rewardCoins: REFERRAL_HOST_REWARD_COINS,
+              discount: refDiscountPct,
+              rewardCoins: refHostCoins,
               minPurchase: dynamicMinNet,
-              isBlocked: !hostClient,
-              blockReason: !hostClient
+              isBlocked: !hostClient || isRefPaused,
+              blockReason: isRefPaused
+                ? '⛔ BENEFICIO PAUSADO: El programa "Invita a un Amigo" se encuentra desactivado temporalmente desde el panel administrativo.'
+                : !hostClient
                 ? (referralError || '⛔ CÓDIGO INVÁLIDO: No existe ningún cliente titular con este código de invitación.')
                 : undefined,
               descripcion: hostClient
-                ? `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse una compra equivalente a un Corte de cabello vigente ($${formatMoney(currentHaircutPrice)} MXN regular / $${formatMoney(dynamicMinNet)} MXN con descuento).`
+                ? `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${refDiscountPct}% de descuento en su primer servicio y ${hostFullName} gana ${refHostCoins} Alfa Coins al completarse una compra de al menos $${formatMoney(refBaseMin)} MXN regular ($${formatMoney(dynamicMinNet)} MXN neto).`
                 : `Código no válido (${clean.toUpperCase()}).`,
             };
           } else {
@@ -1007,9 +1027,14 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (isBirthday) {
             detectedBenefit.isBirthdayBenefit = true;
             detectedBenefit.benefitId = 'regalo_cumpleanos';
+            const minVisitsReq = Math.max(0, Number(cumpleanosConfig.visitas_minimas ?? MIN_BIRTHDAY_ELIGIBLE_VISITS));
 
-            // 1. Exigir QR oficial firmado desde la App y cliente existente en la base de datos oficial
-            if (!detectedBenefit.signature || !detectedBenefit.clientId) {
+            if (cumpleanosConfig.activo === false) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ BENEFICIO PAUSADO: "Regalo de Cumpleaños" se encuentra desactivado temporalmente desde el panel administrativo.';
+            } else if (!detectedBenefit.signature || !detectedBenefit.clientId) {
+              // 1. Exigir QR oficial firmado desde la App y cliente existente en la base de datos oficial
               detectedBenefit.isBlocked = true;
               detectedBenefit.blockReason =
                 '⛔ QR OFICIAL REQUERIDO: Para validar el Regalo de Cumpleaños, debes escanear el código QR oficial firmado desde la aplicación móvil del cliente.';
@@ -1024,7 +1049,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 detectedBenefit.isBlocked = true;
                 detectedBenefit.blockReason = bdayResult.rejectionReason;
               } else {
-                // 3. Validar requisito anti-abuso: mínimo 5 visitas válidas pagadas con consumo >= corte vigente
+                // 3. Validar requisito anti-abuso: mínimo N visitas válidas pagadas con consumo >= corte vigente
                 let eligibleVisits = 0;
                 try {
                   const qClientSales = query(
@@ -1049,21 +1074,34 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                   );
                 }
 
-                if (eligibleVisits < MIN_BIRTHDAY_ELIGIBLE_VISITS) {
-                  const missing = Math.max(1, MIN_BIRTHDAY_ELIGIBLE_VISITS - eligibleVisits);
+                if (eligibleVisits < minVisitsReq) {
+                  const missing = Math.max(1, minVisitsReq - eligibleVisits);
                   detectedBenefit.isBlocked = true;
-                  detectedBenefit.blockReason = `⛔ ANTIGÜEDAD MÍNIMA NO CUMPLIDA: Para canjear el Regalo de Cumpleaños se requieren al menos ${MIN_BIRTHDAY_ELIGIBLE_VISITS} visitas válidas pagadas (con consumo mínimo individual equivalente al corte de cabello vigente: $${formatMoney(currentHaircutPrice)} MXN). Este cliente registra ${eligibleVisits} de ${MIN_BIRTHDAY_ELIGIBLE_VISITS} visitas válidas (le ${missing === 1 ? 'falta 1 visita válida' : `faltan ${missing} visitas válidas`}).`;
+                  detectedBenefit.blockReason = `⛔ ANTIGÜEDAD MÍNIMA NO CUMPLIDA: Para canjear el Regalo de Cumpleaños se requieren al menos ${minVisitsReq} visitas válidas pagadas (con consumo mínimo individual equivalente al corte de cabello vigente: $${formatMoney(currentHaircutPrice)} MXN). Este cliente registra ${eligibleVisits} de ${minVisitsReq} visitas válidas (le ${missing === 1 ? 'falta 1 visita válida' : `faltan ${missing} visitas válidas`}).`;
                 } else {
                   // 4. Validar que no haya sido canjeado en este año (Anti-Replay / 1 cortesía por año calendario)
                   const currentYear = new Date().getFullYear();
                   const clientLastYear = Number((foundClient as any).ultimo_canje_cumpleanos_anio || 0);
+
+                  const assignTierGifts = () => {
+                    const tierEval = evaluateClientAlfaTier(foundClient!, nivelesConfig);
+                    const effTierKey: 'member' | 'gold' | 'vip' =
+                      tierEval.tierId === 'none' ? 'member' : tierEval.tierId;
+                    const tierOpts = resolveClientBirthdayGifts(effTierKey, cumpleanosConfig);
+                    detectedBenefit.isEligible = true;
+                    detectedBenefit.birthdayTierId = effTierKey;
+                    detectedBenefit.birthdayTierName =
+                      tierEval.tierName === 'Sin Nivel' ? 'Alfa Member' : tierEval.tierName;
+                    detectedBenefit.birthdayOptions = tierOpts;
+                    setSelectedBirthdayOptionId(tierOpts[0]?.id || '');
+                    detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños y Antigüedad Confirmados! (${bdayResult.birthDateFormatted} • ${eligibleVisits} visitas válidas ✓)`;
+                  };
 
                   if (clientLastYear === currentYear) {
                     detectedBenefit.isBlocked = true;
                     detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Este cliente ya utilizó su Regalo de Cumpleaños correspondiente al año ${currentYear}. Su próximo regalo estará disponible hasta ${bdayResult.birthMonthName || 'su mes de cumpleaños'} de ${currentYear + 1}.`;
                   } else {
                     try {
-                      // Consulta de un solo campo (sin depender de índice compuesto) para máxima fiabilidad
                       const qCanjes = query(
                         collection(db, 'canjes_beneficios'),
                         where('clienteId', '==', foundClient.id)
@@ -1091,13 +1129,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         detectedBenefit.isBlocked = true;
                         detectedBenefit.blockReason = `⛔ BENEFICIO YA CANJEADO: Se encontró un canje de Regalo de Cumpleaños ya registrado en ${currentYear}. El siguiente canje estará disponible hasta ${currentYear + 1}.`;
                       } else {
-                        detectedBenefit.isEligible = true;
-                        detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños y Antigüedad Confirmados! (${bdayResult.birthDateFormatted} • ${eligibleVisits} visitas válidas ✓)`;
+                        assignTierGifts();
                       }
                     } catch (errCanjes) {
                       console.error('Error verificando historial de canjes de cumpleaños:', errCanjes);
-                      detectedBenefit.isEligible = true;
-                      detectedBenefit.birthdayNotice = `🎂 ¡Mes de Cumpleaños y Antigüedad Confirmados! (${bdayResult.birthDateFormatted} • ${eligibleVisits} visitas válidas ✓)`;
+                      assignTierGifts();
                     }
                   }
                 }
@@ -1177,29 +1213,62 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           return;
         }
 
-        // 2. Si no es cliente, buscar si es un Cupón / Promoción
+        // 2. Si no es cliente, buscar si es un Cupón / Promoción (colección oficial `promociones` y fallback legado `configuracion/app_movil`)
         if (promoCodeToSearch) {
           try {
-            const appMovilRef = doc(db, 'configuracion', 'app_movil');
-            const snapAppMovil = await getDoc(appMovilRef);
-            if (snapAppMovil.exists()) {
-              const promos: any[] = snapAppMovil.data().promociones || [];
-              const matched = promos.find(
-                p =>
-                  p.activo !== false &&
-                  p.codigoDescuento?.trim().toUpperCase() === promoCodeToSearch.toUpperCase()
-              );
-              if (matched) {
-                playBeep(true);
-                setScannedPromo(matched);
-                setScannedClient(null);
-                await stopCamera();
-                toast({
-                  title: '¡Promoción Válida!',
-                  description: `Cupón "${matched.titulo}" verificado correctamente.`,
-                });
-                return;
+            const targetUpper = promoCodeToSearch.trim().toUpperCase();
+            const todayIsoStr = format(new Date(), 'yyyy-MM-dd');
+            const snapPromos = await getDocs(collection(db, 'promociones'));
+            let matched: any = null;
+
+            snapPromos.docs.forEach((pDoc) => {
+              if (matched) return;
+              const pd = pDoc.data();
+              if (pd.active === false || pd.activo === false) return;
+              if (pd.endDate && String(pd.endDate) < todayIsoStr) return;
+              const rawCode = String(pd.codigo || pd.codigoDescuento || pd.code || '').trim().toUpperCase();
+              const textForCode = `${pd.description || ''} ${pd.termsAndConditions || ''}`;
+              const regexCodeMatch = textForCode.match(/(?:c[oó]digo|cup[oó]n)[:\s]+([A-Z0-9_-]{3,20})/i);
+              const extractedCode = regexCodeMatch ? regexCodeMatch[1].toUpperCase() : '';
+              if (rawCode === targetUpper || extractedCode === targetUpper) {
+                const descMatch = `${pd.name || ''} ${pd.description || ''} ${pd.termsAndConditions || ''}`.match(/(\d+(?:\.\d+)?)\s*%/);
+                matched = {
+                  id: pDoc.id,
+                  titulo: pd.name || pd.titulo || 'Promoción Especial',
+                  descripcion: pd.description || pd.descripcion || '',
+                  codigoDescuento: rawCode || extractedCode || targetUpper,
+                  descuento: Number(pd.descuento || pd.discount || (descMatch ? descMatch[1] : 0)) || 0,
+                  terminos: pd.termsAndConditions || pd.terminos || '',
+                };
               }
+            });
+
+            if (!matched) {
+              const appMovilRef = doc(db, 'configuracion', 'app_movil');
+              const snapAppMovil = await getDoc(appMovilRef);
+              if (snapAppMovil.exists()) {
+                const promos: any[] = snapAppMovil.data().promociones || [];
+                const legacyMatch = promos.find(
+                  p =>
+                    p.activo !== false &&
+                    p.codigoDescuento?.trim().toUpperCase() === targetUpper
+                );
+                if (legacyMatch) {
+                  matched = legacyMatch;
+                }
+              }
+            }
+
+            if (matched) {
+              playBeep(true);
+              setScannedPromo(matched);
+              setScannedClient(null);
+              await stopCamera();
+              toast({
+                title: '¡Promoción Válida!',
+                description: `Cupón "${matched.titulo}" verificado correctamente.`,
+              });
+              return;
             }
           } catch (_) {}
         }
@@ -1689,6 +1758,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         scannedBenefit.folio?.includes('CUMPLE') ||
         (scannedBenefit.benefitTitle || '').toLowerCase().includes('cumple');
 
+      const chosenBirthdayOption: BirthdayGiftOption | undefined = isBirthday
+        ? (scannedBenefit.birthdayOptions || []).find((o: any) => o.id === selectedBirthdayOptionId) ||
+          (scannedBenefit.birthdayOptions || [])[0]
+        : undefined;
+
       // Si applyToCashbox === true, NO quemamos aún el folio ni el año de cumpleaños (se confirma atómicamente al cobrar en Caja).
       // Si applyToCashbox === false ("Solo Canjear"), ejecutamos transacción atómica para evitar doble canje simultáneo.
       const targetState = applyToCashbox ? 'en_proceso' : 'canjeado';
@@ -1700,6 +1774,21 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         if (existingSnap.exists() && existingSnap.data()?.estado === 'canjeado') {
           throw new Error('Este folio ya fue canjeado anteriormente.');
         }
+        let bdayCoinsToAward = 0;
+        let bdayPrevCoins = 0;
+        let clientRef: any = null;
+        if (!applyToCashbox && isBirthday && clientId) {
+          clientRef = doc(db, 'clientes', clientId);
+          if (chosenBirthdayOption?.tipo === 'alfa_coins' && Number(chosenBirthdayOption.coinsCantidad || 0) > 0) {
+            const clientSnap = await tx.get(clientRef);
+            const cData: any = clientSnap.exists() ? clientSnap.data() : {};
+            bdayPrevCoins = Number(
+              cData?.alfaCoins ?? cData?.alfa_coins ?? cData?.puntosLealtad ?? cData?.puntos_lealtad ?? cData?.puntos ?? 0
+            );
+            bdayCoinsToAward = Math.floor(Number(chosenBirthdayOption.coinsCantidad));
+          }
+        }
+
         tx.set(
           folioRef,
           {
@@ -1714,6 +1803,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             ...(applyToCashbox ? { iniciadoEn: serverTimestamp() } : { canjeadoEn: serverTimestamp(), fechaCanje: serverTimestamp() }),
             sucursal: todayReservation?.local_nombre || 'Sucursal Principal',
             registradoPor: 'Recepción',
+            ...(chosenBirthdayOption ? { birthdayOption: chosenBirthdayOption } : {}),
+            ...(bdayCoinsToAward > 0 ? { rewardCoins: bdayCoinsToAward, recompensaAcreditada: true } : {}),
             ...(scannedBenefit.isReferralBenefit ? {
               isReferralBenefit: true,
               referralCode: scannedBenefit.referralCode || null,
@@ -1727,13 +1818,35 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         );
 
         // Solo al finalizar sin pasar por Caja (applyToCashbox === false) quemamos en perfil del cliente aquí.
-        if (!applyToCashbox && isBirthday && clientId) {
-          tx.update(doc(db, 'clientes', clientId), {
+        if (!applyToCashbox && isBirthday && clientId && clientRef) {
+          const bdayClientUpdate: Record<string, any> = {
             ultimo_canje_cumpleanos_anio: currentYear,
             ultimo_canje_cumpleanos_folio: folio,
             fecha_ultimo_canje_cumpleanos: serverTimestamp(),
             actualizado_en: serverTimestamp(),
-          });
+          };
+          if (bdayCoinsToAward > 0) {
+            bdayClientUpdate.puntos = increment(bdayCoinsToAward);
+            bdayClientUpdate.alfaCoins = increment(bdayCoinsToAward);
+            bdayClientUpdate.alfa_coins = increment(bdayCoinsToAward);
+            bdayClientUpdate.puntosLealtad = increment(bdayCoinsToAward);
+            bdayClientUpdate.puntos_lealtad = increment(bdayCoinsToAward);
+            bdayClientUpdate.recompensa_pendiente = {
+              id: `bday_${Date.now()}`,
+              tipo_recompensa: 'cumpleanos',
+              sello_agregado: false,
+              sellos_ganados: 0,
+              sellos_anteriores: Number(scannedClient?.cortes_acumulados || 0),
+              sellos_actuales: Number(scannedClient?.cortes_acumulados || 0),
+              meta_sellos: targetStamps,
+              corte_gratis_desbloqueado: false,
+              coins_ganadas: bdayCoinsToAward,
+              coins_anteriores: bdayPrevCoins,
+              coins_actuales: bdayPrevCoins + bdayCoinsToAward,
+              fecha: new Date().toISOString(),
+            };
+          }
+          tx.update(clientRef, bdayClientUpdate);
         }
         if (!applyToCashbox && (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis') && clientId) {
           tx.update(doc(db, 'clientes', clientId), {
@@ -1754,8 +1867,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       playBeep(true);
       toast({
         title: '🎉 ¡Beneficio Canjeado con Éxito!',
-        description: `Se registró el canje de "${scannedBenefit.benefitTitle}" para ${clientName}.`,
+        description: chosenBirthdayOption
+          ? `Se registró "${chosenBirthdayOption.titulo}" para ${clientName}.`
+          : `Se registró el canje de "${scannedBenefit.benefitTitle}" para ${clientName}.`,
       });
+
+      const benefitPayload = {
+        ...scannedBenefit,
+        folio,
+        ...(chosenBirthdayOption ? { birthdayOption: chosenBirthdayOption } : {}),
+      };
 
       if (applyToCashbox) {
         onOpenChange(false);
@@ -1764,7 +1885,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             new CustomEvent('apply-qr-to-sale', {
               detail: {
                 client: scannedClient || undefined,
-                benefitRedeemed: { ...scannedBenefit, folio },
+                benefitRedeemed: benefitPayload,
               },
             })
           );
@@ -1785,7 +1906,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             new CustomEvent('new-sale', {
               detail: {
                 client: scannedClient || undefined,
-                benefitRedeemed: { ...scannedBenefit, folio },
+                benefitRedeemed: benefitPayload,
                 items: preloadedItems,
                 reservationId: todayReservation?.id || undefined,
                 anticipoPagado: todayReservation?.anticipoPagado || 0,
@@ -1794,7 +1915,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           );
         }
       } else {
-        setScannedBenefit({ ...scannedBenefit, isRedeemed: true });
+        setScannedBenefit({ ...benefitPayload, isRedeemed: true });
       }
     } catch (err: any) {
       console.error('Error al canjear beneficio:', err);
@@ -1808,10 +1929,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     }
   };
 
+  const allowedDecimaDays = Array.isArray(decimaConfig.dias_semana) && decimaConfig.dias_semana.length > 0
+    ? decimaConfig.dias_semana
+    : [1, 2, 3, 4, 5];
+  const todayDowNow = new Date().getDay();
+  const decimaDayOk = allowedDecimaDays.includes(todayDowNow);
+  const decimaApptOk = decimaConfig.exigir_cita_previa === false || Boolean(todayReservation);
+
   // Acción: Cobrar en Caja de Ventas
   const handleOpenInCashbox = (applyFreeCutFromPass = false) => {
     if (!scannedClient && !scannedBenefit) return;
-    onOpenChange(false);
 
     const requiredPaidStampsForPass = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
     const hasFreeCutReady = Boolean(
@@ -1819,6 +1946,43 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         (scannedClient.corte_gratis_disponible ||
           Number(scannedClient.cortes_acumulados || 0) >= requiredPaidStampsForPass)
     );
+
+    if (applyFreeCutFromPass && !scannedBenefit) {
+      if (!hasFreeCutReady) {
+        toast({
+          variant: 'destructive',
+          title: 'Sellos insuficientes',
+          description: 'El cliente aún no completa los sellos requeridos para su corte gratis.',
+        });
+        return;
+      }
+      if (decimaConfig.activo === false) {
+        toast({
+          variant: 'destructive',
+          title: 'Beneficio Pausado',
+          description: 'El beneficio "La Décima va por la Casa" está pausado temporalmente.',
+        });
+        return;
+      }
+      if (!decimaDayOk) {
+        toast({
+          variant: 'destructive',
+          title: '⛔ Día No Válido',
+          description: `El 10.° Corte Gratis solo se canjea ${formatJuntosDaysEs(allowedDecimaDays)}.`,
+        });
+        return;
+      }
+      if (!decimaApptOk) {
+        toast({
+          variant: 'destructive',
+          title: '⛔ Cita Previa Requerida',
+          description: 'El cliente no tiene cita agendada hoy para canjear su 10.° Corte Gratis.',
+        });
+        return;
+      }
+    }
+
+    onOpenChange(false);
 
     if (onClientSelectedForSale && scannedClient && !applyFreeCutFromPass && !scannedBenefit) {
       onClientSelectedForSale(scannedClient);
@@ -1830,8 +1994,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           ? scannedBenefit
           : undefined;
 
-      // Solo inyectar 10.° Corte Gratis cuando el operador eligió explícitamente canjearlo (applyFreeCutFromPass === true)
-      if (!safeBenefitToPass && applyFreeCutFromPass && scannedClient) {
+      // Solo inyectar 10.° Corte Gratis cuando el operador eligió explícitamente canjearlo y hoy cumple requisitos
+      if (!safeBenefitToPass && applyFreeCutFromPass && scannedClient && decimaDayOk && decimaApptOk) {
         safeBenefitToPass = {
           folio: `VA-CORTE-${Date.now().toString().slice(-6)}`,
           benefitId: 'decimo_corte',
@@ -2333,6 +2497,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     setScannedClient(null);
     setScannedPromo(null);
     setScannedBenefit(null);
+    setSelectedBirthdayOptionId('');
     setTodayReservation(null);
     setJuntosOption(null);
     setJuntosMinorsCount(1);
@@ -2351,6 +2516,20 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const totalSlots = targetStamps;
   const requiredPaidStampsForGoal = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
   const freeCutAvailable = Boolean(scannedClient?.corte_gratis_disponible || clientStamps >= requiredPaidStampsForGoal);
+  const canRedeemFreeCutToday = freeCutAvailable && decimaConfig.activo !== false && decimaDayOk && decimaApptOk;
+  const freeCutTodayBlockedReason = !freeCutAvailable
+    ? ''
+    : decimaConfig.activo === false
+    ? 'Beneficio pausado temporalmente.'
+    : !decimaDayOk
+    ? `Canje válido únicamente ${formatJuntosDaysEs(allowedDecimaDays)}.`
+    : !decimaApptOk
+    ? 'Requiere cita previa agendada para hoy.'
+    : '';
+  const decimaCoveragePreview =
+    decimaConfig.cobertura_tipo === 'monto_fijo' && Number(decimaConfig.cobertura_monto || 0) > 0
+      ? Number(decimaConfig.cobertura_monto)
+      : currentHaircutPrice;
 
   const isBenefitDecimoCorte = Boolean(
     scannedBenefit &&
@@ -2362,7 +2541,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const isFreeCutRedemptionView = Boolean(
     !isScanningCompanion &&
       ((isBenefitDecimoCorte && !scannedBenefit?.isRedeemed) ||
-        (fromCashbox && Boolean(scannedClient) && freeCutAvailable && !scannedBenefit))
+        (fromCashbox && Boolean(scannedClient) && canRedeemFreeCutToday && !scannedBenefit))
   );
   const isJuntosRedemptionView = Boolean(
     !isScanningCompanion && scannedBenefit?.isJuntosBenefit && !scannedBenefit?.isRedeemed
@@ -2447,7 +2626,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         Décimo Corte Gratis
                       </p>
                       <p className="text-xs text-slate-300">
-                        Cubre el 100% del servicio individual de Corte de cabello (${formatMoney(currentHaircutPrice)} MXN).
+                        Cubre {decimaConfig.cobertura_tipo === 'monto_fijo' ? `hasta $${formatMoney(decimaCoveragePreview)} MXN` : `el 100% del Corte de cabello ($${formatMoney(decimaCoveragePreview)} MXN)`}.
                       </p>
                     </div>
                   </div>
@@ -3096,41 +3275,94 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                       </div>
                     )}
 
-                    {/* Aviso de Cumpleaños Confirmado */}
+                    {/* Aviso y Selector de Regalo de Cumpleaños según Nivel */}
                     {scannedBenefit.birthdayNotice && !scannedBenefit.isBlocked && (
-                      <div className="mt-3 p-3 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-200 relative z-10 flex items-start gap-2.5">
-                        <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="text-xs font-bold text-[#C5A880]">{scannedBenefit.birthdayNotice}</p>
-                          <p className="text-[10px] text-gray-300">Cortesía de cumpleaños válida y autorizada para este año.</p>
-                          {scannedClientTier.activo && scannedClientTier.birthdayBenefitText && (
-                            <p className="text-[11px] font-bold text-white bg-[#C5A880]/20 border border-[#C5A880]/50 px-2 py-1 rounded-lg mt-1">
-                              👑 Privilegio de su nivel ({scannedClientTier.tierName}): {scannedClientTier.birthdayBenefitText}
+                      <div className="mt-3 p-3.5 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-100 relative z-10 space-y-2.5">
+                        <div className="flex items-start gap-2.5">
+                          <Gift className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="space-y-0.5 flex-1">
+                            <p className="text-xs font-bold text-white">{scannedBenefit.birthdayNotice}</p>
+                            <p className="text-[11px] text-blue-200 font-semibold">
+                              Nivel actual: {scannedBenefit.birthdayTierName || scannedClientTier.tierName || 'Alfa Member'}
                             </p>
-                          )}
+                          </div>
                         </div>
+
+                        {Array.isArray(scannedBenefit.birthdayOptions) && scannedBenefit.birthdayOptions.length > 0 && (
+                          <div className="space-y-1.5 pt-1 border-t border-blue-500/30">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
+                              {scannedBenefit.birthdayOptions.length > 1
+                                ? 'Elige cuál regalo desea canjear el cliente:'
+                                : 'Regalo de cumpleaños a aplicar:'}
+                            </p>
+                            <div className="space-y-1.5">
+                              {scannedBenefit.birthdayOptions.map((opt: BirthdayGiftOption) => {
+                                const isSel =
+                                  (selectedBirthdayOptionId && selectedBirthdayOptionId === opt.id) ||
+                                  (!selectedBirthdayOptionId && scannedBenefit.birthdayOptions[0]?.id === opt.id);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => setSelectedBirthdayOptionId(opt.id)}
+                                    className={cn(
+                                      'w-full text-left p-2.5 rounded-lg border transition-all flex items-start justify-between gap-2 cursor-pointer',
+                                      isSel
+                                        ? 'bg-blue-600/30 border-blue-400 text-white shadow-sm'
+                                        : 'bg-[#0F172A]/70 border-white/10 text-slate-300 hover:border-blue-400/50'
+                                    )}
+                                  >
+                                    <div className="space-y-0.5 min-w-0">
+                                      <p className="text-xs font-bold leading-snug">{opt.titulo}</p>
+                                      <p className="text-[10px] text-blue-200 leading-snug">
+                                        {formatBirthdayOptionSummary(opt)}
+                                      </p>
+                                    </div>
+                                    <span
+                                      className={cn(
+                                        'h-4 w-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5',
+                                        isSel ? 'border-blue-300 bg-blue-500 text-white' : 'border-slate-500'
+                                      )}
+                                    >
+                                      {isSel && <CheckCircle2 className="h-3 w-3" />}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
                     {/* Aviso de Invitación de Amigo */}
-                    {scannedBenefit.isReferralBenefit && !scannedBenefit.isBlocked && (
-                      <div className="mt-3 p-3.5 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-200 relative z-10 flex items-start gap-2.5">
-                        <Users className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                          <p className="text-xs font-bold text-blue-300">
-                            {scannedBenefit.referrerName
-                              ? `Anfitrión Verificado: ${scannedBenefit.referrerName}${scannedBenefit.referralCode ? ` (${scannedBenefit.referralCode})` : ''}`
-                              : 'Invitación Amigo Alfa'}
-                          </p>
-                          <p className="text-[11px] text-[#C5A880] font-semibold">
-                            🎁 Amigo Invitado (Cliente Nuevo): 20% de Descuento automático en su primer servicio.
-                          </p>
-                          <p className="text-[10px] text-gray-300">
-                            🪙 Recompensa al Anfitrión: Al cobrarse la primera visita equivalente a 1 Corte de cabello vigente (${formatMoney(currentHaircutPrice)} MXN antes de desc. / ${formatMoney(calculateReferralMinNetPurchase(currentHaircutPrice))} MXN neto), su anfitrión recibirá 500 Alfa Coins y notificación en su App.
-                          </p>
+                    {scannedBenefit.isReferralBenefit && !scannedBenefit.isBlocked && (() => {
+                      const refPctShow = Number(scannedBenefit.discount ?? referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
+                      const refCoinsShow = Number(scannedBenefit.rewardCoins ?? referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
+                      const refBaseShow =
+                        referralConfig.consumo_minimo_tipo === 'monto_fijo' && Number(referralConfig.consumo_minimo_monto || 0) > 0
+                          ? Number(referralConfig.consumo_minimo_monto)
+                          : currentHaircutPrice;
+                      const refMinNetShow = Math.round(refBaseShow * (1 - refPctShow / 100) * 100) / 100;
+                      return (
+                        <div className="mt-3 p-3.5 rounded-xl bg-blue-500/15 border border-blue-500/40 text-blue-200 relative z-10 flex items-start gap-2.5">
+                          <Users className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+                          <div className="space-y-1">
+                            <p className="text-xs font-bold text-blue-300">
+                              {scannedBenefit.referrerName
+                                ? `Anfitrión Verificado: ${scannedBenefit.referrerName}${scannedBenefit.referralCode ? ` (${scannedBenefit.referralCode})` : ''}`
+                                : 'Invitación Amigo Alfa'}
+                            </p>
+                            <p className="text-[11px] text-[#C5A880] font-semibold">
+                              🎁 Amigo Invitado (Cliente Nuevo): {refPctShow}% de Descuento automático en su primer servicio.
+                            </p>
+                            <p className="text-[10px] text-gray-300">
+                              🪙 Recompensa al Anfitrión: Al cobrarse la primera visita de al menos ${formatMoney(refBaseShow)} MXN regular (${formatMoney(refMinNetShow)} MXN neto con desc.), su anfitrión recibirá {refCoinsShow} Alfa Coins y notificación en su App.
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Términos y Condiciones Oficiales del Beneficio */}
                     {scannedBenefit.terminos && !scannedBenefit.isJuntosBenefit && (
@@ -3144,31 +3376,46 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                       </div>
                     )}
 
-                    {!scannedBenefit.isRedeemed && !scannedBenefit.isBlocked && !scannedBenefit.isJuntosBenefit && (
-                      <div className="mt-4 pt-3 border-t border-[#C5A880]/20 flex gap-2 relative z-10">
-                        <Button
-                          disabled={isRedeemingBenefit}
-                          onClick={() => handleRedeemBenefit(true)}
-                          className="flex-1 bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-md"
-                        >
-                          {isRedeemingBenefit ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-                          ) : (
-                            <CreditCard className="h-4 w-4 mr-1.5" />
+                    {!scannedBenefit.isRedeemed && !scannedBenefit.isBlocked && !scannedBenefit.isJuntosBenefit && (() => {
+                      const activeBdayOpt: BirthdayGiftOption | undefined = scannedBenefit.isBirthdayBenefit
+                        ? (scannedBenefit.birthdayOptions || []).find((o: any) => o.id === selectedBirthdayOptionId) ||
+                          (scannedBenefit.birthdayOptions || [])[0]
+                        : undefined;
+                      const requiresCashboxDiscount = Boolean(
+                        scannedBenefit.isBirthdayBenefit &&
+                          activeBdayOpt &&
+                          (activeBdayOpt.tipo === 'servicio_gratis' ||
+                            activeBdayOpt.tipo === 'producto_gratis' ||
+                            activeBdayOpt.tipo === 'descuento_servicio')
+                      );
+                      return (
+                        <div className="mt-4 pt-3 border-t border-[#C5A880]/20 flex gap-2 relative z-10">
+                          <Button
+                            disabled={isRedeemingBenefit}
+                            onClick={() => handleRedeemBenefit(true)}
+                            className="flex-1 bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-md"
+                          >
+                            {isRedeemingBenefit ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <CreditCard className="h-4 w-4 mr-1.5" />
+                            )}
+                            Canjear y Aplicar en Caja
+                          </Button>
+                          {!requiresCashboxDiscount && (
+                            <Button
+                              variant="outline"
+                              disabled={isRedeemingBenefit}
+                              onClick={() => handleRedeemBenefit(false)}
+                              className="border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/10 text-xs h-10 px-3"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-blue-400" />
+                              Solo Canjear
+                            </Button>
                           )}
-                          Canjear y Aplicar en Caja
-                        </Button>
-                        <Button
-                          variant="outline"
-                          disabled={isRedeemingBenefit}
-                          onClick={() => handleRedeemBenefit(false)}
-                          className="border-[#C5A880]/40 text-[#C5A880] hover:bg-[#C5A880]/10 text-xs h-10 px-3"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-blue-400" />
-                          Solo Canjear
-                        </Button>
-                      </div>
-                    )}
+                        </div>
+                      );
+                    })()}
 
                     {scannedBenefit.isBlocked && (
                       <div className="mt-4 pt-3 border-t border-red-500/20 text-center relative z-10">
@@ -3335,20 +3582,25 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
                     {/* Banner si el corte gratis está listo */}
                     {freeCutAvailable ? (
-                      <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border border-[#C5A880]/50 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Sparkles className="h-5 w-5 text-[#C5A880] animate-bounce" />
-                          <div>
+                      <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border border-[#C5A880]/50 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Sparkles className="h-5 w-5 text-[#C5A880] shrink-0" />
+                          <div className="min-w-0">
                             <p className="text-xs font-bold text-[#C5A880]">¡{rewardName} Disponible!</p>
-                            <p className="text-[10px] text-gray-300">El cliente completó sus {requiredPaidStampsForGoal} sellos en la app.</p>
+                            <p className="text-[10px] text-gray-300">
+                              {canRedeemFreeCutToday
+                                ? `El cliente completó sus ${requiredPaidStampsForGoal} sellos en la app.`
+                                : `Disponible (${clientStamps}/${requiredPaidStampsForGoal}). ${freeCutTodayBlockedReason}`}
+                            </p>
                           </div>
                         </div>
                         <Button
                           size="sm"
+                          disabled={!canRedeemFreeCutToday}
                           onClick={() => handleOpenInCashbox(true)}
-                          className="bg-[#C5A880] hover:bg-[#b0936b] text-black text-xs font-bold shadow-md"
+                          className="bg-[#C5A880] hover:bg-[#b0936b] text-black text-xs font-bold shadow-md disabled:opacity-45 shrink-0"
                         >
-                          Aplicar en Caja
+                          Aplicar Corte Gratis
                         </Button>
                       </div>
                     ) : (
@@ -3402,10 +3654,10 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                   </div>
                 )}
 
-                {/* Acciones Rápidas */}
+                {/* Acciones Rápidas (cobro normal: NUNCA inyectar 10.° corte gratis automáticamente) */}
                 {fromCashbox ? (
                   <Button
-                    onClick={() => handleOpenInCashbox(freeCutAvailable)}
+                    onClick={() => handleOpenInCashbox(false)}
                     className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
                   >
                     <CheckCircle2 className="h-4 w-4 mr-1.5" />
@@ -3414,7 +3666,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 ) : (
                   <div className="grid grid-cols-2 gap-2 pt-1">
                     <Button
-                      onClick={() => handleOpenInCashbox(freeCutAvailable)}
+                      onClick={() => handleOpenInCashbox(false)}
                       className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
                     >
                       <CreditCard className="h-4 w-4 mr-1.5" />
@@ -3472,8 +3724,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         document.dispatchEvent(
                           new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
                             detail: fromCashbox
-                              ? { promoCode: scannedPromo.codigoDescuento }
-                              : { promoCode: scannedPromo.codigoDescuento, items: [] },
+                              ? { promoCode: scannedPromo.codigoDescuento, promoRedeemed: scannedPromo }
+                              : { promoCode: scannedPromo.codigoDescuento, promoRedeemed: scannedPromo, items: [] },
                           })
                         );
                       }}

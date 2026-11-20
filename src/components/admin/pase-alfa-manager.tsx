@@ -31,13 +31,21 @@ import {
     Flame,
     CheckCircle2,
     Crown,
-    Star,
+    Gift,
+    ShoppingBag,
     Percent,
     Check,
     Scissors,
     DollarSign,
     Users,
 } from 'lucide-react';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     DEFAULT_NIVELES_CONFIG,
@@ -65,6 +73,14 @@ import {
     buildDefaultReferralDescripcion,
     buildDefaultReferralTerminos,
     type ReferralProgramConfig,
+    DEFAULT_CUMPLEANOS_CONFIG,
+    buildDefaultCumpleanosDescripcion,
+    buildDefaultCumpleanosTerminos,
+    formatBirthdayOptionSummary,
+    formatBirthdayBenefitLineForTier,
+    type CumpleanosBenefitConfig,
+    type BirthdayGiftOption,
+    type BirthdayGiftType,
 } from '@/lib/benefit-security';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
@@ -226,6 +242,13 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
     const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
     const [autoSyncReferralTerms, setAutoSyncReferralTerms] = useState(true);
 
+    // Estado de Reglas Dinámicas por Nivel para "Regalo de Cumpleaños" + catálogos reales de Caja
+    const [cumpleanosConfig, setCumpleanosConfig] = useState<CumpleanosBenefitConfig>(DEFAULT_CUMPLEANOS_CONFIG);
+    const [activeCumpleTierTab, setActiveCumpleTierTab] = useState<'member' | 'gold' | 'vip'>('member');
+    const [autoSyncCumpleTerms, setAutoSyncCumpleTerms] = useState(true);
+    const [catalogServices, setCatalogServices] = useState<Array<{ id: string; name: string; price: number }>>([]);
+    const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; nombre: string; price: number }>>([]);
+
     // Estado de Beneficios VIP
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
     const [loadingPrivilegios, setLoadingPrivilegios] = useState(true);
@@ -283,11 +306,46 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
             try {
                 let rawBenefits: any[] = [];
 
-                // 1. Cargar configuracion/pase_alfa y configuracion/app_movil en paralelo para merge seguro
-                const [paseSnap, appMovilSnap] = await Promise.all([
+                // 1. Cargar configuracion/pase_alfa, configuracion/app_movil y catálogos en paralelo para merge seguro
+                const [paseSnap, appMovilSnap, servicesSnap, productsSnap] = await Promise.all([
                     getDoc(doc(db, 'configuracion', 'pase_alfa')),
                     getDoc(doc(db, 'configuracion', 'app_movil')),
+                    getDocs(collection(db, 'servicios')).catch(() => null),
+                    getDocs(collection(db, 'productos')).catch(() => null),
                 ]);
+
+                if (servicesSnap && isMounted) {
+                    const loadedServices = servicesSnap.docs
+                        .map((d) => {
+                            const data = d.data();
+                            return {
+                                id: d.id,
+                                name: String(data.name || data.nombre || '').trim(),
+                                price: Number(data.price ?? data.precio ?? 0),
+                                active: data.active !== false,
+                                order: Number(data.order ?? 999),
+                            };
+                        })
+                        .filter((s) => s.active && s.name)
+                        .sort((a, b) => a.order - b.order);
+                    setCatalogServices(loadedServices.map(({ id, name, price }) => ({ id, name, price })));
+                }
+                if (productsSnap && isMounted) {
+                    const loadedProducts = productsSnap.docs
+                        .map((d) => {
+                            const data = d.data();
+                            return {
+                                id: d.id,
+                                nombre: String(data.nombre || data.name || '').trim(),
+                                price: Number(data.public_price ?? data.precio ?? 0),
+                                active: data.active !== false,
+                                order: Number(data.order ?? 999),
+                            };
+                        })
+                        .filter((p) => p.active && p.nombre)
+                        .sort((a, b) => a.order - b.order);
+                    setCatalogProducts(loadedProducts.map(({ id, nombre, price }) => ({ id, nombre, price })));
+                }
 
                 const paseData = paseSnap.exists() ? paseSnap.data() : null;
                 const mData = appMovilSnap.exists() ? appMovilSnap.data() : null;
@@ -400,6 +458,45 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                     ? rawNiveles.vip.beneficios
                                     : DEFAULT_NIVELES_CONFIG.vip.beneficios,
                             },
+                        });
+                    }
+
+                    const rawCumple = merged.cumpleanos_config || mData?.cumpleanos_config || mData?.pase_alfa?.cumpleanos_config;
+                    if (rawCumple && typeof rawCumple === 'object') {
+                        setCumpleanosConfig({
+                            activo: rawCumple.activo !== undefined ? Boolean(rawCumple.activo) : true,
+                            visitas_minimas: rawCumple.visitas_minimas !== undefined ? Math.max(0, Number(rawCumple.visitas_minimas)) : 5,
+                            un_canje_por_anio: rawCumple.un_canje_por_anio !== undefined ? Boolean(rawCumple.un_canje_por_anio) : true,
+                            member: rawCumple.member?.opciones ? rawCumple.member : DEFAULT_CUMPLEANOS_CONFIG.member,
+                            gold: rawCumple.gold?.opciones ? rawCumple.gold : DEFAULT_CUMPLEANOS_CONFIG.gold,
+                            vip: rawCumple.vip?.opciones ? rawCumple.vip : DEFAULT_CUMPLEANOS_CONFIG.vip,
+                        });
+                    } else if (rawNiveles && typeof rawNiveles === 'object') {
+                        const inferFromTier = (tierKey: 'member' | 'gold' | 'vip', fallback: CumpleanosBenefitConfig['member']) => {
+                            const tierBenefits: string[] = Array.isArray(rawNiveles?.[tierKey]?.beneficios)
+                                ? rawNiveles[tierKey].beneficios
+                                : [];
+                            const bdayLine = tierBenefits.find((b) => /cumplea[ñn]os/i.test(String(b || '')));
+                            if (!bdayLine) return fallback;
+                            return {
+                                activo: true,
+                                opciones: [
+                                    {
+                                        id: `cumple_${tierKey}_imported`,
+                                        titulo: bdayLine.trim(),
+                                        tipo: 'servicio_gratis' as BirthdayGiftType,
+                                        activo: true,
+                                        topeMonto: 0,
+                                        incluirEnBeneficiosNivel: true,
+                                    },
+                                ],
+                            };
+                        };
+                        setCumpleanosConfig({
+                            ...DEFAULT_CUMPLEANOS_CONFIG,
+                            member: inferFromTier('member', DEFAULT_CUMPLEANOS_CONFIG.member),
+                            gold: inferFromTier('gold', DEFAULT_CUMPLEANOS_CONFIG.gold),
+                            vip: inferFromTier('vip', DEFAULT_CUMPLEANOS_CONFIG.vip),
                         });
                     }
 
@@ -824,6 +921,8 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
             const isEditingReferral = (currentBenefit.titulo || '').toLowerCase().includes('invita') ||
                                       (currentBenefit.titulo || '').toLowerCase().includes('amigo') ||
                                       (currentBenefit.id || '').toLowerCase().includes('ref');
+            const isEditingCumpleanos = (currentBenefit.titulo || '').toLowerCase().includes('cumple') ||
+                                        (currentBenefit.id || '').toLowerCase().includes('cumple');
 
             const cleanDecimaConfig: DecimaCorteConfig = {
                 ...DEFAULT_DECIMA_CONFIG,
@@ -872,6 +971,42 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 mensaje_promo: (multiplicadorConfig.mensaje_promo || '').trim() || `¡Hoy tus compras generan el ${multiplicadorConfig.multiplicador === 3 ? 'TRIPLE (3x)' : 'DOBLE (2x)'} de Alfa Coins en cualquier sucursal!`,
             };
 
+            const cleanCumpleOptions = (opts: BirthdayGiftOption[]): BirthdayGiftOption[] =>
+                (opts || [])
+                    .map((o, i) => ({
+                        id: String(o.id || `cumple_opt_${Date.now()}_${i}`),
+                        titulo: String(o.titulo || '').trim() || 'Regalo de Cumpleaños',
+                        tipo: (o.tipo || 'servicio_gratis') as BirthdayGiftType,
+                        activo: o.activo !== false,
+                        coinsCantidad: Math.max(0, Number(o.coinsCantidad || 0)),
+                        descuentoTipo: (o.descuentoTipo || 'percentage') as 'percentage' | 'fixed',
+                        descuentoValor: Math.max(0, Number(o.descuentoValor || 0)),
+                        targetItemId: String(o.targetItemId || ''),
+                        targetItemNombre: String(o.targetItemNombre || ''),
+                        topeMonto: Math.max(0, Number(o.topeMonto || 0)),
+                        instruccionesCaja: String(o.instruccionesCaja || ''),
+                        incluirEnBeneficiosNivel: Boolean(o.incluirEnBeneficiosNivel),
+                    }))
+                    .filter((o) => o.titulo.length > 0);
+
+            const cleanCumpleanosConfig: CumpleanosBenefitConfig = {
+                activo: Boolean(currentBenefit.activo),
+                visitas_minimas: Math.max(0, Number(cumpleanosConfig.visitas_minimas ?? 5)),
+                un_canje_por_anio: cumpleanosConfig.un_canje_por_anio !== false,
+                member: {
+                    activo: cumpleanosConfig.member?.activo !== false,
+                    opciones: cleanCumpleOptions(cumpleanosConfig.member?.opciones || []),
+                },
+                gold: {
+                    activo: cumpleanosConfig.gold?.activo !== false,
+                    opciones: cleanCumpleOptions(cumpleanosConfig.gold?.opciones || []),
+                },
+                vip: {
+                    activo: cumpleanosConfig.vip?.activo !== false,
+                    opciones: cleanCumpleOptions(cumpleanosConfig.vip?.opciones || []),
+                },
+            };
+
             if (isEditingJuntos && (autoSyncJuntosTerms || !currentBenefit.terminos)) {
                 currentBenefit.descripcion = buildDefaultJuntosDescripcion(cleanJuntosConfig);
                 currentBenefit.terminos = buildDefaultJuntosTerminos(cleanJuntosConfig);
@@ -896,14 +1031,28 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
             }
+            if (isEditingCumpleanos && (autoSyncCumpleTerms || !currentBenefit.terminos)) {
+                currentBenefit.descripcion = buildDefaultCumpleanosDescripcion(cleanCumpleanosConfig, nivelesConfig);
+                currentBenefit.terminos = buildDefaultCumpleanosTerminos(cleanCumpleanosConfig, nivelesConfig);
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
 
             const cleanNivelesPayload: NivelesClubConfig = {
-                activo: Boolean(currentBenefit.activo),
+                activo: isEditingNiveles ? Boolean(currentBenefit.activo) : nivelesConfig.activo !== false,
                 criterio: nivelesConfig.criterio,
-                titulo_tarjeta: currentBenefit.titulo.trim() || 'NIVELES PASE ALFA',
-                descripcion_tarjeta: (currentBenefit.descripcion || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta || '').trim(),
-                imagenUrl: currentBenefit.imagenUrl || DEFAULT_NIVELES_CONFIG.imagenUrl,
-                terminos: (currentBenefit.terminos || buildDefaultNivelesTerminos(nivelesConfig)).trim(),
+                titulo_tarjeta: isEditingNiveles
+                    ? (currentBenefit.titulo.trim() || 'NIVELES PASE ALFA')
+                    : (nivelesConfig.titulo_tarjeta || DEFAULT_NIVELES_CONFIG.titulo_tarjeta),
+                descripcion_tarjeta: isEditingNiveles
+                    ? (currentBenefit.descripcion || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta || '').trim()
+                    : (nivelesConfig.descripcion_tarjeta || DEFAULT_NIVELES_CONFIG.descripcion_tarjeta || '').trim(),
+                imagenUrl: isEditingNiveles
+                    ? (currentBenefit.imagenUrl || DEFAULT_NIVELES_CONFIG.imagenUrl)
+                    : (nivelesConfig.imagenUrl || DEFAULT_NIVELES_CONFIG.imagenUrl),
+                terminos: isEditingNiveles
+                    ? (currentBenefit.terminos || buildDefaultNivelesTerminos(nivelesConfig)).trim()
+                    : (nivelesConfig.terminos || buildDefaultNivelesTerminos(nivelesConfig)).trim(),
                 member: {
                     id: 'member',
                     nombre: nivelesConfig.member.nombre.trim() || 'Alfa Member',
@@ -958,45 +1107,53 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 },
             };
 
+            const syncNivelesInSave = isEditingNiveles || isEditingCumpleanos;
+
             // Sincronizar en los 3 documentos (usando objeto anidado pase_alfa para actualizar el mapa interno de app_movil)
             await Promise.all([
                 setDoc(doc(db, 'configuracion', 'pase_alfa'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
                     ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
-                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
+                    ...(syncNivelesInSave ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                     ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
                     ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                     ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
+                    ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
                     ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
-                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload } : {}),
+                    ...(syncNivelesInSave ? { niveles_config: cleanNivelesPayload } : {}),
                     ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
                     ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                     ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
+                    ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
                         ...(isEditingCoins ? { multiplicador_coins_config: cleanMultiplicador, coins_config: cleanCoinsConfig } : {}),
-                        ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
+                        ...(syncNivelesInSave ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                         ...(isEditingJuntos ? { juntos_config: cleanJuntosConfig } : {}),
                         ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                         ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
+                        ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'ajustes_sitio', 'membresia_vip'), {
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
-                    ...(isEditingNiveles ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
+                    ...(syncNivelesInSave ? { niveles_config: cleanNivelesPayload, niveles: simpleNivelesPayload } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
             ]);
 
-            if (isEditingNiveles) {
+            if (syncNivelesInSave) {
                 setNivelesConfig(cleanNivelesPayload);
+            }
+            if (isEditingCumpleanos) {
+                setCumpleanosConfig(cleanCumpleanosConfig);
             }
 
             setPrivilegios(updatedList);
@@ -1904,6 +2061,588 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                 </span>
                                             )}
                                         </div>
+
+                                        {/* SI ES EL BENEFICIO REGALO DE CUMPLEAÑOS: REGLAS Y REGALOS POR NIVEL */}
+                                        {((newTitle || '').toLowerCase().includes('cumple') ||
+                                         (benefitId || '').toLowerCase().includes('cumple') ||
+                                         privilegios.find((p) => p.id === editingBenefitId)?.titulo.toLowerCase().includes('cumple')) && (() => {
+                                            const applyCumplePatch = (patch: Partial<CumpleanosBenefitConfig>) => {
+                                                setCumpleanosConfig((prev) => {
+                                                    const next = { ...prev, ...patch };
+                                                    if (autoSyncCumpleTerms) {
+                                                        setNewDescripcion(buildDefaultCumpleanosDescripcion(next, nivelesConfig));
+                                                        setNewTerminos(buildDefaultCumpleanosTerminos(next, nivelesConfig));
+                                                    }
+                                                    return next;
+                                                });
+                                            };
+
+                                            const updateTierOption = (
+                                                tierKey: 'member' | 'gold' | 'vip',
+                                                optId: string,
+                                                patch: Partial<BirthdayGiftOption>
+                                            ) => {
+                                                const oldOpt = (cumpleanosConfig[tierKey]?.opciones || []).find((o) => o.id === optId);
+                                                const nextOpts = (cumpleanosConfig[tierKey]?.opciones || []).map((o) =>
+                                                    o.id === optId ? { ...o, ...patch } : o
+                                                );
+                                                const updatedOpt = nextOpts.find((o) => o.id === optId);
+
+                                                if (oldOpt && updatedOpt && patch.titulo !== undefined && updatedOpt.incluirEnBeneficiosNivel) {
+                                                    const oldLine = formatBirthdayBenefitLineForTier(oldOpt).toLowerCase();
+                                                    const oldRaw = (oldOpt.titulo || '').trim().toLowerCase();
+                                                    const newLine = formatBirthdayBenefitLineForTier(updatedOpt);
+                                                    setNivelesConfig((prevNiv) => {
+                                                        const list = prevNiv[tierKey]?.beneficios || [];
+                                                        const nextList = list.map((b) => {
+                                                            const bl = b.trim().toLowerCase();
+                                                            return bl === oldLine || (oldRaw.length > 0 && bl.includes(oldRaw))
+                                                                ? newLine
+                                                                : b;
+                                                        });
+                                                        return {
+                                                            ...prevNiv,
+                                                            [tierKey]: { ...prevNiv[tierKey], beneficios: nextList },
+                                                        };
+                                                    });
+                                                }
+
+                                                applyCumplePatch({
+                                                    [tierKey]: {
+                                                        ...cumpleanosConfig[tierKey],
+                                                        opciones: nextOpts,
+                                                    },
+                                                } as any);
+                                            };
+
+                                            const addTierOption = (tierKey: 'member' | 'gold' | 'vip') => {
+                                                const newOpt: BirthdayGiftOption = {
+                                                    id: `cumple_${tierKey}_${Date.now()}`,
+                                                    titulo: 'Nuevo regalo de cumpleaños',
+                                                    tipo: 'alfa_coins',
+                                                    activo: true,
+                                                    coinsCantidad: tierKey === 'vip' ? 500 : tierKey === 'gold' ? 300 : 200,
+                                                    descuentoTipo: 'percentage',
+                                                    descuentoValor: 25,
+                                                    targetItemId: '',
+                                                    targetItemNombre: '',
+                                                    topeMonto: 0,
+                                                    instruccionesCaja: '',
+                                                    incluirEnBeneficiosNivel: false,
+                                                };
+                                                applyCumplePatch({
+                                                    [tierKey]: {
+                                                        activo: cumpleanosConfig[tierKey]?.activo !== false,
+                                                        opciones: [...(cumpleanosConfig[tierKey]?.opciones || []), newOpt],
+                                                    },
+                                                } as any);
+                                            };
+
+                                            const removeTierOption = (tierKey: 'member' | 'gold' | 'vip', optId: string) => {
+                                                const targetOpt = (cumpleanosConfig[tierKey]?.opciones || []).find((o) => o.id === optId);
+                                                if (targetOpt) {
+                                                    const oldLine = formatBirthdayBenefitLineForTier(targetOpt).toLowerCase();
+                                                    const oldRaw = (targetOpt.titulo || '').trim().toLowerCase();
+                                                    setNivelesConfig((prevNiv) => ({
+                                                        ...prevNiv,
+                                                        [tierKey]: {
+                                                            ...prevNiv[tierKey],
+                                                            beneficios: (prevNiv[tierKey]?.beneficios || []).filter((b) => {
+                                                                const bl = b.trim().toLowerCase();
+                                                                return bl !== oldLine && !(oldRaw.length > 0 && bl.includes(oldRaw));
+                                                            }),
+                                                        },
+                                                    }));
+                                                }
+                                                applyCumplePatch({
+                                                    [tierKey]: {
+                                                        ...cumpleanosConfig[tierKey],
+                                                        opciones: (cumpleanosConfig[tierKey]?.opciones || []).filter((o) => o.id !== optId),
+                                                    },
+                                                } as any);
+                                            };
+
+                                            const toggleSyncOptionToTierBenefits = (
+                                                tierKey: 'member' | 'gold' | 'vip',
+                                                opt: BirthdayGiftOption
+                                            ) => {
+                                                const tierName = nivelesConfig[tierKey]?.nombre || tierKey;
+                                                const lineForOpt = formatBirthdayBenefitLineForTier(opt);
+                                                const ot = (opt.titulo || '').trim().toLowerCase();
+                                                const currentList = nivelesConfig[tierKey]?.beneficios || [];
+                                                const existingIdx = currentList.findIndex((b) => {
+                                                    const bl = b.trim().toLowerCase();
+                                                    return bl === lineForOpt.toLowerCase() || (ot.length > 0 && bl.includes(ot));
+                                                });
+
+                                                if (existingIdx >= 0) {
+                                                    setNivelesConfig((prevNiv) => ({
+                                                        ...prevNiv,
+                                                        [tierKey]: {
+                                                            ...prevNiv[tierKey],
+                                                            beneficios: (prevNiv[tierKey]?.beneficios || []).filter((_, i) => i !== existingIdx),
+                                                        },
+                                                    }));
+                                                    updateTierOption(tierKey, opt.id, { incluirEnBeneficiosNivel: false });
+                                                    toast({
+                                                        title: `Quitado de ${tierName}`,
+                                                        description: 'Se retiró de la lista visual de beneficios de este nivel (pulsa Guardar para confirmar).',
+                                                    });
+                                                } else {
+                                                    setNivelesConfig((prevNiv) => ({
+                                                        ...prevNiv,
+                                                        [tierKey]: {
+                                                            ...prevNiv[tierKey],
+                                                            beneficios: [lineForOpt, ...(prevNiv[tierKey]?.beneficios || [])],
+                                                        },
+                                                    }));
+                                                    updateTierOption(tierKey, opt.id, { incluirEnBeneficiosNivel: true });
+                                                    toast({
+                                                        title: `Agregado a ${tierName}`,
+                                                        description: `"${lineForOpt}" se añadió a los beneficios de ${tierName} (pulsa Guardar para confirmar).`,
+                                                    });
+                                                }
+                                            };
+
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-3.5">
+                                                    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Gift className="h-4 w-4 shrink-0 text-blue-500" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground">
+                                                                    Reglas Operativas y Regalos por Nivel: Cumpleaños
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Configura qué regalo recibe cada nivel en Caja al escanear su QR y agrégalo con un clic a los beneficios de cada rango.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setNewDescripcion(buildDefaultCumpleanosDescripcion(cumpleanosConfig, nivelesConfig));
+                                                                setNewTerminos(buildDefaultCumpleanosTerminos(cumpleanosConfig, nivelesConfig));
+                                                            }}
+                                                            className="h-7 px-2.5 text-[11px] font-semibold shrink-0 cursor-pointer"
+                                                        >
+                                                            Regenerar Desc. y T&C
+                                                        </Button>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[11px] font-semibold text-foreground">
+                                                                Visitas mínimas elegibles para desbloquear QR
+                                                            </Label>
+                                                            <Input
+                                                                type="number"
+                                                                min={0}
+                                                                max={50}
+                                                                value={cumpleanosConfig.visitas_minimas}
+                                                                onChange={(e) =>
+                                                                    applyCumplePatch({
+                                                                        visitas_minimas: Math.max(0, parseInt(e.target.value, 10) || 0),
+                                                                    })
+                                                                }
+                                                                className="h-8 text-xs font-sans"
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2 p-2.5 rounded-lg border border-border/50 bg-background/40">
+                                                            <Label htmlFor="cumple-autosync" className="text-[11px] font-semibold text-blue-400 cursor-pointer">
+                                                                Actualizar Descripción y T&C automáticamente
+                                                            </Label>
+                                                            <Switch
+                                                                id="cumple-autosync"
+                                                                checked={autoSyncCumpleTerms}
+                                                                onCheckedChange={setAutoSyncCumpleTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <Tabs value={activeCumpleTierTab} onValueChange={(v: any) => setActiveCumpleTierTab(v)}>
+                                                        <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-muted/40 rounded-xl">
+                                                            <TabsTrigger
+                                                                value="member"
+                                                                className="text-xs font-bold gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                                                            >
+                                                                <Award className="w-3.5 h-3.5" />
+                                                                <span className="truncate">{nivelesConfig.member.nombre || 'Alfa Member'}</span>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-current/30">
+                                                                    {(cumpleanosConfig.member?.opciones || []).filter((o) => o.activo !== false).length}
+                                                                </Badge>
+                                                            </TabsTrigger>
+                                                            <TabsTrigger
+                                                                value="gold"
+                                                                className="text-xs font-bold gap-1.5 data-[state=active]:bg-[#C5A880] data-[state=active]:text-black"
+                                                            >
+                                                                <Award className="w-3.5 h-3.5" />
+                                                                <span className="truncate">{nivelesConfig.gold.nombre || 'Alfa Gold'}</span>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-current/30">
+                                                                    {(cumpleanosConfig.gold?.opciones || []).filter((o) => o.activo !== false).length}
+                                                                </Badge>
+                                                            </TabsTrigger>
+                                                            <TabsTrigger
+                                                                value="vip"
+                                                                className="text-xs font-bold gap-1.5 data-[state=active]:bg-[#10172b] data-[state=active]:text-white"
+                                                            >
+                                                                <Crown className="w-3.5 h-3.5 text-[#C5A880]" />
+                                                                <span className="truncate">{nivelesConfig.vip.nombre || 'Alfa Black VIP'}</span>
+                                                                <Badge variant="outline" className="text-[9px] px-1 py-0 border-current/30">
+                                                                    {(cumpleanosConfig.vip?.opciones || []).filter((o) => o.activo !== false).length}
+                                                                </Badge>
+                                                            </TabsTrigger>
+                                                        </TabsList>
+
+                                                        {(['member', 'gold', 'vip'] as const).map((tierKey) => {
+                                                            const tierName = nivelesConfig[tierKey]?.nombre || tierKey;
+                                                            const tierOpts = cumpleanosConfig[tierKey]?.opciones || [];
+                                                            const activeOptsCount = tierOpts.filter((o) => o.activo !== false).length;
+
+                                                            return (
+                                                                <TabsContent key={tierKey} value={tierKey} className="space-y-3 mt-3">
+                                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                                        <span className="text-[11px] text-muted-foreground">
+                                                                            {activeOptsCount > 1
+                                                                                ? `Hay ${activeOptsCount} opciones activas para ${tierName}: Recepción/Caja elegirá con el cliente cuál aplicar.`
+                                                                                : `Opciones de regalo disponibles para ${tierName}.`}
+                                                                        </span>
+                                                                        <Button
+                                                                            type="button"
+                                                                            variant="outline"
+                                                                            size="sm"
+                                                                            onClick={() => addTierOption(tierKey)}
+                                                                            className="h-7.5 px-2.5 text-[11px] font-semibold gap-1 border-blue-500/40 text-blue-400 hover:bg-blue-500/10 cursor-pointer"
+                                                                        >
+                                                                            <Plus className="w-3.5 h-3.5" />
+                                                                            <span>Agregar regalo para {tierName}</span>
+                                                                        </Button>
+                                                                    </div>
+
+                                                                    {tierOpts.length === 0 ? (
+                                                                        <div className="p-4 rounded-xl border border-dashed border-border/70 text-center text-xs text-muted-foreground">
+                                                                            No hay regalos configurados para {tierName}. Pulsa &ldquo;Agregar regalo&rdquo; para crear uno.
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="space-y-2.5">
+                                                                            {tierOpts.map((opt, oIdx) => {
+                                                                                const tierBeneficiosList = nivelesConfig[tierKey]?.beneficios || [];
+                                                                                const lineForOpt = formatBirthdayBenefitLineForTier(opt);
+                                                                                const ot = (opt.titulo || '').trim().toLowerCase();
+                                                                                const isSyncedInTier = tierBeneficiosList.some((b) => {
+                                                                                    const bl = b.trim().toLowerCase();
+                                                                                    return bl === lineForOpt.toLowerCase() || (ot.length > 0 && bl.includes(ot));
+                                                                                });
+
+                                                                                return (
+                                                                                    <div
+                                                                                        key={opt.id || oIdx}
+                                                                                        className={cn(
+                                                                                            "p-3 rounded-xl border space-y-2.5 transition-all",
+                                                                                            opt.activo !== false
+                                                                                                ? "bg-card/80 border-border/80"
+                                                                                                : "bg-muted/20 border-border/40 opacity-65"
+                                                                                        )}
+                                                                                    >
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Switch
+                                                                                                checked={opt.activo !== false}
+                                                                                                onCheckedChange={(checked) => updateTierOption(tierKey, opt.id, { activo: checked })}
+                                                                                                className="scale-75 shrink-0"
+                                                                                                title={opt.activo !== false ? 'Regalo activo' : 'Regalo pausado'}
+                                                                                            />
+                                                                                            <Input
+                                                                                                value={opt.titulo}
+                                                                                                onChange={(e) => updateTierOption(tierKey, opt.id, { titulo: e.target.value })}
+                                                                                                placeholder="Ej. Cera de cortesía, +300 Alfa Coins, Paquete 5 gratis, Vaso oficial..."
+                                                                                                className="h-8 text-xs font-semibold flex-1 font-sans"
+                                                                                            />
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => removeTierOption(tierKey, opt.id)}
+                                                                                                className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 cursor-pointer shrink-0"
+                                                                                                title="Eliminar opción de regalo"
+                                                                                            >
+                                                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                                                            </button>
+                                                                                        </div>
+
+                                                                                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                                                                                            <div className="sm:col-span-5 space-y-1">
+                                                                                                <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                    ¿Cómo se aplica en Caja?
+                                                                                                </Label>
+                                                                                                <Select
+                                                                                                    value={opt.tipo}
+                                                                                                    onValueChange={(val: BirthdayGiftType) =>
+                                                                                                        updateTierOption(tierKey, opt.id, { tipo: val })
+                                                                                                    }
+                                                                                                >
+                                                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                                                        <SelectValue />
+                                                                                                    </SelectTrigger>
+                                                                                                    <SelectContent className="border-2 border-blue-500 rounded-xl">
+                                                                                                        <SelectItem value="alfa_coins" className="text-xs">
+                                                                                                            Abonar Alfa Coins de regalo
+                                                                                                        </SelectItem>
+                                                                                                        <SelectItem value="descuento_servicio" className="text-xs">
+                                                                                                            Descuento en servicio (% o $)
+                                                                                                        </SelectItem>
+                                                                                                        <SelectItem value="servicio_gratis" className="text-xs">
+                                                                                                            Servicio o Paquete gratis
+                                                                                                        </SelectItem>
+                                                                                                        <SelectItem value="producto_gratis" className="text-xs">
+                                                                                                            Producto gratis (ej. Cera)
+                                                                                                        </SelectItem>
+                                                                                                        <SelectItem value="articulo_fisico" className="text-xs">
+                                                                                                            Artículo promocional (ej. Vaso)
+                                                                                                        </SelectItem>
+                                                                                                    </SelectContent>
+                                                                                                </Select>
+                                                                                            </div>
+
+                                                                                            {opt.tipo === 'alfa_coins' && (
+                                                                                                <div className="sm:col-span-7 space-y-1">
+                                                                                                    <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                        Cantidad de Alfa Coins a regalar
+                                                                                                    </Label>
+                                                                                                    <Input
+                                                                                                        type="number"
+                                                                                                        min={10}
+                                                                                                        step={50}
+                                                                                                        value={opt.coinsCantidad ?? 200}
+                                                                                                        onChange={(e) =>
+                                                                                                            updateTierOption(tierKey, opt.id, {
+                                                                                                                coinsCantidad: Math.max(1, Number(e.target.value) || 0),
+                                                                                                            })
+                                                                                                        }
+                                                                                                        className="h-8 text-xs font-sans"
+                                                                                                    />
+                                                                                                </div>
+                                                                                            )}
+
+                                                                                            {opt.tipo === 'descuento_servicio' && (
+                                                                                                <>
+                                                                                                    <div className="sm:col-span-3 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">Tipo</Label>
+                                                                                                        <div className="grid grid-cols-2 gap-1">
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => updateTierOption(tierKey, opt.id, { descuentoTipo: 'percentage' })}
+                                                                                                                className={cn(
+                                                                                                                    "h-8 rounded-lg text-xs font-bold border cursor-pointer",
+                                                                                                                    opt.descuentoTipo !== 'fixed'
+                                                                                                                        ? "bg-blue-600 text-white border-blue-500"
+                                                                                                                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                                                                )}
+                                                                                                            >
+                                                                                                                %
+                                                                                                            </button>
+                                                                                                            <button
+                                                                                                                type="button"
+                                                                                                                onClick={() => updateTierOption(tierKey, opt.id, { descuentoTipo: 'fixed' })}
+                                                                                                                className={cn(
+                                                                                                                    "h-8 rounded-lg text-xs font-bold border cursor-pointer",
+                                                                                                                    opt.descuentoTipo === 'fixed'
+                                                                                                                        ? "bg-blue-600 text-white border-blue-500"
+                                                                                                                        : "bg-muted/20 border-border/60 text-muted-foreground"
+                                                                                                                )}
+                                                                                                            >
+                                                                                                                $
+                                                                                                            </button>
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                    <div className="sm:col-span-4 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                            {opt.descuentoTipo === 'fixed' ? 'Monto ($ MXN)' : 'Porcentaje (%)'}
+                                                                                                        </Label>
+                                                                                                        <Input
+                                                                                                            type="number"
+                                                                                                            min={1}
+                                                                                                            max={opt.descuentoTipo === 'fixed' ? 5000 : 100}
+                                                                                                            value={opt.descuentoValor ?? 25}
+                                                                                                            onChange={(e) =>
+                                                                                                                updateTierOption(tierKey, opt.id, {
+                                                                                                                    descuentoValor: Math.max(1, Number(e.target.value) || 0),
+                                                                                                                })
+                                                                                                            }
+                                                                                                            className="h-8 text-xs font-sans"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </>
+                                                                                            )}
+
+                                                                                            {opt.tipo === 'servicio_gratis' && (
+                                                                                                <>
+                                                                                                    <div className="sm:col-span-4 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                            Servicio o Paquete incluido
+                                                                                                        </Label>
+                                                                                                        <Select
+                                                                                                            value={opt.targetItemId || '__any__'}
+                                                                                                            onValueChange={(val) => {
+                                                                                                                if (val === '__any__') {
+                                                                                                                    updateTierOption(tierKey, opt.id, { targetItemId: '', targetItemNombre: '' });
+                                                                                                                } else {
+                                                                                                                    const svc = catalogServices.find((s) => s.id === val);
+                                                                                                                    updateTierOption(tierKey, opt.id, {
+                                                                                                                        targetItemId: val,
+                                                                                                                        targetItemNombre: svc?.name || '',
+                                                                                                                    });
+                                                                                                                }
+                                                                                                            }}
+                                                                                                        >
+                                                                                                            <SelectTrigger className="h-8 text-xs">
+                                                                                                                <SelectValue placeholder="Cualquier servicio" />
+                                                                                                            </SelectTrigger>
+                                                                                                            <SelectContent className="border-2 border-blue-500 rounded-xl max-h-60">
+                                                                                                                <SelectItem value="__any__" className="text-xs font-semibold">
+                                                                                                                    Cualquier servicio del carrito
+                                                                                                                </SelectItem>
+                                                                                                                {catalogServices.map((s) => (
+                                                                                                                    <SelectItem key={s.id} value={s.id} className="text-xs">
+                                                                                                                        {s.name} (${formatMoney(s.price)})
+                                                                                                                    </SelectItem>
+                                                                                                                ))}
+                                                                                                            </SelectContent>
+                                                                                                        </Select>
+                                                                                                    </div>
+                                                                                                    <div className="sm:col-span-3 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                            Tope $ (0=100%)
+                                                                                                        </Label>
+                                                                                                        <Input
+                                                                                                            type="number"
+                                                                                                            min={0}
+                                                                                                            value={opt.topeMonto ?? 0}
+                                                                                                            onChange={(e) =>
+                                                                                                                updateTierOption(tierKey, opt.id, {
+                                                                                                                    topeMonto: Math.max(0, Number(e.target.value) || 0),
+                                                                                                                })
+                                                                                                            }
+                                                                                                            className="h-8 text-xs font-sans"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </>
+                                                                                            )}
+
+                                                                                            {opt.tipo === 'producto_gratis' && (
+                                                                                                <>
+                                                                                                    <div className="sm:col-span-4 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                            Producto incluido (ej. Cera)
+                                                                                                        </Label>
+                                                                                                        <Select
+                                                                                                            value={opt.targetItemId || '__any__'}
+                                                                                                            onValueChange={(val) => {
+                                                                                                                if (val === '__any__') {
+                                                                                                                    updateTierOption(tierKey, opt.id, { targetItemId: '', targetItemNombre: '' });
+                                                                                                                } else {
+                                                                                                                    const prod = catalogProducts.find((p) => p.id === val);
+                                                                                                                    updateTierOption(tierKey, opt.id, {
+                                                                                                                        targetItemId: val,
+                                                                                                                        targetItemNombre: prod?.nombre || '',
+                                                                                                                    });
+                                                                                                                }
+                                                                                                            }}
+                                                                                                        >
+                                                                                                            <SelectTrigger className="h-8 text-xs">
+                                                                                                                <SelectValue placeholder="Cualquier producto" />
+                                                                                                            </SelectTrigger>
+                                                                                                            <SelectContent className="border-2 border-blue-500 rounded-xl max-h-60">
+                                                                                                                <SelectItem value="__any__" className="text-xs font-semibold">
+                                                                                                                    Cualquier producto del carrito
+                                                                                                                </SelectItem>
+                                                                                                                {catalogProducts.map((p) => (
+                                                                                                                    <SelectItem key={p.id} value={p.id} className="text-xs">
+                                                                                                                        {p.nombre} (${formatMoney(p.price)})
+                                                                                                                    </SelectItem>
+                                                                                                                ))}
+                                                                                                            </SelectContent>
+                                                                                                        </Select>
+                                                                                                    </div>
+                                                                                                    <div className="sm:col-span-3 space-y-1">
+                                                                                                        <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                            Tope $ (0=100%)
+                                                                                                        </Label>
+                                                                                                        <Input
+                                                                                                            type="number"
+                                                                                                            min={0}
+                                                                                                            value={opt.topeMonto ?? 0}
+                                                                                                            onChange={(e) =>
+                                                                                                                updateTierOption(tierKey, opt.id, {
+                                                                                                                    topeMonto: Math.max(0, Number(e.target.value) || 0),
+                                                                                                                })
+                                                                                                            }
+                                                                                                            className="h-8 text-xs font-sans"
+                                                                                                        />
+                                                                                                    </div>
+                                                                                                </>
+                                                                                            )}
+
+                                                                                            {opt.tipo === 'articulo_fisico' && (
+                                                                                                <div className="sm:col-span-7 space-y-1">
+                                                                                                    <Label className="text-[10px] font-semibold text-muted-foreground">
+                                                                                                        Indicación para recepción (ej. Entregar vaso oficial VATOS ALFA)
+                                                                                                    </Label>
+                                                                                                    <Input
+                                                                                                        value={opt.instruccionesCaja || ''}
+                                                                                                        onChange={(e) =>
+                                                                                                            updateTierOption(tierKey, opt.id, {
+                                                                                                                instruccionesCaja: e.target.value,
+                                                                                                            })
+                                                                                                        }
+                                                                                                        placeholder="Ej. Entregar vaso edición especial VATOS ALFA en recepción"
+                                                                                                        className="h-8 text-xs font-sans"
+                                                                                                    />
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-border/40">
+                                                                                            <span className="text-[10px] text-muted-foreground">
+                                                                                                Resumen: <strong className="text-foreground">{formatBirthdayOptionSummary(opt)}</strong>
+                                                                                            </span>
+                                                                                            <Button
+                                                                                                type="button"
+                                                                                                variant={isSyncedInTier ? 'default' : 'outline'}
+                                                                                                size="sm"
+                                                                                                onClick={() => toggleSyncOptionToTierBenefits(tierKey, opt)}
+                                                                                                className={cn(
+                                                                                                    "h-7 px-2.5 text-[11px] font-semibold gap-1.5 cursor-pointer",
+                                                                                                    isSyncedInTier
+                                                                                                        ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
+                                                                                                        : "border-blue-500/40 text-blue-400 hover:bg-blue-500/10"
+                                                                                                )}
+                                                                                            >
+                                                                                                {isSyncedInTier ? (
+                                                                                                    <>
+                                                                                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                                                                                        <span>En beneficios de {tierName} (Quitar)</span>
+                                                                                                    </>
+                                                                                                ) : (
+                                                                                                    <>
+                                                                                                        <Plus className="w-3.5 h-3.5" />
+                                                                                                        <span>Agregar a beneficios de {tierName}</span>
+                                                                                                    </>
+                                                                                                )}
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    )}
+                                                                </TabsContent>
+                                                            );
+                                                        })}
+                                                    </Tabs>
+                                                </div>
+                                            );
+                                        })()}
 
                                         {/* SI ES EL BENEFICIO DE ALFA COINS: DÍAS DOBLES / TRIPLES INTEGRADO */}
                                         {((newTitle || '').toLowerCase().includes('alfa coin') ||
@@ -2846,7 +3585,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                         value="gold"
                                                                         className="text-xs font-bold gap-1.5 data-[state=active]:bg-[#C5A880] data-[state=active]:text-black"
                                                                     >
-                                                                        <Star className="w-3.5 h-3.5" />
+                                                                        <Award className="w-3.5 h-3.5" />
                                                                         <span>{nivelesConfig.gold.nombre || 'Alfa Gold'}</span>
                                                                     </TabsTrigger>
                                                                     <TabsTrigger

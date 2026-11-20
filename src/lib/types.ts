@@ -49,6 +49,11 @@ export interface Client {
   faltas_desde_exencion?: number;
   exento_revocado_en?: any;
   exento_revocado_motivo?: string;
+  ultimo_canje_cumpleanos_anio?: number;
+  ultimo_canje_cumpleanos_folio?: string;
+  ultimo_canje_cortesia_vip_mes?: string;
+  ultimo_canje_cortesia_vip_folio?: string;
+  fecha_ultimo_canje_cortesia_vip?: any;
 }
 
 export interface CanjeBeneficio {

@@ -546,6 +546,186 @@ export interface ReferralProgramConfig {
   limite_mensual_invitaciones: number; // 0 = ilimitadas
 }
 
+export type BirthdayGiftType =
+  | 'alfa_coins'          // Abona X Alfa Coins automáticamente al monedero
+  | 'descuento_servicio'  // Aplica % o $ fijo de descuento en servicios del carrito
+  | 'servicio_gratis'     // Cubre 100% (o hasta topeMonto) de un servicio/paquete del catálogo
+  | 'producto_gratis'     // Cubre 100% (o hasta topeMonto) de un producto de tienda (ej. cera)
+  | 'articulo_fisico';    // Regalo promocional sin inventario (ej. Vaso oficial VATOS ALFA)
+
+export interface BirthdayGiftOption {
+  id: string;
+  titulo: string;
+  tipo: BirthdayGiftType;
+  activo: boolean;
+  coinsCantidad?: number;
+  descuentoTipo?: 'percentage' | 'fixed';
+  descuentoValor?: number;
+  targetItemId?: string;
+  targetItemNombre?: string;
+  topeMonto?: number;
+  instruccionesCaja?: string;
+  incluirEnBeneficiosNivel?: boolean;
+}
+
+export interface BirthdayTierGiftsConfig {
+  activo: boolean;
+  opciones: BirthdayGiftOption[];
+}
+
+export interface CumpleanosBenefitConfig {
+  activo: boolean;
+  visitas_minimas: number; // default 5
+  un_canje_por_anio: boolean; // default true
+  member: BirthdayTierGiftsConfig;
+  gold: BirthdayTierGiftsConfig;
+  vip: BirthdayTierGiftsConfig;
+}
+
+export const DEFAULT_CUMPLEANOS_CONFIG: CumpleanosBenefitConfig = {
+  activo: true,
+  visitas_minimas: MIN_BIRTHDAY_ELIGIBLE_VISITS,
+  un_canje_por_anio: true,
+  member: {
+    activo: true,
+    opciones: [
+      {
+        id: 'cumple_member_default',
+        titulo: '25% de descuento en tu servicio en el mes de tu cumpleaños',
+        tipo: 'descuento_servicio',
+        activo: true,
+        descuentoTipo: 'percentage',
+        descuentoValor: 25,
+        incluirEnBeneficiosNivel: false,
+      },
+    ],
+  },
+  gold: {
+    activo: true,
+    opciones: [
+      {
+        id: 'cumple_gold_default',
+        titulo: 'Arreglo de barba express o delineado a navaja gratis en tu cumpleaños',
+        tipo: 'servicio_gratis',
+        activo: true,
+        topeMonto: 0,
+        incluirEnBeneficiosNivel: false,
+      },
+    ],
+  },
+  vip: {
+    activo: true,
+    opciones: [
+      {
+        id: 'cumple_vip_default',
+        titulo: 'Upgrade de cortesía a Paquete Caballero Alfa en tu cumpleaños',
+        tipo: 'servicio_gratis',
+        activo: true,
+        topeMonto: 0,
+        incluirEnBeneficiosNivel: false,
+      },
+    ],
+  },
+};
+
+export function resolveClientBirthdayGifts(
+  tierId: 'member' | 'gold' | 'vip',
+  cfg?: Partial<CumpleanosBenefitConfig> | null
+): BirthdayGiftOption[] {
+  const merged = { ...DEFAULT_CUMPLEANOS_CONFIG, ...(cfg || {}) };
+  if (merged.activo === false) return [];
+  const tierCfg = tierId === 'vip' ? merged.vip : tierId === 'gold' ? merged.gold : merged.member;
+  if (!tierCfg || tierCfg.activo === false) return [];
+  const rawList = Array.isArray(tierCfg.opciones) ? tierCfg.opciones : [];
+  return rawList.filter((o) => o && o.activo !== false && String(o.titulo || '').trim().length > 0);
+}
+
+export function formatBirthdayOptionSummary(opt: BirthdayGiftOption): string {
+  switch (opt.tipo) {
+    case 'alfa_coins':
+      return `+${Math.max(0, Number(opt.coinsCantidad || 0))} Alfa Coins de regalo en tu cuenta`;
+    case 'descuento_servicio': {
+      const val = Math.max(0, Number(opt.descuentoValor || 0));
+      return opt.descuentoTipo === 'fixed'
+        ? `$${val} MXN de descuento en tu servicio`
+        : `${val}% de descuento en tu servicio`;
+    }
+    case 'servicio_gratis': {
+      const target = opt.targetItemNombre ? opt.targetItemNombre : 'Servicio de cortesía';
+      const tope = Number(opt.topeMonto || 0);
+      return tope > 0 ? `${target} (cubre hasta $${tope} MXN)` : `${target} (100% gratis)`;
+    }
+    case 'producto_gratis': {
+      const target = opt.targetItemNombre ? opt.targetItemNombre : 'Producto seleccionado gratis';
+      const tope = Number(opt.topeMonto || 0);
+      return tope > 0 ? `${target} (cubre hasta $${tope} MXN)` : `${target} (100% gratis)`;
+    }
+    case 'articulo_fisico':
+      return opt.instruccionesCaja
+        ? `Obsequio físico: ${opt.instruccionesCaja}`
+        : `Obsequio físico en recepción: ${opt.titulo}`;
+    default:
+      return opt.titulo || 'Regalo de Cumpleaños';
+  }
+}
+
+export function formatBirthdayBenefitLineForTier(opt: BirthdayGiftOption): string {
+  const clean = (opt.titulo || '').trim() || formatBirthdayOptionSummary(opt);
+  if (/cumplea[ñn]os/i.test(clean)) return clean;
+  return `${clean} en el mes de tu cumpleaños`;
+}
+
+export function buildDefaultCumpleanosDescripcion(
+  cfg: Partial<CumpleanosBenefitConfig> = {},
+  niveles?: { member?: { nombre?: string }; gold?: { nombre?: string }; vip?: { nombre?: string } } | null
+): string {
+  const c = { ...DEFAULT_CUMPLEANOS_CONFIG, ...cfg };
+  const minVisits = Math.max(0, Number(c.visitas_minimas ?? MIN_BIRTHDAY_ELIGIBLE_VISITS));
+  const mName = niveles?.member?.nombre || 'Alfa Member';
+  const gName = niveles?.gold?.nombre || 'Alfa Gold';
+  const vName = niveles?.vip?.nombre || 'Alfa Black VIP';
+
+  const describeTier = (tierName: string, opts: BirthdayGiftOption[]) => {
+    if (opts.length === 0) return `• ${tierName}: Cortesía especial en recepción.`;
+    const joined = opts.map((o) => o.titulo.trim()).join(' ó ');
+    return `• ${tierName}: ${joined}.`;
+  };
+
+  return (
+    `Celebra tu cumpleaños con VATOS ALFA Barber Shop. Durante todo el mes de tu cumpleaños puedes canjear tu regalo según tu nivel actual:\n` +
+    `${describeTier(mName, resolveClientBirthdayGifts('member', c))}\n` +
+    `${describeTier(gName, resolveClientBirthdayGifts('gold', c))}\n` +
+    `${describeTier(vName, resolveClientBirthdayGifts('vip', c))}\n` +
+    `Requisito: contar con fecha de nacimiento verificada y al menos ${minVisits} visitas elegibles pagadas desde tu registro en la App.`
+  );
+}
+
+export function buildDefaultCumpleanosTerminos(
+  cfg: Partial<CumpleanosBenefitConfig> = {},
+  niveles?: { member?: { nombre?: string }; gold?: { nombre?: string }; vip?: { nombre?: string } } | null
+): string {
+  const c = { ...DEFAULT_CUMPLEANOS_CONFIG, ...cfg };
+  const minVisits = Math.max(0, Number(c.visitas_minimas ?? MIN_BIRTHDAY_ELIGIBLE_VISITS));
+  const mName = niveles?.member?.nombre || 'Alfa Member';
+  const gName = niveles?.gold?.nombre || 'Alfa Gold';
+  const vName = niveles?.vip?.nombre || 'Alfa Black VIP';
+
+  const renderTierLine = (tierName: string, opts: BirthdayGiftOption[]) => {
+    if (opts.length === 0) return `  - ${tierName}: Cortesía especial vigente.`;
+    return `  - ${tierName}: ${opts.map((o) => `${o.titulo.trim()} (${formatBirthdayOptionSummary(o)})`).join(' ó ')}.`;
+  };
+
+  return `Promoción "REGALO DE CUMPLEAÑOS PASE ALFA"
+1. Regalos Vigentes por Nivel. El obsequio aplicable corresponde al rango alcanzado por el titular en el momento del canje:
+${renderTierLine(mName, resolveClientBirthdayGifts('member', c))}
+${renderTierLine(gName, resolveClientBirthdayGifts('gold', c))}
+${renderTierLine(vName, resolveClientBirthdayGifts('vip', c))}
+2. Ventana de Canje. Válido únicamente durante el mes calendario de cumpleaños registrado y bloqueado en la cuenta oficial del cliente (previamente verificado con identificación oficial si aplica).
+3. Antigüedad Requerida. Para activar el código QR de cumpleaños se requiere haber completado al menos ${minVisits} visitas elegibles pagadas en sucursal a partir del registro en la aplicación móvil.
+4. Límite de Uso. Personal e intransferible; limitado a 1 canje por año calendario mediante código QR oficial firmado desde la App Móvil en recepción.
+5. Cancelaciones. Si una venta asociada al canje de cumpleaños es cancelada o eliminada, el derecho al regalo del año en curso se restaura y cualquier Alfa Coin de regalo otorgado es revertido automáticamente.`;
+}
+
 export const DEFAULT_REFERRAL_CONFIG: ReferralProgramConfig = {
   activo: true,
   descuento_amigo_pct: 20,
@@ -2049,6 +2229,13 @@ export interface SaleLoyaltySnapshot {
   beneficio_id?: string;
   is_birthday_applied?: boolean;
   cumpleanos_anio_marcado?: number;
+  birthday_coins_awarded?: number;
+  birthday_option_id?: string;
+  birthday_option_title?: string;
+  is_vip_monthly_courtesy_applied?: boolean;
+  vip_monthly_courtesy_month?: string;
+  vip_monthly_courtesy_folio?: string;
+  prev_ultimo_canje_cortesia_vip_mes?: string;
   is_referral_applied?: boolean;
   referrer_id?: string;
   referrer_coins_awarded?: number;
@@ -2216,6 +2403,7 @@ export async function revertSaleLoyaltyAndBenefits(
         ? Number(snap.alfa_coins_canjeados)
         : Number(saleData.alfacoins_canjeados || 0);
     const juntosTitularBonus = Number(snap?.juntos_titular_coins_awarded || 0);
+    const birthdayCoinsAwarded = Number(snap?.birthday_coins_awarded || 0);
 
     const appliedBenefitId = String(
       snap?.beneficio_id || saleData.beneficio_aplicado?.id || ''
@@ -2274,7 +2462,7 @@ export async function revertSaleLoyaltyAndBenefits(
         clientData.puntos ??
         0
     );
-    const totalCoinsToSubtract = coinsEarnedInSale + juntosTitularBonus;
+    const totalCoinsToSubtract = coinsEarnedInSale + juntosTitularBonus + birthdayCoinsAwarded;
     const totalCoinsToRefund = coinsRedeemedInSale;
 
     if (totalCoinsToSubtract > 0 || totalCoinsToRefund > 0) {
@@ -2414,7 +2602,28 @@ export async function revertSaleLoyaltyAndBenefits(
       clientUpdate.ultimo_canje_cumpleanos_anio = deleteField();
       clientUpdate.ultimo_canje_cumpleanos_folio = deleteField();
       clientUpdate.fecha_ultimo_canje_cumpleanos = deleteField();
+      if (clientData.recompensa_pendiente?.tipo_recompensa === 'cumpleanos') {
+        clientUpdate.recompensa_pendiente = null;
+      }
       summary.push('Regalo de Cumpleaños reactivado');
+    }
+
+    if (snap?.is_vip_monthly_courtesy_applied) {
+      if (snap.prev_ultimo_canje_cortesia_vip_mes) {
+        clientUpdate.ultimo_canje_cortesia_vip_mes = snap.prev_ultimo_canje_cortesia_vip_mes;
+      } else {
+        clientUpdate.ultimo_canje_cortesia_vip_mes = deleteField();
+      }
+      clientUpdate.ultimo_canje_cortesia_vip_folio = deleteField();
+      clientUpdate.fecha_ultimo_canje_cortesia_vip = deleteField();
+      if (snap.vip_monthly_courtesy_folio) {
+        await updateDoc(doc(db, 'canjes_beneficios', snap.vip_monthly_courtesy_folio), {
+          estado: 'cancelado_por_venta_eliminada',
+          utilizado_en_venta: false,
+          revertido_en: Timestamp.now(),
+        }).catch(() => {});
+      }
+      summary.push('Cortesía Mensual VIP restaurada');
     }
 
     const isReferral = Boolean(

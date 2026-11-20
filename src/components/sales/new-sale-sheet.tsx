@@ -59,11 +59,12 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send, Gift, Sparkles, ShoppingBag, ArrowRight, UserCheck, Check, QrCode, Building2, Copy, ExternalLink, Banknote, Receipt, Store, Coins, Layers, Wallet, User as UserIcon, Award, Crown } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Users, Scissors, CreditCard, Loader2, Trash2, UserPlus, X, Mail, Phone, Edit, Percent, DollarSign, Calculator, Send, Gift, Sparkles, ShoppingBag, ArrowRight, UserCheck, Check, QrCode, Building2, Copy, ExternalLink, Banknote, Receipt, Store, Coins, Layers, Wallet, User as UserIcon, Award, Crown, ShieldCheck } from 'lucide-react';
 import { NewClientForm } from '../clients/new-client-form';
 import { ClientInput } from '../reservations/client-input';
 import type { Service as ServiceType, Product, Client, User, Local, Profesional, Sale, SaleItem, ServiceCategory } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { format } from 'date-fns';
 import {
     parseAndValidateReferralCode,
     findMatchingReferrerClient,
@@ -92,6 +93,12 @@ import {
     type AlfaCoinsConfig,
     DEFAULT_REFERRAL_CONFIG,
     type ReferralProgramConfig,
+    DEFAULT_CUMPLEANOS_CONFIG,
+    resolveClientBirthdayGifts,
+    formatBirthdayOptionSummary,
+    MONTH_NAMES_ES,
+    type CumpleanosBenefitConfig,
+    type BirthdayGiftOption,
     type SaleLoyaltySnapshot,
 } from '@/lib/benefit-security';
 import { isClientWithApp } from '@/lib/client-app-helper';
@@ -153,6 +160,12 @@ interface CartItem {
     hora_fin?: string | null;
     professional_lock?: boolean | null;
     duracion?: number;
+    addedByBirthdayBenefit?: boolean;
+    birthdayDiscountApplied?: boolean;
+    tierDiscountApplied?: boolean;
+    vipMonthlyCourtesyItem?: boolean;
+    addedByVipMonthly?: boolean;
+    promoDiscountApplied?: boolean;
 }
 
 const saleSchema = (total: number) => z.object({
@@ -189,6 +202,9 @@ interface NewSaleSheetProps {
         reservationId?: string;
         local_id?: string;
         anticipoPagado?: number; // Added field
+        promoCode?: string;
+        promoRedeemed?: any;
+        benefitRedeemed?: any;
     };
     onSaleComplete?: () => void;
     forceMaximize?: number;
@@ -240,6 +256,14 @@ const ResumenCarrito = ({
     propina, appliedBenefit, onApplyReferralCode, onRemoveBenefit, alfaCoinUnitValue, clientLevelInfo,
     juntosMinorsCount = 0, setJuntosMinorsCount, currentHaircutPrice = 140, targetStampsConfig = 9,
     activeCoinsMultiplier, juntosConfig = DEFAULT_JUNTOS_CONFIG,
+    coinsConfig = DEFAULT_COINS_CONFIG,
+    referralConfig = DEFAULT_REFERRAL_CONFIG,
+    cumpleanosConfig = DEFAULT_CUMPLEANOS_CONFIG,
+    selectedBirthdayOptionId = '',
+    onSelectBirthdayOption,
+    vipMonthlyCourtesyApplied = false,
+    vipMonthlyUsedThisMonth = false,
+    onToggleVipMonthlyCourtesy,
 }: any) => {
     const [referralPrefixPart, setReferralPrefixPart] = useState('ALFA');
     const [referralNamePart, setReferralNamePart] = useState('');
@@ -307,6 +331,42 @@ const ResumenCarrito = ({
         todayStr: todayPreviewStr,
         appliedBenefit,
     });
+    const coinsPerPeso = coinsConfig?.activo !== false
+        ? Math.max(0, Number(coinsConfig?.coins_por_peso ?? 1))
+        : 0;
+    const previewEarnedCoins = coinsConfig?.activo !== false && realMoneyPreview > 0
+        ? Math.floor(realMoneyPreview * coinsPerPeso) * (activeCoinsMultiplier?.multiplier || 1)
+        : 0;
+    const refDiscountPct = Math.max(
+        1,
+        Math.min(100, Number(referralConfig?.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT))
+    );
+    const refHostCoins = Math.max(
+        0,
+        Number(referralConfig?.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS)
+    );
+    const refMinGross = referralConfig?.consumo_minimo_tipo === 'monto_fijo'
+        ? Math.max(1, Number(referralConfig?.consumo_minimo_monto) || currentHaircutPrice || 140)
+        : (currentHaircutPrice || 140);
+    const isBirthdayApplied = Boolean(
+        appliedBenefit && (
+            appliedBenefit.isBirthdayBenefit ||
+            String(appliedBenefit.benefitId || '').toLowerCase().includes('cumple') ||
+            String(appliedBenefit.benefitTitle || '').toLowerCase().includes('cumple')
+        )
+    );
+    const birthdayTierId = (clientLevelInfo?.tierId || 'member') as 'member' | 'gold' | 'vip';
+    const birthdayTierLabel = clientLevelInfo?.tierName || 'Alfa Member';
+    const birthdayOptionsForClient = isBirthdayApplied
+        ? resolveClientBirthdayGifts(birthdayTierId, cumpleanosConfig)
+        : [];
+    const activeBirthdayOption =
+        birthdayOptionsForClient.find(
+            (opt: BirthdayGiftOption) => opt.id === (selectedBirthdayOptionId || appliedBenefit?.birthdayOptionId)
+        ) ||
+        birthdayOptionsForClient[0] ||
+        null;
+    const currentMonthLabel = MONTH_NAMES_ES[nowPreview.getMonth()] || 'este mes';
     return (
     <div className="w-full bg-slate-50/70 dark:bg-slate-900/60 border border-border/80 rounded-2xl flex flex-col shadow-xs h-full min-h-0 flex-1 overflow-hidden">
         {/* Cabecera del Ticket */}
@@ -468,14 +528,19 @@ const ResumenCarrito = ({
                                 <div className="flex items-center justify-between text-foreground font-semibold gap-2">
                                     <span className="flex items-center gap-1.5 flex-wrap">
                                         <Coins className="h-3.5 w-3.5 text-[#C5A880]" /> Recompensa Alfa Club
-                                        {activeCoinsMultiplier?.isActive && (
+                                        {coinsConfig?.activo === false && (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30 font-sans">
+                                                Pausado
+                                            </span>
+                                        )}
+                                        {activeCoinsMultiplier?.isActive && coinsConfig?.activo !== false && (
                                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#C5A880]/20 text-[#C5A880] border border-[#C5A880]/40 font-sans">
                                                 🔥 {activeCoinsMultiplier.shortBadge}
                                             </span>
                                         )}
                                     </span>
                                     <span className="text-[#C5A880] font-bold">
-                                        +{total > 0 ? Math.floor(total) * (activeCoinsMultiplier?.multiplier || 1) : 0} ALFA COINS
+                                        +{previewEarnedCoins} ALFA COINS
                                     </span>
                                 </div>
                                 <div className="pt-1.5 border-t border-border/40 flex flex-col gap-1">
@@ -496,6 +561,61 @@ const ResumenCarrito = ({
                                         {stampPreview.reason}
                                     </p>
                                 </div>
+
+                                {clientLevelInfo?.activo && (
+                                    <div className="pt-1.5 border-t border-border/40 flex flex-col gap-1.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1">
+                                                <ShieldCheck className="h-3 w-3 text-blue-400" /> Nivel y Privilegios:
+                                            </span>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-blue-500/15 text-blue-400 border-blue-500/30 font-sans">
+                                                {clientLevelInfo.tierName} ({clientLevelInfo.cashbackPct}%)
+                                            </span>
+                                        </div>
+
+                                        {Array.isArray(clientLevelInfo.beneficios) && clientLevelInfo.beneficios.length > 0 && (
+                                            <ul className="space-y-0.5 pl-1">
+                                                {clientLevelInfo.beneficios.slice(0, 4).map((b: string, idx: number) => (
+                                                    <li key={idx} className="text-[10px] text-muted-foreground leading-snug flex items-start gap-1">
+                                                        <span className="text-blue-400 shrink-0">•</span>
+                                                        <span>{b}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        )}
+
+                                        {clientLevelInfo.tierId === 'vip' && onToggleVipMonthlyCourtesy && (
+                                            <div className="flex items-center justify-between gap-2 p-2 rounded-lg border border-blue-500/30 bg-blue-500/10">
+                                                <div className="min-w-0">
+                                                    <p className="text-[11px] font-semibold text-blue-300 leading-tight">
+                                                        Cortesía VIP Mensual ({currentMonthLabel})
+                                                    </p>
+                                                    <p className="text-[10px] text-muted-foreground leading-tight">
+                                                        1 Barba Express gratis por mes calendario
+                                                    </p>
+                                                </div>
+                                                {vipMonthlyUsedThisMonth ? (
+                                                    <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-slate-500/20 text-slate-300 border border-slate-500/30 shrink-0">
+                                                        Ya usada en {currentMonthLabel}
+                                                    </span>
+                                                ) : (
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={vipMonthlyCourtesyApplied ? 'destructive' : 'secondary'}
+                                                        className={cn(
+                                                            "h-7 px-2.5 text-[10px] font-bold rounded-md shrink-0",
+                                                            !vipMonthlyCourtesyApplied && "bg-blue-600 hover:bg-blue-700 text-white"
+                                                        )}
+                                                        onClick={onToggleVipMonthlyCourtesy}
+                                                    >
+                                                        {vipMonthlyCourtesyApplied ? 'Quitar cortesía VIP' : 'Aplicar Barba Express'}
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ) : null}
                     </>
@@ -505,7 +625,7 @@ const ResumenCarrito = ({
         {/* Acciones directas si aún no hay beneficio activo */}
         {!appliedBenefit && (
             <div className="px-3 py-1.5 shrink-0 space-y-1.5">
-                {onApplyReferralCode && (
+                {onApplyReferralCode && referralConfig?.activo !== false && (
                     <>
                         <div
                             className={cn(
@@ -521,7 +641,7 @@ const ResumenCarrito = ({
                                     </span>
                                 </div>
                                 <span className="text-[10px] font-medium text-[#C5A880]">
-                                    20% desc.
+                                    {refDiscountPct}% desc.
                                 </span>
                             </div>
                             <div className="flex items-center gap-1 w-full min-w-0">
@@ -653,7 +773,7 @@ const ResumenCarrito = ({
                         <div className="min-w-0">
                             <p className={cn("font-bold text-xs", (appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? "text-red-400" : "text-[#C5A880]")}>
                                 {appliedBenefit.isReferralBenefit
-                                    ? (appliedBenefit.isReferralBlocked ? '⛔ Invitación Bloqueada' : `Invita a un Amigo (${REFERRAL_DISCOUNT_PERCENT}% Desc.)`)
+                                    ? (appliedBenefit.isReferralBlocked ? '⛔ Invitación Bloqueada' : `Invita a un Amigo (${refDiscountPct}% Desc.)`)
                                     : appliedBenefit.isJuntosBenefit
                                     ? `JUNTOS ES MEJOR (+${Number(juntosConfig?.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON} Coins c/u)`
                                     : appliedBenefit.isFreeCutBlocked
@@ -678,12 +798,13 @@ const ResumenCarrito = ({
                                             const refPreview = evaluateReferralPurchaseEligibility({
                                                 subtotal: Number(subtotal || 0),
                                                 realMoneyPaid: realMoneyPreview,
-                                                currentHaircutPrice,
+                                                currentHaircutPrice: refMinGross,
                                                 cart,
+                                                discountPercent: refDiscountPct,
                                             });
                                             return refPreview.isEligible
-                                                ? `✓ Consumo >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)}): Anfitrión recibirá +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`
-                                                : `⚠️ Requiere consumo en servicios >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)} MXN antes de desc.) para acreditar +${REFERRAL_HOST_REWARD_COINS} Alfa Coins`;
+                                                ? `✓ Consumo >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)}): Anfitrión recibirá +${refHostCoins} Alfa Coins`
+                                                : `⚠️ Requiere consumo en servicios >= 1 Corte ($${formatMoney(refPreview.requiredGrossService)} MXN antes de desc.) para acreditar +${refHostCoins} Alfa Coins`;
                                         })()}
                                     </p>
                                 </div>
@@ -711,7 +832,7 @@ const ResumenCarrito = ({
                                 ? "bg-red-500/20 text-red-300 border-red-500/40"
                                 : "bg-[#C5A880]/20 text-[#C5A880] border-[#C5A880]/40"
                         )}>
-                            {(appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? 'No Elegible' : appliedBenefit.isReferralBenefit ? '-20% Amigo' : appliedBenefit.isJuntosBenefit ? '+Coins' : 'Canjeado en QR'}
+                            {(appliedBenefit.isReferralBlocked || appliedBenefit.isFreeCutBlocked) ? 'No Elegible' : appliedBenefit.isReferralBenefit ? `-${refDiscountPct}% Amigo` : appliedBenefit.isJuntosBenefit ? '+Coins' : isBirthdayApplied ? birthdayTierLabel : 'Canjeado en QR'}
                         </Badge>
                         {onRemoveBenefit && (
                             <button
@@ -725,6 +846,62 @@ const ResumenCarrito = ({
                         )}
                     </div>
                 </div>
+
+                {/* Sub-panel exclusivo para Regalo de Cumpleaños por Nivel */}
+                {isBirthdayApplied && (
+                    <div className="pt-2 border-t border-[#C5A880]/20 space-y-2 font-sans">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-semibold text-foreground">
+                                Opción de Cumpleaños ({birthdayTierLabel}):
+                            </span>
+                            {activeBirthdayOption && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                                    {formatBirthdayOptionSummary(activeBirthdayOption)}
+                                </span>
+                            )}
+                        </div>
+                        {birthdayOptionsForClient.length === 0 ? (
+                            <p className="text-[10px] text-muted-foreground">
+                                No hay regalos configurados para este nivel en Regalo de Cumpleaños.
+                            </p>
+                        ) : (
+                            <div className="space-y-1">
+                                {birthdayOptionsForClient.map((opt: BirthdayGiftOption) => {
+                                    const isSel = activeBirthdayOption?.id === opt.id;
+                                    return (
+                                        <button
+                                            key={opt.id}
+                                            type="button"
+                                            onClick={() => onSelectBirthdayOption && onSelectBirthdayOption(opt.id)}
+                                            className={cn(
+                                                "w-full text-left px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors flex items-center justify-between gap-2",
+                                                isSel
+                                                    ? "bg-blue-500/15 border-blue-500/50 text-foreground"
+                                                    : "bg-black/20 border-border/50 text-muted-foreground hover:border-border"
+                                            )}
+                                        >
+                                            <span className="font-medium truncate">
+                                                {isSel ? '● ' : '○ '}{opt.titulo}
+                                            </span>
+                                            <span className="text-[10px] font-semibold text-blue-300 shrink-0">
+                                                {formatBirthdayOptionSummary(opt)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {activeBirthdayOption && (
+                            <p className="text-[10px] text-blue-300/90 leading-snug">
+                                {activeBirthdayOption.tipo === 'alfa_coins'
+                                    ? `✓ Se acreditarán +${Math.max(0, Number(activeBirthdayOption.coinsCantidad || 0))} Alfa Coins automáticamente al finalizar la venta.`
+                                    : activeBirthdayOption.tipo === 'articulo_fisico'
+                                    ? `✓ Entrega física en recepción: ${activeBirthdayOption.targetItemNombre || activeBirthdayOption.instruccionesCaja || activeBirthdayOption.titulo}.`
+                                    : '✓ Descuento aplicado en carrito. El cobro queda protegido si falta el ítem elegible.'}
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* Sub-panel exclusivo para Juntos es Mejor: Modalidad Escaneada y Requisito de Consumo Dinámico */}
                 {appliedBenefit.isJuntosBenefit && (() => {
@@ -1186,6 +1363,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
     const [coinsConfig, setCoinsConfig] = useState<AlfaCoinsConfig>(DEFAULT_COINS_CONFIG);
     const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
+    const [cumpleanosConfig, setCumpleanosConfig] = useState<CumpleanosBenefitConfig>(DEFAULT_CUMPLEANOS_CONFIG);
+    const [selectedBirthdayOptionId, setSelectedBirthdayOptionId] = useState<string>('');
+    const [vipMonthlyUsedThisMonth, setVipMonthlyUsedThisMonth] = useState<boolean>(false);
+    const [vipMonthlyCourtesyApplied, setVipMonthlyCourtesyApplied] = useState<boolean>(false);
+    const currentYearMonth = format(new Date(), 'yyyy-MM');
     const [reconciledClientStats, setReconciledClientStats] = useState<{
         clientId: string;
         visits: number;
@@ -1197,7 +1379,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         [multiplicadorCoinsConfig]
     );
 
-    // Suscripción en tiempo real a la configuración completa del Pase Alfa (Niveles, Multiplicador, Juntos, Décima, Coins, Referidos)
+    // Suscripción en tiempo real a la configuración completa del Pase Alfa (Niveles, Multiplicador, Juntos, Décima, Coins, Referidos, Cumpleaños)
     useEffect(() => {
         if (!db) return;
         const unsubPase = onSnapshot(
@@ -1222,6 +1404,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                     if (data.referral_config) {
                         setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...data.referral_config });
+                    }
+                    if (data.cumpleanos_config) {
+                        setCumpleanosConfig({ ...DEFAULT_CUMPLEANOS_CONFIG, ...data.cumpleanos_config });
                     }
                     const sReq = Number(data.sellosRequeridos || 10);
                     setTargetStampsConfig(sReq === 10 ? 9 : sReq);
@@ -1257,6 +1442,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const refCfg = data.referral_config || data.pase_alfa?.referral_config;
                     if (refCfg) {
                         setReferralConfig((prev) => ({ ...DEFAULT_REFERRAL_CONFIG, ...refCfg, ...prev }));
+                    }
+                    const cumCfg = data.cumpleanos_config || data.pase_alfa?.cumpleanos_config;
+                    if (cumCfg) {
+                        setCumpleanosConfig((prev) => ({ ...DEFAULT_CUMPLEANOS_CONFIG, ...cumCfg, ...prev }));
                     }
                 }
             },
@@ -1470,6 +1659,73 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const total = useMemo(() => Math.max(0, subtotal - totalDiscount - anticipoPagado - pointsDiscount), [subtotal, totalDiscount, anticipoPagado, pointsDiscount]);
 
+    useEffect(() => {
+        if (redeemPoints && maxUsableAlfaCoins <= 0) {
+            setRedeemPoints(false);
+            setAlfaCoinsToUse(null);
+        }
+    }, [redeemPoints, maxUsableAlfaCoins]);
+
+    // Verificar en tiempo real si el cliente Alfa Black VIP ya usó su cortesía mensual de Barba Express este mes
+    useEffect(() => {
+        if (!isOpen || !db || !selectedClient?.id) {
+            setVipMonthlyUsedThisMonth(false);
+            setVipMonthlyCourtesyApplied(false);
+            return;
+        }
+        const storedMonth = String((selectedClient as any)?.ultimo_canje_cortesia_vip_mes || '');
+        if (storedMonth === currentYearMonth) {
+            setVipMonthlyUsedThisMonth(true);
+            setVipMonthlyCourtesyApplied(false);
+            return;
+        }
+        let cancelled = false;
+        const vipFolio = `VA-VIP-MES-${currentYearMonth}-${selectedClient.id}`;
+        getDoc(doc(db, 'canjes_beneficios', vipFolio))
+            .then((snap) => {
+                if (cancelled) return;
+                const used = snap.exists() && String(snap.data()?.estado || '') !== 'cancelado';
+                setVipMonthlyUsedThisMonth(used);
+                if (used) {
+                    setVipMonthlyCourtesyApplied(false);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setVipMonthlyUsedThisMonth(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, db, selectedClient?.id, (selectedClient as any)?.ultimo_canje_cortesia_vip_mes, currentYearMonth]);
+
+    // Sincronizar opción seleccionada para Regalo de Cumpleaños según nivel del cliente
+    useEffect(() => {
+        const isBirthday = Boolean(
+            appliedBenefit && (
+                appliedBenefit.isBirthdayBenefit ||
+                String(appliedBenefit.benefitId || '').toLowerCase().includes('cumple') ||
+                String(appliedBenefit.benefitTitle || '').toLowerCase().includes('cumple')
+            )
+        );
+        if (!isBirthday) {
+            if (selectedBirthdayOptionId) setSelectedBirthdayOptionId('');
+            return;
+        }
+        const tierId = (clientLevelInfo?.tierId || 'member') as 'member' | 'gold' | 'vip';
+        const options = resolveClientBirthdayGifts(tierId, cumpleanosConfig);
+        if (options.length === 0) {
+            if (selectedBirthdayOptionId) setSelectedBirthdayOptionId('');
+            return;
+        }
+        const preferred =
+            options.find((o) => o.id === selectedBirthdayOptionId) ||
+            options.find((o) => o.id === appliedBenefit?.birthdayOptionId) ||
+            options[0];
+        if (preferred && preferred.id !== selectedBirthdayOptionId) {
+            setSelectedBirthdayOptionId(preferred.id);
+        }
+    }, [appliedBenefit, clientLevelInfo?.tierId, cumpleanosConfig, selectedBirthdayOptionId]);
+
     const form = useForm<SaleFormData>({
         resolver: zodResolver(saleSchema(total)),
         defaultValues: {
@@ -1541,7 +1797,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             const applyReferralDiscount =
                 tipo === 'servicio' &&
                 Boolean(appliedBenefit?.isReferralBenefit) &&
-                !Boolean(appliedBenefit?.isReferralBlocked);
+                !Boolean(appliedBenefit?.isReferralBlocked) &&
+                referralConfig.activo !== false;
             const applyTierProductDiscount =
                 tipo === 'producto' &&
                 Boolean(clientLevelInfo.activo) &&
@@ -1561,6 +1818,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 } : applyTierProductDiscount ? {
                     discountValue: String(clientLevelInfo.productDiscountPct),
                     discountType: 'percentage' as const,
+                    tierDiscountApplied: true,
                 } : {})
             }];
         });
@@ -1573,25 +1831,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setCart(prev => {
             let changed = false;
             const next = prev.map(it => {
-                if (it.tipo !== 'producto') return it;
-                if (tierProdPct > 0 && (!it.discountValue || Number(it.discountValue) === 0)) {
+                if (it.tipo !== 'producto' || it.birthdayDiscountApplied) return it;
+                if (tierProdPct > 0 && (!it.discountValue || Number(it.discountValue) === 0 || (it.tierDiscountApplied && Number(it.discountValue) !== tierProdPct))) {
                     changed = true;
                     return {
                         ...it,
                         discountValue: String(tierProdPct),
                         discountType: 'percentage' as const,
+                        tierDiscountApplied: true,
                     };
                 }
                 if (
                     tierProdPct <= 0 &&
-                    it.discountType === 'percentage' &&
-                    (Number(it.discountValue) === 10 || Number(it.discountValue) === 15)
+                    (it.tierDiscountApplied ||
+                        (it.discountType === 'percentage' && (Number(it.discountValue) === 10 || Number(it.discountValue) === 15)))
                 ) {
                     changed = true;
                     return {
                         ...it,
                         discountValue: '0',
                         discountType: 'fixed' as const,
+                        tierDiscountApplied: false,
                     };
                 }
                 return it;
@@ -1660,9 +1920,6 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, []);
 
     // Aplicar automáticamente el descuento del 10.° Corte Gratis ("La Décima Va por la Casa")
-    // Regla Oficial: Aplica de forma estricta y exclusiva sobre el servicio individual independiente de "Corte de cabello".
-    // 1. Si en la cita se agregaron más servicios (barba, facial) o productos, el QR cubre únicamente el corte de cabello ($140 MXN).
-    // 2. Si el cliente agendó un Paquete combinado (ej. "El Caballero alfa"), el QR NO es válido porque no admite descomposición de paquetes.
     useEffect(() => {
         const isFreeCut =
             appliedBenefit?.benefitId === 'decimo_corte' ||
@@ -1670,7 +1927,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             String(appliedBenefit?.folio || '').startsWith('VA-CORTE');
         if (!isFreeCut) return;
 
+        const decimaMaxCoverage =
+            decimaConfig.cobertura_tipo === 'monto_fijo' && Number(decimaConfig.cobertura_monto || 0) > 0
+                ? Number(decimaConfig.cobertura_monto)
+                : Number(currentHaircutPrice || 140);
+        const allowPackages = decimaConfig.solo_corte_individual === false;
+
         const hasIndividualHaircut = cart.some(isIndividualHaircutItem);
+        const hasAnyService = cart.some(it => it.tipo === 'servicio');
         const hasPackage = cart.some(item => {
             const it = item as any;
             if (it.tipo !== 'servicio') return false;
@@ -1693,13 +1957,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             );
         });
 
-        if (!hasIndividualHaircut) {
-            if (hasPackage && !appliedBenefit.isFreeCutBlocked) {
+        const hasEligibleItem = hasIndividualHaircut || (allowPackages && hasAnyService);
+
+        if (!hasEligibleItem) {
+            if (hasPackage && !allowPackages && !appliedBenefit.isFreeCutBlocked) {
                 setAppliedBenefit((prev: any) =>
                     prev ? {
                         ...prev,
                         isFreeCutBlocked: true,
-                        freeCutBlockReason: '⚠️ No aplicable a Paquetes. El 10.° Corte Gratis aplica exclusivamente para el servicio individual independiente de Corte de cabello ($140.00 MXN).'
+                        freeCutBlockReason: `⚠️ No aplicable a Paquetes. El 10.° Corte Gratis aplica exclusivamente para el servicio individual independiente de Corte de cabello ($${formatMoney(decimaMaxCoverage)} MXN).`
                     } : prev
                 );
                 toast({
@@ -1711,7 +1977,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             return;
         }
 
-        // Si hay corte individual, desbloquear si estaba bloqueado
+        // Si hay ítem elegible, desbloquear si estaba bloqueado
         if (appliedBenefit.isFreeCutBlocked) {
             setAppliedBenefit((prev: any) =>
                 prev ? {
@@ -1722,26 +1988,31 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             );
         }
 
+        const isTargetFreeCutItem = (it: CartItem) =>
+            isIndividualHaircutItem(it) || (allowPackages && it.tipo === 'servicio');
+
         setCart(prev => {
             const alreadyApplied = prev.some(
-                it => isIndividualHaircutItem(it) && Number(it.discountValue) > 0
+                it => isTargetFreeCutItem(it) && Number(it.discountValue) > 0
             );
             if (alreadyApplied) return prev;
 
-            const haircutIdx = prev.findIndex(isIndividualHaircutItem);
-            if (haircutIdx === -1) return prev;
+            let targetIdx = prev.findIndex(isIndividualHaircutItem);
+            if (targetIdx === -1 && allowPackages) {
+                targetIdx = prev.findIndex(it => it.tipo === 'servicio' && (it.nombre || '').toLowerCase().includes('corte'));
+                if (targetIdx === -1) {
+                    targetIdx = prev.findIndex(it => it.tipo === 'servicio');
+                }
+            }
+            if (targetIdx === -1) return prev;
 
-            const targetItem = prev[haircutIdx];
+            const targetItem = prev[targetIdx];
             const itemPrice = Number(targetItem.precio) || 0;
-            const decimaMaxCoverage =
-                decimaConfig.cobertura_tipo === 'monto_fijo' && Number(decimaConfig.cobertura_monto || 0) > 0
-                    ? Number(decimaConfig.cobertura_monto)
-                    : Number(currentHaircutPrice || 140);
             const freeCutDiscountAmt = Math.min(itemPrice, decimaMaxCoverage);
             if (freeCutDiscountAmt <= 0) return prev;
 
             return prev.map((it, idx) =>
-                idx === haircutIdx
+                idx === targetIdx
                     ? {
                           ...it,
                           discountValue: String(freeCutDiscountAmt),
@@ -1750,22 +2021,230 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     : it
             );
         });
-    }, [appliedBenefit?.benefitId, appliedBenefit?.folio, appliedBenefit?.isFreeCutBlocked, cart, currentHaircutPrice, isIndividualHaircutItem, toast]);
+    }, [appliedBenefit?.benefitId, appliedBenefit?.folio, appliedBenefit?.isFreeCutBlocked, cart, currentHaircutPrice, decimaConfig, isIndividualHaircutItem, toast]);
+
+    const appliedBirthdaySyncRef = useRef<string>('');
+
+    // Aplicar automáticamente el Regalo de Cumpleaños seleccionado según el nivel real del cliente
+    useEffect(() => {
+        const isBirthday = Boolean(
+            appliedBenefit && (
+                appliedBenefit.isBirthdayBenefit ||
+                String(appliedBenefit.benefitId || '').toLowerCase().includes('cumple') ||
+                String(appliedBenefit.benefitTitle || '').toLowerCase().includes('cumple')
+            )
+        );
+        if (!isBirthday) {
+            if (appliedBirthdaySyncRef.current) {
+                appliedBirthdaySyncRef.current = '';
+            }
+            return;
+        }
+
+        const tierId = (clientLevelInfo?.tierId || 'member') as 'member' | 'gold' | 'vip';
+        const options = resolveClientBirthdayGifts(tierId, cumpleanosConfig);
+        const activeOpt =
+            options.find((o) => o.id === (selectedBirthdayOptionId || appliedBenefit?.birthdayOptionId)) ||
+            options[0] ||
+            null;
+        const syncKey = `${appliedBenefit?.folio || 'bday'}::${tierId}::${activeOpt?.id || 'none'}`;
+        const isNewSync = appliedBirthdaySyncRef.current !== syncKey;
+        if (isNewSync) {
+            appliedBirthdaySyncRef.current = syncKey;
+        }
+
+        if (!isNewSync && (!activeOpt || activeOpt.tipo === 'alfa_coins' || activeOpt.tipo === 'articulo_fisico')) {
+            return;
+        }
+
+        setCart(prev => {
+            let changed = false;
+            let next = [...prev];
+
+            if (isNewSync) {
+                const cleaned = next
+                    .filter(it => !it.addedByBirthdayBenefit)
+                    .map(it =>
+                        it.birthdayDiscountApplied
+                            ? { ...it, birthdayDiscountApplied: false, discountValue: '0', discountType: 'fixed' as const }
+                            : it
+                    );
+                if (cleaned.length !== next.length || cleaned.some((it, i) => it !== next[i])) {
+                    changed = true;
+                }
+                next = cleaned;
+            }
+
+            if (activeOpt?.tipo === 'servicio_gratis' && (activeOpt.targetItemId || activeOpt.targetItemNombre)) {
+                const alreadyDiscounted = next.some(it => it.birthdayDiscountApplied);
+                if (!alreadyDiscounted) {
+                    const maxCap = Number(activeOpt.topeMonto || 0);
+                    const targetIdx = next.findIndex(
+                        it =>
+                            it.tipo === 'servicio' &&
+                            ((activeOpt.targetItemId && it.id === activeOpt.targetItemId) ||
+                                (activeOpt.targetItemNombre &&
+                                    it.nombre.toLowerCase().trim() === activeOpt.targetItemNombre.toLowerCase().trim()))
+                    );
+                    if (targetIdx !== -1) {
+                        const rawPrice = Number(next[targetIdx].precio) || 0;
+                        const discAmt = maxCap > 0 ? Math.min(rawPrice, maxCap) : rawPrice;
+                        next[targetIdx] = {
+                            ...next[targetIdx],
+                            birthdayDiscountApplied: true,
+                            discountValue: String(discAmt),
+                            discountType: 'fixed',
+                        };
+                        changed = true;
+                    } else if (isNewSync) {
+                        const svc = services?.find(
+                            (s) =>
+                                (activeOpt.targetItemId && s.id === activeOpt.targetItemId) ||
+                                (activeOpt.targetItemNombre &&
+                                    s.name.toLowerCase().trim() === activeOpt.targetItemNombre.toLowerCase().trim())
+                        );
+                        if (svc) {
+                            const rawPrice = Number(svc.price) || 0;
+                            const discAmt = maxCap > 0 ? Math.min(rawPrice, maxCap) : rawPrice;
+                            next.push({
+                                uniqueId: crypto.randomUUID(),
+                                id: svc.id,
+                                nombre: svc.name,
+                                precio: rawPrice,
+                                cantidad: 1,
+                                tipo: 'servicio',
+                                duracion: svc.duration,
+                                addedByBirthdayBenefit: true,
+                                birthdayDiscountApplied: true,
+                                discountValue: String(discAmt),
+                                discountType: 'fixed',
+                            });
+                            changed = true;
+                        }
+                    }
+                }
+            } else if (activeOpt?.tipo === 'producto_gratis' && (activeOpt.targetItemId || activeOpt.targetItemNombre)) {
+                const alreadyDiscounted = next.some(it => it.birthdayDiscountApplied);
+                if (!alreadyDiscounted) {
+                    const maxCap = Number(activeOpt.topeMonto || 0);
+                    const targetIdx = next.findIndex(
+                        it =>
+                            it.tipo === 'producto' &&
+                            ((activeOpt.targetItemId && it.id === activeOpt.targetItemId) ||
+                                (activeOpt.targetItemNombre &&
+                                    it.nombre.toLowerCase().trim() === activeOpt.targetItemNombre.toLowerCase().trim()))
+                    );
+                    if (targetIdx !== -1) {
+                        const rawPrice = Number(next[targetIdx].precio) || 0;
+                        const discAmt = maxCap > 0 ? Math.min(rawPrice, maxCap) : rawPrice;
+                        next[targetIdx] = {
+                            ...next[targetIdx],
+                            birthdayDiscountApplied: true,
+                            discountValue: String(discAmt),
+                            discountType: 'fixed',
+                        };
+                        changed = true;
+                    } else if (isNewSync) {
+                        const prod = products?.find(
+                            (p) =>
+                                (activeOpt.targetItemId && p.id === activeOpt.targetItemId) ||
+                                (activeOpt.targetItemNombre &&
+                                    p.nombre.toLowerCase().trim() === activeOpt.targetItemNombre.toLowerCase().trim())
+                        );
+                        if (prod) {
+                            const rawPrice = Number(prod.public_price) || 0;
+                            const discAmt = maxCap > 0 ? Math.min(rawPrice, maxCap) : rawPrice;
+                            next.push({
+                                uniqueId: crypto.randomUUID(),
+                                id: prod.id,
+                                nombre: prod.nombre,
+                                precio: rawPrice,
+                                cantidad: 1,
+                                tipo: 'producto',
+                                presentation_id: prod.presentation_id,
+                                addedByBirthdayBenefit: true,
+                                birthdayDiscountApplied: true,
+                                discountValue: String(discAmt),
+                                discountType: 'fixed',
+                            });
+                            changed = true;
+                        }
+                    }
+                }
+            } else if (activeOpt?.tipo === 'descuento_servicio' && Number(activeOpt.descuentoValor || 0) > 0) {
+                const discVal = Number(activeOpt.descuentoValor || 0);
+                if (activeOpt.descuentoTipo === 'fixed') {
+                    const alreadyHas = next.some(it => it.birthdayDiscountApplied);
+                    if (!alreadyHas) {
+                        const svcIdx = next.findIndex(it => it.tipo === 'servicio' && !it.vipMonthlyCourtesyItem);
+                        if (svcIdx !== -1) {
+                            const maxDisc = Math.min(Number(next[svcIdx].precio) || 0, discVal);
+                            next[svcIdx] = {
+                                ...next[svcIdx],
+                                birthdayDiscountApplied: true,
+                                discountValue: String(maxDisc),
+                                discountType: 'fixed',
+                            };
+                            changed = true;
+                        }
+                    }
+                } else {
+                    const pct = Math.min(100, Math.max(1, discVal));
+                    next = next.map(it => {
+                        if (it.tipo === 'servicio' && !it.vipMonthlyCourtesyItem && !it.birthdayDiscountApplied && (!it.discountValue || Number(it.discountValue) === 0)) {
+                            changed = true;
+                            return {
+                                ...it,
+                                birthdayDiscountApplied: true,
+                                discountValue: String(pct),
+                                discountType: 'percentage' as const,
+                            };
+                        }
+                        return it;
+                    });
+                }
+            }
+
+            return changed ? next : prev;
+        });
+    }, [appliedBenefit, clientLevelInfo?.tierId, cumpleanosConfig, selectedBirthdayOptionId, cart.length, services, products]);
 
     // Validación Zero-Trust cuando se selecciona al cliente en Caja con un código de referido activo
     useEffect(() => {
         if (!appliedBenefit?.isReferralBenefit || !selectedClient || !db) return;
 
+        if (referralConfig.activo === false) {
+            const msg = '⛔ El programa "Invita a un Amigo" está temporalmente pausado en Configuración.';
+            if (!appliedBenefit.isReferralBlocked || appliedBenefit.referralBlockReason !== msg) {
+                setAppliedBenefit((prev: any) => prev ? { ...prev, isReferralBlocked: true, referralBlockReason: msg } : null);
+            }
+            return;
+        }
+
         let cancelled = false;
         const verifyClientEligibility = async () => {
             let previousSalesCount = 0;
             let alreadyRedeemedReferral = false;
+            let hostMonthRedemptions = 0;
+            const monthlyLimit = Math.max(0, Number(referralConfig.limite_mensual_invitaciones || 0));
+            const curMonthPrefix = format(new Date(), 'yyyy-MM');
+
             try {
-                const [snapSales, snapCanjes] = await Promise.all([
+                const queries: Promise<any>[] = [
                     getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', selectedClient.id))),
                     getDocs(query(collection(db, 'canjes_beneficios'), where('clienteId', '==', selectedClient.id))),
-                ]);
-                previousSalesCount = snapSales.docs.filter(d => {
+                ];
+                if (monthlyLimit > 0 && appliedBenefit.referrerId) {
+                    queries.push(
+                        getDocs(query(collection(db, 'canjes_beneficios'), where('referrerId', '==', appliedBenefit.referrerId)))
+                    );
+                }
+                const results = await Promise.all(queries);
+                const snapSales = results[0];
+                const snapCanjes = results[1];
+                const snapHostCanjes = results[2];
+
+                previousSalesCount = snapSales.docs.filter((d: any) => {
                     const sd = d.data();
                     const st = (sd.pago_estado || '').toLowerCase();
                     // Excluir anticipos de la primera cita (para que un cliente nuevo que pagó anticipo online no sea rechazado)
@@ -1774,20 +2253,34 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                     return sd.estado !== 'cancelada' && st !== 'cancelado' && st !== 'pendiente';
                 }).length;
-                alreadyRedeemedReferral = snapCanjes.docs.some(d => {
+                alreadyRedeemedReferral = snapCanjes.docs.some((d: any) => {
                     const cd = d.data();
                     return cd.benefitId === 'invita_amigo' && cd.estado === 'canjeado';
                 });
+                if (snapHostCanjes) {
+                    hostMonthRedemptions = snapHostCanjes.docs.filter((d: any) => {
+                        const cd = d.data();
+                        if (cd.benefitId !== 'invita_amigo' || cd.estado !== 'canjeado') return false;
+                        const dt = cd.fecha?.toDate ? cd.fecha.toDate() : cd.creado_en?.toDate ? cd.creado_en.toDate() : null;
+                        return dt ? format(dt, 'yyyy-MM') === curMonthPrefix : false;
+                    }).length;
+                }
             } catch (e) {
                 console.warn('Error verificando historial de ventas para referido:', e);
             }
 
             if (cancelled) return;
 
+            const enforceNewClient = referralConfig.solo_clientes_nuevos !== false;
             const eligibility = alreadyRedeemedReferral
                 ? {
                       isEligible: false,
                       rejectionReason: `⛔ BENEFICIO YA UTILIZADO: "${selectedClient.nombre || ''}" ya canjeó un código de invitación previamente.`,
+                  }
+                : monthlyLimit > 0 && hostMonthRedemptions >= monthlyLimit
+                ? {
+                      isEligible: false,
+                      rejectionReason: `⛔ LÍMITE MENSUAL ALCANZADO: El anfitrión ya alcanzó su límite de ${monthlyLimit} invitaciones canjeadas este mes.`,
                   }
                 : validateInvitedClientEligibility(
                       selectedClient,
@@ -1796,7 +2289,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                           nombre: appliedBenefit.referrerName,
                           telefono: appliedBenefit.referrerPhone,
                       },
-                      previousSalesCount
+                      enforceNewClient ? previousSalesCount : 0
                   );
 
             if (!eligibility.isEligible) {
@@ -1833,10 +2326,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         return () => {
             cancelled = true;
         };
-    }, [selectedClient, appliedBenefit?.isReferralBenefit, appliedBenefit?.referrerId, db, toast]);
+    }, [selectedClient, appliedBenefit?.isReferralBenefit, appliedBenefit?.referrerId, referralConfig, db, toast]);
 
     const handleApplyManualReferralCode = useCallback(
         async (rawCode: string): Promise<{ ok: boolean; error?: string }> => {
+            if (referralConfig.activo === false) {
+                const msg = '⛔ El programa "Invita a un Amigo" está temporalmente pausado en Configuración.';
+                toast({ variant: 'destructive', title: 'Programa Pausado', description: msg });
+                return { ok: false, error: msg };
+            }
+
             // 1. Validar nomenclatura y bloquear códigos genéricos o de invitado
             const formatCheck = parseAndValidateReferralCode(rawCode);
             if (!formatCheck.isValidFormat) {
@@ -1874,7 +2373,28 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 return { ok: false, error: msg };
             }
 
-            // 3. Corroborar que el cliente en caja cumpla las reglas (cliente nuevo, sin compras previas ni auto-invitación)
+            const monthlyLimit = Math.max(0, Number(referralConfig.limite_mensual_invitaciones || 0));
+            if (monthlyLimit > 0 && db) {
+                try {
+                    const hostSnap = await getDocs(query(collection(db, 'canjes_beneficios'), where('referrerId', '==', hostClient.id)));
+                    const curMonthPrefix = format(new Date(), 'yyyy-MM');
+                    const hostCount = hostSnap.docs.filter((d) => {
+                        const cd = d.data();
+                        if (cd.benefitId !== 'invita_amigo' || cd.estado !== 'canjeado') return false;
+                        const dt = cd.fecha?.toDate ? cd.fecha.toDate() : cd.creado_en?.toDate ? cd.creado_en.toDate() : null;
+                        return dt ? format(dt, 'yyyy-MM') === curMonthPrefix : false;
+                    }).length;
+                    if (hostCount >= monthlyLimit) {
+                        const msg = `⛔ LÍMITE MENSUAL ALCANZADO: ${hostClient.nombre} ya alcanzó el máximo de ${monthlyLimit} invitados en este mes.`;
+                        toast({ variant: 'destructive', title: '⛔ Límite Alcanzado', description: msg });
+                        return { ok: false, error: msg };
+                    }
+                } catch (e) {
+                    console.warn('Error verificando límite mensual de anfitrión:', e);
+                }
+            }
+
+            // 3. Corroborar que el cliente en caja cumpla las reglas (cliente nuevo excluyendo anticipos, sin compras previas ni auto-invitación)
             if (selectedClient) {
                 let previousSalesCount = 0;
                 let alreadyRedeemedReferral = false;
@@ -1888,6 +2408,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         previousSalesCount = snapSales.docs.filter(d => {
                             const sd = d.data();
                             const st = (sd.pago_estado || '').toLowerCase();
+                            if (sd.tipo_venta === 'anticipo' || d.id.startsWith('deposit_') || sd.absorbed_in_sale_id) {
+                                return false;
+                            }
                             return sd.estado !== 'cancelada' && st !== 'cancelado' && st !== 'pendiente';
                         }).length;
                         alreadyRedeemedReferral = snapCanjes.docs.some(d => {
@@ -1909,7 +2432,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     return { ok: false, error: msg };
                 }
 
-                const eligibility = validateInvitedClientEligibility(selectedClient, hostClient, previousSalesCount);
+                const enforceNewClient = referralConfig.solo_clientes_nuevos !== false;
+                const eligibility = validateInvitedClientEligibility(
+                    selectedClient,
+                    hostClient,
+                    enforceNewClient ? previousSalesCount : 0
+                );
                 if (!eligibility.isEligible) {
                     toast({
                         variant: 'destructive',
@@ -1919,6 +2447,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     return { ok: false, error: eligibility.rejectionReason };
                 }
             }
+
+            const refDiscountPct = Math.max(1, Math.min(100, Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT)));
+            const refHostCoins = Math.max(0, Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS));
+            const refMinBase = referralConfig.consumo_minimo_tipo === 'monto_fijo'
+                ? Math.max(1, Number(referralConfig.consumo_minimo_monto) || currentHaircutPrice || 140)
+                : (currentHaircutPrice || 140);
 
             const hostFullName = `${hostClient.nombre} ${hostClient.apellido || ''}`.trim();
             const folio = `VA-REF-${parsed.suffix}-${Date.now().toString().slice(-4)}`;
@@ -1932,19 +2466,19 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 referrerId: hostClient.id,
                 referrerName: hostFullName,
                 referrerPhone: hostClient.telefono || '',
-                discount: REFERRAL_DISCOUNT_PERCENT,
-                rewardCoins: REFERRAL_HOST_REWARD_COINS,
-                minPurchase: calculateReferralMinNetPurchase(currentHaircutPrice),
+                discount: refDiscountPct,
+                rewardCoins: refHostCoins,
+                minPurchase: Math.round(refMinBase * (1 - refDiscountPct / 100) * 100) / 100,
                 isReferralBlocked: false,
             });
 
             toast({
                 title: '🎉 ¡Código de Invitación Validado!',
-                description: `Anfitrión: ${hostFullName}. Se aplicó ${REFERRAL_DISCOUNT_PERCENT}% de descuento en los servicios del cliente nuevo.`,
+                description: `Anfitrión: ${hostFullName}. Se aplicó ${refDiscountPct}% de descuento en los servicios del cliente invitado.`,
             });
             return { ok: true };
         },
-        [clients, selectedClient, currentHaircutPrice, toast, db]
+        [clients, selectedClient, currentHaircutPrice, referralConfig, toast, db]
     );
 
     // Auto-detectar si el cliente seleccionado tiene un registro grupal pre-verificado de "Juntos es Mejor" (Tickets Separados) hoy
@@ -1987,34 +2521,151 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     }, [isOpen, db, selectedClient?.id, appliedBenefit, toast, juntosConfig?.coins_por_persona]);
 
     const handleRemoveAppliedBenefit = useCallback(() => {
-        if (appliedBenefit?.isReferralBenefit) {
-            setCart(prev =>
-                prev.map(it =>
+        const refPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
+        const maxDecimaCov = Math.max(Number(currentHaircutPrice || 140), Number(decimaConfig.cobertura_monto || 140));
+
+        setCart(prev => {
+            const withoutAdded = prev.filter(it => !it.addedByBirthdayBenefit);
+            return withoutAdded.map(it => {
+                if (it.birthdayDiscountApplied) {
+                    return { ...it, birthdayDiscountApplied: false, discountValue: '0', discountType: 'fixed' as const };
+                }
+                if (it.promoDiscountApplied) {
+                    return { ...it, promoDiscountApplied: false, discountValue: '0', discountType: 'fixed' as const };
+                }
+                if (
+                    appliedBenefit?.isReferralBenefit &&
                     it.tipo === 'servicio' &&
                     it.discountType === 'percentage' &&
-                    Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT
-                        ? { ...it, discountValue: '0', discountType: 'fixed' }
-                        : it
-                )
-            );
-        } else if (
-            appliedBenefit?.benefitId === 'decimo_corte' ||
-            appliedBenefit?.benefitId === 'corte_gratis' ||
-            String(appliedBenefit?.folio || '').startsWith('VA-CORTE')
-        ) {
-            setCart(prev =>
-                prev.map(it =>
+                    (Number(it.discountValue) === refPct || Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT)
+                ) {
+                    return { ...it, discountValue: '0', discountType: 'fixed' as const };
+                }
+                if (
+                    (appliedBenefit?.benefitId === 'decimo_corte' ||
+                        appliedBenefit?.benefitId === 'corte_gratis' ||
+                        String(appliedBenefit?.folio || '').startsWith('VA-CORTE')) &&
                     it.tipo === 'servicio' &&
                     it.discountType === 'fixed' &&
-                    Number(it.discountValue) <= Number(currentHaircutPrice || 140)
-                        ? { ...it, discountValue: '0', discountType: 'fixed' }
+                    Number(it.discountValue) <= maxDecimaCov
+                ) {
+                    return { ...it, discountValue: '0', discountType: 'fixed' as const };
+                }
+                return it;
+            });
+        });
+        appliedBirthdaySyncRef.current = '';
+        setSelectedBirthdayOptionId('');
+        setAppliedBenefit(null);
+        setJuntosMinorsCount(0);
+    }, [appliedBenefit, currentHaircutPrice, decimaConfig.cobertura_monto, referralConfig.descuento_amigo_pct]);
+
+    const handleToggleVipMonthlyCourtesy = useCallback(() => {
+        if (clientLevelInfo?.tierId !== 'vip') return;
+        if (vipMonthlyUsedThisMonth) {
+            toast({
+                variant: 'destructive',
+                title: 'Cortesía VIP Ya Utilizada',
+                description: `Este cliente Alfa Black VIP ya canjeó su Barba Express gratis correspondiente a ${MONTH_NAMES_ES[new Date().getMonth()]}.`,
+            });
+            return;
+        }
+        if (vipMonthlyCourtesyApplied) {
+            setCart(prev =>
+                prev
+                    .filter(it => !it.addedByVipMonthly)
+                    .map(it =>
+                        it.vipMonthlyCourtesyItem
+                            ? { ...it, vipMonthlyCourtesyItem: false, discountValue: '0', discountType: 'fixed' as const }
+                            : it
+                    )
+            );
+            setVipMonthlyCourtesyApplied(false);
+            return;
+        }
+
+        const isBeardService = (nameRaw: string, catRaw: string, isPkgFlag?: boolean) => {
+            const name = (nameRaw || '').toLowerCase();
+            const cat = (catRaw || '').toLowerCase();
+            if (
+                isPkgFlag ||
+                cat.includes('paquete') ||
+                cat.includes('combo') ||
+                /^[1-5]\s+/i.test(name) ||
+                name.includes('paquete') ||
+                name.includes('combo')
+            ) {
+                return false;
+            }
+            return name.includes('barba express') || name.includes('delineado de barba') || name.includes('barba');
+        };
+
+        let existingIdx = cart.findIndex(
+            it => it.tipo === 'servicio' && !it.birthdayDiscountApplied && (it.nombre || '').toLowerCase().includes('barba express')
+        );
+        if (existingIdx === -1) {
+            existingIdx = cart.findIndex(
+                it => it.tipo === 'servicio' && !it.birthdayDiscountApplied && isBeardService(it.nombre, '', false)
+            );
+        }
+
+        if (existingIdx !== -1) {
+            const targetUniqueId = cart[existingIdx].uniqueId;
+            setCart(prev =>
+                prev.map(it =>
+                    it.uniqueId === targetUniqueId
+                        ? { ...it, vipMonthlyCourtesyItem: true, discountValue: String(Math.max(0, Number(it.precio) || 0)), discountType: 'fixed' as const }
                         : it
                 )
             );
+            setVipMonthlyCourtesyApplied(true);
+            toast({
+                title: '👑 Cortesía Alfa Black VIP Aplicada',
+                description: '1 Barba Express gratis (100% descuento) aplicada sobre el servicio en ticket.',
+            });
+            return;
         }
-        setAppliedBenefit(null);
-        setJuntosMinorsCount(0);
-    }, [appliedBenefit, currentHaircutPrice]);
+
+        const expressCatalog = services?.find((s: any) =>
+            isBeardService(s.name, s.category, s.esPaquete || s.es_paquete) &&
+            (s.name || '').toLowerCase().includes('barba express')
+        );
+        const anyBeardCatalog =
+            expressCatalog ||
+            services?.find((s: any) => isBeardService(s.name, s.category, s.esPaquete || s.es_paquete));
+
+        if (!anyBeardCatalog) {
+            toast({
+                variant: 'destructive',
+                title: 'Servicio Barba Express no encontrado',
+                description: 'Agrega o configura un servicio individual de Barba Express en el catálogo para aplicar la cortesía.',
+            });
+            return;
+        }
+
+        const svcPrice = Math.max(0, Number(anyBeardCatalog.price) || 0);
+        setCart(prev => [
+            ...prev,
+            {
+                uniqueId: crypto.randomUUID(),
+                id: anyBeardCatalog.id,
+                nombre: anyBeardCatalog.name,
+                precio: svcPrice,
+                cantidad: 1,
+                tipo: 'servicio',
+                duracion: anyBeardCatalog.duration,
+                addedByVipMonthly: true,
+                vipMonthlyCourtesyItem: true,
+                discountValue: String(svcPrice),
+                discountType: 'fixed',
+            },
+        ]);
+        setVipMonthlyCourtesyApplied(true);
+        toast({
+            title: '👑 Cortesía Alfa Black VIP Aplicada',
+            description: '1 Barba Express gratis agregada al ticket del mes.',
+        });
+    }, [cart, clientLevelInfo?.tierId, vipMonthlyUsedThisMonth, vipMonthlyCourtesyApplied, services, toast]);
 
     const removeFromCart = (uniqueId: string) => {
         setCart(prev => prev.filter(item => item.uniqueId !== uniqueId));
@@ -2282,6 +2933,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setIsGeneratingTransferLink(false);
             setTransferLinkCopied(false);
             setBankDetailsCopied(false);
+            setVipMonthlyCourtesyApplied(false);
 
             // Reset form fields that should not persist across sales
             form.setValue('metodo_pago', 'efectivo');
@@ -2293,7 +2945,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 form.setValue('notas', (initialData as any)?.notas || '');
             }
 
-            setAppliedBenefit((initialData as any)?.benefitRedeemed || null);
+            const incomingPromo = (initialData as any)?.promoRedeemed;
+            const incomingPromoPct = Number(
+                incomingPromo?.descuento_porcentaje || incomingPromo?.descuento || incomingPromo?.discountPct || 0
+            );
+            if ((initialData as any)?.benefitRedeemed) {
+                setAppliedBenefit((initialData as any).benefitRedeemed);
+            } else if (incomingPromo) {
+                setAppliedBenefit({
+                    folio: incomingPromo?.codigo || (initialData as any)?.promoCode || 'PROMO-QR',
+                    benefitTitle: incomingPromo?.titulo || incomingPromo?.title || incomingPromo?.nombre || 'Cupón Promocional',
+                    benefitId: incomingPromo?.id || 'promo_cupon',
+                    isPromoCoupon: true,
+                    discount: incomingPromoPct,
+                });
+            } else {
+                setAppliedBenefit(null);
+            }
 
             if (initialData?.client?.id) {
                 setSelectedClientId(initialData.client.id);
@@ -2313,6 +2981,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const nombre = tipo === 'servicio' ? (item as ServiceType).name : (item as Product).nombre;
                 const presentation_id = tipo === 'producto' ? (item as Product).presentation_id : undefined;
                 const rawDiscVal = (item as any).discountValue ?? (item as any).descuento_porcentaje;
+                const shouldApplyPromo =
+                    !(initialData as any)?.benefitRedeemed &&
+                    incomingPromo &&
+                    incomingPromoPct > 0 &&
+                    tipo === 'servicio' &&
+                    (!rawDiscVal || Number(rawDiscVal) <= 0);
                 return {
                     uniqueId: crypto.randomUUID(),
                     id: item.id,
@@ -2327,8 +3001,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     hora_fin: (item as any).hora_fin || null,
                     professional_lock: (item as any).professional_lock || null,
                     duracion: (item as any).duracion || (item as any).duration || 0,
-                    discountValue: rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? String(rawDiscVal) : undefined,
-                    discountType: (item as any).discountType || (rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? 'percentage' : undefined),
+                    discountValue: shouldApplyPromo
+                        ? String(incomingPromoPct)
+                        : rawDiscVal !== undefined && Number(rawDiscVal) > 0
+                        ? String(rawDiscVal)
+                        : undefined,
+                    discountType: shouldApplyPromo
+                        ? ('percentage' as const)
+                        : (item as any).discountType || (rawDiscVal !== undefined && Number(rawDiscVal) > 0 ? 'percentage' : undefined),
+                    ...(shouldApplyPromo ? { promoDiscountApplied: true } : {}),
                 };
             });
             if (initialCartItems.length > 0) {
@@ -2429,6 +3110,30 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (detail.benefitRedeemed) {
                 setAppliedBenefit(detail.benefitRedeemed);
                 setJuntosMinorsCount(Number(detail.benefitRedeemed?.minorsCount || 0));
+            } else if (detail.promoRedeemed) {
+                const p = detail.promoRedeemed;
+                const promoPct = Number(p?.descuento_porcentaje || p?.descuento || p?.discountPct || 0);
+                setAppliedBenefit({
+                    folio: p?.codigo || detail.promoCode || 'PROMO-QR',
+                    benefitTitle: p?.titulo || p?.title || p?.nombre || 'Cupón Promocional',
+                    benefitId: p?.id || 'promo_cupon',
+                    isPromoCoupon: true,
+                    discount: promoPct,
+                });
+                if (promoPct > 0) {
+                    setCart(prev =>
+                        prev.map(it =>
+                            it.tipo === 'servicio' && (!it.discountValue || Number(it.discountValue) <= 0)
+                                ? {
+                                      ...it,
+                                      discountValue: String(promoPct),
+                                      discountType: 'percentage' as const,
+                                      promoDiscountApplied: true,
+                                  }
+                                : it
+                        )
+                    );
+                }
             }
         };
         document.addEventListener('apply-qr-to-sale', handleApplyQrToSale);
@@ -2697,6 +3402,66 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     variant: 'destructive',
                     title: 'Error al actualizar Pase Alfa',
                     description: 'La venta se guardó, pero no se pudieron acreditar sellos/Alfa Coins en el perfil del cliente.',
+                });
+            }
+        }
+
+        // Cortesía Mensual Alfa Black VIP: 1 Barba Express gratis por mes calendario (atómico por cliente y mes)
+        if (
+            vipMonthlyCourtesyApplied &&
+            cart.some(it => it.vipMonthlyCourtesyItem) &&
+            clientLevelInfo?.tierId === 'vip' &&
+            liveClient?.id &&
+            db
+        ) {
+            try {
+                const vipFolio = `VA-VIP-MES-${currentYearMonth}-${liveClient.id}`;
+                const vipDocRef = doc(db, 'canjes_beneficios', vipFolio);
+                const clientVipRef = doc(db, 'clientes', liveClient.id);
+                const prevVipMonth = String((liveClient as any)?.ultimo_canje_cortesia_vip_mes || '');
+
+                await runTransaction(db, async (tx) => {
+                    const [cSnap, vSnap] = await Promise.all([tx.get(clientVipRef), tx.get(vipDocRef)]);
+                    const cData = cSnap.exists() ? cSnap.data() || {} : {};
+                    const vData = vSnap.exists() ? vSnap.data() || {} : null;
+                    if (
+                        String(cData.ultimo_canje_cortesia_vip_mes || '') === currentYearMonth ||
+                        (vData && String(vData.estado || '') !== 'cancelado')
+                    ) {
+                        throw new Error(`El cliente ya utilizó su Barba Express de cortesía en ${currentYearMonth}.`);
+                    }
+                    tx.set(vipDocRef, {
+                        folio: vipFolio,
+                        benefitId: 'cortesia_vip_mensual',
+                        benefitTitle: 'Cortesía Mensual Alfa Black VIP (1 Barba Express Gratis)',
+                        estado: 'canjeado',
+                        utilizado_en_venta: true,
+                        pagado: true,
+                        clienteId: liveClient.id,
+                        cliente_id: liveClient.id,
+                        clienteNombre: `${liveClient.nombre || ''} ${liveClient.apellido || ''}`.trim(),
+                        mes: currentYearMonth,
+                        ...(finalizedSaleId ? { ventaId: finalizedSaleId } : {}),
+                        fecha_aplicacion: Timestamp.now(),
+                    }, { merge: true });
+                    tx.update(clientVipRef, {
+                        ultimo_canje_cortesia_vip_mes: currentYearMonth,
+                        ultimo_canje_cortesia_vip_folio: vipFolio,
+                        fecha_ultimo_canje_cortesia_vip: Timestamp.now(),
+                    });
+                });
+
+                loyaltySnapshot.is_vip_monthly_courtesy_applied = true;
+                loyaltySnapshot.vip_monthly_courtesy_month = currentYearMonth;
+                loyaltySnapshot.vip_monthly_courtesy_folio = vipFolio;
+                loyaltySnapshot.prev_ultimo_canje_cortesia_vip_mes = prevVipMonth;
+                setVipMonthlyUsedThisMonth(true);
+            } catch (vipErr: any) {
+                console.warn('Error registrando cortesía VIP mensual:', vipErr);
+                toast({
+                    variant: 'destructive',
+                    title: 'Cortesía VIP no registrada',
+                    description: vipErr?.message || 'No se pudo bloquear el canje mensual VIP.',
                 });
             }
         }
@@ -2986,10 +3751,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 const folio = appliedBenefit.folio || `VA-JUNTOS-${Date.now().toString().slice(-6)}`;
                 loyaltySnapshot.beneficio_folio = folio;
+                const keepPending = separateTicketsStillPending || (!isMet && mode === 'companions_separate_tickets');
                 await setDoc(doc(db, 'canjes_beneficios', folio), {
                     folio,
-                    estado: separateTicketsStillPending ? 'pendiente_cobro_grupo' : 'canjeado',
-                    utilizado_en_venta: true,
+                    estado: keepPending ? 'pendiente_cobro_grupo' : 'canjeado',
+                    utilizado_en_venta: !keepPending,
                     pagado: isMet,
                     fecha_aplicacion: Timestamp.now(),
                     fecha_canje_dia: todayStr,
@@ -3003,7 +3769,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     haircutPriceApplied: effPrice,
                     requiredMinPurchase: reqMin,
                     rewardCoins: totalBonusCoinsCredited,
-                    recompensaAcreditada: separateTicketsStillPending ? false : isMet,
+                    recompensaAcreditada: keepPending ? false : isMet,
                 }, { merge: true });
             } catch (e) {
                 console.error("Error updating canjes_beneficios for Juntos es Mejor:", e);
@@ -3023,11 +3789,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const invitedFriendName = selectedClient
                     ? `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim()
                     : '';
+                const dynamicRefDiscountPct = Math.max(1, Math.min(100, Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT)));
+                const dynamicRefHostCoins = Math.max(0, Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS));
+                const refMinBase = referralConfig.consumo_minimo_tipo === 'monto_fijo'
+                    ? Math.max(1, Number(referralConfig.consumo_minimo_monto) || currentHaircutPrice || 140)
+                    : (currentHaircutPrice || 140);
                 const referralEval = evaluateReferralPurchaseEligibility({
                     subtotal: Number(subtotal || 0),
                     realMoneyPaid: Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100),
-                    currentHaircutPrice,
+                    currentHaircutPrice: refMinBase,
                     cart,
+                    discountPercent: dynamicRefDiscountPct,
                 });
                 const isEligibleReferralReward =
                     Boolean(appliedBenefit.isReferralBenefit) &&
@@ -3035,13 +3807,24 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     appliedBenefit.referrerId !== clientId &&
                     referralEval.isEligible;
 
+                const bdayEval = isBirthdayApplied
+                    ? evaluateClientAlfaTier(liveClient || targetClient, nivelesConfig, { forceEvaluateWhenPaused: true })
+                    : null;
+                const bdayTierId = ((bdayEval?.tierId || clientLevelInfo?.tierId || 'member') as 'member' | 'gold' | 'vip');
+                const bdayOpts = isBirthdayApplied ? resolveClientBirthdayGifts(bdayTierId, cumpleanosConfig) : [];
+                const selectedBirthdayOpt = isBirthdayApplied
+                    ? (bdayOpts.find(o => o.id === (selectedBirthdayOptionId || appliedBenefit?.birthdayOptionId)) || bdayOpts[0] || null)
+                    : null;
+
                 loyaltySnapshot.beneficio_folio = appliedBenefit.folio;
                 loyaltySnapshot.is_birthday_applied = isBirthdayApplied;
                 if (isBirthdayApplied) {
                     loyaltySnapshot.cumpleanos_anio_marcado = currentYear;
+                    if (selectedBirthdayOpt) {
+                        loyaltySnapshot.birthday_option_id = selectedBirthdayOpt.id;
+                        loyaltySnapshot.birthday_option_title = selectedBirthdayOpt.titulo;
+                    }
                 }
-                const dynamicRefDiscountPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
-                const dynamicRefHostCoins = Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
 
                 if (appliedBenefit.isReferralBenefit) {
                     loyaltySnapshot.is_referral_applied = true;
@@ -3050,11 +3833,28 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 }
 
                 const benefitFolioRef = doc(db, 'canjes_beneficios', appliedBenefit.folio);
-                await runTransaction(db, async (tx) => {
-                    const folioSnap = await tx.get(benefitFolioRef);
+                const birthdayClientRef = isBirthdayApplied && targetClientIdForBenefit
+                    ? doc(db, 'clientes', targetClientIdForBenefit)
+                    : null;
+
+                const awardedBirthdayCoinsInTx = await runTransaction(db, async (tx) => {
+                    const [folioSnap, bdayClientSnap] = await Promise.all([
+                        tx.get(benefitFolioRef),
+                        birthdayClientRef ? tx.get(birthdayClientRef) : Promise.resolve(null),
+                    ]);
                     if (folioSnap.exists() && folioSnap.data()?.estado === 'canjeado' && folioSnap.data()?.utilizado_en_venta === true) {
                         throw new Error(`El folio ${appliedBenefit.folio} ya fue canjeado en otra venta.`);
                     }
+
+                    const prevCreditedBdayCoins = Number(folioSnap.exists() ? folioSnap.data()?.coins_acreditadas || 0 : 0);
+                    const birthdayCoinsToAward =
+                        isBirthdayApplied &&
+                        liveHasApp &&
+                        selectedBirthdayOpt?.tipo === 'alfa_coins' &&
+                        prevCreditedBdayCoins <= 0
+                            ? Math.max(0, Math.round(Number(selectedBirthdayOpt.coinsCantidad || 0)))
+                            : 0;
+
                     tx.set(benefitFolioRef, {
                         folio: appliedBenefit.folio,
                         benefitId: isBirthdayApplied ? 'regalo_cumpleanos' : (appliedBenefit.benefitId || 'beneficio_alfa'),
@@ -3068,6 +3868,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         clienteId: targetClientIdForBenefit,
                         clienteNombre: invitedFriendName || null,
                         totalVenta: total,
+                        ...(isBirthdayApplied ? {
+                            isBirthdayBenefit: true,
+                            tierId: bdayTierId,
+                            ...(selectedBirthdayOpt ? {
+                                benefitOptionId: selectedBirthdayOpt.id,
+                                benefitOptionTitle: selectedBirthdayOpt.titulo,
+                                benefitOptionType: selectedBirthdayOpt.tipo,
+                            } : {}),
+                            coins_acreditadas: birthdayCoinsToAward > 0 ? birthdayCoinsToAward : prevCreditedBdayCoins,
+                        } : {}),
                         ...(appliedBenefit.isReferralBenefit ? {
                             isReferralBenefit: true,
                             referralCode: appliedBenefit.referralCode || null,
@@ -3080,15 +3890,65 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             recompensaAcreditada: isEligibleReferralReward,
                         } : {})
                     }, { merge: true });
+
+                    if (isBirthdayApplied && birthdayClientRef) {
+                        const bdayUpdate: Record<string, any> = {
+                            ultimo_canje_cumpleanos_anio: currentYear,
+                            ultimo_canje_cumpleanos_folio: appliedBenefit.folio,
+                            fecha_ultimo_canje_cumpleanos: Timestamp.now(),
+                            actualizado_en: Timestamp.now(),
+                        };
+                        if (birthdayCoinsToAward > 0 && bdayClientSnap?.exists()) {
+                            const cData: any = bdayClientSnap.data() || {};
+                            const prevCoins = Number(
+                                cData.alfaCoins ?? cData.alfa_coins ?? cData.puntos_lealtad ?? cData.puntosLealtad ?? cData.puntos ?? 0
+                            );
+                            const currStamps = Number(cData.cortes_acumulados ?? cData.cortesAcumulados ?? 0);
+                            const existingPending = cData.recompensa_pendiente;
+                            const mergeSameSaleReward = Boolean(
+                                existingPending &&
+                                loyaltySnapshot.recompensa_pendiente_id &&
+                                existingPending.id === loyaltySnapshot.recompensa_pendiente_id
+                            );
+                            bdayUpdate.puntos = increment(birthdayCoinsToAward);
+                            bdayUpdate.alfaCoins = increment(birthdayCoinsToAward);
+                            bdayUpdate.alfa_coins = increment(birthdayCoinsToAward);
+                            bdayUpdate.puntosLealtad = increment(birthdayCoinsToAward);
+                            bdayUpdate.puntos_lealtad = increment(birthdayCoinsToAward);
+                            bdayUpdate.recompensa_pendiente = mergeSameSaleReward
+                                ? {
+                                    ...existingPending,
+                                    coins_ganadas: Number(existingPending.coins_ganadas || 0) + birthdayCoinsToAward,
+                                    coins_actuales: Number(existingPending.coins_actuales || prevCoins) + birthdayCoinsToAward,
+                                    cumpleanos_coins: birthdayCoinsToAward,
+                                    fecha: new Date().toISOString(),
+                                }
+                                : {
+                                    id: `reward_bday_${Date.now()}`,
+                                    tipo_recompensa: 'cumpleanos',
+                                    sello_agregado: false,
+                                    sellos_ganados: 0,
+                                    sellos_anteriores: currStamps,
+                                    sellos_actuales: currStamps,
+                                    meta_sellos: targetStampsConfig,
+                                    corte_gratis_desbloqueado: Boolean(cData.corte_gratis_disponible),
+                                    coins_ganadas: birthdayCoinsToAward,
+                                    coins_anteriores: prevCoins,
+                                    coins_actuales: prevCoins + birthdayCoinsToAward,
+                                    fecha: new Date().toISOString(),
+                                };
+                        }
+                        tx.update(birthdayClientRef, bdayUpdate);
+                    }
+
+                    return birthdayCoinsToAward;
                 });
 
-                // Si es beneficio de cumpleaños aplicado en Caja, bloquear en el perfil del cliente hasta el siguiente año calendario
-                if (isBirthdayApplied && targetClientIdForBenefit) {
-                    await updateDoc(doc(db, 'clientes', targetClientIdForBenefit), {
-                        ultimo_canje_cumpleanos_anio: currentYear,
-                        ultimo_canje_cumpleanos_folio: appliedBenefit.folio,
-                        fecha_ultimo_canje_cumpleanos: Timestamp.now(),
-                        actualizado_en: Timestamp.now(),
+                if (awardedBirthdayCoinsInTx > 0) {
+                    loyaltySnapshot.birthday_coins_awarded = awardedBirthdayCoinsInTx;
+                    toast({
+                        title: '🎂 ¡Regalo de Cumpleaños Acreditado!',
+                        description: `Se abonaron +${awardedBirthdayCoinsInTx} Alfa Coins al perfil del cliente por su cumpleaños.`,
                     });
                 }
 
@@ -3242,7 +4102,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             } : undefined,
                             benefitLabel: (appliedBenefit && !appliedBenefit.isReferralBlocked && !appliedBenefit.isFreeCutBlocked)
                                 ? (appliedBenefit.isReferralBenefit
-                                    ? `Invita a un Amigo (-${REFERRAL_DISCOUNT_PERCENT}%${appliedBenefit.referralCode ? ` | ${appliedBenefit.referralCode}` : ''})`
+                                    ? `Invita a un Amigo (-${Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT)}%${appliedBenefit.referralCode ? ` | ${appliedBenefit.referralCode}` : ''})`
                                     : (appliedBenefit.benefitTitle || 'Beneficio Pase Alfa'))
                                 : undefined,
                             footerMessage: ticketFooterMessage
@@ -3280,6 +4140,38 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const isSubmittingRef = useRef(false);
     const isSendingTerminalRef = useRef(false);
 
+    const validateBirthdayCartBeforeCharge = (): { ok: boolean; message?: string } => {
+        const isBirthday = Boolean(
+            appliedBenefit && (
+                appliedBenefit.isBirthdayBenefit ||
+                appliedBenefit.benefitId === 'regalo_cumpleanos' ||
+                String(appliedBenefit.folio || '').includes('CUMPLE') ||
+                String(appliedBenefit.benefitTitle || '').toLowerCase().includes('cumple')
+            )
+        );
+        if (!isBirthday) return { ok: true };
+        const tierId = (clientLevelInfo?.tierId || 'member') as 'member' | 'gold' | 'vip';
+        const options = resolveClientBirthdayGifts(tierId, cumpleanosConfig);
+        const activeOpt =
+            options.find((o) => o.id === (selectedBirthdayOptionId || appliedBenefit?.birthdayOptionId)) ||
+            options[0] ||
+            null;
+        if (
+            activeOpt &&
+            (activeOpt.tipo === 'servicio_gratis' ||
+                activeOpt.tipo === 'producto_gratis' ||
+                activeOpt.tipo === 'descuento_servicio') &&
+            !cart.some((it) => it.birthdayDiscountApplied)
+        ) {
+            return {
+                ok: false,
+                message:
+                    'El regalo de cumpleaños seleccionado requiere tener el servicio o producto elegible con descuento aplicado en el carrito antes de cobrar (o retira el beneficio con la X).',
+            };
+        }
+        return { ok: true };
+    };
+
     // --- LOGICA DE COBRO CON TERMINAL CORREGIDA ---
     const handleSendToTerminal = async () => {
         if (isSendingTerminalRef.current) return;
@@ -3289,6 +4181,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
         if (cart.some(item => !item.barbero_id)) {
             toast({ variant: 'destructive', title: 'Faltan datos', description: 'Debes asignar un profesional/vendedor a todos los items del carrito para cobrar en terminal.' });
+            return;
+        }
+
+        const bdayGuard = validateBirthdayCartBeforeCharge();
+        if (!bdayGuard.ok) {
+            toast({ variant: 'destructive', title: 'Regalo de Cumpleaños Incompleto', description: bdayGuard.message });
             return;
         }
 
@@ -3699,6 +4597,16 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             return;
         }
 
+        const bdayNextGuard = validateBirthdayCartBeforeCharge();
+        if (!bdayNextGuard.ok) {
+            toast({
+                variant: 'destructive',
+                title: 'Regalo de Cumpleaños Incompleto',
+                description: bdayNextGuard.message,
+            });
+            return;
+        }
+
         // Preseleccionar método de pago y monto exacto si no está definido
         if (total === 0 && pointsDiscount > 0) {
             form.setValue('metodo_pago', 'alfacoins', { shouldValidate: true });
@@ -3731,6 +4639,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setAnticipoPagado(0); // Reset anticipo to prevent cross-contamination between sales
         setReservationId(undefined); // Reset reservationId to prevent modifying wrong reservation
         setAppliedBenefit(null);
+        setSelectedBirthdayOptionId('');
+        setVipMonthlyCourtesyApplied(false);
+        setVipMonthlyUsedThisMonth(false);
+        appliedBirthdaySyncRef.current = '';
 
         // Determine default local
         let defaultLocalId = '';
@@ -3908,6 +4820,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     async function onSubmit(data: SaleFormData) {
         if (!db || isSubmittingRef.current) return;
+        const bdaySubmitGuard = validateBirthdayCartBeforeCharge();
+        if (!bdaySubmitGuard.ok) {
+            toast({
+                variant: 'destructive',
+                title: 'Regalo de Cumpleaños Incompleto',
+                description: bdaySubmitGuard.message,
+            });
+            return;
+        }
         isSubmittingRef.current = true;
         setIsSubmitting(true);
         try {
@@ -4874,6 +5795,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         targetStampsConfig={targetStampsConfig}
                                         activeCoinsMultiplier={activeCoinsMultiplier}
                                         juntosConfig={juntosConfig}
+                                        coinsConfig={coinsConfig}
+                                        referralConfig={referralConfig}
+                                        cumpleanosConfig={cumpleanosConfig}
+                                        selectedBirthdayOptionId={selectedBirthdayOptionId}
+                                        onSelectBirthdayOption={setSelectedBirthdayOptionId}
+                                        vipMonthlyCourtesyApplied={vipMonthlyCourtesyApplied}
+                                        vipMonthlyUsedThisMonth={vipMonthlyUsedThisMonth}
+                                        onToggleVipMonthlyCourtesy={handleToggleVipMonthlyCourtesy}
                                     />
                                 </div>
 
@@ -4927,10 +5856,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                     <p className="font-bold text-xs sm:text-sm text-foreground truncate max-w-full">
                                                                         {selectedClient.nombre} {selectedClient.apellido}
                                                                     </p>
-                                                                    {hasAppDownloaded && ((selectedClient.cortes_acumulados || selectedClient.cortesAcumulados || 0) > 0 || clientAlfaCoins > 0) && (
-                                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold border-[#C5A880]/40 text-[#C5A880] bg-[#C5A880]/10 shrink-0 font-sans">
-                                                                            <Sparkles className="h-2.5 w-2.5 mr-1 text-[#C5A880]" />
-                                                                            VIP Alfa
+                                                                    {hasAppDownloaded && clientLevelInfo?.activo && (
+                                                                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-bold border-blue-500/40 text-blue-400 bg-blue-500/10 shrink-0 font-sans">
+                                                                            <ShieldCheck className="h-2.5 w-2.5 mr-1 text-blue-400" />
+                                                                            {clientLevelInfo.tierName} ({clientLevelInfo.cashbackPct}%)
                                                                         </Badge>
                                                                     )}
                                                                 </div>
@@ -4958,6 +5887,39 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         </span>
                                                                     )}
                                                                 </div>
+                                                                {hasAppDownloaded && clientLevelInfo?.activo && (
+                                                                    <div className="mt-2 pt-1.5 border-t border-border/40 space-y-1.5">
+                                                                        {Array.isArray(clientLevelInfo.beneficios) && clientLevelInfo.beneficios.length > 0 && (
+                                                                            <p className="text-[10px] text-muted-foreground leading-snug">
+                                                                                Privilegios {clientLevelInfo.tierName}: {clientLevelInfo.beneficios.slice(0, 3).join(' · ')}
+                                                                            </p>
+                                                                        )}
+                                                                        {clientLevelInfo.tierId === 'vip' && (
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                {vipMonthlyUsedThisMonth ? (
+                                                                                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30">
+                                                                                        Cortesía VIP Barba Express ya usada este mes
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <Button
+                                                                                        type="button"
+                                                                                        size="sm"
+                                                                                        variant={vipMonthlyCourtesyApplied ? 'destructive' : 'secondary'}
+                                                                                        className={cn(
+                                                                                            "h-6 px-2 text-[10px] font-bold rounded-md",
+                                                                                            !vipMonthlyCourtesyApplied && "bg-blue-600 hover:bg-blue-700 text-white"
+                                                                                        )}
+                                                                                        onClick={handleToggleVipMonthlyCourtesy}
+                                                                                    >
+                                                                                        {vipMonthlyCourtesyApplied
+                                                                                            ? 'Quitar Cortesía VIP (Barba Express)'
+                                                                                            : 'Aplicar Cortesía VIP: 1 Barba Express Gratis'}
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
@@ -4983,6 +5945,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                     form.setValue('cliente_id', '');
                                                                     setSelectedClientId('');
                                                                     setRedeemPoints(false);
+                                                                    setVipMonthlyCourtesyApplied(false);
                                                                     setStep(1);
                                                                 }}
                                                                 title="Cambiar cliente"
@@ -5070,7 +6033,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                             </span>
                                                             <p className="text-[10px] text-muted-foreground font-sans">
                                                                 {clientAlfaCoins > 0
-                                                                    ? `Equivalente a $${formatMoney(clientCashAvailable)} MXN ($${alfaCoinUnitValue.toFixed(2)} c/u)`
+                                                                    ? `Equivalente a $${formatMoney(clientCashAvailable)} MXN ($${alfaCoinUnitValue.toFixed(2)} c/u)${
+                                                                          maxUsableAlfaCoins <= 0
+                                                                              ? coinsConfig.activo === false
+                                                                                  ? ' • Canje pausado'
+                                                                                  : clientAlfaCoins < Number(coinsConfig.minimo_canje_coins || 0)
+                                                                                  ? ` • Mínimo ${coinsConfig.minimo_canje_coins} coins`
+                                                                                  : ' • Sin saldo aplicable a este ticket'
+                                                                              : ''
+                                                                      }`
                                                                     : 'Sin saldo de ALFA COINS para canjear en este cobro'}
                                                             </p>
                                                         </div>
@@ -5099,7 +6070,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                         setAlfaCoinsToUse(maxUsableAlfaCoins);
                                                                     }
                                                                 }}
-                                                                disabled={clientAlfaCoins <= 0}
+                                                                disabled={maxUsableAlfaCoins <= 0}
                                                             />
                                                         </div>
                                                     </div>
@@ -5823,6 +6794,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         targetStampsConfig={targetStampsConfig}
                                         activeCoinsMultiplier={activeCoinsMultiplier}
                                         juntosConfig={juntosConfig}
+                                        coinsConfig={coinsConfig}
+                                        referralConfig={referralConfig}
+                                        cumpleanosConfig={cumpleanosConfig}
+                                        selectedBirthdayOptionId={selectedBirthdayOptionId}
+                                        onSelectBirthdayOption={setSelectedBirthdayOptionId}
+                                        vipMonthlyCourtesyApplied={vipMonthlyCourtesyApplied}
+                                        vipMonthlyUsedThisMonth={vipMonthlyUsedThisMonth}
+                                        onToggleVipMonthlyCourtesy={handleToggleVipMonthlyCourtesy}
                                     />
                                 </div>
                                 <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">

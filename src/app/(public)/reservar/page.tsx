@@ -76,7 +76,6 @@ export default function BookingPage() {
             error: (msg: string) => shadToast({ variant: "destructive", description: msg }),
         }
     );
-    const executeRecaptcha = async (action?: string) => "mock-token";
 
     // Data Queries
     const { data: services = [], loading: loadingServices } = useFirestoreQuery<any>('servicios');
@@ -945,19 +944,6 @@ export default function BookingPage() {
         let errorCount = 0;
 
         try {
-            if (!executeRecaptcha) {
-                console.warn('Recaptcha not ready');
-            }
-
-            let token: string | null = null;
-            try {
-                if (executeRecaptcha) {
-                    token = await executeRecaptcha('booking');
-                }
-            } catch (recaptchaError) {
-                console.error("Recaptcha execution failed, proceeding without token:", recaptchaError);
-            }
-
             let lastError = "";
 
             // Prepare Booking Data
@@ -1022,7 +1008,6 @@ export default function BookingPage() {
                     amountDue: effectiveAmountToPayToday,
                     totalAmount: totalPrice,
                     paymentType: effectiveAmountToPayToday < (totalPrice - 0.01) ? 'deposit' : 'full',
-                    // recaptchaToken: token
                 });
             } else {
                 for (const item of cart) {
@@ -1079,7 +1064,6 @@ export default function BookingPage() {
                         amountDue: itemUpfront,
                         totalAmount: Number(item.service.price || 0),
                         paymentType: itemUpfront < (Number(item.service.price || 0) - 0.01) ? 'deposit' : 'full',
-                        // recaptchaToken: token
                     });
                 }
             }
@@ -1150,7 +1134,6 @@ export default function BookingPage() {
                             ? (isPayingFullToday ? 'Pagado' : 'deposit_paid')
                             : 'pending',
                         isSandbox: isSandboxMode,
-                        recaptchaToken: token
                     });
 
                     if (res.success && res.reservationId) {
@@ -3031,12 +3014,6 @@ export default function BookingPage() {
                             )}
                         </div>
                     )}
-
-                    <div className="mt-4 text-[10px] text-center text-muted-foreground">
-                        Este sitio está protegido por reCAPTCHA y se aplican la{' '}
-                        <a href="https://policies.google.com/privacy" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Política de Privacidad</a> y los{' '}
-                        <a href="https://policies.google.com/terms" className="underline hover:text-primary" target="_blank" rel="noopener noreferrer">Términos de Servicio</a> de Google.
-                    </div>
 
                     {step === 0 && <div className="h-16 sm:h-20 shrink-0 pointer-events-none" />}
 

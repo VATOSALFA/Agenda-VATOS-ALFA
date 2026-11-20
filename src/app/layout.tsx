@@ -9,7 +9,6 @@ import { ThemeProvider } from '@/components/layout/theme-provider';
 import { getServerCompanyBootstrap, getServerSeasonalConfig } from '@/lib/public-landing-data';
 import { Metadata, Viewport } from 'next';
 
-import { RecaptchaProvider } from '@/components/providers/google-recaptcha-provider';
 import { GoogleAdsScript } from '@/components/providers/google-ads-script';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
 import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
@@ -86,13 +85,11 @@ export default async function RootLayout({
             <AuthGuard>
               <ThemeProvider initialTheme={companyBootstrap.theme}>
                 <MercadoPagoProvider>
-                  <RecaptchaProvider>
-                    <NetworkStatusIndicator />
-                    <PwaUpdateBanner />
-                    <SeasonalEffectsWebOverlay initialConfig={seasonalConfig} />
-                    {children}
-                    <Toaster />
-                  </RecaptchaProvider>
+                  <NetworkStatusIndicator />
+                  <PwaUpdateBanner />
+                  <SeasonalEffectsWebOverlay initialConfig={seasonalConfig} />
+                  {children}
+                  <Toaster />
                 </MercadoPagoProvider>
               </ThemeProvider>
             </AuthGuard>

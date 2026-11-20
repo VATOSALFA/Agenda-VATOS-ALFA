@@ -1174,7 +1174,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
 
     if (client.exentoAnticipo) {
       finalRequiresDeposit = false;
-      finalEstado = 'Confirmado';
+      finalEstado = 'Reservado';
       finalPagoEstado = 'Pendiente';
       finalExentoAnticipo = true;
       finalExentoPor = 'Cliente Exento de Anticipo';
@@ -1202,7 +1202,7 @@ export const agendarCitaSucursalTool = ai.defineTool(
         purpose: `Exención de anticipo autorizada por ${caller.operatorName}`,
       });
       finalRequiresDeposit = false;
-      finalEstado = 'Confirmado';
+      finalEstado = 'Reservado';
       finalPagoEstado = 'Pendiente';
       finalExentoAnticipo = true;
       finalExentoPor = caller.operatorName;
@@ -1289,9 +1289,9 @@ export const agendarCitaSucursalTool = ai.defineTool(
     });
 
     const avisoAnticipo = finalRequiresDeposit
-      ? `\n\n⚠️ **Aviso de Anticipo:** Por regla del sistema (${depositReason}), esta cita quedó en estado **Tentativa / Esperando Anticipo de $${expectedDeposit.toFixed(2)} MXN** (con **30 minutos de tolerancia**).\n\n¿Deseas que:\n1. **Le aplique un código de exención por esta ocasión** para confirmarla al 100%, o\n2. **Marque a ${client.nombre} como cliente exento permanente** en la base de datos para que nunca se le pida anticipo?`
+      ? `\n\n⚠️ **Aviso de Anticipo:** Por regla del sistema (${depositReason}), esta cita quedó en estado **Tentativa / Esperando Anticipo de $${expectedDeposit.toFixed(2)} MXN** (con **30 minutos de tolerancia**).\n\n¿Deseas que:\n1. **Le aplique un código de exención por esta ocasión** para confirmar su registro, o\n2. **Marque a ${client.nombre} como cliente exento permanente** en la base de datos para que nunca se le pida anticipo?`
       : finalExentoAnticipo
-        ? `\n\n★ **Anticipo Exentado:** La cita quedó confirmada al 100% sin requerir anticipo (${finalExentoMotivo}).`
+        ? `\n\n★ **Anticipo Exentado:** La cita quedó registrada en estado **Reservado** sin requerir anticipo (${finalExentoMotivo}). El cliente podrá confirmar su asistencia desde su App Móvil o WhatsApp.`
         : '';
 
     return {

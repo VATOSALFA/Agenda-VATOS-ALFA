@@ -1504,9 +1504,9 @@ export function NewReservationForm({
           : (data.estado || 'Reservado');
       const resolvedEstado = preservedStatuses.includes(data.estado)
         ? data.estado
-        : (effectiveDepositPaid || isExemptFromDeposit
+        : (effectiveDepositPaid
             ? 'Confirmado'
-            : (isSaveAnyAnticipoActive ? 'Pendiente de pago' : cleanInitialEstado));
+            : (isSaveAnyAnticipoActive && !isExemptFromDeposit ? 'Pendiente de pago' : cleanInitialEstado));
 
       if (wasResetFromWaitingRoomByReschedule) {
         toast({

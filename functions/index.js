@@ -28,17 +28,19 @@ setGlobalOptions({ region: "us-central1" });
 
 console.log('Functions starting up (Gen 2 - Final V13). Version: ' + new Date().toISOString());
 
-// Initialize Firebase Admin SDK with service account if available
+// Initialize Firebase Admin SDK with service account (local dev/emulator only; use ADC in Cloud Functions runtime)
 if (admin.apps.length === 0) {
   let cert = null;
-  try {
-    const serviceAccount = require("./backend-credentials.json");
-    if (serviceAccount && serviceAccount.private_key) {
-      cert = admin.credential.cert(serviceAccount);
-      console.log("Firebase Admin initialized with service account credentials.");
+  if (!process.env.K_SERVICE && !process.env.FUNCTION_TARGET) {
+    try {
+      const serviceAccount = require("./backend-credentials.json");
+      if (serviceAccount && serviceAccount.private_key) {
+        cert = admin.credential.cert(serviceAccount);
+        console.log("Firebase Admin initialized with local service account credentials.");
+      }
+    } catch (e) {
+      console.warn("Could not load backend-credentials.json, defaulting to ADC:", e.message);
     }
-  } catch (e) {
-    console.warn("Could not load backend-credentials.json, defaulting to standard credentials:", e.message);
   }
 
   if (cert) {
@@ -85,9 +87,127 @@ const getMercadoPagoConfig = async () => {
 
 /**
  * =================================================================
- * MERCADO PAGO FUNCTIONS
+ * MERCADO PAGO FUNCTIONS & SECURITY HELPERS
  * =================================================================
  */
+
+const GENERAL_ADMIN_UIDS = new Set(['JxK6BLZPOBcBpjnuVZPsgmIHbZ12']);
+const GENERAL_ADMIN_EMAILS = new Set(['vatosalfa@gmail.com']);
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+async function isGeneralAdminUser(uid, email) {
+  if (!uid) return false;
+  if (GENERAL_ADMIN_UIDS.has(uid)) return true;
+  if (email && GENERAL_ADMIN_EMAILS.has(String(email).toLowerCase())) return true;
+  try {
+    const snap = await admin.firestore().collection('usuarios').doc(uid).get();
+    if (!snap.exists) return false;
+    const role = String(snap.data()?.role || '').toLowerCase();
+    return role === 'administrador general' || role === 'admin';
+  } catch {
+    return false;
+  }
+}
+
+async function isStaffUser(uid, email) {
+  if (!uid) return false;
+  if (await isGeneralAdminUser(uid, email)) return true;
+  try {
+    const snap = await admin.firestore().collection('usuarios').doc(uid).get();
+    return snap.exists && snap.data()?.activo !== false;
+  } catch {
+    return false;
+  }
+}
+
+async function requireStaffAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+  }
+  const ok = await isStaffUser(request.auth.uid, request.auth.token?.email);
+  if (!ok) {
+    throw new HttpsError('permission-denied', 'Se requieren permisos de personal autorizado.');
+  }
+}
+
+async function requireAdminAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+  }
+  const ok = await isGeneralAdminUser(request.auth.uid, request.auth.token?.email);
+  if (!ok) {
+    throw new HttpsError('permission-denied', 'Solo el Administrador General puede realizar esta acción.');
+  }
+}
+
+async function requireManagerOrAdminAuth(request) {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+  }
+  if (await isGeneralAdminUser(request.auth.uid, request.auth.token?.email)) return;
+  try {
+    const snap = await admin.firestore().collection('usuarios').doc(request.auth.uid).get();
+    const role = String(snap.data()?.role || snap.data()?.rol || '').trim().toLowerCase();
+    if (
+      snap.exists &&
+      snap.data()?.activo !== false &&
+      (role === 'administrador general' || role === 'administrador local' || role === 'admin')
+    ) {
+      return;
+    }
+  } catch (_) {}
+  throw new HttpsError('permission-denied', 'Se requieren permisos de administrador.');
+}
+
+const fnRateLimitStore = new Map();
+function checkFnRateLimit(key, maxRequests, windowMs) {
+  const now = Date.now();
+  if (fnRateLimitStore.size > 2000) {
+    for (const [k, entry] of fnRateLimitStore.entries()) {
+      if (now > entry.resetAt) fnRateLimitStore.delete(k);
+    }
+  }
+  const cur = fnRateLimitStore.get(key);
+  if (!cur || now > cur.resetAt) {
+    fnRateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (cur.count >= maxRequests) return false;
+  cur.count += 1;
+  return true;
+}
+
+function getRequestClientIp(request) {
+  const fwd = request.headers?.['x-forwarded-for'] || '';
+  if (typeof fwd === 'string' && fwd.trim()) return fwd.split(',')[0].trim();
+  return request.ip || 'unknown';
+}
+
+function safeHttpsLogoUrl(raw, fallback) {
+  const val = String(raw || '').trim();
+  return /^https:\/\//i.test(val) ? escapeHtml(val) : escapeHtml(fallback);
+}
+
+async function verifyBearerAuthHeader(req) {
+  const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
+  if (!String(authHeader).startsWith('Bearer ')) return null;
+  const token = String(authHeader).slice(7).trim();
+  if (!token) return null;
+  try {
+    return await admin.auth().verifyIdToken(token);
+  } catch (err) {
+    console.warn('[Auth] Token Bearer inválido:', err.message);
+    return null;
+  }
+}
 
 exports.getPointTerminals = onCall(
   {
@@ -96,9 +216,7 @@ exports.getPointTerminals = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    }
+    await requireStaffAuth(request);
     try {
       const { client } = await getMercadoPagoConfig();
       const point = new Point(client);
@@ -118,7 +236,7 @@ exports.setTerminalPDVMode = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    await requireStaffAuth(request);
 
     const { terminalId } = request.data;
     if (!terminalId) throw new HttpsError('invalid-argument', 'Falta terminalId.');
@@ -145,9 +263,7 @@ exports.createPointPayment = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    }
+    await requireStaffAuth(request);
 
     const { amount, terminalId, referenceId } = request.data;
 
@@ -205,7 +321,7 @@ exports.createStore = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    await requireAdminAuth(request);
     const { name, business_hours } = request.data;
     if (!name) throw new HttpsError('invalid-argument', 'Falta nombre de sucursal.');
 
@@ -253,7 +369,7 @@ exports.createPos = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    await requireAdminAuth(request);
     const { name, store_id, external_store_id, fixed_amount } = request.data;
     if (!name || (!store_id && !external_store_id)) throw new HttpsError('invalid-argument', 'Falta nombre o store_id.');
 
@@ -288,11 +404,7 @@ exports.updateUserPassword = onCall(
     invoker: 'public'
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-
-    // Optional: Check if requester is admin
-    // const callerUid = request.auth.uid;
-    // ... verification logic ...
+    await requireAdminAuth(request);
 
     const { uid, password } = request.data;
     if (!uid || !password) throw new HttpsError('invalid-argument', 'Faltan datos.');
@@ -332,8 +444,10 @@ exports.mercadoPagoWebhook = onRequest(
 
     try {
       const { query, body } = request;
-      const topic = query.type || query.topic || body.type || 'unknown';
-      const dataId = query['data.id'] || query.id || body?.data?.id || body?.id;
+      const topic = query.type || query.topic || body?.type || 'unknown';
+      const rawQueryDataId = query['data.id'] || query.id;
+      const queryDataId = Array.isArray(rawQueryDataId) ? rawQueryDataId[0] : rawQueryDataId;
+      const dataId = queryDataId || body?.data?.id || body?.id;
 
       if (!dataId) {
         console.warn("[vFinal] Missing headers/params.", { query, body });
@@ -343,12 +457,14 @@ exports.mercadoPagoWebhook = onRequest(
 
       console.log(`[vFinal] Topic: ${topic}, ID: ${dataId}`);
 
-      // --- SIGNATURE VALIDATION ---
-      const xSignature = request.headers['x-signature'];
-      const xRequestId = request.headers['x-request-id'];
+      // --- SIGNATURE VALIDATION (Constant-time HMAC-SHA256) ---
+      const rawXSignature = request.headers['x-signature'];
+      const rawXRequestId = request.headers['x-request-id'];
+      const xSignature = Array.isArray(rawXSignature) ? rawXSignature[0] : rawXSignature;
+      const xRequestId = Array.isArray(rawXRequestId) ? rawXRequestId[0] : rawXRequestId;
 
       if (xSignature && xRequestId) {
-        const parts = xSignature.split(',');
+        const parts = String(xSignature).split(',');
         let ts = null;
         let receivedHash = null;
         for (const part of parts) {
@@ -357,33 +473,43 @@ exports.mercadoPagoWebhook = onRequest(
           if (key === 'v1') receivedHash = value;
         }
 
-        if (ts && receivedHash) {
-          const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-          let isValid = false;
+        if (ts && receivedHash && /^[0-9a-f]+$/i.test(receivedHash)) {
+          // Regla oficial MP: usar data.id de query en minúsculas y omitir `id:` si no viene en URL
+          const candidateManifests = queryDataId
+            ? [`id:${String(queryDataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`]
+            : [
+                `request-id:${xRequestId};ts:${ts};`,
+                `id:${String(dataId).toLowerCase()};request-id:${xRequestId};ts:${ts};`
+              ];
 
-          // Try Terminal Secret
-          if (secretTerminal) {
-            const calculatedHash = crypto.createHmac('sha256', secretTerminal).update(manifest).digest('hex');
-            if (calculatedHash === receivedHash) isValid = true;
-          }
+          const verifyWithSecret = (secret) => {
+            if (!secret) return false;
+            const receivedBuf = Buffer.from(receivedHash, 'hex');
+            return candidateManifests.some((manifestStr) => {
+              const calculatedHex = crypto.createHmac('sha256', secret).update(manifestStr).digest('hex');
+              const expectedBuf = Buffer.from(calculatedHex, 'hex');
+              return expectedBuf.length === receivedBuf.length && crypto.timingSafeEqual(expectedBuf, receivedBuf);
+            });
+          };
 
-          // Try Web Secret if not valid yet
-          if (!isValid && secretWeb) {
-            const calculatedHash = crypto.createHmac('sha256', secretWeb).update(manifest).digest('hex');
-            if (calculatedHash === receivedHash) isValid = true;
-          }
+          const isValid = verifyWithSecret(secretTerminal) || verifyWithSecret(secretWeb);
 
           if (!isValid) {
-            console.error(`[vFinal] Invalid HMAC Signature. Manifest: ${manifest}`);
-            console.error(`[vFinal] Received: ${receivedHash}`);
-            // Non-blocking for now to ensure payments are processed. Security is covered by API check.
-            console.warn("[vFinal] WARNING: Signature validation failed, but proceeding to API check for continuity.");
+            console.error(`[vFinal] Invalid HMAC Signature. Rejecting request.`);
+            response.status(401).send("Unauthorized: Invalid signature.");
+            return;
           } else {
             console.log("[vFinal] HMAC Signature Verified Successfully.");
           }
+        } else {
+          console.error("[vFinal] Malformed x-signature header. Rejecting.");
+          response.status(401).send("Unauthorized: Malformed signature.");
+          return;
         }
       } else {
-        console.warn("[vFinal] Missing x-signature or x-request-id. Skiping verification.");
+        console.error("[vFinal] Missing x-signature or x-request-id. Rejecting.");
+        response.status(401).send("Unauthorized: Missing signature headers.");
+        return;
       }
       // ----------------------------
 
@@ -425,14 +551,36 @@ exports.mercadoPagoWebhook = onRequest(
         }
       }
 
-      // Prioritize the external reference from the webhook body if available
-      const external_reference = body?.data?.external_reference || paymentInfo?.external_reference;
+      // SECURITY: Use EXCLUSIVELY external_reference from Mercado Pago API response (never trust webhook body)
+      const external_reference = paymentInfo?.external_reference;
 
       if (!paymentInfo || paymentInfo.status !== 'approved' || !external_reference) {
         console.error(`[vFinal] Could not verify or process payment for ID ${dataId}.`);
         response.status(200).send("OK (Ignored)");
         return;
       }
+
+      // Replay protection: ensure each Mercado Pago payment ID is only bound to one external_reference
+      const mpPaymentIdStr = String(paymentInfo.id || dataId);
+      const processedRef = admin.firestore().collection('mp_processed_payments').doc(mpPaymentIdStr);
+      const existingPaymentSnap = await processedRef.get();
+      if (existingPaymentSnap.exists) {
+        const existingRef = existingPaymentSnap.data()?.external_reference;
+        if (existingRef && existingRef !== external_reference) {
+          console.error(`[vFinal] REPLAY DETECTED: payment ${mpPaymentIdStr} already bound to ${existingRef}, ignoring ${external_reference}`);
+          response.status(403).send("Replay detected");
+          return;
+        }
+        console.log(`[vFinal] Payment ${mpPaymentIdStr} already processed for ${external_reference}. Returning OK.`);
+        response.status(200).send("OK (Already processed)");
+        return;
+      }
+      await processedRef.set({
+        payment_id: mpPaymentIdStr,
+        external_reference,
+        amount: paymentInfo.transaction_amount || 0,
+        processed_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
       const { status, transaction_amount } = paymentInfo;
       console.log(`[vFinal] API Check: Status=${status}, Ref=${external_reference}`);
@@ -1012,7 +1160,7 @@ exports.mercadoPagoWebhook = onRequest(
 
     } catch (error) {
       console.error('[vFinal] Error processing webhook:', error);
-      response.status(200).send('OK_WITH_ERROR');
+      response.status(500).send('ERROR');
       return;
     }
 
@@ -1024,13 +1172,13 @@ exports.mercadoPagoWebhook = onRequest(
  * =================================================================
  * CRON ENGINE: AUTOMATED MESSAGES
  * =================================================================
- * Runs every hour to check for:
+ * Runs every 15 minutes to check for:
  * 1. Birthdays
  * 2. Appointment Reminders
  * 3. Google Reviews
  */
 exports.checkAutomatedMessages = onSchedule({
-  schedule: "every 1 minutes",
+  schedule: "every 15 minutes",
   secrets: [mpAccessToken, resendApiKey]
 }, async (event) => {
   await runAutomatedChecks();
@@ -1041,6 +1189,11 @@ exports.triggerManualChecks = onRequest({
   secrets: [mpAccessToken, resendApiKey]
 }, async (req, res) => {
   try {
+    const decoded = await verifyBearerAuthHeader(req);
+    const isAdmin = decoded ? await isGeneralAdminUser(decoded.uid, decoded.email) : false;
+    if (!isAdmin) {
+      return res.status(403).send("Forbidden: General Admin authentication required.");
+    }
     await runAutomatedChecks();
     res.status(200).send("Automated checks executed successfully (Reminders sent if applicable).");
   } catch (e) {
@@ -1252,6 +1405,11 @@ async function runAutomatedChecks() {
           } catch (err) {
             console.error(`[Reminders] Failed to send to ${doc.id}:`, err);
           }
+        } else {
+          await db.collection('reservas').doc(doc.id).update({
+            reminderSent: true,
+            reminderSkippedNoEmail: true,
+          }).catch(() => {});
         }
       }
     }
@@ -1265,6 +1423,11 @@ exports.backfillClientNumbers = onRequest(
   },
   async (request, response) => {
     try {
+      const decoded = await verifyBearerAuthHeader(request);
+      const isAdmin = decoded ? await isGeneralAdminUser(decoded.uid, decoded.email) : false;
+      if (!isAdmin) {
+        return response.status(403).send("Forbidden: General Admin authentication required.");
+      }
       const db = admin.firestore();
       const clientsRef = db.collection('clientes');
 
@@ -1776,7 +1939,7 @@ async function sendProfessionalConfirmationEmail(reservationId, clientId, localI
  * Sends an email to each professional with their appointments for the day.
  */
 exports.sendDailyAgendaSummary = onSchedule({
-  schedule: "every 30 minutes",
+  schedule: "0,30 7-11 * * *",
   timeZone: "America/Mexico_City",
   secrets: [resendApiKey]
 }, async (event) => {
@@ -1885,7 +2048,7 @@ exports.triggerDailyAgendaSummary = onCall(
     region: "us-central1"
   },
   async (request) => {
-    if (!request.auth) throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
+    await requireManagerOrAdminAuth(request);
 
     // Optional: date in YYYY-MM-DD
     const { date } = request.data || {};
@@ -2050,8 +2213,15 @@ async function runDailySummary(dateStr) {
 
           let localName = "Local";
           if (res.local_id) {
-            const lSnap = await db.collection('locales').doc(res.local_id).get();
-            if (lSnap.exists) localName = lSnap.data().name;
+            if (localesMap[res.local_id]?.name) {
+              localName = localesMap[res.local_id].name;
+            } else {
+              const lSnap = await db.collection('locales').doc(res.local_id).get();
+              if (lSnap.exists) {
+                localesMap[res.local_id] = lSnap.data();
+                localName = lSnap.data().name || localName;
+              }
+            }
           }
 
           const formattedTime = res.hora_inicio || '--:--';
@@ -2232,11 +2402,9 @@ exports.sendSaleReceipt = onCall(
     region: "us-central1"
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    }
+    await requireStaffAuth(request);
 
-    const { saleId } = request.data;
+    const { saleId } = request.data || {};
     if (!saleId) {
       throw new HttpsError('invalid-argument', 'Falta el ID de la venta.');
     }
@@ -2273,43 +2441,47 @@ exports.sendSaleReceipt = onCall(
       const localData = localSnap && localSnap.exists ? localSnap.data() : {};
 
       const senderName = empresaConfig.name || 'VATOS ALFA';
+      const safeSenderName = escapeHtml(senderName);
       const senderEmail = 'contacto@vatosalfa.com';
-      const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
-      const localAddress = localData.address || '';
+      const logoUrl = safeHttpsLogoUrl(
+        empresaConfig.logo_url || empresaConfig.icon_url,
+        'https://vatosalfa.com/logo.png'
+      );
+      const localAddress = escapeHtml(localData.address || '');
 
       // 4. Build HTML
       const dateObj = saleData.fecha_hora_venta ? (saleData.fecha_hora_venta.toDate ? saleData.fecha_hora_venta.toDate() : new Date(saleData.fecha_hora_venta)) : new Date();
-      const dateStr = dateObj.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const dateStr = escapeHtml(dateObj.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }));
 
       // Build Items HTML
       const itemsHtml = (saleData.items || []).map(item => `
         <tr style="border-bottom: 1px solid #eee;">
-          <td style="padding: 10px; color: #333;">${item.nombre}</td>
-          <td style="padding: 10px; text-align: right; color: #333;">$${(item.precio_unitario || item.precio || 0).toLocaleString('es-MX')} x ${item.cantidad}</td>
-          <td style="padding: 10px; text-align: right; font-weight: bold; color: #333;">$${((item.precio_unitario || item.precio || 0) * item.cantidad).toLocaleString('es-MX')}</td>
+          <td style="padding: 10px; color: #333;">${escapeHtml(item.nombre)}</td>
+          <td style="padding: 10px; text-align: right; color: #333;">$${Number(item.precio_unitario || item.precio || 0).toLocaleString('es-MX')} x ${Number(item.cantidad) || 1}</td>
+          <td style="padding: 10px; text-align: right; font-weight: bold; color: #333;">$${(Number(item.precio_unitario || item.precio || 0) * (Number(item.cantidad) || 1)).toLocaleString('es-MX')}</td>
         </tr>
       `).join('');
 
-      const subtotal = saleData.subtotal || 0;
-      const discount = saleData.descuento?.monto || 0;
-      const total = saleData.total || 0;
+      const subtotal = Number(saleData.subtotal || 0);
+      const discount = Number(saleData.descuento?.monto || 0);
+      const total = Number(saleData.total || 0);
 
       const htmlContent = `
         <div style="font-family: 'Roboto', Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
           <div style="background-color: #ffffff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             
             <div style="text-align: center; margin-bottom: 20px;">
-              <img src="${logoUrl}" alt="${senderName}" style="max-width: 150px; height: auto;" />
+              <img src="${logoUrl}" alt="${safeSenderName}" style="max-width: 150px; height: auto;" />
               <h2 style="margin-top: 10px; color: #333;">Comprobante de Pago</h2>
-              <p style="color: #666; font-size: 0.9em;">ID: ${saleId}</p>
+              <p style="color: #666; font-size: 0.9em;">ID: ${escapeHtml(saleId)}</p>
             </div>
 
             <div style="margin-bottom: 30px; border-top: 1px solid #eee; border-bottom: 1px solid #eee; padding: 15px 0;">
                <p style="margin: 5px 0;"><strong>Fecha:</strong> ${dateStr}</p>
-               <p style="margin: 5px 0;"><strong>Cliente:</strong> ${clientData.nombre} ${clientData.apellido || ''}</p>
-               <p style="margin: 5px 0;"><strong>Local:</strong> ${localData.name || 'Sucursal'}</p>
+               <p style="margin: 5px 0;"><strong>Cliente:</strong> ${escapeHtml(clientData.nombre || '')} ${escapeHtml(clientData.apellido || '')}</p>
+               <p style="margin: 5px 0;"><strong>Local:</strong> ${escapeHtml(localData.name || 'Sucursal')}</p>
                ${localAddress ? `<p style="margin: 5px 0;"><strong>Dirección:</strong> ${localAddress}</p>` : ''}
-               <p style="margin: 5px 0;"><strong>Método de Pago:</strong> ${saleData.metodo_pago}</p>
+               <p style="margin: 5px 0;"><strong>Método de Pago:</strong> ${escapeHtml(saleData.metodo_pago || '')}</p>
             </div>
 
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -2342,7 +2514,7 @@ exports.sendSaleReceipt = onCall(
 
             <div style="text-align: center; font-size: 0.8em; color: #999; margin-top: 30px;">
               <p>Gracias por tu preferencia.</p>
-              <p>${senderName}</p>
+              <p>${safeSenderName}</p>
             </div>
 
           </div>
@@ -2380,12 +2552,10 @@ exports.sendCommissionReport = onCall(
     region: "us-central1"
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    }
+    await requireManagerOrAdminAuth(request);
 
-    const { professionalId, details, dateRangeStr } = request.data;
-    if (!professionalId || !details) {
+    const { professionalId, details, dateRangeStr } = request.data || {};
+    if (!professionalId || !Array.isArray(details)) {
       throw new HttpsError('invalid-argument', 'Faltan datos requeridos (professionalId, details).');
     }
 
@@ -2407,30 +2577,34 @@ exports.sendCommissionReport = onCall(
       const empresaSnap = await db.collection('empresa').limit(1).get();
       const empresaConfig = !empresaSnap.empty ? empresaSnap.docs[0].data() : {};
       const senderName = empresaConfig.name || 'VATOS ALFA';
+      const safeSenderName = escapeHtml(senderName);
       const senderEmail = 'contacto@vatosalfa.com';
-      const logoUrl = empresaConfig.logo_url || empresaConfig.icon_url || 'https://vatosalfa.com/logo.png';
+      const logoUrl = safeHttpsLogoUrl(
+        empresaConfig.logo_url || empresaConfig.icon_url,
+        'https://vatosalfa.com/logo.png'
+      );
 
       // 3. Build HTML List (Mobile Friendly)
       const rowsHtml = details.map(item => `
           <div style="padding: 15px 0; border-bottom: 1px solid #eee;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
-                <span style="font-weight: 700; color: #333; font-size: 15px; width: 70%;">${item.itemName}</span>
-                <span style="font-weight: 700; color: #2563eb; font-size: 15px;">$${item.commissionAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
+                <span style="font-weight: 700; color: #333; font-size: 15px; width: 70%;">${escapeHtml(item.itemName)}</span>
+                <span style="font-weight: 700; color: #2563eb; font-size: 15px;">$${Number(item.commissionAmount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666; margin-bottom: 2px;">
-                 <span>${item.clientName}</span>
-                 <span style="background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${item.itemType}</span>
+                 <span>${escapeHtml(item.clientName)}</span>
+                 <span style="background-color: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${escapeHtml(item.itemType)}</span>
             </div>
 
             <div style="font-size: 12px; color: #999; text-align: right;">
-                Venta: $${item.saleAmount.toLocaleString('es-MX')} (${item.commissionPercentage}%)
+                Venta: $${Number(item.saleAmount || 0).toLocaleString('es-MX')} (${Number(item.commissionPercentage || 0)}%)
             </div>
           </div>
       `).join('');
 
-      const totalSales = details.reduce((acc, item) => acc + item.saleAmount, 0);
-      const totalCommission = details.reduce((acc, item) => acc + item.commissionAmount, 0);
+      const totalSales = details.reduce((acc, item) => acc + Number(item.saleAmount || 0), 0);
+      const totalCommission = details.reduce((acc, item) => acc + Number(item.commissionAmount || 0), 0);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -2446,10 +2620,10 @@ exports.sendCommissionReport = onCall(
             
             <!-- Header -->
             <div style="background-color: #ffffff; padding: 30px 20px 20px 20px; text-align: center; border-bottom: 1px solid #f0f0f0;">
-              <img src="${logoUrl}" alt="${senderName}" style="max-width: 160px; height: auto; object-fit: contain;" />
+              <img src="${logoUrl}" alt="${safeSenderName}" style="max-width: 160px; height: auto; object-fit: contain;" />
               <h2 style="margin-top: 20px; color: #314177; font-size: 20px; margin-bottom: 5px;">Reporte de Comisiones</h2>
-              <p style="color: #666; font-size: 14px; margin: 0;">Hola <strong>${proData.name || 'Profesional'}</strong></p>
-              ${dateRangeStr ? `<div style="display: inline-block; background-color: #f3f4f6; color: #555; padding: 4px 10px; border-radius: 20px; font-size: 12px; margin-top: 15px;">${dateRangeStr}</div>` : ''}
+              <p style="color: #666; font-size: 14px; margin: 0;">Hola <strong>${escapeHtml(proData.name || 'Profesional')}</strong></p>
+              ${dateRangeStr ? `<div style="display: inline-block; background-color: #f3f4f6; color: #555; padding: 4px 10px; border-radius: 20px; font-size: 12px; margin-top: 15px;">${escapeHtml(dateRangeStr)}</div>` : ''}
             </div>
 
             <!-- Content List -->
@@ -2471,7 +2645,7 @@ exports.sendCommissionReport = onCall(
 
             <!-- Footer -->
             <div style="padding: 20px; text-align: center; color: #94a3b8; font-size: 11px;">
-               ${senderName}
+               ${safeSenderName}
                <br/>
                Enviado automáticamente por el sistema.
             </div>
@@ -2512,11 +2686,9 @@ exports.resendReservationConfirmation = onCall(
     region: "us-central1"
   },
   async (request) => {
-    if (!request.auth) {
-      throw new HttpsError('unauthenticated', 'Usuario no autenticado.');
-    }
+    await requireStaffAuth(request);
 
-    const { reservationId } = request.data;
+    const { reservationId } = request.data || {};
     if (!reservationId) {
       throw new HttpsError('invalid-argument', 'Falta el ID de la reserva.');
     }
@@ -2573,23 +2745,42 @@ exports.sendVatosAlfaEmailVerification = onRequest(
 
       // SOPORTE PARA SUBIDA DE FOTO DE PERFIL (EVITA INCOMPATIBILIDAD CON BLOBS EN REACT NATIVE)
       if (payload.action === 'uploadProfilePhoto') {
-        const targetUid = payload.uid;
+        const decoded = await verifyBearerAuthHeader(request);
+        if (!decoded) {
+          return response.status(401).json({ error: { message: 'Autenticación requerida (Bearer Token inválido o ausente).' } });
+        }
+        const isCallerAdmin = await isGeneralAdminUser(decoded.uid, decoded.email);
+        const targetUid = isCallerAdmin && payload.uid ? String(payload.uid) : decoded.uid;
         const base64Data = payload.base64;
         if (!targetUid || !base64Data) {
-          return response.status(400).json({ error: { message: 'Faltan parámetros requeridos (uid o base64).' } });
+          return response.status(400).json({ error: { message: 'Faltan parámetros requeridos (base64).' } });
         }
 
-        console.log(`[uploadProfilePhoto] Subiendo foto para UID: ${targetUid}`);
-        const rawBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+        const rawBase64 = String(base64Data).includes(',') ? String(base64Data).split(',')[1] : String(base64Data);
         const buffer = Buffer.from(rawBase64, 'base64');
+        const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+        if (!buffer.length || buffer.length > MAX_IMAGE_BYTES) {
+          return response.status(400).json({ error: { message: 'La imagen excede el tamaño máximo permitido (5 MB).' } });
+        }
+        // Verificar magic bytes (JPEG, PNG o WEBP)
+        const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+        const isPng = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+        const isWebp = buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP';
+        if (!isJpeg && !isPng && !isWebp) {
+          return response.status(400).json({ error: { message: 'Formato de imagen no válido. Solo se permiten JPEG, PNG o WEBP.' } });
+        }
+        const contentType = isPng ? 'image/png' : (isWebp ? 'image/webp' : 'image/jpeg');
+        const ext = isPng ? 'png' : (isWebp ? 'webp' : 'jpg');
+
+        console.log(`[uploadProfilePhoto] Subiendo foto para UID: ${targetUid}`);
         const bucket = admin.storage().bucket('agenda-1ae08.firebasestorage.app');
-        const fileName = `clientes_fotos/${targetUid}_${Date.now()}.jpg`;
+        const fileName = `clientes_fotos/${targetUid}_${Date.now()}.${ext}`;
         const token = uuidv4();
         const file = bucket.file(fileName);
 
         await file.save(buffer, {
           metadata: {
-            contentType: 'image/jpeg',
+            contentType,
             metadata: {
               firebaseStorageDownloadTokens: token,
             },
@@ -2624,11 +2815,49 @@ exports.sendVatosAlfaEmailVerification = onRequest(
         });
       }
 
-      // SOPORTE PARA ELIMINACIÓN DEFINITIVA DE CUENTA Y DATOS
+      // SOPORTE PARA ELIMINACIÓN DEFINITIVA DE CUENTA Y DATOS (Apple 5.1.1(v) & Google Play)
       if (payload.action === 'delete') {
-        const targetUid = payload.uid;
-        const targetEmail = payload.email ? String(payload.email).trim().toLowerCase() : null;
-        console.log(`[deleteAccount] Solicitando eliminación para UID: ${targetUid}, Email: ${targetEmail}`);
+        const decoded = await verifyBearerAuthHeader(request);
+        if (!decoded) {
+          return response.status(401).json({ error: { message: 'Autenticación requerida para eliminar tu cuenta.' } });
+        }
+        const isCallerAdmin = await isGeneralAdminUser(decoded.uid, decoded.email);
+        const targetUid = isCallerAdmin && payload.uid ? String(payload.uid) : decoded.uid;
+        const targetEmail = (isCallerAdmin && payload.email ? String(payload.email) : (decoded.email || '')).trim().toLowerCase() || null;
+        console.log(`[deleteAccount] Solicitando eliminación autenticada para UID: ${targetUid}, Email: ${targetEmail}`);
+
+        // Revocación obligatoria de token Sign in with Apple si viene authorizationCode y están las credenciales de Apple
+        if (payload.appleAuthorizationCode && process.env.APPLE_CLIENT_ID && process.env.APPLE_CLIENT_SECRET) {
+          try {
+            const tokenRes = await fetch('https://appleid.apple.com/auth/token', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                client_id: process.env.APPLE_CLIENT_ID,
+                client_secret: process.env.APPLE_CLIENT_SECRET,
+                code: String(payload.appleAuthorizationCode),
+                grant_type: 'authorization_code',
+              }),
+            });
+            const tokenData = await tokenRes.json().catch(() => ({}));
+            const tokenToRevoke = tokenData.refresh_token || tokenData.access_token;
+            if (tokenToRevoke) {
+              await fetch('https://appleid.apple.com/auth/revoke', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                  client_id: process.env.APPLE_CLIENT_ID,
+                  client_secret: process.env.APPLE_CLIENT_SECRET,
+                  token: tokenToRevoke,
+                  token_type_hint: tokenData.refresh_token ? 'refresh_token' : 'access_token',
+                }),
+              });
+              console.log(`[deleteAccount] Token de Sign in with Apple revocado para UID ${targetUid}`);
+            }
+          } catch (appleRevokeErr) {
+            console.warn(`[deleteAccount] No se pudo revocar token de Apple: ${appleRevokeErr.message}`);
+          }
+        }
 
         if (targetUid) {
           try {
@@ -2640,17 +2869,12 @@ exports.sendVatosAlfaEmailVerification = onRequest(
           try {
             await admin.firestore().collection('clientes').doc(targetUid).delete();
           } catch (_) {}
-        } else if (targetEmail) {
           try {
-            const userRec = await admin.auth().getUserByEmail(targetEmail);
-            await admin.auth().deleteUser(userRec.uid);
-            try {
-              await admin.firestore().collection('clientes').doc(userRec.uid).delete();
-            } catch (_) {}
-            console.log(`[deleteAccount] Auth Email ${targetEmail} eliminado con éxito.`);
-          } catch (e) {
-            console.warn(`[deleteAccount] Error borrando Auth Email: ${e.message}`);
-          }
+            const linkedSnap = await admin.firestore().collection('clientes').where('authUid', '==', targetUid).get();
+            for (const d of linkedSnap.docs) {
+              await d.ref.delete();
+            }
+          } catch (_) {}
         }
 
         if (targetEmail) {
@@ -2678,18 +2902,28 @@ exports.sendVatosAlfaEmailVerification = onRequest(
           return response.status(400).json({ error: { message: 'El correo electrónico es requerido.' } });
         }
 
-        console.log(`[reset_password] Generando enlace de restablecimiento para: ${targetEmail}`);
+        const clientIp = getRequestClientIp(request);
+        if (
+          !checkFnRateLimit(`pwd_ip:${clientIp}`, 5, 10 * 60_000) ||
+          !checkFnRateLimit(`pwd_email:${targetEmail}`, 5, 10 * 60_000)
+        ) {
+          return response.status(429).json({
+            error: { message: 'Demasiadas solicitudes. Intenta nuevamente en unos minutos.' },
+          });
+        }
 
-        // 1. Verificar si el usuario existe en Firebase Auth
+        console.log(`[reset_password] Solicitando enlace de restablecimiento para correo.`);
+
+        // 1. Verificar si el usuario existe en Firebase Auth (sin enumeración de cuentas en la respuesta)
         let userRec = null;
         try {
           userRec = await admin.auth().getUserByEmail(targetEmail);
         } catch (e) {
-          console.warn(`[reset_password] Usuario no encontrado en Auth para ${targetEmail}: ${e.message}`);
-          return response.status(404).json({
-            error: {
-              message: `No encontramos ninguna cuenta activa en la App con el correo ${targetEmail}. Si aún no te has registrado, puedes crear tu cuenta en la pestaña "Crear Cuenta".`
-            }
+          console.warn(`[reset_password] Correo no encontrado en Auth (respuesta genérica por seguridad).`);
+          return response.status(200).json({
+            data: { success: true },
+            success: true,
+            message: 'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña.'
           });
         }
 
@@ -2698,7 +2932,7 @@ exports.sendVatosAlfaEmailVerification = onRequest(
         console.log(`[reset_password] Enlace de restablecimiento generado con éxito.`);
 
         // 3. Preparar el HTML con la línea de diseño oficial de Vatos Alfa
-        const clientName = userRec.displayName || payload.name || 'Caballero';
+        const clientName = escapeHtml(userRec.displayName || payload.name || 'Caballero');
         const htmlContent = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -2774,13 +3008,38 @@ exports.sendVatosAlfaEmailVerification = onRequest(
         return;
       }
 
-      console.log(`[sendVatosAlfaEmailVerification] Solicitando enlace para: ${email}`);
-      // 1. Generar enlace oficial y seguro de verificación de Firebase Auth
-      const link = await admin.auth().generateEmailVerificationLink(email);
+      const clientIp = getRequestClientIp(request);
+      if (
+        !checkFnRateLimit(`verif_ip:${clientIp}`, 5, 10 * 60_000) ||
+        !checkFnRateLimit(`verif_email:${email}`, 5, 10 * 60_000)
+      ) {
+        response.status(429).json({
+          error: { message: 'Demasiadas solicitudes de verificación. Intenta nuevamente en unos minutos.' },
+        });
+        return;
+      }
+
+      console.log(`[sendVatosAlfaEmailVerification] Solicitando enlace de verificación.`);
+      // 1. Generar enlace oficial y seguro de verificación de Firebase Auth (sin enumeración de cuentas)
+      let link = '';
+      try {
+        link = await admin.auth().generateEmailVerificationLink(email);
+      } catch (linkErr) {
+        if (linkErr?.code === 'auth/user-not-found' || String(linkErr?.message || '').includes('no user record')) {
+          console.warn('[sendVatosAlfaEmailVerification] Correo no registrado (respuesta genérica por seguridad).');
+          response.status(200).json({
+            data: { success: true },
+            success: true,
+            message: 'Si el correo está registrado, recibirás un enlace de verificación.',
+          });
+          return;
+        }
+        throw linkErr;
+      }
       console.log(`[sendVatosAlfaEmailVerification] Enlace generado con éxito.`);
 
       // 2. Preparar el HTML con la línea de diseño oficial de Vatos Alfa (sin dorado, logo real, sin tarjeta de beneficios)
-      const clientName = name || 'Caballero';
+      const clientName = escapeHtml(name || 'Caballero');
       const htmlContent = `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -2848,7 +3107,7 @@ exports.sendVatosAlfaEmailVerification = onRequest(
       response.status(200).json({ data: { success: true }, success: true });
     } catch (error) {
       console.error("Error sending custom verification email:", error);
-      response.status(500).json({ error: { message: error.message || 'Error interno al enviar correo.' } });
+      response.status(500).json({ error: { message: 'Error interno al procesar la solicitud.' } });
     }
   }
 );

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 
 export interface PromotionItem {
   id: string;
@@ -72,7 +73,6 @@ export function AlfaPromotionsSection({
 
   return (
     <section
-      id="promociones"
       className={cn(
         "w-full py-8 sm:py-12 bg-slate-50/80 border-t border-border/60 scroll-mt-20",
         className
@@ -130,10 +130,11 @@ export function AlfaPromotionsSection({
                       src={promoImg}
                       alt={promoTitle}
                       fill
-                      quality={92}
+                      quality={80}
+                      loading="lazy"
                       className="object-cover group-hover/thumb:scale-105 transition-transform duration-300"
                       sizes="(max-width: 640px) 110px, 120px"
-                      unoptimized={true}
+                      unoptimized={shouldBypassImageOptimization(promoImg)}
                     />
                   ) : (
                     <div className="absolute inset-0 bg-[#0F172A] flex flex-col items-center justify-center text-slate-500 p-2 text-center">
@@ -168,6 +169,7 @@ export function AlfaPromotionsSection({
                       type="button"
                       onClick={(e) => handleSharePromotion(promo, e)}
                       title="Compartir enlace de la promoción"
+                      aria-label={`Compartir promoción ${promoTitle}`}
                       className="h-7 w-7 rounded-lg border border-slate-200/80 bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
                     >
                       {copiedId === promo.id ? (
@@ -266,9 +268,10 @@ export function AlfaPromotionsSection({
                   src={(selectedPromotion?.imageUrl || selectedPromotion?.imagenUrl)!}
                   alt={selectedPromotion?.name || selectedPromotion?.titulo || 'Promoción'}
                   fill
-                  quality={95}
+                  quality={90}
+                  sizes="(max-width: 640px) 90vw, 384px"
                   className="object-contain"
-                  unoptimized={true}
+                  unoptimized={shouldBypassImageOptimization((selectedPromotion?.imageUrl || selectedPromotion?.imagenUrl)!)}
                 />
               </div>
             )}

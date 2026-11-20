@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { AlfaGoldSmokeBurst } from '@/components/ui/alfa-gold-smoke-burst';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 
 export interface BenefitItem {
   id: string;
@@ -99,7 +100,16 @@ function StickyBenefitCard({
           scale,
           transformOrigin: 'top center',
         }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Ver detalles de ${benefit.titulo}`}
         onClick={() => onSelect(benefit)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onSelect(benefit);
+          }
+        }}
         className="group relative w-full h-[195px] sm:h-[220px] rounded-2xl sm:rounded-3xl p-[1.5px] overflow-hidden bg-slate-900 border border-white/20 hover:border-blue-500/80 shadow-[0_12px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_16px_40px_rgba(37,99,235,0.3)] transition-all duration-300 cursor-pointer select-none"
       >
         {/* Haz de luz láser rotatorio perimetral (NeonGlowCard / ShinyButton) */}
@@ -116,10 +126,11 @@ function StickyBenefitCard({
               src={benefit.imagenUrl}
               alt={benefit.titulo}
               fill
-              quality={90}
+              quality={80}
+              loading="lazy"
               className="object-cover group-hover:scale-105 transition-transform duration-500"
               sizes="(max-width: 640px) 100vw, 600px"
-              unoptimized={true}
+              unoptimized={shouldBypassImageOptimization(benefit.imagenUrl)}
             />
           ) : (
             <div className="absolute inset-0 bg-[#0F172A] flex items-center justify-center">
@@ -315,7 +326,7 @@ export function AlfaBenefitsSection({
   });
 
   return (
-    <div id="beneficios" className={cn("w-full py-12 md:py-16 bg-white scroll-mt-20", className)}>
+    <div className={cn("w-full py-12 md:py-16 bg-white scroll-mt-20", className)}>
       <div className="container px-4 md:px-6 max-w-4xl mx-auto">
         {/* Sticky Stacking Deck of Cards (Estilo StickyPromoStack de la App Móvil) */}
         <div
@@ -391,7 +402,7 @@ export function AlfaBenefitsSection({
           className="w-[calc(100%-2.5rem)] sm:w-full max-w-lg bg-transparent border-none shadow-none p-0 overflow-visible flex flex-col justify-center items-center max-h-[90vh] z-50 gap-0"
         >
           {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
-          <AlfaGoldSmokeBurst key={selectedBenefit?.id || 'benefit-smoke'} />
+          {selectedBenefit && <AlfaGoldSmokeBurst key={selectedBenefit?.id || 'benefit-smoke'} />}
 
           {/* Contenedor Oficial del Modal */}
           <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[85vh]">
@@ -432,9 +443,10 @@ export function AlfaBenefitsSection({
                     src={selectedBenefit.imagenUrl}
                     alt={selectedBenefit.titulo}
                     fill
-                    quality={100}
+                    quality={90}
+                    sizes="(max-width: 640px) 95vw, 480px"
                     className="object-cover"
-                    unoptimized={true}
+                    unoptimized={shouldBypassImageOptimization(selectedBenefit.imagenUrl)}
                   />
                   {selectedBenefit.discount && (
                     <div

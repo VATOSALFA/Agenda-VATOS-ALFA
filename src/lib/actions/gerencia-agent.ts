@@ -6,6 +6,8 @@ import { getDb } from '@/lib/firebase-server';
 import { verifyBranchManagerAccess } from '@/lib/ai/ceo-security';
 import { getGerenciaAgentTools, janetCallerStorage } from '@/lib/ai/gerencia-tools';
 import { getMexicoDateInfo, sanitizeExecutiveMessage } from '@/lib/ai/agent-utils';
+import { checkRateLimit } from '@/lib/server-auth';
+import { WEAK_BLOCKED_AUTH_CODES } from '@/lib/auth-code-validator';
 
 function serializeDocDate(val: any): string {
   if (!val) return new Date().toISOString();
@@ -782,8 +784,18 @@ export async function executeApprovedGerenciaAction({
   const tipo = prop.tipoAccion;
   const params = prop.parametrosEjecucion || {};
 
-  // Si es eliminación de venta facturada, validar el código de autorización (ej. 1234 o código activo)
+  let matchedCodeLabel = '****';
+
+  // Si es eliminación de venta facturada, validar el código de autorización activo con permisos suficientes
   if (tipo === 'eliminar_venta') {
+    const rl = checkRateLimit(`gerencia_pin:${managerUser.uid}`, 8, 60_000);
+    if (!rl.allowed) {
+      return {
+        success: false,
+        message: `Demasiados intentos de autorización. Espera ${rl.retryAfterSec} segundos.`,
+      };
+    }
+
     const cleanCode = String(authCode || '').trim();
     if (!cleanCode) {
       return {
@@ -791,34 +803,61 @@ export async function executeApprovedGerenciaAction({
         message: 'Ingresa tu código de autorización para confirmar la eliminación de la venta.',
       };
     }
+    if (WEAK_BLOCKED_AUTH_CODES.has(cleanCode)) {
+      return {
+        success: false,
+        message: 'Código bloqueado por seguridad. Usa un código válido de autorización.',
+      };
+    }
+
     const codesSnap = await db
       .collection('codigos_autorizacion')
       .where('code', '==', cleanCode)
       .where('active', '==', true)
+      .limit(5)
       .get();
 
-    let codeValid = cleanCode === '1234';
+    let codeValid = false;
+    const parseExpiresMs = (rawExp: any) => {
+      if (!rawExp) return 0;
+      if (typeof rawExp?.toMillis === 'function') return rawExp.toMillis();
+      const ms = new Date(rawExp).getTime();
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
     if (!codesSnap.empty) {
       for (const d of codesSnap.docs) {
-        const cData = d.data() || {};
-        if (cData.is_one_time === true) {
-          if (cData.used === true) continue;
-          const expMs = cData.expires_at ? new Date(cData.expires_at).getTime() : 0;
-          if (expMs > 0 && Date.now() > expMs) {
-            await d.ref.update({ active: false });
-            continue;
+        const verified = await db.runTransaction(async (tx) => {
+          const fresh = await tx.get(d.ref);
+          if (!fresh.exists) return null;
+          const cData = fresh.data() || {};
+          if (cData.active !== true) return null;
+          if (cData.expires_at) {
+            const expMs = parseExpiresMs(cData.expires_at);
+            if (!expMs || Date.now() > expMs) {
+              tx.update(d.ref, { active: false });
+              return null;
+            }
           }
-          await d.ref.update({
-            active: false,
-            used: true,
-            used_at: new Date().toISOString(),
-            used_by: managerUser.name,
-            used_in_module: 'Janet Gerencia (Eliminar Venta)',
-          });
+          if (cData.is_one_time === true) {
+            if (cData.used === true) return null;
+            if (cData.invoiced_sales === false) return null;
+            tx.update(d.ref, {
+              active: false,
+              used: true,
+              used_at: new Date().toISOString(),
+              used_by: managerUser.name,
+              used_in_module: 'Janet Gerencia (Eliminar Venta)',
+            });
+            return { isOneTime: true };
+          }
+          if (cData.invoiced_sales !== true) return null;
+          return { isOneTime: false };
+        });
+
+        if (verified) {
           codeValid = true;
-          break;
-        } else {
-          codeValid = true;
+          matchedCodeLabel = verified.isOneTime ? '1-USO (****)' : '****';
           break;
         }
       }
@@ -827,7 +866,7 @@ export async function executeApprovedGerenciaAction({
     if (!codeValid) {
       return {
         success: false,
-        message: 'Código de autorización inválido o ya utilizado.',
+        message: 'Código de autorización inválido, sin permisos o ya utilizado.',
       };
     }
   }
@@ -898,9 +937,19 @@ export async function executeApprovedGerenciaAction({
         }
       }
 
-      for (const [productId, { quantity, name }] of productQuantities.entries()) {
+      const productEntries = Array.from(productQuantities.entries());
+      const productSnaps = await Promise.all(
+        productEntries.map(([productId]) => transaction.get(db.collection('productos').doc(productId)))
+      );
+      const reservationRef = currentSaleData.reservationId
+        ? db.collection('reservas').doc(currentSaleData.reservationId)
+        : null;
+      const reservationSnap = reservationRef ? await transaction.get(reservationRef) : null;
+
+      for (let idx = 0; idx < productEntries.length; idx++) {
+        const [productId, { quantity, name }] = productEntries[idx];
         const productRef = db.collection('productos').doc(productId);
-        const productSnap = await transaction.get(productRef);
+        const productSnap = productSnaps[idx];
         if (productSnap.exists) {
           const pData = productSnap.data() || {};
           const currentStock = Number(pData.stock || 0);
@@ -927,9 +976,7 @@ export async function executeApprovedGerenciaAction({
       }
 
       // 2. Revertir Reserva asociada si existe
-      if (currentSaleData.reservationId) {
-        const reservationRef = db.collection('reservas').doc(currentSaleData.reservationId);
-        const reservationSnap = await transaction.get(reservationRef);
+      if (reservationRef && reservationSnap) {
         if (reservationSnap.exists) {
           const resData = reservationSnap.data() || {};
           const isDepositSale =
@@ -1010,6 +1057,7 @@ export async function executeApprovedGerenciaAction({
       severity: 'critical',
       entityId: ventaId,
       localId: params.localId || 'unknown',
+      authCode: matchedCodeLabel,
       timestamp: FieldValue.serverTimestamp(),
     });
 

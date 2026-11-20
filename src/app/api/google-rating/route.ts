@@ -1,13 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const revalidate = 3600; // Cache 1 hour
+export const revalidate = 43200; // 12 hours
+
+const DEFAULT_PLACE_ID = process.env.GOOGLE_MAPS_PLACE_ID || 'ChIJxQ4hagBb04URwQM4y5UsX-U';
+const OFFICIAL_QUERY = 'VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro';
+const ALLOWED_PLACE_IDS = new Set<string>(
+  [DEFAULT_PLACE_ID, 'ChIJxQ4hagBb04URwQM4y5UsX-U'].filter(Boolean)
+);
+
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const ratingCache = new Map<string, { payload: Record<string, any>; expiresAt: number }>();
+
+function jsonWithCache(payload: Record<string, any>) {
+  return NextResponse.json(payload, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=43200, stale-while-revalidate=86400',
+    },
+  });
+}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const query =
-    searchParams.get('query') ||
-    'VATOS ALFA Barber Shop Av. Sombrerete 1001, Col. Cipreses, Querétaro';
-  const placeId = searchParams.get('placeId') || process.env.GOOGLE_MAPS_PLACE_ID || 'ChIJxQ4hagBb04URwQM4y5UsX-U';
+  const requestedPlaceId = (searchParams.get('placeId') || '').trim();
+  const placeId = ALLOWED_PLACE_IDS.has(requestedPlaceId) ? requestedPlaceId : DEFAULT_PLACE_ID;
+
+  const cached = ratingCache.get(placeId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return jsonWithCache(cached.payload);
+  }
 
   const defaultMapsUri = `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
 
@@ -18,37 +38,34 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     '';
 
-  // 1. Si hay API Key de Google Places (v1 o Legacy), consultar en tiempo real
   if (apiKey) {
     try {
-      // 1.1 Google Places API (New v1) por Place ID (recomendado y exacto)
-      if (placeId) {
-        const v1PlaceRes = await fetch(
-          `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=es`,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': apiKey,
-              'X-Goog-FieldMask': 'rating,userRatingCount,googleMapsUri,reviews',
-            },
-            next: { revalidate: 3600 },
-          }
-        );
-        if (v1PlaceRes.ok) {
-          const v1PlaceData = await v1PlaceRes.json();
-          if (v1PlaceData && typeof v1PlaceData.rating === 'number') {
-            return NextResponse.json({
-              rating: Number(v1PlaceData.rating.toFixed(1)),
-              userRatingCount: v1PlaceData.userRatingCount ?? 102,
-              googleMapsUri: v1PlaceData.googleMapsUri || defaultMapsUri,
-              reviews: v1PlaceData.reviews || [],
-              source: 'google_places_v1_details',
-            });
-          }
+      // Google Places API (New v1) solo con campos esenciales (sin `reviews` para evitar SKU Atmosphere)
+      const v1PlaceRes = await fetch(
+        `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=es`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': 'rating,userRatingCount,googleMapsUri',
+          },
+          next: { revalidate: 43200 },
+        }
+      );
+      if (v1PlaceRes.ok) {
+        const v1PlaceData = await v1PlaceRes.json();
+        if (v1PlaceData && typeof v1PlaceData.rating === 'number') {
+          const payload = {
+            rating: Number(v1PlaceData.rating.toFixed(1)),
+            userRatingCount: v1PlaceData.userRatingCount ?? 102,
+            googleMapsUri: v1PlaceData.googleMapsUri || defaultMapsUri,
+            source: 'google_places_v1_details',
+          };
+          ratingCache.set(placeId, { payload, expiresAt: Date.now() + CACHE_TTL_MS });
+          return jsonWithCache(payload);
         }
       }
 
-      // Google Places API (New v1) Text Search
       const v1Res = await fetch('https://places.googleapis.com/v1/places:searchText', {
         method: 'POST',
         headers: {
@@ -57,44 +74,24 @@ export async function GET(req: NextRequest) {
           'X-Goog-FieldMask': 'places.rating,places.userRatingCount,places.googleMapsUri',
         },
         body: JSON.stringify({
-          textQuery: query,
+          textQuery: OFFICIAL_QUERY,
           languageCode: 'es',
         }),
-        next: { revalidate: 3600 },
+        next: { revalidate: 43200 },
       });
 
       if (v1Res.ok) {
         const v1Data = await v1Res.json();
         const place = v1Data?.places?.[0];
         if (place && typeof place.rating === 'number') {
-          return NextResponse.json({
+          const payload = {
             rating: Number(place.rating.toFixed(1)),
             userRatingCount: place.userRatingCount || null,
             googleMapsUri: place.googleMapsUri || defaultMapsUri,
             source: 'google_places_v1',
-          });
-        }
-      }
-
-      // Fallback a Places Text Search clásico
-      const textSearchRes = await fetch(
-        `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(
-          query
-        )}&inputtype=textquery&fields=rating,user_ratings_total,place_id&key=${encodeURIComponent(apiKey)}`,
-        { next: { revalidate: 3600 } }
-      );
-      if (textSearchRes.ok) {
-        const tsData = await textSearchRes.json();
-        const candidate = tsData?.candidates?.[0];
-        if (candidate && typeof candidate.rating === 'number') {
-          return NextResponse.json({
-            rating: Number(candidate.rating.toFixed(1)),
-            userRatingCount: candidate.user_ratings_total || null,
-            googleMapsUri: candidate.place_id
-              ? `https://www.google.com/maps/place/?q=place_id:${candidate.place_id}`
-              : defaultMapsUri,
-            source: 'google_places_find',
-          });
+          };
+          ratingCache.set(placeId, { payload, expiresAt: Date.now() + CACHE_TTL_MS });
+          return jsonWithCache(payload);
         }
       }
     } catch (err) {
@@ -102,46 +99,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Intento de extracción pública desde Google Maps / Search sin API Key
-  try {
-    const publicRes = await fetch(
-      `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=es`,
-      {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Accept-Language': 'es-MX,es;q=0.9',
-        },
-        next: { revalidate: 3600 },
-      }
-    );
-
-    if (publicRes.ok) {
-      const html = await publicRes.text();
-      // Buscar patrón de calificación en metadatos o bloque de lugar (ej. "4.9 estrellas" o [4.9, 120])
-      const ariaMatch = html.match(/([45]\.\d)\s+estrellas/i) || html.match(/aria-label="([45]\.\d)\s+estrellas/i);
-      if (ariaMatch && ariaMatch[1]) {
-        const parsedRating = parseFloat(ariaMatch[1]);
-        if (!isNaN(parsedRating) && parsedRating >= 1 && parsedRating <= 5) {
-          const countMatch = html.match(/(\d+)\s+opiniones/i) || html.match(/(\d+)\s+reseñas/i);
-          return NextResponse.json({
-            rating: Number(parsedRating.toFixed(1)),
-            userRatingCount: countMatch ? parseInt(countMatch[1], 10) : null,
-            googleMapsUri: defaultMapsUri,
-            source: 'google_maps_public',
-          });
-        }
-      }
-    }
-  } catch (err) {
-    // Ignorar silenciosamente si Google bloquea la petición sin key
-  }
-
-  // 3. Fallback institucional real verificado con Google Maps
-  return NextResponse.json({
+  const fallbackPayload = {
     rating: 4.5,
     userRatingCount: 102,
     googleMapsUri: defaultMapsUri,
     source: 'fallback',
-  });
+  };
+  ratingCache.set(placeId, { payload: fallbackPayload, expiresAt: Date.now() + 30 * 60 * 1000 });
+  return jsonWithCache(fallbackPayload);
 }

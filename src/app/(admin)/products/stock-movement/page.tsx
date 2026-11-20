@@ -3,10 +3,9 @@
 import { useState, useMemo, useEffect } from "react";
 import { format, startOfDay, endOfDay } from "date-fns";
 import { es } from "date-fns/locale";
-import { Timestamp, where } from "firebase/firestore";
+import { Timestamp, where, orderBy, limit } from "firebase/firestore";
 import type { DateRange } from "react-day-picker";
 import { useRouter } from "next/navigation";
-import * as XLSX from 'xlsx';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -71,11 +70,16 @@ export default function StockMovementPage() {
     // Queries
     const { data: movements, loading: movementsLoading } = useFirestoreQuery<StockMovement>(
         'movimientos_inventario',
-        `movements-${queryKey}`,
+        `movements-${queryKey}-${dateRange?.from?.getTime() || 'recent'}-${dateRange?.to?.getTime() || 'none'}`,
         ...(dateRange?.from ? [
             where('date', '>=', Timestamp.fromDate(startOfDay(dateRange.from))),
-            where('date', '<=', Timestamp.fromDate(endOfDay(dateRange.to || dateRange.from)))
-        ] : [])
+            where('date', '<=', Timestamp.fromDate(endOfDay(dateRange.to || dateRange.from))),
+            orderBy('date', 'desc'),
+            limit(500)
+        ] : [
+            orderBy('date', 'desc'),
+            limit(200)
+        ])
     );
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
     const { data: categories, loading: categoriesLoading } = useFirestoreQuery<ProductCategory>('categorias_productos');
@@ -212,7 +216,7 @@ export default function StockMovementPage() {
         setCurrentPage(1);
     };
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (filteredMovements.length === 0) {
             toast({
                 variant: "destructive",
@@ -238,6 +242,7 @@ export default function StockMovementPage() {
             };
         });
 
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Movimientos_Stock");

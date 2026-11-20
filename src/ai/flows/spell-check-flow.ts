@@ -7,6 +7,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { verifyStaffAccess } from '@/lib/server-auth';
 
 const SpellCheckInputSchema = z.object({
   text: z.string().describe('The text to be spell-checked.'),
@@ -153,11 +154,13 @@ const COMMON_NAMES: Record<string, string> = {
 };
 
 export async function spellCheck(text: string): Promise<SpellCheckOutput> {
-  const trimmedText = text.trim();
+  await verifyStaffAccess();
+  const cappedText = String(text || '').slice(0, 200);
+  const trimmedText = cappedText.trim();
 
   // If the text is very short, don't attempt to correct it.
   if (trimmedText.length <= 2) {
-    return { correctedText: text, hasCorrection: false };
+    return { correctedText: cappedText, hasCorrection: false };
   }
 
   // 1. Dictionary Check (Instant & Offline)

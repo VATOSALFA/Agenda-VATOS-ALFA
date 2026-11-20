@@ -56,7 +56,7 @@
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.475.0",
     "mercadopago": "^2.11.0",
-    "next": "16.0.10",
+    "next": "16.4.6",
     "react": "^19.2.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^19.2.1",
@@ -94,5 +94,13 @@
       "eslint": "$eslint"
     },
     "eslint": "$eslint"
-  }
+  },
+  "browserslist": [
+    "chrome >= 109",
+    "edge >= 109",
+    "firefox >= 115",
+    "safari >= 16",
+    "ios_saf >= 16",
+    "and_chr >= 109"
+  ]
 }

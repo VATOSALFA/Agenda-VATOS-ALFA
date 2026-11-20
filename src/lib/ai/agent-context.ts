@@ -7,6 +7,7 @@ export interface ChatExecutionContext {
   clientEmail?: string;
   clientNotes?: string;
   clientId?: string;
+  channel?: 'whatsapp' | 'simulador' | 'web' | 'app' | string;
   humanHandoffRequested?: boolean;
   simulation?: boolean;
   mutationAttempted?: boolean;

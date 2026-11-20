@@ -73,10 +73,10 @@ export async function getCeoExecutiveDashboardSnapshot(idToken: string) {
   ] = await Promise.all([
     computeFinancialStatementForRange(startCurrentMonth, endCurrentMonth, currentMonthKey),
     computeFinancialStatementForRange(startPrevMonth, endPrevMonth, prevMonthKey),
-    db.collection('ventas_canceladas').get(),
-    db.collection('settings').doc('app_movil').collection('opiniones').get(),
+    db.collection('ventas_canceladas').where('eliminada_el', '>=', cutoff15Days).limit(150).get(),
+    db.collection('settings').doc('app_movil').collection('opiniones').limit(100).get(),
     db.collection('conversaciones').limit(40).get(),
-    db.collection('productos').get(),
+    db.collection('productos').limit(300).get(),
     db.collection('ceo_memoria').limit(20).get(),
     db.collection('ceo_propuestas').limit(20).get(),
     db.collection('ceo_sesiones').orderBy('actualizado_en', 'desc').limit(25).get(),

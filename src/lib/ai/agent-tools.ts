@@ -4,7 +4,8 @@ import { getClientReservations, getClientReservation, validateAgentBooking, asse
 import { hasPendingDeposit, isUpcomingReservation } from './agent-utils';
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getAvailableSlots, createPublicReservation } from '@/lib/actions/booking';
+import { getAvailableSlots } from '@/lib/actions/booking';
+import { createReservationServer } from '@/lib/services/reservation-service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { parseClientCustomDuration } from '@/lib/client-notes-helper';
@@ -481,6 +482,30 @@ export const verificarORegistrarClienteTool = ai.defineTool(
 
       // 3. Si ya existe en la base de datos
       if (existingDoc) {
+        const isWebChannel = chatContextStorage.getStore()?.channel === 'web';
+        if (isWebChannel) {
+          const providedMissing: string[] = [];
+          if (!nombreCompleto || nombreCompleto.trim().length < 2 || /cliente/i.test(nombreCompleto)) {
+            providedMissing.push('nombre completo');
+          }
+          if (!cleanPhone || cleanPhone.length < 10) providedMissing.push('celular (10 dígitos)');
+          if (!cleanEmail || !cleanEmail.includes('@')) providedMissing.push('correo electrónico');
+
+          if (providedMissing.length > 0) {
+            return {
+              registrado: false,
+              faltanDatos: providedMissing,
+              mensaje: `Para continuar con tu reserva en línea, es OBLIGATORIO que nos confirmes: ${providedMissing.join(', ')}.`,
+            };
+          }
+
+          return {
+            registrado: true,
+            clienteId: existingDoc.id,
+            mensaje: `Datos listos para continuar con tu reserva. Puedes proceder a agendar su cita con crear_cita.`,
+          };
+        }
+
         const data = existingDoc.data();
         const currentEmail = data.correo || data.email || '';
 
@@ -797,7 +822,7 @@ export const crearCitaTool = ai.defineTool(
         chatContext?.conversationId?.startsWith('sim')
       );
 
-      const res = await createPublicReservation({
+      const res = await createReservationServer({
         client: {
           name: firstName,
           lastName: lastName,
@@ -819,7 +844,7 @@ export const crearCitaTool = ai.defineTool(
         totalAmount: anticipoCalc.montoTotal,
         paymentStatus: (anticipoCalc.requiereAnticipo || liquidarTotalEnLinea) ? 'pending_payment' : 'pendiente',
         productItems: resolvedProducts,
-      });
+      }, { trustedInternalCaller: true });
 
       if ('error' in res && res.error) {
         let alternativeSlotsText = '';
@@ -1387,6 +1412,8 @@ export const reagendarCitaTool = ai.defineTool(
       let updatedPrice = Number(data.total || data.precio || 140);
       let updatedItems = data.items;
 
+      let selectedServiceDocs: any[] = [];
+
       if (nuevoServicio && nuevoServicio.trim()) {
         const servicesSnap = await db.collection('servicios').get();
         const norm = (s: string) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
@@ -1399,6 +1426,7 @@ export const reagendarCitaTool = ai.defineTool(
 
         if (matchedDoc) {
           const sData = matchedDoc.data();
+          selectedServiceDocs = [sData];
           updatedServiceId = matchedDoc.id;
           updatedServiceName = sData.name || sData.nombre || nuevoServicio;
           updatedPrice = Number(sData.price ?? sData.precio ?? updatedPrice);
@@ -1423,12 +1451,45 @@ export const reagendarCitaTool = ai.defineTool(
         }
       }
 
+      if (selectedServiceDocs.length === 0) {
+        const existingServiceIds = Array.from(
+          new Set(
+            [
+              ...items
+                .filter((it: any) => (!it?.tipo || it.tipo === 'servicio') && it?.id)
+                .map((it: any) => String(it.id)),
+              ...(updatedServiceId ? [String(updatedServiceId)] : []),
+            ].filter(Boolean)
+          )
+        );
+        if (existingServiceIds.length > 0) {
+          const docSnaps = await Promise.all(
+            existingServiceIds.map((id) => db.collection('servicios').doc(id).get())
+          );
+          selectedServiceDocs = docSnaps.filter((s) => s.exists).map((s) => s.data());
+        }
+        if (selectedServiceDocs.length === 0) {
+          selectedServiceDocs = [
+            {
+              name: updatedServiceName,
+              nombre: updatedServiceName,
+              price: updatedPrice,
+              precio: updatedPrice,
+            },
+          ];
+        }
+      }
+
+      const nuevoAnticipo = await calcularAnticipoParaServicios(selectedServiceDocs, 0, targetHora);
+
       if (!Number.isFinite(duration) || duration <= 0) {
         duration = Number(data.duracion || 30);
       }
 
       const end = minutes(targetHora) + duration;
       const endTime = `${Math.floor(end / 60).toString().padStart(2, '0')}:${(end % 60).toString().padStart(2, '0')}`;
+
+      let requiresNewDeposit = false;
 
       await db.runTransaction(async transaction => {
         const fresh = await transaction.get(ref);
@@ -1453,6 +1514,11 @@ export const reagendarCitaTool = ai.defineTool(
         }
 
         const anticipoPagado = Number(current.anticipo_pagado || current.anticipoPagado || 0);
+        const needsDepositUpdate =
+          nuevoAnticipo.requiereAnticipo &&
+          anticipoPagado + 1 < Number(nuevoAnticipo.montoAnticipo || 0);
+        requiresNewDeposit = needsDepositUpdate;
+
         const updatePayload: Record<string, any> = {
           fecha: targetFecha,
           hora_inicio: targetHora,
@@ -1469,6 +1535,18 @@ export const reagendarCitaTool = ai.defineTool(
           precio: updatedPrice,
           saldo_pendiente: Math.max(0, updatedPrice - anticipoPagado),
           ...(updatedItems ? { items: updatedItems } : {}),
+          ...(nuevoAnticipo.requiereAnticipo
+            ? {
+                requiere_pago_anticipado: true,
+                anticipo_esperado: nuevoAnticipo.montoAnticipo,
+              }
+            : {}),
+          ...(needsDepositUpdate
+            ? {
+                estado: 'Pendiente de pago',
+                pago_estado: 'pending_payment',
+              }
+            : {}),
           etiqueta_recordatorio: 'reagendada',
           updated_at: new Date(),
           notas:
@@ -1479,9 +1557,13 @@ export const reagendarCitaTool = ai.defineTool(
         transaction.update(ref, updatePayload);
       });
 
+      const depositNotice = requiresNewDeposit
+        ? ` Nota: por el nuevo servicio/horario se requiere anticipo de $${nuevoAnticipo.montoAnticipo.toFixed(2)} MXN (${nuevoAnticipo.motivo}) para confirmar.`
+        : '';
+
       return {
         exito: true,
-        mensaje: `¡Cita actualizada con éxito! Servicio: ${updatedServiceName} (${duration} min) para el ${targetFecha} de ${targetHora} a ${endTime} hrs. Total: $${updatedPrice.toFixed(2)} MXN.`,
+        mensaje: `¡Cita actualizada con éxito! Servicio: ${updatedServiceName} (${duration} min) para el ${targetFecha} de ${targetHora} a ${endTime} hrs. Total: $${updatedPrice.toFixed(2)} MXN.${depositNotice}`,
       };
     } catch (e: any) {
       console.error('Error in reagendar_cita:', e);

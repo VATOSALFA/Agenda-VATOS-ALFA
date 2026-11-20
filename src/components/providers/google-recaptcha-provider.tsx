@@ -1,23 +1,27 @@
 'use client';
 
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 
+const DynamicGoogleReCaptchaProvider = dynamic(
+  () => import('react-google-recaptcha-v3').then((m) => m.GoogleReCaptchaProvider),
+  { ssr: false }
+);
+
 export function RecaptchaProvider({ children }: { children: ReactNode }) {
-    const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-    const pathname = usePathname();
+  const siteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+  const pathname = usePathname() || '';
 
-    const isReservationPage = pathname?.startsWith('/reservar');
+  const isReservationPage = pathname.startsWith('/reservar');
 
-    if (!siteKey || !isReservationPage) {
-        if (!siteKey) console.warn("Recaptcha Site Key missing");
-        return <>{children}</>;
-    }
+  if (!isReservationPage || !siteKey) {
+    return <>{children}</>;
+  }
 
-    return (
-        <GoogleReCaptchaProvider reCaptchaKey={siteKey} language="es">
-            {children}
-        </GoogleReCaptchaProvider>
-    );
+  return (
+    <DynamicGoogleReCaptchaProvider reCaptchaKey={siteKey} language="es">
+      {children}
+    </DynamicGoogleReCaptchaProvider>
+  );
 }

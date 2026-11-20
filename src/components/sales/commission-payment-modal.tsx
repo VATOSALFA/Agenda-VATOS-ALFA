@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
 import {
@@ -359,14 +359,26 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
     }, []);
 
 
+    const isPayingRef = useRef(false);
+
     const handlePayCommissions = async () => {
+        if (isPayingRef.current) return;
         if (selectedProfessionals.length === 0) {
             toast({ variant: 'destructive', title: 'Sin selección', description: 'Por favor, selecciona al menos un profesional para pagar.' });
             return;
         }
+        isPayingRef.current = true;
         setIsProcessing(true);
         try {
-            const batch = writeBatch(db);
+            let batch = writeBatch(db);
+            let batchOpCount = 0;
+            const commitIfFull = async () => {
+                if (batchOpCount >= 400) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    batchOpCount = 0;
+                }
+            };
             const formattedDate = new Intl.DateTimeFormat('es-MX', {
                 timeZone: 'America/Mexico_City',
                 day: '2-digit',
@@ -440,6 +452,8 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                     }
 
                     batch.set(egresoRef, egresoPayload);
+                    batchOpCount += 1;
+                    await commitIfFull();
 
                     // Mark items as paid (accumulate changes in salesToUpdate map declared outside the loop)
                     comm.saleItemIds.forEach(idPair => {
@@ -500,11 +514,15 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
                 mergedSalePatches.set(saleId, patch);
             });
 
-            mergedSalePatches.forEach((patch, saleId) => {
+            for (const [saleId, patch] of mergedSalePatches.entries()) {
                 batch.update(doc(db, 'ventas', saleId), patch);
-            });
+                batchOpCount += 1;
+                await commitIfFull();
+            }
 
-            await batch.commit();
+            if (batchOpCount > 0) {
+                await batch.commit();
+            }
 
             toast({ title: 'Comisiones y propinas liquidadas', description: `Se han registrado ${professionalsToPay.length} liquidaciones con éxito.` });
             onFormSubmit();
@@ -513,6 +531,7 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
             console.error("Error al pagar comisiones y propinas:", error);
             toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron registrar los pagos.' });
         } finally {
+            isPayingRef.current = false;
             setIsProcessing(false);
         }
     }

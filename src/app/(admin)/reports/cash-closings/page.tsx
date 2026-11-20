@@ -5,7 +5,6 @@ import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -326,7 +325,7 @@ export default function CashClosingsPage() {
         return <ArrowDown className="ml-1 h-3 w-3 text-blue-400" />;
     };
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (!sortedClosings || sortedClosings.length === 0) {
             toast({
                 title: "No hay datos para exportar",
@@ -370,6 +369,7 @@ export default function CashClosingsPage() {
             { 'Concepto': 'Diferencia Neta Acumulada', 'Valor': `$${(totalEntregadoSum - totalSistemaSum).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` },
         ];
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dataForExcel), "Cierres de Caja");
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), "Resumen");

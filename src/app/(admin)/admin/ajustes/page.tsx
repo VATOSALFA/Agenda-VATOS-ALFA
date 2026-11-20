@@ -362,6 +362,11 @@ export default function AjustesPage() {
                         className="text-xs whitespace-pre-wrap font-sans leading-relaxed"
                         dangerouslySetInnerHTML={{
                           __html: (form.watch('whatsappMessageTemplate') || '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;')
                             .replace(/{nombre}/g, 'Juan Pérez')
                             .replace(/{servicios}/g, 'Corte Clásico')
                             .replace(/{fecha}/g, 'Lunes, 12 Octubre')
@@ -434,6 +439,11 @@ export default function AjustesPage() {
                         className="text-xs whitespace-pre-wrap font-sans leading-relaxed"
                         dangerouslySetInnerHTML={{
                           __html: (form.watch('whatsappReminderTemplate') || '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;')
                             .replace(/{nombre}/g, 'Juan Pérez')
                             .replace(/{servicios}/g, 'Corte Clásico')
                             .replace(/{fecha}/g, 'Lunes, 12 Octubre')
@@ -516,6 +526,11 @@ export default function AjustesPage() {
                         className="text-xs whitespace-pre-wrap font-sans leading-relaxed break-words"
                         dangerouslySetInnerHTML={{
                           __html: (form.watch('whatsappAnticipoTemplate') || '')
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;')
+                            .replace(/"/g, '&quot;')
+                            .replace(/'/g, '&#39;')
                             .replace(/{nombre}/g, 'Guadalupe Rojo')
                             .replace(/{servicios}/g, '4 El alfa superior')
                             .replace(/{fecha}/g, 'Viernes, 06 de noviembre')

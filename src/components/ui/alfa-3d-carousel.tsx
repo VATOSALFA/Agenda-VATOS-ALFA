@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlfaGoldSmokeBurst } from '@/components/ui/alfa-gold-smoke-burst';
 import { cn } from '@/lib/utils';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 import { LookbookStyle, LOOKBOOK_STYLES } from '@/data/lookbook-styles';
 
 interface Alfa3DCarouselProps {
@@ -75,9 +76,12 @@ export function Alfa3DCarousel({
       }
     };
 
-    updateDimensions();
+    const rafId = requestAnimationFrame(updateDimensions);
     window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateDimensions);
+    };
   }, []);
 
   // Modal detail state
@@ -130,15 +134,18 @@ export function Alfa3DCarousel({
     [stopAnimation]
   );
 
-  // Autoplay management
+  // Autoplay management (solo anima mientras la sección es visible)
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const isVisibleRef = useRef(false);
   const autoPlayTimer = useRef<NodeJS.Timeout | null>(null);
   const idleTimeout = useRef<NodeJS.Timeout | null>(null);
   const isInteracting = useRef(false);
 
   const startAutoPlay = useCallback(() => {
     if (autoPlayTimer.current) clearInterval(autoPlayTimer.current);
+    if (!isVisibleRef.current) return;
     autoPlayTimer.current = setInterval(() => {
-      if (!isInteracting.current && !selectedStyleForModal) {
+      if (!isInteracting.current && !selectedStyleForModal && isVisibleRef.current) {
         const nextAngle = rotationRef.current - STEP_ANGLE;
         animateToAngle(nextAngle, 620);
       }
@@ -165,8 +172,33 @@ export function Alfa3DCarousel({
   }, [startAutoPlay]);
 
   useEffect(() => {
-    startAutoPlay();
+    if (typeof IntersectionObserver === 'undefined') {
+      isVisibleRef.current = true;
+      startAutoPlay();
+      return () => {
+        pauseAutoPlay();
+        stopAnimation();
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisibleRef.current = entry.isIntersecting;
+        if (entry.isIntersecting) {
+          startAutoPlay();
+        } else {
+          pauseAutoPlay();
+        }
+      },
+      { rootMargin: '50px' }
+    );
+
+    if (sectionRef.current) {
+      observer.observe(sectionRef.current);
+    }
+
     return () => {
+      observer.disconnect();
       pauseAutoPlay();
       stopAnimation();
     };
@@ -236,18 +268,16 @@ export function Alfa3DCarousel({
     }
   };
 
-  const sectionRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
     offset: ['start end', 'end start'],
   });
 
-  // Retracción 3D en profundidad cinemática (Zoom-out y desenfoque) hacia el fondo
+  // Retracción 3D en profundidad cinemática acelerada por GPU (scale, y, opacity)
   // cuando el carrusel se va ocultando para dar paso a Productos Destacados
   const stageScale = useTransform(scrollYProgress, [0, 0.60, 0.86], [1, 1, 0.78]);
   const stageY = useTransform(scrollYProgress, [0, 0.60, 0.86], [0, 0, -40]);
   const stageOpacity = useTransform(scrollYProgress, [0, 0.64, 0.86], [1, 1, 0]);
-  const stageFilter = useTransform(scrollYProgress, [0, 0.64, 0.86], ['blur(0px)', 'blur(0px)', 'blur(8px)']);
 
   return (
     <div ref={sectionRef} className={cn("w-full my-auto py-16 sm:py-20 md:py-24 select-none overflow-hidden", className)}>
@@ -256,7 +286,6 @@ export function Alfa3DCarousel({
           scale: stageScale,
           y: stageY,
           opacity: stageOpacity,
-          filter: stageFilter,
         }}
         className="max-w-6xl xl:max-w-7xl mx-auto px-4 sm:px-6 will-change-transform"
       >
@@ -373,7 +402,16 @@ export function Alfa3DCarousel({
               return (
                 <div
                   key={`slot_${offset}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Ver corte ${styleItem.titulo || 'Corte Alfa'}`}
                   onClick={() => handleCardClick(cardData)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleCardClick(cardData);
+                    }
+                  }}
                   className="absolute cursor-pointer transition-transform duration-75 select-none"
                   style={{
                     width: `${stageDimensions.cardSize}px`,
@@ -395,11 +433,12 @@ export function Alfa3DCarousel({
                       src={styleItem.imagenUrl}
                       alt={styleItem.titulo || 'Corte Alfa'}
                       fill
-                      quality={85}
+                      quality={80}
+                      loading="lazy"
                       sizes="(max-width: 640px) 160px, (max-width: 1024px) 200px, (max-width: 1440px) 260px, 320px"
                       className="object-cover pointer-events-none"
                       draggable={false}
-                      unoptimized={true}
+                      unoptimized={shouldBypassImageOptimization(styleItem.imagenUrl)}
                     />
 
                     {/* Indicador de visualización: Icono de ojo limpio al centro en la parte inferior */}
@@ -473,9 +512,10 @@ export function Alfa3DCarousel({
                     src={selectedStyleForModal.imagenUrl}
                     alt={selectedStyleForModal.titulo || 'Corte Real'}
                     fill
-                    quality={95}
+                    quality={90}
+                    sizes="(max-width: 640px) 95vw, 448px"
                     className="object-cover"
-                    unoptimized={true}
+                    unoptimized={shouldBypassImageOptimization(selectedStyleForModal.imagenUrl)}
                   />
                 )}
               </div>

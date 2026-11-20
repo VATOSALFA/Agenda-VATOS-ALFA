@@ -12,7 +12,11 @@
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/backend-credentials.json",
+      "**/.env*",
+      "scratch/**",
+      "scripts/**"
     ],
     "rewrites": [
       {
@@ -31,7 +35,11 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "package-lock.json"
+        "package-lock.json",
+        "**/backend-credentials.json",
+        "**/.env*",
+        "scratch/**",
+        "scripts/**"
       ],
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" install"

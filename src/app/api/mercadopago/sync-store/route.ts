@@ -1,14 +1,29 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb } from '@/lib/firebase-server';
+import { verifyStaffAccess } from '@/lib/server-auth';
 
 export async function POST(req: NextRequest) {
     try {
-        const body = await req.json();
-        const { accessToken, userId, externalId } = body;
+        const bearerToken = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim() || undefined;
+        try {
+            await verifyStaffAccess(bearerToken, { requireGeneralAdmin: true });
+        } catch (authErr: any) {
+            const msg = String(authErr?.message || '');
+            const status = msg.includes('403') || msg.includes('permiso') || msg.includes('Administrador General')
+                ? 403
+                : 401;
+            return NextResponse.json({ error: msg || 'No autorizado.' }, { status });
+        }
 
-        if (!accessToken || !userId) {
-            return NextResponse.json({ error: "Faltan credenciales (AccessToken o UserID)" }, { status: 400 });
+        const body = await req.json();
+        const { accessToken, userId } = body || {};
+
+        if (!accessToken || typeof accessToken !== 'string' || accessToken.trim().length < 10) {
+            return NextResponse.json({ error: "AccessToken de Mercado Pago inválido." }, { status: 400 });
+        }
+        const cleanUserId = String(userId || '').trim();
+        if (!/^\d{4,25}$/.test(cleanUserId)) {
+            return NextResponse.json({ error: "UserID de Mercado Pago inválido." }, { status: 400 });
         }
 
         // 1. SEARCH/CREATE SYSTEM STORE (V2)
@@ -19,7 +34,7 @@ export async function POST(req: NextRequest) {
         const SYSTEM_EXTERNAL_ID = "SucursalVatosAlfa_Sistema_V1";
         console.log("Buscando sucursal del sistema...");
 
-        const searchStores = await fetch(`https://api.mercadopago.com/users/${userId}/stores/search?external_id=${SYSTEM_EXTERNAL_ID}`, {
+        const searchStores = await fetch(`https://api.mercadopago.com/users/${cleanUserId}/stores/search?external_id=${SYSTEM_EXTERNAL_ID}`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         const searchData = await searchStores.json();
@@ -57,7 +72,7 @@ export async function POST(req: NextRequest) {
                 external_id: SYSTEM_EXTERNAL_ID
             };
 
-            const storeRes = await fetch(`https://api.mercadopago.com/users/${userId}/stores`, {
+            const storeRes = await fetch(`https://api.mercadopago.com/users/${cleanUserId}/stores`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${accessToken}`,
@@ -66,7 +81,10 @@ export async function POST(req: NextRequest) {
                 body: JSON.stringify(storeData)
             });
             const storeResult = await storeRes.json();
-            if (!storeRes.ok) throw new Error("No se pudo crear la sucursal: " + (storeResult.message || storeResult.error));
+            if (!storeRes.ok) {
+                console.error("MP store create failed:", storeResult);
+                return NextResponse.json({ error: "No se pudo crear la sucursal en Mercado Pago." }, { status: 400 });
+            }
             storeId = storeResult.id;
             storeName = storeData.name;
         }
@@ -77,7 +95,7 @@ export async function POST(req: NextRequest) {
         const posData = {
             name: "Caja Principal",
             fixed_amount: true,
-            store_id: Number(storeId), // Ensure it is a number or string as required, typically Number for MP API
+            store_id: Number(storeId),
             external_id: "CajaVatosAlfa1"
         };
 
@@ -97,7 +115,6 @@ export async function POST(req: NextRequest) {
 
         if (!posRes.ok) {
             console.warn("POS creation warning:", posResult);
-            // Check if exists by external_id
             const getPos = await fetch(`https://api.mercadopago.com/pos?external_id=${posData.external_id}`, {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             });
@@ -107,9 +124,7 @@ export async function POST(req: NextRequest) {
                 qr = getPosData.results[0].qr;
                 console.log("Caja ya existía, usando la existente.");
             } else {
-                // Try to force creation without external_id if that was the conflict
-                // Or return specific error
-                return NextResponse.json({ error: "No se pudo crear la caja.", details: posResult }, { status: 400 });
+                return NextResponse.json({ error: "No se pudo crear o recuperar la caja en Mercado Pago." }, { status: 400 });
             }
         }
 
@@ -121,6 +136,6 @@ export async function POST(req: NextRequest) {
 
     } catch (error: any) {
         console.error("Error syncing MP Store/POS:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: "Error interno sincronizando con Mercado Pago." }, { status: 500 });
     }
 }

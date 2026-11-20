@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import { getDb } from '@/lib/firebase-server';
+import { escapeHtml } from '@/lib/server-auth';
 
 let cachedMpToken: { token: string; expiresAt: number } | null = null;
 
@@ -34,14 +35,21 @@ async function getMercadoPagoToken(db: FirebaseFirestore.Firestore): Promise<str
 }
 
 function renderStatusHtml(title: string, message: string, ctaText: string, ctaUrl: string) {
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+  const safeCtaText = escapeHtml(ctaText);
+  const safeCtaUrl = /^https?:\/\//i.test(String(ctaUrl || '').trim())
+    ? escapeHtml(String(ctaUrl).trim())
+    : 'https://vatosalfa.com';
+
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title} • VATOS ALFA Barber Shop</title>
-  <meta property="og:title" content="${title} • VATOS ALFA Barber Shop" />
-  <meta property="og:description" content="${message}" />
+  <title>${safeTitle} • VATOS ALFA Barber Shop</title>
+  <meta property="og:title" content="${safeTitle} • VATOS ALFA Barber Shop" />
+  <meta property="og:description" content="${safeMessage}" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -106,9 +114,9 @@ function renderStatusHtml(title: string, message: string, ctaText: string, ctaUr
 <body>
   <div class="card">
     <div class="badge">VATOS ALFA BARBER SHOP</div>
-    <h1>${title}</h1>
-    <p>${message}</p>
-    <a class="btn" href="${ctaUrl}">${ctaText}</a>
+    <h1>${safeTitle}</h1>
+    <p>${safeMessage}</p>
+    <a class="btn" href="${safeCtaUrl}">${safeCtaText}</a>
   </div>
 </body>
 </html>`;
@@ -124,15 +132,15 @@ export async function GET(
     const mode = req.nextUrl.searchParams.get('m') === 'full' ? 'full' : 'deposit';
     const wantsJson = req.nextUrl.searchParams.get('format') === 'json';
 
-    if (!reservationId) {
+    if (!reservationId || !/^[a-zA-Z0-9_-]{4,64}$/.test(reservationId)) {
       return new NextResponse(
         renderStatusHtml(
           'Enlace no válido',
-          'No se encontró la referencia de la cita solicitada.',
+          'La referencia de la cita solicitada no es válida.',
           'Ir a VATOS ALFA',
           'https://vatosalfa.com'
         ),
-        { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
 
@@ -149,7 +157,7 @@ export async function GET(
           'Pago Seguro de Anticipo',
           'Confirma tu cita en VATOS ALFA Barber Shop con SPEI o tarjeta.',
           'Continuar al pago',
-          `https://vatosalfa.com/p/${reservationId}`
+          `https://vatosalfa.com/p/${encodeURIComponent(reservationId)}`
         ),
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
@@ -374,15 +382,15 @@ export async function GET(
       return NextResponse.redirect(prefResult.init_point, 302);
     }
 
-    return new NextResponse(
-      renderStatusHtml(
-        'Error al abrir pasarela',
-        'No fue posible inicializar el enlace de pago. Por favor intenta nuevamente.',
-        'Reintentar',
-        `https://vatosalfa.com/p/${reservationId}`
-      ),
-      { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-    );
+      return new NextResponse(
+        renderStatusHtml(
+          'Error al abrir pasarela',
+          'No fue posible inicializar el enlace de pago. Por favor intenta nuevamente.',
+          'Reintentar',
+          `https://vatosalfa.com/p/${encodeURIComponent(reservationId)}`
+        ),
+        { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      );
   } catch (err: any) {
     console.error('[ShortPayRedirect] Error:', err);
     return new NextResponse(

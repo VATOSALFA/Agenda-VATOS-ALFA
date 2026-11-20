@@ -256,12 +256,14 @@ export default function AgendaView() {
   // Quick Consult Modal State
   const [isQuickConsultOpen, setIsQuickConsultOpen] = useState(false);
 
-  // Automatic Janet Chat Reminder dispatcher when Agenda is open
+  // Automatic Janet Chat Reminder dispatcher when Agenda is open & visible (every 15 min)
   useEffect(() => {
-    checkAndSendPendingChatReminders().catch(() => {});
-    const reminderInterval = setInterval(() => {
+    const runIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       checkAndSendPendingChatReminders().catch(() => {});
-    }, 60 * 1000);
+    };
+    runIfVisible();
+    const reminderInterval = setInterval(runIfVisible, 15 * 60 * 1000);
     return () => clearInterval(reminderInterval);
   }, []);
 
@@ -750,23 +752,34 @@ export default function AgendaView() {
         autoCancellingIdsRef.current.add(res.id);
         const isSandbox = Boolean((res as any).isSandbox);
         const targetCol = isSandbox ? 'reservas_sandbox' : 'reservas';
-        updateDoc(doc(db, targetCol, res.id), {
-          estado: 'Cancelado',
-          motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 30 minutos de tolerancia.',
-          cancelada_automaticamente: true,
-          cancelado_en: Timestamp.now(),
+        const resRef = doc(db, targetCol, res.id);
+        runTransaction(db, async (tx) => {
+          const freshRes = await tx.get(resRef);
+          if (!freshRes.exists()) return false;
+          const freshData = freshRes.data() || {};
+          if (freshData.estado !== 'Pendiente de pago') return false;
+          if (
+            freshData.pago_estado === 'deposit_paid' ||
+            freshData.pago_estado === 'Pagado' ||
+            Number(freshData.anticipo_pagado || freshData.monto_pagado || 0) > 0
+          ) {
+            return false;
+          }
+          tx.update(resRef, {
+            estado: 'Cancelado',
+            motivo_cancelacion: 'Cancelada automáticamente por falta de pago de anticipo en los 30 minutos de tolerancia.',
+            cancelada_automaticamente: true,
+            cancelado_en: Timestamp.now(),
+          });
+          if (!isSandbox && freshData.cliente_id) {
+            tx.update(doc(db, 'clientes', freshData.cliente_id), {
+              citas_canceladas: increment(1),
+            });
+          }
+          return true;
         })
-          .then(async () => {
-            if (!isSandbox && res.cliente_id) {
-              try {
-                await updateDoc(doc(db, 'clientes', res.cliente_id), {
-                  citas_canceladas: increment(1)
-                });
-              } catch (cErr) {
-                console.warn('Error incrementando citas_canceladas del cliente:', cErr);
-              }
-            }
-            onDataRefresh();
+          .then((cancelled) => {
+            if (cancelled) onDataRefresh();
           })
           .catch((err) => {
             console.error('Error auto-cancelando cita por anticipo vencido:', err);

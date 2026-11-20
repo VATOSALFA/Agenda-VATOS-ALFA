@@ -1,26 +1,69 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Suspense } from 'react';
-import { CheckCircle, XCircle, AlertCircle, Info, Calendar, Clock, Home, RotateCcw } from 'lucide-react';
+import { Suspense, useState } from 'react';
+import { CheckCircle, XCircle, AlertCircle, Info, Calendar, Clock, Home, RotateCcw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CustomLoader } from '@/components/ui/custom-loader';
 
 function ActionResultContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
-    const status = searchParams.get('status');
+    const initialStatus = searchParams.get('status');
     const action = searchParams.get('action');
-    const nombre = searchParams.get('nombre') || '';
-    const fecha = searchParams.get('fecha') || '';
-    const hora = searchParams.get('hora') || '';
-    const message = searchParams.get('message') || '';
+    const token = searchParams.get('token') || '';
+    const initialNombre = searchParams.get('nombre') || '';
+    const initialFecha = searchParams.get('fecha') || '';
+    const initialHora = searchParams.get('hora') || '';
+    const initialMessage = searchParams.get('message') || '';
 
+    const [status, setStatus] = useState<string | null>(initialStatus);
+    const [nombre, setNombre] = useState(initialNombre);
+    const [fecha, setFecha] = useState(initialFecha);
+    const [hora, setHora] = useState(initialHora);
+    const [message, setMessage] = useState(initialMessage);
+    const [isExecuting, setIsExecuting] = useState(false);
+
+    const isPendingConfirmation = status === 'pending' && Boolean(token) && (action === 'confirm' || action === 'cancel');
     const isConfirmSuccess = status === 'success' && action === 'confirm';
     const isCancelSuccess = status === 'success' && action === 'cancel';
     const isAlready = status === 'already';
 
+    const handleExecuteAction = async () => {
+        if (!token || !action || isExecuting) return;
+        setIsExecuting(true);
+        try {
+            const res = await fetch('/api/cita/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, action }),
+            });
+            const data = await res.json().catch(() => ({}));
+            setStatus(data.status || (res.ok ? 'success' : 'error'));
+            if (data.nombre) setNombre(data.nombre);
+            if (data.fecha) setFecha(data.fecha);
+            if (data.hora) setHora(data.hora);
+            if (data.message) setMessage(data.message);
+        } catch {
+            setStatus('error');
+            setMessage('No se pudo conectar con el servidor. Intenta de nuevo.');
+        } finally {
+            setIsExecuting(false);
+        }
+    };
+
     const getHeaderInfo = () => {
+        if (isPendingConfirmation) {
+            return {
+                icon: action === 'confirm'
+                    ? <CheckCircle className="w-8 h-8 text-blue-400 mb-1" />
+                    : <XCircle className="w-8 h-8 text-red-400 mb-1" />,
+                title: action === 'confirm' ? 'Confirmar Asistencia' : 'Cancelar Cita',
+                subtitle: action === 'confirm'
+                    ? 'Confirma con un clic que asistirás a tu cita.'
+                    : 'Confirma si deseas cancelar esta reservación.',
+            };
+        }
         if (isConfirmSuccess) {
             return {
                 icon: <CheckCircle className="w-8 h-8 text-blue-400 mb-1" />,
@@ -74,6 +117,49 @@ function ActionResultContent() {
                 </div>
 
                 <div className="p-6 space-y-6">
+                    {isPendingConfirmation && (
+                        <div className="space-y-4 text-center">
+                            {nombre && (
+                                <p className="text-sm text-slate-300">
+                                    Hola <strong className="text-white font-semibold">{nombre}</strong>, revisa los datos de tu cita antes de continuar:
+                                </p>
+                            )}
+                            {(fecha || hora) && (
+                                <div className="bg-slate-950/60 rounded-xl p-4 border border-slate-800 space-y-2 text-left">
+                                    {fecha && (
+                                        <div className="flex items-center gap-2.5 text-slate-200">
+                                            <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+                                            <span className="text-sm font-semibold capitalize">{fecha}</span>
+                                        </div>
+                                    )}
+                                    {hora && (
+                                        <div className="flex items-center gap-2.5 text-slate-200">
+                                            <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                                            <span className="text-sm font-semibold">{hora} hrs</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            <Button
+                                variant={action === 'confirm' ? 'alfa' : 'destructive'}
+                                className="w-full h-11 text-sm font-bold shadow-lg"
+                                disabled={isExecuting}
+                                onClick={handleExecuteAction}
+                            >
+                                {isExecuting ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                        Procesando...
+                                    </>
+                                ) : action === 'confirm' ? (
+                                    'Confirmar mi asistencia'
+                                ) : (
+                                    'Sí, cancelar mi cita'
+                                )}
+                            </Button>
+                        </div>
+                    )}
+
                     {/* Status Content */}
                     {isConfirmSuccess && (
                         <div className="space-y-4 text-center">
@@ -142,7 +228,7 @@ function ActionResultContent() {
                         </div>
                     )}
 
-                    {!isConfirmSuccess && !isCancelSuccess && !isAlready && (
+                    {!isPendingConfirmation && !isConfirmSuccess && !isCancelSuccess && !isAlready && (
                         <div className="space-y-4 text-center">
                             <div className="bg-red-950/20 p-4 rounded-xl border border-red-500/30 text-left">
                                 <p className="text-xs text-slate-300 leading-relaxed">
@@ -154,14 +240,16 @@ function ActionResultContent() {
 
                     {/* Actions */}
                     <div className="space-y-3 pt-2">
-                        <Button 
-                            variant="alfa" 
-                            className="w-full h-11 text-sm font-bold shadow-lg"
-                            onClick={() => router.push('/')}
-                        >
-                            <Home className="w-4 h-4 mr-2" />
-                            Ir a la Página Principal
-                        </Button>
+                        {!isPendingConfirmation && (
+                            <Button 
+                                variant="alfa" 
+                                className="w-full h-11 text-sm font-bold shadow-lg"
+                                onClick={() => router.push('/')}
+                            >
+                                <Home className="w-4 h-4 mr-2" />
+                                Ir a la Página Principal
+                            </Button>
+                        )}
                         <Button 
                             variant="outline" 
                             className="w-full h-10 text-xs sm:text-sm text-slate-300 border-slate-700 bg-slate-800/40 hover:bg-slate-800 hover:text-white"

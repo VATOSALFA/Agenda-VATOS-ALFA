@@ -188,49 +188,86 @@ export function sanitizeExternalUntrustedText(raw: any, maxLength: number = 350)
  * CAPA 3: Verificación de PIN Maestro de Dirección para Poderes Ejecutivos (Escritura).
  * Incluye protección contra fuerza bruta (bloqueo temporal tras 3 intentos fallidos).
  */
+const WEAK_EXECUTIVE_PINS = new Set<string>([
+  '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999',
+  '1234', '4321', '2345', '3456', '4567', '5678', '6789', '9876', '0123', '1212',
+  '12345', '123456',
+]);
+
+function timingSafeHexEquals(aHex: string, bHex: string): boolean {
+  try {
+    if (!aHex || !bHex || aHex.length !== bHex.length) return false;
+    const bufA = Buffer.from(aHex, 'hex');
+    const bufB = Buffer.from(bHex, 'hex');
+    return bufA.length > 0 && bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
+  }
+}
+
+function parseExpiresAtMs(expiresAt: any): number {
+  if (!expiresAt) return 0;
+  if (typeof expiresAt?.toMillis === 'function') return expiresAt.toMillis();
+  if (expiresAt instanceof Date) return expiresAt.getTime();
+  if (typeof expiresAt === 'number') return expiresAt;
+  const parsed = new Date(expiresAt).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function hashPin(pin: string, salt: string): string {
   return crypto.createHash('sha256').update(`${salt}:${pin.trim()}`).digest('hex');
 }
 
 export async function verifyMasterExecutivePin(uid: string, pinInput: string): Promise<{ valid: boolean; message?: string }> {
   const cleanPin = String(pinInput || '').trim();
-  if (!cleanPin || cleanPin.length < 4) {
-    return { valid: false, message: 'Ingresa un PIN o código de autorización válido (mínimo 4 dígitos).' };
+  if (!cleanPin || cleanPin.length < 4 || WEAK_EXECUTIVE_PINS.has(cleanPin)) {
+    return { valid: false, message: 'Ingresa un PIN o código de autorización válido y seguro.' };
   }
 
   const db = getDb();
   const secRef = db.collection('ceo_config').doc('security');
-  const secDoc = await secRef.get();
   const nowMs = Date.now();
 
-  if (secDoc.exists) {
+  const txPinResult = await db.runTransaction(async (tx) => {
+    const secDoc = await tx.get(secRef);
+    if (!secDoc.exists) {
+      return { hasCustomPin: false as const };
+    }
     const data = secDoc.data() || {};
     const lockedUntilMs = Number(data.lockedUntilMs || 0);
     if (lockedUntilMs > nowMs) {
       const minsLeft = Math.ceil((lockedUntilMs - nowMs) / 60000);
       return {
-        valid: false,
+        hasCustomPin: true as const,
+        valid: false as const,
         message: `Ejecución bloqueada por seguridad tras intentos fallidos. Intenta de nuevo en ${minsLeft} min.`,
       };
     }
 
     if (data.pinHash && data.pinSalt) {
-      const candidateHash = hashPin(cleanPin, data.pinSalt);
-      if (candidateHash === data.pinHash) {
-        await secRef.set({ failedAttempts: 0, lockedUntilMs: 0, lastVerifiedAt: FieldValue.serverTimestamp() }, { merge: true });
-        return { valid: true };
+      const candidateHash = hashPin(cleanPin, String(data.pinSalt));
+      if (timingSafeHexEquals(candidateHash, String(data.pinHash))) {
+        tx.set(secRef, { failedAttempts: 0, lockedUntilMs: 0, lastVerifiedAt: FieldValue.serverTimestamp() }, { merge: true });
+        return { hasCustomPin: true as const, valid: true as const };
       } else {
         const failed = Number(data.failedAttempts || 0) + 1;
         const lockMs = failed >= 3 ? nowMs + 15 * 60 * 1000 : 0;
-        await secRef.set({ failedAttempts: failed, lockedUntilMs: lockMs }, { merge: true });
+        tx.set(secRef, { failedAttempts: failed, lockedUntilMs: lockMs }, { merge: true });
         return {
-          valid: false,
+          hasCustomPin: true as const,
+          valid: false as const,
           message: failed >= 3
             ? 'PIN Maestro incorrecto. Por seguridad se bloquearon las acciones ejecutivas por 15 minutos.'
             : `PIN Maestro incorrecto (intento ${failed} de 3).`,
         };
       }
     }
+
+    return { hasCustomPin: false as const };
+  });
+
+  if (txPinResult.hasCustomPin) {
+    return { valid: txPinResult.valid, ...(txPinResult.message ? { message: txPinResult.message } : {}) };
   }
 
   // Si aún no se ha personalizado un PIN Maestro exclusivo en ceo_config/security,
@@ -239,27 +276,37 @@ export async function verifyMasterExecutivePin(uid: string, pinInput: string): P
     .collection('codigos_autorizacion')
     .where('code', '==', cleanPin)
     .where('active', '==', true)
+    .limit(5)
     .get();
 
   if (!codesSnap.empty) {
     for (const d of codesSnap.docs) {
-      const cData = d.data() || {};
-      if (cData.is_one_time === true) {
-        if (cData.used === true) continue;
-        const expMs = cData.expires_at ? new Date(cData.expires_at).getTime() : 0;
-        if (expMs > 0 && Date.now() > expMs) {
-          await d.ref.update({ active: false });
-          continue;
+      const accepted = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(d.ref);
+        if (!fresh.exists) return false;
+        const cData = fresh.data() || {};
+        if (cData.active !== true) return false;
+        if (cData.expires_at) {
+          const expMs = parseExpiresAtMs(cData.expires_at);
+          if (!expMs || Date.now() > expMs) {
+            tx.update(d.ref, { active: false });
+            return false;
+          }
         }
-        await d.ref.update({
-          active: false,
-          used: true,
-          used_at: new Date().toISOString(),
-          used_by: uid,
-          used_in_module: 'Janet CEO (Autorización Ejecutiva)',
-        });
-        return { valid: true };
-      } else {
+        if (cData.is_one_time === true) {
+          if (cData.used === true) return false;
+          tx.update(d.ref, {
+            active: false,
+            used: true,
+            used_at: new Date().toISOString(),
+            used_by: uid,
+            used_in_module: 'Janet CEO (Autorización Ejecutiva)',
+          });
+          return true;
+        }
+        return cData.invoiced_sales === true;
+      });
+      if (accepted) {
         return { valid: true };
       }
     }
@@ -270,8 +317,8 @@ export async function verifyMasterExecutivePin(uid: string, pinInput: string): P
 
 export async function configureMasterExecutivePin(uid: string, newPin: string): Promise<{ success: boolean; message: string }> {
   const cleanPin = String(newPin || '').trim();
-  if (!/^\d{4,8}$/.test(cleanPin)) {
-    return { success: false, message: 'El PIN Maestro debe contener entre 4 y 8 dígitos numéricos.' };
+  if (!/^\d{4,8}$/.test(cleanPin) || WEAK_EXECUTIVE_PINS.has(cleanPin)) {
+    return { success: false, message: 'El PIN Maestro debe contener entre 4 y 8 dígitos numéricos y no ser trivial (ej. 1234).' };
   }
 
   const db = getDb();

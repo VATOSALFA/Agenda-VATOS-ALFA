@@ -1,28 +1,57 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Rules for media received from WhatsApp
-    match /whatsapp_media/{allPaths=**} {
-      // Allow public read access to anyone
-      allow read;
-      // Allow writes only for authenticated users (like our Cloud Function)
-      allow write: if request.auth != null;
-    }
-    
-    // Promotions Images (Public Read)
-    match /promotions/{allPaths=**} {
-      allow read;
-      allow write: if request.auth != null;
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Clientes Profile Photos (Public Read & Write for Mobile App)
+    function isNonAnonymousUser() {
+      return isSignedIn() &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous' &&
+        request.auth.token.get('email', '') != 'app_client_sync@vatosalfa.com';
+    }
+
+    function isGeneralAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == 'JxK6BLZPOBcBpjnuVZPsgmIHbZ12' ||
+        request.auth.token.get('email', '') == 'vatosalfa@gmail.com'
+      );
+    }
+
+    function isStaff() {
+      return isGeneralAdmin() || (
+        isNonAnonymousUser() &&
+        firestore.exists(/databases/(default)/documents/usuarios/$(request.auth.uid))
+      );
+    }
+
+    function isValidImageUpload() {
+      return request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    // Media received from WhatsApp (only authenticated staff/backend)
+    match /whatsapp_media/{allPaths=**} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+    
+    // Promotions Images (Public Read, Staff Write)
+    match /promotions/{allPaths=**} {
+      allow read: if true;
+      allow write: if isStaff() && isValidImageUpload();
+    }
+
+    // Clientes Profile Photos (Authenticated Read, Mobile App / Staff Image Write <= 5MB)
     match /clientes_fotos/{allPaths=**} {
-      allow read, write;
+      allow read: if isSignedIn();
+      allow write: if (isStaff() || isNonAnonymousUser()) && isValidImageUpload();
     }
 
     // Default secure rule for all other paths
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read: if isSignedIn();
+      allow write: if isStaff();
     }
   }
 }

@@ -1,7 +1,9 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { getAuth, getDb } from '@/lib/firebase-server';
 import { allPermissions, initialRoles } from '@/lib/permissions';
+import { STAFF_AUTH_COOKIE, verifyStaffAccess } from '@/lib/server-auth';
 
 export interface ServerResolvedUserProfile {
   uid: string;
@@ -90,7 +92,7 @@ export async function resolveAuthenticatedUserAction(idToken: string): Promise<R
 
   let decoded: { uid: string; email?: string; name?: string; picture?: string };
   try {
-    decoded = await adminAuth.verifyIdToken(idToken);
+    decoded = await adminAuth.verifyIdToken(idToken, true);
   } catch (err: any) {
     return { status: 'invalid_token', message: err?.message || 'Token expirado o inválido.' };
   }
@@ -196,6 +198,19 @@ export async function resolveAuthenticatedUserAction(idToken: string): Promise<R
     }
   }
 
+  try {
+    const cookieStore = await cookies();
+    cookieStore.set(STAFF_AUTH_COOKIE, idToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 3600,
+    });
+  } catch {
+    // Cookie cannot be set outside HTTP request context
+  }
+
   return {
     status: 'ok',
     profile: {
@@ -209,4 +224,33 @@ export async function resolveAuthenticatedUserAction(idToken: string): Promise<R
       audio_settings: safeAudioSettings,
     },
   };
+}
+
+export async function syncServerAuthCookieAction(idToken: string): Promise<{ ok: boolean }> {
+  try {
+    if (!idToken || typeof idToken !== 'string' || idToken.trim().length < 20) {
+      return { ok: false };
+    }
+    await verifyStaffAccess(idToken);
+    const cookieStore = await cookies();
+    cookieStore.set(STAFF_AUTH_COOKIE, idToken.trim(), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 3600,
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function clearServerAuthCookieAction(): Promise<void> {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete(STAFF_AUTH_COOKIE);
+  } catch {
+    // Ignore when cookies cannot be cleared
+  }
 }

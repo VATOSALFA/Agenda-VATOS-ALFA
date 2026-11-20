@@ -31,7 +31,7 @@ import { AuditLogEntry } from '@/lib/audit-logger';
 import type { Role } from '@/lib/types';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Skeleton } from '@/components/ui/skeleton';
-import * as XLSX from 'xlsx';
+import { where, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 
 export default function AuditPage() {
@@ -47,7 +47,23 @@ export default function AuditPage() {
     const [itemsPerPage, setItemsPerPage] = useState(10);
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'fecha', direction: 'desc' });
 
-    const { data: logs, loading: logsLoading } = useFirestoreQuery<AuditLogEntry & { id: string }>('audit_logs');
+    const auditConstraints = useMemo(() => {
+        if (dateRange?.from) {
+            return [
+                where('timestamp', '>=', Timestamp.fromDate(startOfDay(dateRange.from))),
+                where('timestamp', '<=', Timestamp.fromDate(endOfDay(dateRange.to || dateRange.from))),
+                orderBy('timestamp', 'desc'),
+                limit(500),
+            ];
+        }
+        return [orderBy('timestamp', 'desc'), limit(200)];
+    }, [dateRange?.from, dateRange?.to]);
+
+    const { data: logs, loading: logsLoading } = useFirestoreQuery<AuditLogEntry & { id: string }>(
+        'audit_logs',
+        `audit-${dateRange?.from?.getTime() || 'all'}-${dateRange?.to?.getTime() || 'none'}`,
+        ...auditConstraints
+    );
     const { data: usersData, loading: usersLoading } = useFirestoreQuery<any>('usuarios');
     const { data: roles } = useFirestoreQuery<Role>('roles');
     const userRole = roles?.find(r => r.title === user?.role);
@@ -157,7 +173,7 @@ export default function AuditPage() {
         return format(new Date(timestamp.seconds * 1000), "dd MMM yyyy HH:mm", { locale: es });
     };
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (filteredLogs.length === 0) {
             toast({ variant: "destructive", title: "Sin datos", description: "No hay registros para exportar." });
             return;
@@ -177,6 +193,7 @@ export default function AuditPage() {
             };
         });
 
+        const XLSX = await import('xlsx');
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(data);
         XLSX.utils.book_append_sheet(wb, ws, "Auditoría");

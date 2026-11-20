@@ -10,11 +10,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import type { Sale, Egreso, Profesional, Service, Product, User } from '@/lib/types';
-import { Timestamp, collection, query, getDocs } from 'firebase/firestore';
+import { Timestamp, collection, query, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
-import * as XLSX from 'xlsx';
 
 const tooltipContentStyle = {
     backgroundColor: '#151b2e',
@@ -80,8 +79,21 @@ export default function FinanzasResumenPage() {
         adminProductCommissions?: Record<string, { type: 'fixed' | 'percentage', value: number }>
     }>>({});
 
-    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>('ventas');
-    const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>('egresos');
+    const yearStartTs = useMemo(() => Timestamp.fromDate(new Date(year, 0, 1, 0, 0, 0, 0)), [year]);
+    const yearEndTs = useMemo(() => Timestamp.fromDate(new Date(year, 11, 31, 23, 59, 59, 999)), [year]);
+
+    const { data: sales, loading: salesLoading } = useFirestoreQuery<Sale>(
+        'ventas',
+        `finanzas-ventas-${year}`,
+        where('fecha_hora_venta', '>=', yearStartTs),
+        where('fecha_hora_venta', '<=', yearEndTs)
+    );
+    const { data: egresos, loading: egresosLoading } = useFirestoreQuery<Egreso>(
+        'egresos',
+        `finanzas-egresos-${year}`,
+        where('fecha', '>=', yearStartTs),
+        where('fecha', '<=', yearEndTs)
+    );
     const { data: professionals, loading: professionalsLoading } = useFirestoreQuery<Profesional>('profesionales');
     const { data: services, loading: servicesLoading } = useFirestoreQuery<Service>('servicios');
     const { data: products, loading: productsLoading } = useFirestoreQuery<Product>('productos');
@@ -162,6 +174,7 @@ export default function FinanzasResumenPage() {
 
         // 1. Procesar Ventas
         sales.forEach(sale => {
+            if ((sale as any).pago_estado === 'Pendiente' || (sale as any).absorbed_in_sale_id) return;
             const saleDate = sale.fecha_hora_venta?.toDate ? sale.fecha_hora_venta.toDate() : new Date();
             if (saleDate.getFullYear() !== year) return;
 
@@ -330,7 +343,7 @@ export default function FinanzasResumenPage() {
         totalUtilidad: d.utilidadNetaServicios + d.utilidadNetaProductos
     }));
 
-    const handleDownloadReport = () => {
+    const handleDownloadReport = async () => {
         if (!yearlyData || yearlyData.length === 0) {
             toast({
                 variant: "destructive",
@@ -386,6 +399,7 @@ export default function FinanzasResumenPage() {
             'Utilidad Neta': d.utilidadNetaServicios + d.utilidadNetaProductos
         }));
 
+        const XLSX = await import('xlsx');
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthlyRows), "Desglose Mensual");
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Resumen Anual");

@@ -5,7 +5,6 @@ import { useState, useMemo, useEffect } from 'react';
 import type { DateRange } from 'react-day-picker';
 import { format, startOfDay, endOfDay, subDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
-import * as XLSX from 'xlsx';
 import {
     Card,
     CardHeader,
@@ -487,10 +486,21 @@ export default function CashBoxPage() {
                 const currentSaleData = saleDoc.data() as Sale;
                 deletedSaleSnapshot = currentSaleData;
 
+                // PRE-READ: Ejecutar TODAS las lecturas antes de cualquier escritura (regla estricta de Firestore Transactions)
+                const productEntries = Array.from(productQuantitiesToReturn.entries());
+                const productSnaps = await Promise.all(
+                    productEntries.map(([productId]) => transaction.get(doc(db, 'productos', productId)))
+                );
+                const reservationRef = currentSaleData.reservationId
+                    ? doc(db, 'reservas', currentSaleData.reservationId)
+                    : null;
+                const reservationSnap = reservationRef ? await transaction.get(reservationRef) : null;
+
                 // A. Revertir inventario de productos consolidados
-                for (const [productId, { quantity, name }] of productQuantitiesToReturn.entries()) {
+                for (let idx = 0; idx < productEntries.length; idx++) {
+                    const [productId, { quantity, name }] = productEntries[idx];
                     const productRef = doc(db, 'productos', productId);
-                    const productSnap = await transaction.get(productRef);
+                    const productSnap = productSnaps[idx];
 
                     if (productSnap.exists()) {
                         const productData = productSnap.data() as Product;
@@ -527,10 +537,7 @@ export default function CashBoxPage() {
                 }
 
                 // B. Revertir Reserva asociada (si existe)
-                if (currentSaleData.reservationId) {
-                    const reservationRef = doc(db, 'reservas', currentSaleData.reservationId);
-                    const reservationSnap = await transaction.get(reservationRef);
-
+                if (reservationRef && reservationSnap) {
                     if (reservationSnap.exists()) {
                         const resData = reservationSnap.data();
                         const isDepositSale = currentSaleData.tipo_venta === 'anticipo' || saleRef.id.startsWith('deposit_') || currentSaleData.pago_estado === 'deposit_paid';
@@ -865,7 +872,7 @@ export default function CashBoxPage() {
         }
     };
 
-    const triggerDownload = () => {
+    const triggerDownload = async () => {
         const salesData = salesWithClientData.map(sale => ({
             ID: sale.id,
             'Fecha De Pago': sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A',
@@ -894,6 +901,7 @@ export default function CashBoxPage() {
             return;
         }
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
 
         if (salesData.length > 0) {
@@ -2146,57 +2154,65 @@ export default function CashBoxPage() {
                 </div >
             </div >
 
-            <AddEgresoModal
-                isOpen={isEgresoModalOpen}
-                onOpenChange={(open) => {
-                    setIsEgresoModalOpen(open);
-                    if (!open) {
+            {isEgresoModalOpen && (
+                <AddEgresoModal
+                    isOpen={isEgresoModalOpen}
+                    onOpenChange={(open) => {
+                        setIsEgresoModalOpen(open);
+                        if (!open) {
+                            setTimeout(() => setEditingEgreso(null), 300);
+                        }
+                    }}
+                    onFormSubmit={() => {
+                        setIsEgresoModalOpen(false)
                         setTimeout(() => setEditingEgreso(null), 300);
-                    }
-                }}
-                onFormSubmit={() => {
-                    setIsEgresoModalOpen(false)
-                    setTimeout(() => setEditingEgreso(null), 300);
-                    setTimeout(() => handleSearch(), 500);
-                }}
-                egreso={editingEgreso}
-            />
-            <AddIngresoModal
-                isOpen={isIngresoModalOpen}
-                onOpenChange={(open) => {
-                    setIsIngresoModalOpen(open);
-                    if (!open) {
+                        setTimeout(() => handleSearch(), 500);
+                    }}
+                    egreso={editingEgreso}
+                />
+            )}
+            {isIngresoModalOpen && (
+                <AddIngresoModal
+                    isOpen={isIngresoModalOpen}
+                    onOpenChange={(open) => {
+                        setIsIngresoModalOpen(open);
+                        if (!open) {
+                            setTimeout(() => setEditingIngreso(null), 300);
+                        }
+                    }}
+                    onFormSubmit={() => {
+                        setIsIngresoModalOpen(false)
                         setTimeout(() => setEditingIngreso(null), 300);
-                    }
-                }}
-                onFormSubmit={() => {
-                    setIsIngresoModalOpen(false)
-                    setTimeout(() => setEditingIngreso(null), 300);
-                    setTimeout(() => handleSearch(), 500);
-                }}
-                ingreso={editingIngreso}
-                localId={selectedLocalId}
-            />
-            <CashBoxClosingModal
-                isOpen={isClosingModalOpen}
-                onOpenChange={setIsClosingModalOpen}
-                onFormSubmit={() => {
-                    setIsClosingModalOpen(false);
-                    handleSearch();
-                }}
-                initialCash={liveCashInBox}
-                localId={selectedLocalId}
-            />
-            <CommissionPaymentModal
-                isOpen={isCommissionModalOpen}
-                onOpenChange={setIsCommissionModalOpen}
-                onFormSubmit={() => {
-                    setIsCommissionModalOpen(false);
-                    handleSearch();
-                }}
-                dateRange={activeFilters.dateRange}
-                localId={selectedLocalId !== 'todos' ? selectedLocalId : activeFilters.localId}
-            />
+                        setTimeout(() => handleSearch(), 500);
+                    }}
+                    ingreso={editingIngreso}
+                    localId={selectedLocalId}
+                />
+            )}
+            {isClosingModalOpen && (
+                <CashBoxClosingModal
+                    isOpen={isClosingModalOpen}
+                    onOpenChange={setIsClosingModalOpen}
+                    onFormSubmit={() => {
+                        setIsClosingModalOpen(false);
+                        handleSearch();
+                    }}
+                    initialCash={liveCashInBox}
+                    localId={selectedLocalId}
+                />
+            )}
+            {isCommissionModalOpen && (
+                <CommissionPaymentModal
+                    isOpen={isCommissionModalOpen}
+                    onOpenChange={setIsCommissionModalOpen}
+                    onFormSubmit={() => {
+                        setIsCommissionModalOpen(false);
+                        handleSearch();
+                    }}
+                    dateRange={activeFilters.dateRange}
+                    localId={selectedLocalId !== 'todos' ? selectedLocalId : activeFilters.localId}
+                />
+            )}
             {
                 selectedSale && (
                     <SaleDetailModal

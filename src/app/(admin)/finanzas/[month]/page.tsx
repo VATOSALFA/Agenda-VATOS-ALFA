@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowRight, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Edit, LineChart, TrendingUp, Save, Undo, MoreVertical, Search, CalendarDays, ExternalLink, HelpCircle, PlusCircle, ShoppingCart, Loader2, Trash2, DollarSign, FileEdit, X, ArrowUpDown, Minus, UserCircle, ArrowUpRight, ArrowDownLeft, Download, Percent, Scissors } from "lucide-react";
-import * as XLSX from 'xlsx';
 import { AddEgresoModal } from '@/components/finanzas/add-egreso-modal';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -1299,7 +1298,7 @@ export default function FinanzasMensualesPage() {
         incomesPage * incomesPerPage
     );
 
-    const handleDownloadReport = () => {
+    const handleDownloadReport = async () => {
         // 1. Resumen General del Mes
         const summaryRows = [
             { 'Concepto': 'Mes', 'Valor': capitalize(monthName) },
@@ -1350,6 +1349,7 @@ export default function FinanzasMensualesPage() {
             'Comentarios': mov.comentarios || ''
         }));
 
+        const XLSX = await import('xlsx');
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summaryRows), "Resumen General");
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(incomeRows), "Ingresos Diarios");

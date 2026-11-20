@@ -15,6 +15,45 @@ interface UseFirestoreQuery<T> {
   setKey: React.Dispatch<React.SetStateAction<any>>;
 }
 
+function serializeConstraintValue(val: any, depth = 0): any {
+  if (val === null || val === undefined) return val;
+  if (depth > 4) return '[depth]';
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return val;
+  if (val instanceof Date) return `Date:${val.getTime()}`;
+  if (typeof val.toMillis === 'function') return `Ts:${val.toMillis()}`;
+  if (typeof val.seconds === 'number' && typeof val.nanoseconds === 'number') {
+    return `Ts:${val.seconds}:${val.nanoseconds}`;
+  }
+  if (Array.isArray(val)) return val.map((item) => serializeConstraintValue(item, depth + 1));
+  if (Array.isArray(val.segments)) return `Field:${val.segments.join('.')}`;
+  if (typeof val === 'object') {
+    const out: Record<string, any> = {};
+    for (const key of Object.keys(val).sort()) {
+      if (key.startsWith('_') || key === 'type' || key === 'id' || key === 'path' || key === 'segments') {
+        out[key] = serializeConstraintValue(val[key], depth + 1);
+      }
+    }
+    return out;
+  }
+  return String(val);
+}
+
+function serializeQueryConstraint(c: any): any {
+  if (!c || typeof c !== 'object') return String(c);
+  return {
+    type: c.type,
+    field: c._field ? serializeConstraintValue(c._field) : undefined,
+    op: c._op,
+    value: c._value !== undefined ? serializeConstraintValue(c._value) : undefined,
+    dir: c._directionStr,
+    limit: c._limit,
+    docs: c._docOrFields ? serializeConstraintValue(c._docOrFields) : undefined,
+    nested: Array.isArray(c._queryConstraints)
+      ? c._queryConstraints.map((nc: any) => serializeQueryConstraint(nc))
+      : undefined,
+  };
+}
+
 export function useFirestoreQuery<T>(
   collectionName: string,
   keyOrFirstConstraint?: any,
@@ -41,7 +80,7 @@ export function useFirestoreQuery<T>(
     finalConstraints.push(...otherConstraints.filter((c): c is QueryConstraint => c !== undefined));
   }
 
-  const constraintsKey = JSON.stringify(finalConstraints.map(c => c.type));
+  const constraintsKey = JSON.stringify(finalConstraints.map(serializeQueryConstraint));
 
   useEffect(() => {
     // Crucial check: do not run if db is not initialized.

@@ -6,6 +6,7 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { Scissors, Package, Check, Sparkles, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getServiceLocalImage } from '@/lib/service-images';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 
 interface AlfaServicesSectionProps {
   regularServices: any[];
@@ -153,9 +154,12 @@ export function AlfaServicesSection({
         setColumns(4);
       }
     };
-    handleResize();
+    const rafId = requestAnimationFrame(handleResize);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   const totalCount = regularServices.length + packageServices.length;
@@ -181,11 +185,11 @@ export function AlfaServicesSection({
             src={localImg}
             alt={service.name}
             fill
-            quality={85}
+            quality={80}
             loading="lazy"
             className="object-cover group-hover:scale-108 transition-transform duration-500"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            unoptimized={true}
+            unoptimized={shouldBypassImageOptimization(localImg)}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-slate-400">

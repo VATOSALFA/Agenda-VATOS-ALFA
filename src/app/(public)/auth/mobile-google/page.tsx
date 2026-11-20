@@ -6,6 +6,35 @@ const GOOGLE_WEB_CLIENT_ID =
   process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
   '34221543030-qq5fgktvjcs9367ad3k477aq59if299d.apps.googleusercontent.com';
 
+const MOBILE_OAUTH_STATE_KEY = 'va_mobile_oauth_state';
+const DEFAULT_APP_REDIRECT = 'vatosalfa://oauthredirect';
+
+function generateCryptoToken(byteLength = 16): string {
+  const bytes = new Uint8Array(byteLength);
+  window.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function resolveSafeMobileRedirect(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return DEFAULT_APP_REDIRECT;
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('vatosalfa://') || trimmed.startsWith('com.vatosalfa.app://')) {
+    return trimmed;
+  }
+  if (process.env.NODE_ENV !== 'production') {
+    if (trimmed.startsWith('exp://')) return trimmed;
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === 'http:' && parsed.hostname === 'localhost') {
+        return trimmed;
+      }
+    } catch {
+      // Fall through to default
+    }
+  }
+  return DEFAULT_APP_REDIRECT;
+}
+
 export default function MobileGoogleAuthBridgePage() {
   const [statusMessage, setStatusMessage] = useState('Conectando con Google...');
   const [returnToAppUrl, setReturnToAppUrl] = useState<string | null>(null);
@@ -21,19 +50,43 @@ export default function MobileGoogleAuthBridgePage() {
     const idToken = hashParams.get('id_token') || searchParams.get('id_token');
     const accessToken = hashParams.get('access_token') || searchParams.get('access_token');
     const oauthError = hashParams.get('error') || searchParams.get('error');
-    const stateRedirect = hashParams.get('state') || searchParams.get('redirect_uri') || searchParams.get('state');
+    const rawStateParam = hashParams.get('state') || searchParams.get('state');
+    const rawRedirectQuery = searchParams.get('redirect_uri');
 
-    const safeAppRedirect =
-      stateRedirect &&
-      (stateRedirect.startsWith('vatosalfa://') ||
-        stateRedirect.startsWith('com.vatosalfa.app://') ||
-        stateRedirect.startsWith('exp://') ||
-        stateRedirect.startsWith('http://localhost'))
-        ? stateRedirect
-        : 'vatosalfa://oauthredirect';
+    let incomingCsrf: string | null = null;
+    let incomingRedirect: string | null = rawRedirectQuery;
+    if (rawStateParam) {
+      const sepIdx = rawStateParam.indexOf('|');
+      if (sepIdx !== -1) {
+        incomingCsrf = rawStateParam.slice(0, sepIdx);
+        incomingRedirect = rawStateParam.slice(sepIdx + 1);
+      } else {
+        incomingRedirect = rawStateParam;
+      }
+    }
 
-    // 1. Si Google ya nos devolvió el id_token en el hash, redirigimos de inmediato a la App Móvil
+    const safeAppRedirect = resolveSafeMobileRedirect(incomingRedirect);
+
+    // 1. Si Google ya nos devolvió el id_token en el hash, verificar estado CSRF y formato JWT
     if (idToken) {
+      if (idToken.split('.').length !== 3) {
+        setErrorMessage('Token de Google inválido.');
+        return;
+      }
+      try {
+        const storedRaw = window.sessionStorage.getItem(MOBILE_OAUTH_STATE_KEY);
+        window.sessionStorage.removeItem(MOBILE_OAUTH_STATE_KEY);
+        if (storedRaw) {
+          const parsedState = JSON.parse(storedRaw);
+          if (!incomingCsrf || parsedState?.csrf !== incomingCsrf) {
+            setErrorMessage('Sesión OAuth expirada o inválida. Vuelve a intentar desde la app.');
+            return;
+          }
+        }
+      } catch {
+        // Fallback if sessionStorage restricted
+      }
+
       setStatusMessage('¡Sesión verificada! Regresando a la aplicación VATOS ALFA...');
       const separator = safeAppRedirect.includes('?') ? '&' : '?';
       const targetDeepLink = `${safeAppRedirect}${separator}id_token=${encodeURIComponent(idToken)}${
@@ -46,6 +99,9 @@ export default function MobileGoogleAuthBridgePage() {
 
     // 2. Si el usuario canceló o hubo error en Google
     if (oauthError) {
+      try {
+        window.sessionStorage.removeItem(MOBILE_OAUTH_STATE_KEY);
+      } catch {}
       setErrorMessage('Se canceló el inicio de sesión con Google.');
       const separator = safeAppRedirect.includes('?') ? '&' : '?';
       const cancelDeepLink = `${safeAppRedirect}${separator}error=${encodeURIComponent(oauthError)}`;
@@ -57,7 +113,15 @@ export default function MobileGoogleAuthBridgePage() {
     // 3. Iniciar flujo OAuth 2.0 hacia Google forzando prompt=select_account (lista de todas las cuentas del dispositivo)
     const currentOrigin = window.location.origin;
     const httpsCallbackUri = `${currentOrigin}/auth/mobile-google`;
-    const nonce = Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    const nonce = generateCryptoToken(16);
+    const csrfToken = generateCryptoToken(16);
+
+    try {
+      window.sessionStorage.setItem(
+        MOBILE_OAUTH_STATE_KEY,
+        JSON.stringify({ csrf: csrfToken, redirect: safeAppRedirect, ts: Date.now() })
+      );
+    } catch {}
 
     const googleAuthUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     googleAuthUrl.searchParams.set('client_id', GOOGLE_WEB_CLIENT_ID);
@@ -66,7 +130,7 @@ export default function MobileGoogleAuthBridgePage() {
     googleAuthUrl.searchParams.set('scope', 'openid profile email');
     googleAuthUrl.searchParams.set('prompt', 'select_account');
     googleAuthUrl.searchParams.set('nonce', nonce);
-    googleAuthUrl.searchParams.set('state', safeAppRedirect);
+    googleAuthUrl.searchParams.set('state', `${csrfToken}|${safeAppRedirect}`);
 
     setStatusMessage('Abriendo selector de cuentas de Google...');
     window.location.replace(googleAuthUrl.toString());
@@ -89,7 +153,7 @@ export default function MobileGoogleAuthBridgePage() {
             <p className="text-sm text-slate-200">{statusMessage}</p>
           </div>
         ) : (
-          <p className="text-sm text-amber-300 my-2">{errorMessage}</p>
+          <p className="text-sm text-red-400 my-2">{errorMessage}</p>
         )}
 
         {returnToAppUrl && (

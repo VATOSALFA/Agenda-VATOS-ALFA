@@ -2,6 +2,18 @@
 
 import { getAuth, getDb } from '@/lib/firebase-server';
 import { sendEmail } from '@/lib/services/email';
+import {
+    GENERAL_ADMIN_EMAILS,
+    GENERAL_ADMIN_UIDS,
+    escapeHtml,
+    verifyStaffAccess,
+} from '@/lib/server-auth';
+
+function safeLogoUrl(raw: unknown, fallback: string): string {
+    const val = String(raw || '').trim();
+    if (/^https:\/\//i.test(val)) return escapeHtml(val);
+    return escapeHtml(fallback);
+}
 
 export async function inviteUser(userData: {
     email: string;
@@ -10,16 +22,51 @@ export async function inviteUser(userData: {
     permissions?: string[];
     local_id?: string | null;
     avatarUrl?: string;
+    idToken?: string;
 }) {
     try {
+        const caller = await verifyStaffAccess(userData.idToken, { requireAdmin: true });
+        const cleanEmail = String(userData.email || '').trim().toLowerCase();
+        const targetRoleLower = String(userData.role || '').trim().toLowerCase();
+
+        if (!cleanEmail || !cleanEmail.includes('@')) {
+            return { success: false, error: 'Correo electrónico inválido.' };
+        }
+
+        if (!caller.isGeneralAdmin) {
+            if (
+                targetRoleLower === 'administrador general' ||
+                targetRoleLower === 'admin' ||
+                targetRoleLower === 'administrador local'
+            ) {
+                return { success: false, error: 'Solo el Administrador General puede asignar roles de administrador.' };
+            }
+            if (GENERAL_ADMIN_EMAILS.has(cleanEmail)) {
+                return { success: false, error: 'No tienes permisos para modificar esta cuenta.' };
+            }
+        }
+
         const auth = getAuth();
         const db = getDb();
 
         // 1. Check/Create User in Firebase Auth
         let uid;
         try {
-            const userRecord = await auth.getUserByEmail(userData.email);
+            const userRecord = await auth.getUserByEmail(cleanEmail);
             uid = userRecord.uid;
+            if (!caller.isGeneralAdmin) {
+                if (GENERAL_ADMIN_UIDS.has(uid)) {
+                    return { success: false, error: 'No tienes permisos para modificar al Administrador General.' };
+                }
+                const existingDoc = await db.collection('usuarios').doc(uid).get();
+                const existingRole = String(existingDoc.data()?.role || existingDoc.data()?.rol || '').trim().toLowerCase();
+                if (
+                    existingDoc.exists &&
+                    (existingRole === 'administrador general' || existingRole === 'admin' || existingRole === 'administrador local')
+                ) {
+                    return { success: false, error: 'Solo el Administrador General puede modificar cuentas de administrador.' };
+                }
+            }
             // Update profile if exists
             await auth.updateUser(uid, {
                 displayName: userData.name,
@@ -28,7 +75,7 @@ export async function inviteUser(userData: {
         } catch (error: any) {
             if (error.code === 'auth/user-not-found') {
                 const userRecord = await auth.createUser({
-                    email: userData.email,
+                    email: cleanEmail,
                     emailVerified: true, // Mark as verified since we are inviting
                     displayName: userData.name,
                     photoURL: userData.avatarUrl || undefined,
@@ -44,7 +91,7 @@ export async function inviteUser(userData: {
         const userRef = db.collection('usuarios').doc(uid);
         await userRef.set({
             name: userData.name,
-            email: userData.email,
+            email: cleanEmail,
             role: userData.role,
             permissions: userData.permissions || [],
             avatarUrl: userData.avatarUrl || null,
@@ -55,13 +102,15 @@ export async function inviteUser(userData: {
 
 
         // 3. Generate Password Reset Link
-        const link = await auth.generatePasswordResetLink(userData.email);
+        const link = await auth.generatePasswordResetLink(cleanEmail);
 
         // 4. Get Company Branding
         const settingsSnap = await db.collection('settings').doc('website').get();
         const settings = settingsSnap.data() || {};
-        const logoUrl = settings.logoUrl || 'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/logo-vatos-alfa.png?alt=media&token=placeholder'; // Fallback or dynamic
-        const companyName = settings.companyName || 'VATOS ALFA Barber Shop';
+        const rawLogoUrl = settings.logoUrl || 'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/logo-vatos-alfa.png?alt=media&token=placeholder';
+        const companyName = String(settings.companyName || 'VATOS ALFA Barber Shop');
+        const safeCompanyName = escapeHtml(companyName);
+        const safeLogo = safeLogoUrl(rawLogoUrl, 'https://vatosalfa.com/logo.png');
         const primaryColor = '#1e3a8a'; // Azul oscuro de Vatos Alfa
 
         // 5. Send Email
@@ -88,25 +137,25 @@ export async function inviteUser(userData: {
             <div class="container">
                 <div class="header">
                     <!-- Si no hay logo, mostramos el nombre -->
-                    ${logoUrl && !logoUrl.includes('placeholder')
-                ? `<img src="${logoUrl}" alt="${companyName}">`
-                : `<h1 style="color: white; margin: 0;">${companyName}</h1>`
+                    ${rawLogoUrl && !String(rawLogoUrl).includes('placeholder')
+                ? `<img src="${safeLogo}" alt="${safeCompanyName}">`
+                : `<h1 style="color: white; margin: 0;">${safeCompanyName}</h1>`
             }
                 </div>
                 <div class="content">
-                    <h1 class="h1">¡Bienvenido al Equipo, ${userData.name}!</h1>
+                    <h1 class="h1">¡Bienvenido al Equipo, ${escapeHtml(userData.name)}!</h1>
                     <p class="p">
-                        Has sido invitado a formar parte del equipo de <strong>${companyName}</strong>.
+                        Has sido invitado a formar parte del equipo de <strong>${safeCompanyName}</strong>.
                         Para comenzar, por favor configura tu contraseña segura haciendo clic en el siguiente botón.
                     </p>
-                    <a href="${link}" class="btn">Configurar Contraseña</a>
+                    <a href="${escapeHtml(link)}" class="btn">Configurar Contraseña</a>
                     <p class="p" style="margin-top: 30px; font-size: 14px; color: #64748b;">
                         Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
-                        <a href="${link}" style="color: ${primaryColor};">${link}</a>
+                        <a href="${escapeHtml(link)}" style="color: ${primaryColor};">${escapeHtml(link)}</a>
                     </p>
                 </div>
                 <div class="footer">
-                    &copy; ${new Date().getFullYear()} ${companyName}. Todos los derechos reservados.<br>
+                    &copy; ${new Date().getFullYear()} ${safeCompanyName}. Todos los derechos reservados.<br>
                     Este correo fue enviado automáticamente por el sistema de gestión.
                 </div>
             </div>
@@ -115,7 +164,7 @@ export async function inviteUser(userData: {
         `;
 
         await sendEmail({
-            to: userData.email,
+            to: cleanEmail,
             from: 'Agenda VATOS ALFA <contacto@vatosalfa.com>',
             subject: `Invitación para unirte a ${companyName}`,
             html: htmlContent,
@@ -130,12 +179,16 @@ export async function inviteUser(userData: {
     }
 }
 
-export async function resendUserInvitation(email: string, name?: string) {
+export async function resendUserInvitation(email: string, name?: string, idToken?: string) {
     try {
+        const caller = await verifyStaffAccess(idToken, { requireAdmin: true });
         const auth = getAuth();
         const db = getDb();
 
         const cleanEmail = email.trim().toLowerCase();
+        if (!caller.isGeneralAdmin && GENERAL_ADMIN_EMAILS.has(cleanEmail)) {
+            return { success: false, error: 'No tienes permisos sobre la cuenta del Administrador General.' };
+        }
         let userName = name?.trim() || '';
 
         // 1. Check or fetch user in Auth
@@ -143,6 +196,9 @@ export async function resendUserInvitation(email: string, name?: string) {
         try {
             const userRecord = await auth.getUserByEmail(cleanEmail);
             uid = userRecord.uid;
+            if (!caller.isGeneralAdmin && GENERAL_ADMIN_UIDS.has(uid)) {
+                return { success: false, error: 'No tienes permisos sobre la cuenta del Administrador General.' };
+            }
             if (!userName && userRecord.displayName) {
                 userName = userRecord.displayName;
             }
@@ -152,6 +208,10 @@ export async function resendUserInvitation(email: string, name?: string) {
                 const userSnap = await db.collection('usuarios').where('email', '==', cleanEmail).limit(1).get();
                 if (!userSnap.empty) {
                     const uData = userSnap.docs[0].data();
+                    const uRole = String(uData?.role || uData?.rol || '').trim().toLowerCase();
+                    if (!caller.isGeneralAdmin && (uRole === 'administrador general' || uRole === 'admin')) {
+                        return { success: false, error: 'No tienes permisos para reenviar invitación a administradores generales.' };
+                    }
                     userName = userName || uData.name || 'Miembro del Equipo';
                     const newRec = await auth.createUser({
                         email: cleanEmail,
@@ -165,6 +225,14 @@ export async function resendUserInvitation(email: string, name?: string) {
                 }
             } else {
                 throw error;
+            }
+        }
+
+        if (!caller.isGeneralAdmin) {
+            const targetDoc = await db.collection('usuarios').doc(uid).get();
+            const targetRole = String(targetDoc.data()?.role || targetDoc.data()?.rol || '').trim().toLowerCase();
+            if (targetRole === 'administrador general' || targetRole === 'admin') {
+                return { success: false, error: 'No tienes permisos sobre administradores generales.' };
             }
         }
 
@@ -183,8 +251,10 @@ export async function resendUserInvitation(email: string, name?: string) {
         // 3. Get Company Branding
         const settingsSnap = await db.collection('settings').doc('website').get();
         const settings = settingsSnap.data() || {};
-        const logoUrl = settings.logoUrl || 'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/logo-vatos-alfa.png?alt=media&token=placeholder';
-        const companyName = settings.companyName || 'VATOS ALFA Barber Shop';
+        const rawLogoUrl = settings.logoUrl || 'https://firebasestorage.googleapis.com/v0/b/agenda-1ae08.firebasestorage.app/o/logo-vatos-alfa.png?alt=media&token=placeholder';
+        const companyName = String(settings.companyName || 'VATOS ALFA Barber Shop');
+        const safeCompanyName = escapeHtml(companyName);
+        const safeLogo = safeLogoUrl(rawLogoUrl, 'https://vatosalfa.com/logo.png');
         const primaryColor = '#202A49';
 
         // 4. HTML Content
@@ -193,7 +263,7 @@ export async function resendUserInvitation(email: string, name?: string) {
         <html>
         <head>
             <meta charset="utf-8">
-            <title>Invitación a ${companyName}</title>
+            <title>Invitación a ${safeCompanyName}</title>
             <style>
                 body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 0; }
                 .container { max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -210,27 +280,27 @@ export async function resendUserInvitation(email: string, name?: string) {
         <body>
             <div class="container">
                 <div class="header">
-                    ${logoUrl && !logoUrl.includes('placeholder')
-                        ? `<img src="${logoUrl}" alt="${companyName}">`
-                        : `<h1 style="color: white; margin: 0;">${companyName}</h1>`
+                    ${rawLogoUrl && !String(rawLogoUrl).includes('placeholder')
+                        ? `<img src="${safeLogo}" alt="${safeCompanyName}">`
+                        : `<h1 style="color: white; margin: 0;">${safeCompanyName}</h1>`
                     }
                 </div>
                 <div class="content">
-                    <h1 class="h1">¡Hola, ${userName}!</h1>
+                    <h1 class="h1">¡Hola, ${escapeHtml(userName)}!</h1>
                     <p class="p">
-                        Te enviamos este correo para que configures tu acceso seguro a la plataforma y a la aplicación móvil de <strong>${companyName}</strong>.
+                        Te enviamos este correo para que configures tu acceso seguro a la plataforma y a la aplicación móvil de <strong>${safeCompanyName}</strong>.
                     </p>
                     <p class="p">
                         Haz clic en el siguiente botón para establecer tu contraseña e iniciar sesión:
                     </p>
-                    <a href="${link}" class="btn">Configurar Mi Contraseña</a>
+                    <a href="${escapeHtml(link)}" class="btn">Configurar Mi Contraseña</a>
                     <p class="p" style="margin-top: 30px; font-size: 14px; color: #64748b;">
                         Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
-                        <a href="${link}" style="color: ${primaryColor};">${link}</a>
+                        <a href="${escapeHtml(link)}" style="color: ${primaryColor};">${escapeHtml(link)}</a>
                     </p>
                 </div>
                 <div class="footer">
-                    &copy; ${new Date().getFullYear()} ${companyName}. Todos los derechos reservados.<br>
+                    &copy; ${new Date().getFullYear()} ${safeCompanyName}. Todos los derechos reservados.<br>
                     Este correo fue enviado automáticamente por el sistema de gestión.
                 </div>
             </div>

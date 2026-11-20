@@ -53,6 +53,7 @@ import {
   where,
   getDocs,
   updateDoc,
+  runTransaction,
   serverTimestamp,
   increment,
   onSnapshot,
@@ -73,6 +74,10 @@ import {
   isSameJuntosPeriod,
   DEFAULT_JUNTOS_CONFIG,
   type JuntosEsMejorConfig,
+  DEFAULT_DECIMA_CONFIG,
+  type DecimaCorteConfig,
+  DEFAULT_REFERRAL_CONFIG,
+  type ReferralProgramConfig,
   JUNTOS_REWARD_COINS_PER_PERSON,
   getCurrentHaircutPrice,
   evaluateClientAlfaTier,
@@ -159,6 +164,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   >([]);
   const [isScanningCompanion, setIsScanningCompanion] = useState<boolean>(false);
   const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
+  const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
+  const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
 
   useEffect(() => {
     if (!db) return;
@@ -183,6 +190,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           }
           if (d.niveles_config) setNivelesConfig(d.niveles_config);
           if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
+          if (d.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...d.decima_config });
+          if (d.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...d.referral_config });
         }
         if (snapApp.exists()) {
           const rawApp = snapApp.data();
@@ -196,6 +205,10 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (niv) setNivelesConfig((prev: any) => prev || niv);
           const jun = rawApp.juntos_config || d.juntos_config || rawApp['pase_alfa.juntos_config'];
           if (jun && !snap.data()?.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...jun });
+          const dec = rawApp.decima_config || d.decima_config || rawApp['pase_alfa.decima_config'];
+          if (dec && !snap.data()?.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...dec });
+          const refCfg = rawApp.referral_config || d.referral_config || rawApp['pase_alfa.referral_config'];
+          if (refCfg && !snap.data()?.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...refCfg });
         }
         setBeneficiosList(bList);
       } catch (_) {}
@@ -209,6 +222,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           const d = snap.data();
           if (d.niveles_config) setNivelesConfig(d.niveles_config);
           if (d.juntos_config) setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...d.juntos_config });
+          if (d.decima_config) setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...d.decima_config });
+          if (d.referral_config) setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...d.referral_config });
           if (Number(d.sellosRequeridos) > 0) setTargetStamps(Number(d.sellosRequeridos));
           if (d.recompensa) setRewardName(d.recompensa);
           if (Array.isArray(d.beneficios_detallados) && d.beneficios_detallados.length > 0) {
@@ -786,12 +801,24 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             detectedBenefit.folio?.startsWith('VA-REF');
 
           if (isReferral) {
-            const dynamicMinNet = calculateReferralMinNetPurchase(currentHaircutPrice);
+            const refDiscountPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
+            const refHostCoins = Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
+            const refBaseMin =
+              referralConfig.consumo_minimo_tipo === 'monto_fijo' && Number(referralConfig.consumo_minimo_monto || 0) > 0
+                ? Number(referralConfig.consumo_minimo_monto)
+                : currentHaircutPrice;
+            const dynamicMinNet = Math.round(refBaseMin * (1 - refDiscountPct / 100) * 100) / 100;
             detectedBenefit.isReferralBenefit = true;
             detectedBenefit.benefitId = 'invita_amigo';
-            detectedBenefit.discount = REFERRAL_DISCOUNT_PERCENT;
-            detectedBenefit.rewardCoins = REFERRAL_HOST_REWARD_COINS;
+            detectedBenefit.discount = refDiscountPct;
+            detectedBenefit.rewardCoins = refHostCoins;
             detectedBenefit.minPurchase = dynamicMinNet;
+
+            if (referralConfig.activo === false) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ BENEFICIO PAUSADO: El programa "Invita a un Amigo" se encuentra desactivado temporalmente desde el panel administrativo.';
+            }
 
             // Si se escaneó el QR de invitación del anfitrión, foundClient es el anfitrión (quien invita), NO el cliente nuevo
             if (!detectedBenefit.referrerId && foundClient) {
@@ -799,7 +826,32 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               detectedBenefit.referrerId = foundClient.id;
               detectedBenefit.referrerName = hostFullName;
               detectedBenefit.referrerPhone = foundClient.telefono || '';
-              detectedBenefit.descripcion = `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${REFERRAL_DISCOUNT_PERCENT}% de descuento en su primer servicio y ${hostFullName} gana ${REFERRAL_HOST_REWARD_COINS} Alfa Coins al completarse una compra equivalente a un Corte de cabello vigente ($${formatMoney(currentHaircutPrice)} MXN regular / $${formatMoney(dynamicMinNet)} MXN con descuento).`;
+              detectedBenefit.descripcion = `Invitación oficial de ${hostFullName}. El amigo invitado (cliente nuevo) recibe ${refDiscountPct}% de descuento en su primer servicio y ${hostFullName} gana ${refHostCoins} Alfa Coins al completarse un consumo mínimo de $${formatMoney(refBaseMin)} MXN regular ($${formatMoney(dynamicMinNet)} MXN neto con descuento).`;
+            }
+
+            // Validar límite mensual de invitaciones del anfitrión si está configurado (> 0)
+            const monthlyLimit = Number(referralConfig.limite_mensual_invitaciones || 0);
+            if (!detectedBenefit.isBlocked && monthlyLimit > 0 && detectedBenefit.referrerId && db) {
+              try {
+                const now = new Date();
+                const curYear = now.getFullYear();
+                const curMonth = now.getMonth();
+                const qRefMonth = query(
+                  collection(db, 'canjes_beneficios'),
+                  where('referrerId', '==', detectedBenefit.referrerId)
+                );
+                const snapRefMonth = await getDocs(qRefMonth);
+                const usedThisMonth = snapRefMonth.docs.filter((dSnap) => {
+                  const data = dSnap.data();
+                  if (data.estado !== 'canjeado') return false;
+                  const dt = data.fechaCanje?.toDate?.() || data.canjeadoEn?.toDate?.();
+                  return dt && dt.getFullYear() === curYear && dt.getMonth() === curMonth;
+                }).length;
+                if (usedThisMonth >= monthlyLimit) {
+                  detectedBenefit.isBlocked = true;
+                  detectedBenefit.blockReason = `⛔ LÍMITE MENSUAL ALCANZADO: El anfitrión ya completó ${usedThisMonth} de ${monthlyLimit} invitaciones permitidas este mes.`;
+                }
+              } catch (_) {}
             }
 
             // Limpiar foundClient para que en Caja se seleccione o registre al AMIGO NUEVO, no al anfitrión
@@ -930,9 +982,18 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
           if (isFreeCut) {
             detectedBenefit.benefitId = 'decimo_corte';
-            const requiredPaidStamps = Math.max(1, targetStamps - 1);
+            const requiredPaidStamps = targetStamps === 10 ? 9 : Math.max(1, targetStamps);
+            const todayDow = new Date().getDay();
+            const allowedDays =
+              Array.isArray(decimaConfig.dias_semana) && decimaConfig.dias_semana.length > 0
+                ? decimaConfig.dias_semana
+                : [1, 2, 3, 4, 5];
 
-            if (!detectedBenefit.signature || !detectedBenefit.clientId) {
+            if (decimaConfig.activo === false) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ BENEFICIO PAUSADO: "La Décima Va por la Casa" se encuentra desactivado temporalmente desde el panel administrativo.';
+            } else if (!detectedBenefit.signature || !detectedBenefit.clientId) {
               detectedBenefit.isBlocked = true;
               detectedBenefit.blockReason =
                 '⛔ QR OFICIAL REQUERIDO: Para canjear el 10.° Corte Gratis, debes escanear el código QR oficial firmado desde la aplicación del cliente.';
@@ -940,6 +1001,14 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               detectedBenefit.isBlocked = true;
               detectedBenefit.blockReason =
                 '⛔ CLIENTE NO ENCONTRADO: Este código QR no pertenece a ningún cliente registrado en el sistema oficial.';
+            } else if (!allowedDays.includes(todayDow)) {
+              const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason = `⛔ DÍA NO VÁLIDO: El 10.° Corte Gratis aplica únicamente en días permitidos (${allowedDays.map((d: number) => dayNames[d]).filter(Boolean).join(', ')}). Hoy es ${dayNames[todayDow]}.`;
+            } else if (decimaConfig.exigir_cita_previa !== false && !clientResForToday) {
+              detectedBenefit.isBlocked = true;
+              detectedBenefit.blockReason =
+                '⛔ CITA PREVIA REQUERIDA: El cliente no tiene una cita agendada para hoy. Este beneficio requiere cita previa en agenda.';
             } else if (!detectedBenefit.isBlocked) {
               const currentStamps = Number(foundClient.cortes_acumulados || 0);
               const hasFreeCutFlag = Boolean((foundClient as any).corte_gratis_disponible);
@@ -1458,55 +1527,66 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         scannedBenefit.folio?.includes('CUMPLE') ||
         (scannedBenefit.benefitTitle || '').toLowerCase().includes('cumple');
 
-      await setDoc(doc(db, 'canjes_beneficios', folio), {
-        folio,
-        benefitId: isBirthday ? 'regalo_cumpleanos' : (scannedBenefit.benefitId || 'beneficio_alfa'),
-        benefitTitle: scannedBenefit.benefitTitle || 'Beneficio Pase Alfa',
-        clienteId: clientId,
-        clienteNombre: clientName,
-        telefono: clientPhone,
-        estado: 'canjeado',
-        anio: currentYear,
-        canjeadoEn: serverTimestamp(),
-        fechaCanje: serverTimestamp(),
-        sucursal: 'Sombrerete',
-        registradoPor: 'Recepción',
-        ...(scannedBenefit.isReferralBenefit ? {
-          isReferralBenefit: true,
-          referralCode: scannedBenefit.referralCode || null,
-          referrerId: scannedBenefit.referrerId || null,
-          referrerName: scannedBenefit.referrerName || null,
-          referrerPhone: scannedBenefit.referrerPhone || null,
-          rewardCoins: 500,
-        } : {}),
-      }, { merge: true });
+      // Si applyToCashbox === true, NO quemamos aún el folio ni el año de cumpleaños (se confirma atómicamente al cobrar en Caja).
+      // Si applyToCashbox === false ("Solo Canjear"), ejecutamos transacción atómica para evitar doble canje simultáneo.
+      const targetState = applyToCashbox ? 'en_proceso' : 'canjeado';
+      const folioRef = doc(db, 'canjes_beneficios', folio);
+      const refHostCoins = Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
 
-      // Si es beneficio de cumpleaños, registrar año en el perfil del cliente para evitar doble canje hasta el siguiente año
-      if (isBirthday && clientId) {
-        await updateDoc(doc(db, 'clientes', clientId), {
-          ultimo_canje_cumpleanos_anio: currentYear,
-          ultimo_canje_cumpleanos_folio: folio,
-          fecha_ultimo_canje_cumpleanos: serverTimestamp(),
-          actualizado_en: serverTimestamp(),
-        });
-        if (scannedClient) {
-          (scannedClient as any).ultimo_canje_cumpleanos_anio = currentYear;
+      await runTransaction(db, async (tx) => {
+        const existingSnap = await tx.get(folioRef);
+        if (existingSnap.exists() && existingSnap.data()?.estado === 'canjeado') {
+          throw new Error('Este folio ya fue canjeado anteriormente.');
         }
-      }
+        tx.set(
+          folioRef,
+          {
+            folio,
+            benefitId: isBirthday ? 'regalo_cumpleanos' : (scannedBenefit.benefitId || 'beneficio_alfa'),
+            benefitTitle: scannedBenefit.benefitTitle || 'Beneficio Pase Alfa',
+            clienteId: clientId,
+            clienteNombre: clientName,
+            telefono: clientPhone,
+            estado: targetState,
+            anio: currentYear,
+            ...(applyToCashbox ? { iniciadoEn: serverTimestamp() } : { canjeadoEn: serverTimestamp(), fechaCanje: serverTimestamp() }),
+            sucursal: todayReservation?.local_nombre || 'Sucursal Principal',
+            registradoPor: 'Recepción',
+            ...(scannedBenefit.isReferralBenefit ? {
+              isReferralBenefit: true,
+              referralCode: scannedBenefit.referralCode || null,
+              referrerId: scannedBenefit.referrerId || null,
+              referrerName: scannedBenefit.referrerName || null,
+              referrerPhone: scannedBenefit.referrerPhone || null,
+              rewardCoins: refHostCoins,
+            } : {}),
+          },
+          { merge: true }
+        );
 
-      // Si es el 10.° corte gratis y se eligió "Solo Canjear" (sin pasar por Caja), reiniciar sellos aquí.
-      // Cuando applyToCashbox === true, NewSaleSheet aplica el descuento del corte y reinicia a 0/9 al confirmar el cobro.
-      if (!applyToCashbox && (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis')) {
-        if (clientId) {
-          await updateDoc(doc(db, 'clientes', clientId), {
+        // Solo al finalizar sin pasar por Caja (applyToCashbox === false) quemamos en perfil del cliente aquí.
+        if (!applyToCashbox && isBirthday && clientId) {
+          tx.update(doc(db, 'clientes', clientId), {
+            ultimo_canje_cumpleanos_anio: currentYear,
+            ultimo_canje_cumpleanos_folio: folio,
+            fecha_ultimo_canje_cumpleanos: serverTimestamp(),
+            actualizado_en: serverTimestamp(),
+          });
+        }
+        if (!applyToCashbox && (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis') && clientId) {
+          tx.update(doc(db, 'clientes', clientId), {
             cortes_acumulados: 0,
             corte_gratis_disponible: false,
             actualizado_en: serverTimestamp(),
           });
-          if (scannedClient) {
-            setScannedClient({ ...scannedClient, cortes_acumulados: 0, corte_gratis_disponible: false });
-          }
         }
+      });
+
+      if (!applyToCashbox && isBirthday && scannedClient) {
+        (scannedClient as any).ultimo_canje_cumpleanos_anio = currentYear;
+      }
+      if (!applyToCashbox && (scannedBenefit.benefitId === 'decimo_corte' || scannedBenefit.benefitId === 'corte_gratis') && scannedClient) {
+        setScannedClient({ ...scannedClient, cortes_acumulados: 0, corte_gratis_disponible: false });
       }
 
       playBeep(true);
@@ -1588,7 +1668,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           ? scannedBenefit
           : undefined;
 
-      if (!safeBenefitToPass && (applyFreeCutFromPass || hasFreeCutReady) && scannedClient) {
+      // Solo inyectar 10.° Corte Gratis cuando el operador eligió explícitamente canjearlo (applyFreeCutFromPass === true)
+      if (!safeBenefitToPass && applyFreeCutFromPass && scannedClient) {
         safeBenefitToPass = {
           folio: `VA-CORTE-${Date.now().toString().slice(-6)}`,
           benefitId: 'decimo_corte',

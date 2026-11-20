@@ -1,5 +1,8 @@
 import LandingPageClient from './page-client';
 import { Metadata } from 'next';
+import { getPublicLandingData } from '@/lib/public-landing-data';
+
+export const revalidate = 60;
 
 export const metadata: Metadata = {
     metadataBase: new URL('https://vatosalfa.com'),
@@ -68,14 +71,16 @@ const serverJsonLd = {
   ]
 };
 
-export default function Page() {
+export default async function Page() {
+    const initialData = await getPublicLandingData();
+
     return (
         <>
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(serverJsonLd) }}
             />
-            <LandingPageClient />
+            <LandingPageClient initialData={initialData} />
         </>
     );
 }

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { ShoppingBag, Eye, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 
 export interface AlfaProductsSectionProps {
   products: any[];
@@ -115,7 +116,7 @@ export function AlfaProductsSection({
   const isProductInCart = (id: string) => productCart.includes(id);
 
   return (
-    <section id="productos" className={cn("py-16 md:py-24 bg-slate-50 border-t scroll-mt-20 overflow-x-clip", className)}>
+    <section className={cn("py-16 md:py-24 bg-slate-50 border-t scroll-mt-20 overflow-x-clip", className)}>
       <div className="container px-3 sm:px-4 md:px-6 max-w-6xl mx-auto">
         {/* Section Header: Visible y limpio, sube de manera natural con el scroll */}
         <div className="text-center mb-8 sm:mb-12">
@@ -155,11 +156,11 @@ export function AlfaProductsSection({
                       src={product.images[0]}
                       alt={product.nombre}
                       fill
-                      quality={85}
+                      quality={80}
                       loading="lazy"
                       className="object-cover group-hover:scale-108 transition-transform duration-500"
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      unoptimized={true}
+                      unoptimized={shouldBypassImageOptimization(product.images[0])}
                     />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800 text-slate-400">

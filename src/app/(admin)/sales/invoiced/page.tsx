@@ -43,7 +43,6 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import * as XLSX from 'xlsx';
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { db } from "@/lib/firebase-client";
@@ -330,10 +329,21 @@ export default function InvoicedSalesPage() {
                 const currentSaleData = saleDoc.data() as Sale;
                 deletedSaleSnapshot = currentSaleData;
 
+                // PRE-READ: Ejecutar TODAS las lecturas antes de cualquier escritura (Firestore Transaction Rule)
+                const productEntries = Array.from(productQuantitiesToReturn.entries());
+                const productSnaps = await Promise.all(
+                    productEntries.map(([productId]) => transaction.get(doc(db, 'productos', productId)))
+                );
+                const reservationRef = currentSaleData.reservationId
+                    ? doc(db, 'reservas', currentSaleData.reservationId)
+                    : null;
+                const reservationSnap = reservationRef ? await transaction.get(reservationRef) : null;
+
                 // A. Revertir inventario de productos consolidados
-                for (const [productId, { quantity, name }] of productQuantitiesToReturn.entries()) {
+                for (let idx = 0; idx < productEntries.length; idx++) {
+                    const [productId, { quantity, name }] = productEntries[idx];
                     const productRef = doc(db, 'productos', productId);
-                    const productSnap = await transaction.get(productRef);
+                    const productSnap = productSnaps[idx];
 
                     if (productSnap.exists()) {
                         const productData = productSnap.data() as Product;
@@ -369,10 +379,7 @@ export default function InvoicedSalesPage() {
                 }
 
                 // B. Revertir Reserva asociada (si existe)
-                if (currentSaleData.reservationId) {
-                    const reservationRef = doc(db, 'reservas', currentSaleData.reservationId);
-                    const reservationSnap = await transaction.get(reservationRef);
-
+                if (reservationRef && reservationSnap) {
                     if (reservationSnap.exists()) {
                         const resData = reservationSnap.data();
                         const isDepositSale = currentSaleData.tipo_venta === 'anticipo' || saleRef.id.startsWith('deposit_') || currentSaleData.pago_estado === 'deposit_paid';
@@ -556,6 +563,7 @@ export default function InvoicedSalesPage() {
             'Descuento': '0.00%', // Placeholder
         }));
 
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Pagos");

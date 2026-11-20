@@ -27,6 +27,13 @@ export const consultarServiciosTool = ai.defineTool(
   },
   async () => {
     try {
+      const gCache = globalThis as unknown as {
+        __vaServicesCatalogCache?: { items: any[]; expiresAt: number };
+      };
+      if (gCache.__vaServicesCatalogCache && Date.now() < gCache.__vaServicesCatalogCache.expiresAt) {
+        return gCache.__vaServicesCatalogCache.items;
+      }
+
       const db = getDb();
       const [servsSnap, profsSnap] = await Promise.all([
         db.collection('servicios').where('active', '==', true).get(),
@@ -53,7 +60,7 @@ export const consultarServiciosTool = ai.defineTool(
         }
       } catch (_) {}
 
-      return servsSnap.docs
+      const mappedServices = servsSnap.docs
         .filter((doc) => !doc.data().deleted)
         .map((doc) => {
           const d = doc.data();
@@ -108,6 +115,9 @@ export const consultarServiciosTool = ai.defineTool(
               : `Sin anticipo individual (aplica 50% de anticipo si se combina con otros servicios sumando $${globalMin}+ MXN)`,
           };
         });
+      // Cache result for 90 seconds
+      gCache.__vaServicesCatalogCache = { items: mappedServices, expiresAt: Date.now() + 90_000 };
+      return mappedServices;
     } catch (e: any) {
       console.error('Error in consultar_servicios:', e);
       return [];

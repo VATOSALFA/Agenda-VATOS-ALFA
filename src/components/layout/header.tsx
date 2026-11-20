@@ -76,7 +76,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useFeatures } from '@/hooks/use-features';
 import { useMemo } from 'react';
 import { useNetworkStatus } from '@/hooks/use-network-status';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, or, onSnapshot, doc } from 'firebase/firestore';
 import { playStrongNotificationAlert, initAudioUnlock, getAudioSettings, setAudioSettings, applyFontSizeScale } from '@/lib/notification-sound';
 
 // Removed top-level mainNavLinks
@@ -375,7 +375,13 @@ export default function Header() {
     isInitialConvSnapshotRef.current = true;
     prevConvStateRef.current = new Map();
 
-    const q = query(collection(db, 'conversaciones'));
+    const q = query(
+      collection(db, 'conversaciones'),
+      or(
+        where('modo_atencion', 'in', ['requiere_atencion', 'humano_al_mando']),
+        where('atencion_pendiente_fuera_horario', '==', true)
+      )
+    );
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {

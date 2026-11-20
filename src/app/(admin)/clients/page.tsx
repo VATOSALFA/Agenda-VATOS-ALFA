@@ -35,14 +35,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { deleteDoc, doc, updateDoc, where, Timestamp, collection, query, getDocs } from "firebase/firestore";
+import { deleteDoc, doc, updateDoc, where, orderBy, limit, Timestamp, collection, query, getDocs } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { UploadClientsModal } from "@/components/clients/upload-clients-modal";
-import * as XLSX from 'xlsx';
 import { useAuth } from "@/contexts/firebase-auth-context";
 import { useLocal } from "@/contexts/local-context";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -475,9 +474,16 @@ export default function ClientsPage() {
     const constraints = [];
     if (activeFilters.dateRange?.from) {
       constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(activeFilters.dateRange.from))));
-    }
-    if (activeFilters.dateRange?.to) {
-      constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+      if (activeFilters.dateRange?.to) {
+        constraints.push(where('fecha_hora_venta', '<=', Timestamp.fromDate(endOfDay(activeFilters.dateRange.to))));
+      }
+      constraints.push(orderBy('fecha_hora_venta', 'desc'));
+      constraints.push(limit(1000));
+    } else {
+      const ninetyDaysAgo = subMonths(new Date(), 3);
+      constraints.push(where('fecha_hora_venta', '>=', Timestamp.fromDate(startOfDay(ninetyDaysAgo))));
+      constraints.push(orderBy('fecha_hora_venta', 'desc'));
+      constraints.push(limit(600));
     }
     return constraints;
   }, [activeFilters.dateRange]);
@@ -490,11 +496,18 @@ export default function ClientsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
 
-  // Precargar reservas en segundo plano para enriquecer la fecha de última visita
+  // Precargar reservas recientes (últimos 90 días) para enriquecer la fecha de última visita sin descargar toda la colección histórica
   useEffect(() => {
     if (!db) return;
     let isCancelled = false;
-    getDocs(collection(db, 'reservas'))
+    const cutoffStr = format(subMonths(new Date(), 3), 'yyyy-MM-dd');
+    const recentResQuery = query(
+      collection(db, 'reservas'),
+      where('fecha', '>=', cutoffStr),
+      orderBy('fecha', 'desc'),
+      limit(600)
+    );
+    getDocs(recentResQuery)
       .then(snap => {
         if (isCancelled) return;
         const resList = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Reservation));
@@ -1369,6 +1382,7 @@ export default function ClientsPage() {
       };
     });
 
+    const XLSX = await import('xlsx');
     const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");

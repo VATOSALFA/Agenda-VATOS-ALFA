@@ -447,10 +447,11 @@ export function EmailPreview({ config, type, companyDetails }: EmailPreviewProps
             </div>
             <ScrollArea className="flex-1 w-full bg-gray-100">
                 <div className="w-full min-h-full flex items-start justify-center p-6">
-                    <div
-                        dangerouslySetInnerHTML={{ __html: getHtml() }}
-                        className="w-full max-w-[450px] bg-transparent origin-top transform transition-all"
-                        style={{ isolation: 'isolate' }}
+                    <iframe
+                        title="Vista previa de correo"
+                        sandbox=""
+                        srcDoc={getHtml()}
+                        className="w-full max-w-[450px] min-h-[620px] border-0 bg-transparent rounded-md"
                     />
                 </div>
             </ScrollArea>

@@ -1,9 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { allPermissions, initialRoles } from '@/lib/permissions';
-import { resolveAuthenticatedUserAction, type ServerResolvedUserProfile } from '@/lib/actions/auth-session';
+import {
+  resolveAuthenticatedUserAction,
+  syncServerAuthCookieAction,
+  clearServerAuthCookieAction,
+  type ServerResolvedUserProfile,
+} from '@/lib/actions/auth-session';
 import { usePathname, useRouter } from 'next/navigation';
 import { CustomLoader } from "@/components/ui/custom-loader";
 
@@ -80,6 +85,7 @@ async function loadFirebaseModules() {
     db: clientMod.db,
     storage: clientMod.storage,
     onAuthStateChanged: authMod.onAuthStateChanged,
+    onIdTokenChanged: authMod.onIdTokenChanged,
     firebaseSignOut: authMod.signOut,
     signInWithEmailAndPassword: authMod.signInWithEmailAndPassword,
     setPersistence: authMod.setPersistence,
@@ -134,21 +140,64 @@ export const useAuth = () => {
   return context;
 };
 
+function hasStoredStaffHint(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem('current_session_id')) return true;
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(AUTH_PROFILE_CACHE_PREFIX)) {
+        return true;
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return false;
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const pathname = usePathname() || '';
+  const router = useRouter();
+
+  const isPublicPage =
+    pathname === '/' ||
+    pathname.startsWith('/reservar') ||
+    pathname.startsWith('/reserva') ||
+    pathname === '/privacidad' ||
+    pathname === '/terminos' ||
+    pathname === '/agenda/display' ||
+    pathname.startsWith('/cita') ||
+    pathname.startsWith('/promociones') ||
+    pathname.startsWith('/blog') ||
+    pathname.startsWith('/auth/mobile-google');
+  const isAuthPage = pathname === '/login';
+  const isMarketingPublicPage =
+    pathname === '/' ||
+    pathname === '/blog' ||
+    pathname.startsWith('/blog/') ||
+    pathname === '/privacidad' ||
+    pathname === '/terminos';
+
   const [user, setUser] = useState<CustomUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!isPublicPage);
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [hasStaffHint, setHasStaffHint] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [firebaseDb, setFirebaseDb] = useState<any>(null);
   const [firebaseStorage, setFirebaseStorage] = useState<any>(null);
 
   const inFlightValidationRef = useRef<Map<string, Promise<CustomUser>>>(new Map());
   const activeAuthUidRef = useRef<string | null>(null);
+  const firebaseInitializedRef = useRef(false);
 
-  const pathname = usePathname();
-  const router = useRouter();
+  useEffect(() => {
+    if (hasStoredStaffHint()) {
+      setHasStaffHint(true);
+    }
+  }, [pathname]);
 
-  const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname.startsWith('/reserva') || pathname === '/privacidad' || pathname === '/terminos' || pathname === '/agenda/display' || pathname.startsWith('/cita') || pathname.startsWith('/promociones') || pathname.startsWith('/blog') || pathname.startsWith('/auth/mobile-google');
-  const isAuthPage = pathname === '/login';
+  const shouldInitFirebase = !isMarketingPublicPage || hasStaffHint;
 
   const checkLocalSchedule = async (localId: string): Promise<boolean> => {
     try {
@@ -362,6 +411,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           const clientProfile = await queryClientFirestoreProfile(firebaseUser);
           saveCachedUserProfile(clientProfile);
+          syncServerAuthCookieAction(idToken).catch(() => {});
           return buildCustomUser(firebaseUser, clientProfile);
         } catch (err: any) {
           if (err?.message === 'ACCESS_DENIED' || err?.message === 'OUTSIDE_HOURS') {
@@ -444,7 +494,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
+    if (!shouldInitFirebase || firebaseInitializedRef.current) return;
+    firebaseInitializedRef.current = true;
+
     let unsubscribe: (() => void) | undefined;
+    let unsubscribeIdToken: (() => void) | undefined;
     let isUnmounted = false;
 
     const handleOnlineRevalidation = async () => {
@@ -467,7 +521,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     (async () => {
-      // Load full Firebase client and set up auth listener on all pages
+      // Load full Firebase client and set up auth listener only when needed
       const fb = await getFirebase();
       if (isUnmounted) return;
       setFirebaseDb(fb.db);
@@ -519,28 +573,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }
         } else {
+          clearServerAuthCookieAction().catch(() => {});
           if (!isUnmounted) {
             setUser(null);
           }
         }
         if (!isUnmounted) {
+          setAuthInitialized(true);
           setLoading(false);
+        }
+      });
+
+      unsubscribeIdToken = fb.onIdTokenChanged(fb.auth, async (u) => {
+        if (u) {
+          try {
+            const freshToken = await u.getIdToken(false);
+            await syncServerAuthCookieAction(freshToken);
+          } catch {
+            // Ignore transient refresh failure
+          }
         }
       });
     })();
 
     return () => {
       isUnmounted = true;
+      firebaseInitializedRef.current = false;
       if (unsubscribe) unsubscribe();
+      if (unsubscribeIdToken) unsubscribeIdToken();
       if (typeof window !== 'undefined') {
         window.removeEventListener('online', handleOnlineRevalidation);
       }
     };
-  }, []);
+  }, [shouldInitFirebase]);
 
   // Handling redirects in a separate effect to avoid updates during render
   useEffect(() => {
-    if (loading) return;
+    if (loading || (shouldInitFirebase && !authInitialized)) return;
 
     if (user && isAuthPage) {
       router.replace('/agenda');
@@ -550,7 +619,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       router.replace('/login');
     }
 
-  }, [user, loading, pathname, router, isAuthPage, isPublicPage]);
+  }, [user, loading, authInitialized, shouldInitFirebase, pathname, router, isAuthPage, isPublicPage]);
 
   const getDeviceInfo = () => {
     if (typeof window === 'undefined') return 'Desconocido';
@@ -651,11 +720,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Keep receptionist sessions updated every 60 seconds (Heartbeat)
+  // Keep receptionist sessions updated every 5 minutes when tab is visible (Heartbeat)
   useEffect(() => {
     if (!currentSessionId || !user || user.role !== 'Recepcionista') return;
 
     const intervalId = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const fb = await getFirebase();
         await fb.updateDoc(fb.doc(fb.db, 'sesiones_trabajo', currentSessionId), {
@@ -664,7 +734,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } catch (e) {
         console.error("Error updating session heartbeat:", e);
       }
-    }, 60000);
+    }, 5 * 60 * 1000);
 
     return () => {
       clearInterval(intervalId);
@@ -676,6 +746,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const uidToClear = user?.uid || fb.auth.currentUser?.uid || null;
     await closeCurrentSession();
     clearCachedUserProfile(uidToClear);
+    clearServerAuthCookieAction().catch(() => {});
     activeAuthUidRef.current = null;
     await fb.firebaseSignOut(fb.auth);
     setUser(null);
@@ -744,7 +815,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return userCredential.user;
   };
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     signInAndSetup,
@@ -752,7 +823,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
     db: firebaseDb,
     storage: firebaseStorage,
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [user, loading, firebaseDb, firebaseStorage]);
 
 
   if (loading) {

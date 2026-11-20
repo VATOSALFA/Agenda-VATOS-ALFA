@@ -20,8 +20,18 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: false,
+  publicExcludes: ['!janeth-fullscreen.mp4', '!**/*.mp4', '!**/*.gif', '!logo-vatos-wa.png', '!version.json', '!noprecache/**/*'],
   workboxOptions: {
     cleanupOutdatedCaches: true,
+    exclude: [
+      /\/_next\/static\/.*(?<!\.p)\.woff2/,
+      /\.map$/,
+      /^manifest.*\.js$/,
+      /\(admin\)/,
+      /finanzas/,
+      /gerencia/,
+      /ceo/,
+    ],
     runtimeCaching: [
       {
         urlPattern: ({ request, url }) =>
@@ -38,10 +48,17 @@ const withPWA = withPWAInit({
 const nextConfig = {
   turbopack: {},
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
   async headers() {
+    const immutableCacheHeaders = [
+      {
+        key: 'Cache-Control',
+        value: 'public, max-age=31536000, immutable',
+      },
+    ];
+
     return [
       {
         source: '/:path*',
@@ -67,16 +84,55 @@ const nextConfig = {
             value: 'camera=(self), microphone=(self), geolocation=()',
           },
           {
-            key: 'X-XSS-Protection',
-            value: '1; mode=block',
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://*.mercadopago.com https://*.mlstatic.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "img-src 'self' data: blob: https:",
+              "media-src 'self' data: blob: https:",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net https://*.run.app https://accounts.google.com https://apis.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mlstatic.com https://*.mercadolibre.com",
+              "frame-src 'self' https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mercadolibre.com https://accounts.google.com https://*.firebaseapp.com",
+              "worker-src 'self' blob:",
+              "frame-ancestors 'self'",
+              "base-uri 'self'",
+              "object-src 'none'",
+            ].join('; '),
           },
         ],
       },
+      {
+        source: '/services/:path*',
+        headers: immutableCacheHeaders,
+      },
+      ...[
+        '/logo-header-blanco.webp',
+        '/logo-header-blanco.png',
+        '/logo-v-400x400.webp',
+        '/logo-vatos-alfa.webp',
+        '/logo-vatos-alfa.png',
+        '/logo-vatos-wa.webp',
+        '/logo-vatos-wa.png',
+        '/icon-192x192.png',
+        '/icon-512x512.png',
+        '/icon-maskable-512x512.png',
+        '/apple-touch-icon.png',
+        '/icono-pagina-web.webp',
+        '/janeth-poster.jpg',
+      ].map((source) => ({
+        source,
+        headers: immutableCacheHeaders,
+      })),
     ];
   },
 
   images: {
-    qualities: [75, 85, 90],
+    formats: ['image/webp'],
+    minimumCacheTTL: 2592000,
+    deviceSizes: [384, 640, 750, 828, 1080, 1200],
+    imageSizes: [36, 64, 96, 128, 256, 384],
+    qualities: [75, 80, 85, 90, 95, 100],
     remotePatterns: [
       {
         protocol: 'https',
@@ -108,6 +164,18 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'vatosalfa.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
   env: {
@@ -118,8 +186,9 @@ const nextConfig = {
     NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
     NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-    NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY: process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '',
-    NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || '',
+    NEXT_PUBLIC_MP_WEB_PUBLIC_KEY: process.env.NEXT_PUBLIC_MP_WEB_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '',
+    NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY: process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || process.env.NEXT_PUBLIC_MP_WEB_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || '',
+    NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY: process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY || process.env.NEXT_PUBLIC_MP_WEB_PUBLIC_KEY || process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || '',
   }
 };
 

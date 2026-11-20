@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Loader2, CreditCard, RefreshCw, Smartphone, CheckCircle2 } from "lucide-react";
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
-import { db, httpsCallable, functions } from '@/lib/firebase-client';
+import { db, auth, httpsCallable, functions } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -163,9 +163,13 @@ export default function PagosAgendaProPage() {
         }
         setIsSyncingStore(true);
         try {
+            const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : '';
             const res = await fetch('/api/mercadopago/sync-store', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+                },
                 body: JSON.stringify({ accessToken: token, userId: uid })
             });
             const data = await res.json();

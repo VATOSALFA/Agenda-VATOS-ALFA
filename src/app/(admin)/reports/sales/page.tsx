@@ -19,7 +19,6 @@ import type { Sale, Service, ServiceCategory, SaleItem, Role, Profesional, Clien
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import * as XLSX from 'xlsx';
 
 const CHART_COLORS = ['#202A49', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#C5A880', '#64748B', '#94A3B8'];
 
@@ -365,7 +364,7 @@ export default function SalesReportPage() {
         return list.sort((a, b) => (orderMap[a.dayIndex] || 0) - (orderMap[b.dayIndex] || 0));
     }, [aggregatedData.averageSalesByDay, daySortOrder]);
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (!sales || sales.length === 0) {
             toast({
                 variant: "destructive",
@@ -440,6 +439,7 @@ export default function SalesReportPage() {
             'Total Vendido': s.value
         }));
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(salesData), "Ventas Detalladas");
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(generalSummary), "Resumen");

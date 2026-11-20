@@ -3,7 +3,6 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
@@ -45,9 +44,10 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     const file = acceptedFiles[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const bstr = event.target?.result;
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(bstr, { type: 'binary', cellDates: true });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
@@ -154,7 +154,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
     multiple: false,
   });
 
-  const downloadTemplate = () => {
+  const downloadTemplate = async () => {
     try {
       const headers = [
         'nombre',
@@ -187,6 +187,7 @@ export function UploadClientsModal({ isOpen, onOpenChange, onUploadComplete }: U
         }
       ];
 
+      const XLSX = await import('xlsx');
       const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Plantilla Clientes');

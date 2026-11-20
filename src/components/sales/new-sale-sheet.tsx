@@ -84,6 +84,12 @@ import {
     type MultiplicadorCoinsConfig,
     DEFAULT_JUNTOS_CONFIG,
     type JuntosEsMejorConfig,
+    DEFAULT_DECIMA_CONFIG,
+    type DecimaCorteConfig,
+    DEFAULT_COINS_CONFIG,
+    type AlfaCoinsConfig,
+    DEFAULT_REFERRAL_CONFIG,
+    type ReferralProgramConfig,
     type SaleLoyaltySnapshot,
 } from '@/lib/benefit-security';
 import { isClientWithApp } from '@/lib/client-app-helper';
@@ -1168,6 +1174,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [multiplicadorCoinsConfig, setMultiplicadorCoinsConfig] = useState<MultiplicadorCoinsConfig | null>(null);
     const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
     const [targetStampsConfig, setTargetStampsConfig] = useState<number>(9);
+    const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
+    const [coinsConfig, setCoinsConfig] = useState<AlfaCoinsConfig>(DEFAULT_COINS_CONFIG);
+    const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
     const [reconciledClientStats, setReconciledClientStats] = useState<{
         clientId: string;
         visits: number;
@@ -1179,7 +1188,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         [multiplicadorCoinsConfig]
     );
 
-    // Suscripción en tiempo real a la configuración de Niveles y Rangos (Pase Alfa Club) y Multiplicador de Alfa Coins
+    // Suscripción en tiempo real a la configuración completa del Pase Alfa (Niveles, Multiplicador, Juntos, Décima, Coins, Referidos)
     useEffect(() => {
         if (!db) return;
         const unsubPase = onSnapshot(
@@ -1195,6 +1204,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                     if (data.juntos_config) {
                         setJuntosConfig({ ...DEFAULT_JUNTOS_CONFIG, ...data.juntos_config });
+                    }
+                    if (data.decima_config) {
+                        setDecimaConfig({ ...DEFAULT_DECIMA_CONFIG, ...data.decima_config });
+                    }
+                    if (data.coins_config) {
+                        setCoinsConfig({ ...DEFAULT_COINS_CONFIG, ...data.coins_config });
+                    }
+                    if (data.referral_config) {
+                        setReferralConfig({ ...DEFAULT_REFERRAL_CONFIG, ...data.referral_config });
                     }
                     const sReq = Number(data.sellosRequeridos || 10);
                     setTargetStampsConfig(sReq === 10 ? 9 : sReq);
@@ -1218,6 +1236,18 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const junCfg = data.juntos_config || data.pase_alfa?.juntos_config;
                     if (junCfg) {
                         setJuntosConfig((prev) => ({ ...DEFAULT_JUNTOS_CONFIG, ...junCfg, ...prev }));
+                    }
+                    const decCfg = data.decima_config || data.pase_alfa?.decima_config;
+                    if (decCfg) {
+                        setDecimaConfig((prev) => ({ ...DEFAULT_DECIMA_CONFIG, ...decCfg, ...prev }));
+                    }
+                    const coiCfg = data.coins_config || data.pase_alfa?.coins_config;
+                    if (coiCfg) {
+                        setCoinsConfig((prev) => ({ ...DEFAULT_COINS_CONFIG, ...coiCfg, ...prev }));
+                    }
+                    const refCfg = data.referral_config || data.pase_alfa?.referral_config;
+                    if (refCfg) {
+                        setReferralConfig((prev) => ({ ...DEFAULT_REFERRAL_CONFIG, ...refCfg, ...prev }));
                     }
                 }
             },
@@ -1392,10 +1422,29 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
     const maxUsableAlfaCoins = useMemo(() => {
         if (!selectedClient || clientAlfaCoins <= 0 || alfaCoinUnitValue <= 0) return 0;
+        if (coinsConfig.activo === false) return 0;
+        const minCanje = Math.max(0, Number(coinsConfig.minimo_canje_coins || 0));
+        if (minCanje > 0 && clientAlfaCoins < minCanje) return 0;
+
+        // Calcular base elegible según aplicable_en ('ambos' | 'servicios' | 'productos')
+        const aplicableEn = coinsConfig.aplicable_en || 'ambos';
+        const eligibleSubtotal = cart.reduce((acc, item) => {
+            if (aplicableEn === 'servicios' && item.tipo !== 'servicio') return acc;
+            if (aplicableEn === 'productos' && item.tipo !== 'producto') return acc;
+            const gross = (Number(item.precio) || 0) * (Number(item.cantidad) || 1);
+            const discVal = Number(item.discountValue) || 0;
+            const disc = item.discountType === 'percentage' ? (gross * discVal) / 100 : discVal;
+            return acc + Math.max(0, gross - disc);
+        }, 0);
+
         const currentTotalBeforeCoins = Math.max(0, subtotal - totalDiscount - anticipoPagado);
-        const coinsNeededForFullTotal = Math.ceil(currentTotalBeforeCoins / alfaCoinUnitValue);
-        return Math.min(clientAlfaCoins, coinsNeededForFullTotal);
-    }, [selectedClient, clientAlfaCoins, subtotal, totalDiscount, anticipoPagado, alfaCoinUnitValue]);
+        const capPct = Math.min(100, Math.max(1, Number(coinsConfig.tope_descuento_pct || 100)));
+        const maxMoneyByCap = Math.min(currentTotalBeforeCoins, (eligibleSubtotal * capPct) / 100);
+        if (maxMoneyByCap <= 0) return 0;
+
+        const coinsNeededForCap = Math.ceil(maxMoneyByCap / alfaCoinUnitValue);
+        return Math.min(clientAlfaCoins, coinsNeededForCap);
+    }, [selectedClient, clientAlfaCoins, subtotal, totalDiscount, anticipoPagado, alfaCoinUnitValue, coinsConfig, cart]);
 
     const effectiveAlfaCoinsToUse = useMemo(() => {
         if (!redeemPoints || maxUsableAlfaCoins <= 0) return 0;
@@ -1498,7 +1547,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 tipo,
                 presentation_id,
                 ...(applyReferralDiscount ? {
-                    discountValue: String(REFERRAL_DISCOUNT_PERCENT),
+                    discountValue: String(Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT)),
                     discountType: 'percentage' as const,
                 } : applyTierProductDiscount ? {
                     discountValue: String(clientLevelInfo.productDiscountPct),
@@ -1508,20 +1557,32 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         });
     };
 
-    // Aplicar automáticamente el descuento en productos configurado en el Nivel Alfa del cliente
+    // Aplicar o retirar automáticamente el descuento en productos configurado en el Nivel Alfa del cliente
     useEffect(() => {
         const tierProdPct = clientLevelInfo.activo ? Number(clientLevelInfo.productDiscountPct || 0) : 0;
-        if (tierProdPct <= 0) return;
 
         setCart(prev => {
             let changed = false;
             const next = prev.map(it => {
-                if (it.tipo === 'producto' && (!it.discountValue || Number(it.discountValue) === 0)) {
+                if (it.tipo !== 'producto') return it;
+                if (tierProdPct > 0 && (!it.discountValue || Number(it.discountValue) === 0)) {
                     changed = true;
                     return {
                         ...it,
                         discountValue: String(tierProdPct),
                         discountType: 'percentage' as const,
+                    };
+                }
+                if (
+                    tierProdPct <= 0 &&
+                    it.discountType === 'percentage' &&
+                    (Number(it.discountValue) === 10 || Number(it.discountValue) === 15)
+                ) {
+                    changed = true;
+                    return {
+                        ...it,
+                        discountValue: '0',
+                        discountType: 'fixed' as const,
                     };
                 }
                 return it;
@@ -1530,16 +1591,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         });
     }, [clientLevelInfo.activo, clientLevelInfo.productDiscountPct, selectedClientId, cart.length]);
 
-    // Aplicar o retirar automáticamente el 20% de descuento de referido sobre los servicios del carrito
+    // Aplicar o retirar automáticamente el descuento dinámico de referido sobre los servicios del carrito
     useEffect(() => {
         if (!appliedBenefit?.isReferralBenefit) return;
+        const refDiscountPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
 
-        if (appliedBenefit.isReferralBlocked) {
+        if (appliedBenefit.isReferralBlocked || referralConfig.activo === false) {
             setCart(prev =>
                 prev.map(it =>
                     it.tipo === 'servicio' &&
                     it.discountType === 'percentage' &&
-                    Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT
+                    (Number(it.discountValue) === refDiscountPct || Number(it.discountValue) === REFERRAL_DISCOUNT_PERCENT)
                         ? { ...it, discountValue: '0', discountType: 'fixed' }
                         : it
                 )
@@ -1548,12 +1610,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setCart(prev =>
                 prev.map(it =>
                     it.tipo === 'servicio' && (!it.discountValue || Number(it.discountValue) === 0)
-                        ? { ...it, discountValue: String(REFERRAL_DISCOUNT_PERCENT), discountType: 'percentage' }
+                        ? { ...it, discountValue: String(refDiscountPct), discountType: 'percentage' }
                         : it
                 )
             );
         }
-    }, [appliedBenefit?.isReferralBenefit, appliedBenefit?.isReferralBlocked, cart.length]);
+    }, [appliedBenefit?.isReferralBenefit, appliedBenefit?.isReferralBlocked, referralConfig.descuento_amigo_pct, referralConfig.activo, cart.length]);
 
     // Helper para identificar el servicio individual independiente de corte de cabello (excluyendo paquetes)
     const isIndividualHaircutItem = useCallback((it: any) => {
@@ -1662,7 +1724,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
             const targetItem = prev[haircutIdx];
             const itemPrice = Number(targetItem.precio) || 0;
-            const freeCutDiscountAmt = Math.min(itemPrice, Number(currentHaircutPrice || 140));
+            const decimaMaxCoverage =
+                decimaConfig.cobertura_tipo === 'monto_fijo' && Number(decimaConfig.cobertura_monto || 0) > 0
+                    ? Number(decimaConfig.cobertura_monto)
+                    : Number(currentHaircutPrice || 140);
+            const freeCutDiscountAmt = Math.min(itemPrice, decimaMaxCoverage);
             if (freeCutDiscountAmt <= 0) return prev;
 
             return prev.map((it, idx) =>
@@ -1693,6 +1759,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 previousSalesCount = snapSales.docs.filter(d => {
                     const sd = d.data();
                     const st = (sd.pago_estado || '').toLowerCase();
+                    // Excluir anticipos de la primera cita (para que un cliente nuevo que pagó anticipo online no sea rechazado)
+                    if (sd.tipo_venta === 'anticipo' || d.id.startsWith('deposit_') || sd.absorbed_in_sale_id) {
+                        return false;
+                    }
                     return sd.estado !== 'cancelada' && st !== 'cancelado' && st !== 'pendiente';
                 }).length;
                 alreadyRedeemedReferral = snapCanjes.docs.some(d => {
@@ -2395,7 +2465,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 );
 
                 const alreadyCountedToday = (targetClient as any).ultima_visita_fecha === todayStr;
-                const visitDelta = !isFreeCutRedemption && hasServiceInCart && !alreadyCountedToday ? 1 : 0;
+                const freeCutCountsAsVisit = decimaConfig.contar_como_visita_nivel === true;
+                const visitDelta = (!isFreeCutRedemption || freeCutCountsAsVisit) && hasServiceInCart && !alreadyCountedToday ? 1 : 0;
 
                 loyaltySnapshot.consumo_real_sumado = realMoneySpent;
                 loyaltySnapshot.visita_asistida_sumada = visitDelta;
@@ -2450,7 +2521,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 // Si el cliente tiene la App descargada, actualizar también sus AlfaCoins y Sello del Pase Alfa
                 if (hasAppDownloaded) {
-                    const pointsEarned = total > 0 ? Math.floor(total) * coinsMult : 0;
+                    const coinsPerPeso = coinsConfig.activo !== false ? Math.max(0, Number(coinsConfig.coins_por_peso ?? 1)) : 0;
+                    // Usar realMoneySpent (incluye anticipo/pago total online) para no perder Alfa Coins al pagar por adelantado
+                    const pointsEarned = realMoneySpent > 0 && coinsPerPeso > 0 ? Math.floor(realMoneySpent * coinsPerPeso) * coinsMult : 0;
                     const pointsSpent = effectiveAlfaCoinsToUse || 0;
                     const deltaCoins = pointsEarned - pointsSpent;
 
@@ -2469,12 +2542,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     let nextStamps = currStamps;
                     let stampAdded = false;
 
+                    const effectiveStampMinPrice =
+                        decimaConfig.consumo_sello_tipo === 'monto_fijo' && Number(decimaConfig.consumo_sello_monto || 0) > 0
+                            ? Number(decimaConfig.consumo_sello_monto)
+                            : currentHaircutPrice;
+
                     const stampEvaluation = evaluatePaseAlfaStampsForSale({
                         client: targetClient,
                         hasAppDownloaded: true,
                         cart,
                         realMoneySpent,
-                        currentHaircutPrice,
+                        currentHaircutPrice: effectiveStampMinPrice,
                         targetStamps: targetStampsConfig,
                         todayStr,
                         appliedBenefit,
@@ -2553,7 +2631,27 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }
 
-                await updateDoc(clientRef, updatePayload);
+                // Transacción atómica cuando se gastan Alfa Coins o se canjea 10.° Corte Gratis (previene double spending)
+                const needsAtomicGuard = (effectiveAlfaCoinsToUse || 0) > 0 || isFreeCutRedemption;
+                if (needsAtomicGuard) {
+                    await runTransaction(db, async (tx) => {
+                        const freshSnap = await tx.get(clientRef);
+                        if (!freshSnap.exists()) return;
+                        const freshData = freshSnap.data() || {};
+                        const spent = effectiveAlfaCoinsToUse || 0;
+                        if (spent > 0) {
+                            const liveCoins = Number(
+                                freshData.alfaCoins ?? freshData.alfa_coins ?? freshData.puntosLealtad ?? freshData.puntos_lealtad ?? freshData.puntos ?? 0
+                            );
+                            if (liveCoins < spent) {
+                                throw new Error(`Saldo insuficiente de Alfa Coins en servidor (${liveCoins} disponibles vs ${spent} solicitados).`);
+                            }
+                        }
+                        tx.update(clientRef, updatePayload);
+                    });
+                } else {
+                    await updateDoc(clientRef, updatePayload);
+                }
 
                 // Notificar en Recepción si el cliente subió de nivel automáticamente y los niveles están activos
                 if (
@@ -2842,37 +2940,47 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 if (isBirthdayApplied) {
                     loyaltySnapshot.cumpleanos_anio_marcado = currentYear;
                 }
+                const dynamicRefDiscountPct = Number(referralConfig.descuento_amigo_pct ?? REFERRAL_DISCOUNT_PERCENT);
+                const dynamicRefHostCoins = Number(referralConfig.recompensa_anfitrion_coins ?? REFERRAL_HOST_REWARD_COINS);
+
                 if (appliedBenefit.isReferralBenefit) {
                     loyaltySnapshot.is_referral_applied = true;
                     loyaltySnapshot.referrer_id = appliedBenefit.referrerId || undefined;
-                    loyaltySnapshot.referrer_coins_awarded = isEligibleReferralReward ? REFERRAL_HOST_REWARD_COINS : 0;
+                    loyaltySnapshot.referrer_coins_awarded = isEligibleReferralReward ? dynamicRefHostCoins : 0;
                 }
 
-                await setDoc(doc(db, 'canjes_beneficios', appliedBenefit.folio), {
-                    folio: appliedBenefit.folio,
-                    benefitId: isBirthdayApplied ? 'regalo_cumpleanos' : (appliedBenefit.benefitId || 'beneficio_alfa'),
-                    benefitTitle: appliedBenefit.benefitTitle || 'Beneficio Pase Alfa',
-                    estado: 'canjeado',
-                    anio: currentYear,
-                    utilizado_en_venta: true,
-                    canjeadoEn: Timestamp.now(),
-                    fechaCanje: Timestamp.now(),
-                    fecha_aplicacion: Timestamp.now(),
-                    clienteId: targetClientIdForBenefit,
-                    clienteNombre: invitedFriendName || null,
-                    totalVenta: total,
-                    ...(appliedBenefit.isReferralBenefit ? {
-                        isReferralBenefit: true,
-                        referralCode: appliedBenefit.referralCode || null,
-                        referrerId: appliedBenefit.referrerId || null,
-                        referrerName: appliedBenefit.referrerName || null,
-                        discountPercentApplied: REFERRAL_DISCOUNT_PERCENT,
-                        haircutPriceApplied: referralEval.requiredGrossService,
-                        requiredMinNetPaid: referralEval.requiredNetPaid,
-                        rewardCoins: isEligibleReferralReward ? REFERRAL_HOST_REWARD_COINS : 0,
-                        recompensaAcreditada: isEligibleReferralReward,
-                    } : {})
-                }, { merge: true });
+                const benefitFolioRef = doc(db, 'canjes_beneficios', appliedBenefit.folio);
+                await runTransaction(db, async (tx) => {
+                    const folioSnap = await tx.get(benefitFolioRef);
+                    if (folioSnap.exists() && folioSnap.data()?.estado === 'canjeado' && folioSnap.data()?.utilizado_en_venta === true) {
+                        throw new Error(`El folio ${appliedBenefit.folio} ya fue canjeado en otra venta.`);
+                    }
+                    tx.set(benefitFolioRef, {
+                        folio: appliedBenefit.folio,
+                        benefitId: isBirthdayApplied ? 'regalo_cumpleanos' : (appliedBenefit.benefitId || 'beneficio_alfa'),
+                        benefitTitle: appliedBenefit.benefitTitle || 'Beneficio Pase Alfa',
+                        estado: 'canjeado',
+                        anio: currentYear,
+                        utilizado_en_venta: true,
+                        canjeadoEn: Timestamp.now(),
+                        fechaCanje: Timestamp.now(),
+                        fecha_aplicacion: Timestamp.now(),
+                        clienteId: targetClientIdForBenefit,
+                        clienteNombre: invitedFriendName || null,
+                        totalVenta: total,
+                        ...(appliedBenefit.isReferralBenefit ? {
+                            isReferralBenefit: true,
+                            referralCode: appliedBenefit.referralCode || null,
+                            referrerId: appliedBenefit.referrerId || null,
+                            referrerName: appliedBenefit.referrerName || null,
+                            discountPercentApplied: dynamicRefDiscountPct,
+                            haircutPriceApplied: referralEval.requiredGrossService,
+                            requiredMinNetPaid: referralEval.requiredNetPaid,
+                            rewardCoins: isEligibleReferralReward ? dynamicRefHostCoins : 0,
+                            recompensaAcreditada: isEligibleReferralReward,
+                        } : {})
+                    }, { merge: true });
+                });
 
                 // Si es beneficio de cumpleaños aplicado en Caja, bloquear en el perfil del cliente hasta el siguiente año calendario
                 if (isBirthdayApplied && targetClientIdForBenefit) {
@@ -2895,8 +3003,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     });
                 }
 
-                // Si es un beneficio de referido válido y la compra cumple el equivalente a 1 Corte vigente,
-                // acreditar 500 Alfa Coins al anfitrión y registrar su notificación + animación en la App Móvil
+                // Si es un beneficio de referido válido y la compra cumple el consumo mínimo,
+                // acreditar Alfa Coins dinámicas al anfitrión y registrar su notificación + animación en la App Móvil
                 if (isEligibleReferralReward) {
                     const referrerRef = doc(db, 'clientes', appliedBenefit.referrerId);
                     const referrerSnap = await getDoc(referrerRef);
@@ -2916,11 +3024,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     loyaltySnapshot.referrer_recompensa_pendiente_id = refRewardId;
 
                     await updateDoc(referrerRef, {
-                        puntos: increment(REFERRAL_HOST_REWARD_COINS),
-                        alfaCoins: increment(REFERRAL_HOST_REWARD_COINS),
-                        alfa_coins: increment(REFERRAL_HOST_REWARD_COINS),
-                        puntosLealtad: increment(REFERRAL_HOST_REWARD_COINS),
-                        puntos_lealtad: increment(REFERRAL_HOST_REWARD_COINS),
+                        puntos: increment(dynamicRefHostCoins),
+                        alfaCoins: increment(dynamicRefHostCoins),
+                        alfa_coins: increment(dynamicRefHostCoins),
+                        puntosLealtad: increment(dynamicRefHostCoins),
+                        puntos_lealtad: increment(dynamicRefHostCoins),
                         amigos_referidos: increment(1),
                         recompensa_pendiente: {
                             id: refRewardId,
@@ -2932,15 +3040,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             sellos_actuales: hostCurrStamps,
                             meta_sellos: targetStampsConfig,
                             corte_gratis_desbloqueado: Boolean(hostData?.corte_gratis_disponible),
-                            coins_ganadas: REFERRAL_HOST_REWARD_COINS,
+                            coins_ganadas: dynamicRefHostCoins,
                             coins_anteriores: prevHostCoins,
-                            coins_actuales: prevHostCoins + REFERRAL_HOST_REWARD_COINS,
+                            coins_actuales: prevHostCoins + dynamicRefHostCoins,
                             fecha: new Date().toISOString(),
                         },
                     });
                     toast({
-                        title: '🪙 ¡500 Alfa Coins Acreditados al Anfitrión!',
-                        description: `Se abonaron automáticamente ${REFERRAL_HOST_REWARD_COINS} Alfa Coins y notificación en App a ${appliedBenefit.referrerName}.`,
+                        title: `🪙 ¡${dynamicRefHostCoins} Alfa Coins Acreditados al Anfitrión!`,
+                        description: `Se abonaron automáticamente ${dynamicRefHostCoins} Alfa Coins y notificación en App a ${appliedBenefit.referrerName}.`,
                     });
                 }
             } catch (e) {
@@ -3069,8 +3177,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         onSaleComplete?.();
     };
 
+    const isSubmittingRef = useRef(false);
+    const isSendingTerminalRef = useRef(false);
+
     // --- LOGICA DE COBRO CON TERMINAL CORREGIDA ---
     const handleSendToTerminal = async () => {
+        if (isSendingTerminalRef.current) return;
         const formData = form.getValues();
         const amountToCharge = paymentMethod === 'combinado' ? (formData.pago_tarjeta || 0) : (total + Number(formData.propina || 0));
         if (!db || !selectedTerminalId || amountToCharge <= 0 || !selectedClient) return;
@@ -3080,6 +3192,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             return;
         }
 
+        isSendingTerminalRef.current = true;
         setIsSendingToTerminal(true);
         setIsWaitingForPayment(true);
 
@@ -3450,9 +3563,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 await revertPendingSale(saleIdRef.current);
             }
 
+            isSendingTerminalRef.current = false;
             setIsSendingToTerminal(false);
             setIsWaitingForPayment(false);
             saleIdRef.current = null;
+        } finally {
+            isSendingTerminalRef.current = false;
         }
     };
 
@@ -3567,40 +3683,49 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const saleData = saleDoc.data();
                 if (saleData.pago_estado !== 'Pendiente') return;
 
-                // Restaurar Stock
+                // Restaurar Stock (PRE-READ de todos los productos antes de cualquier escritura)
                 const items = saleData.items || [];
+                const productQtyMap = new Map<string, number>();
                 for (const item of items) {
-                    if (item.tipo === 'producto') {
-                        const productRef = doc(db, 'productos', item.id);
-                        const productDoc = await transaction.get(productRef);
-                        if (productDoc.exists()) {
-                            const productData = productDoc.data() as Product;
-                            const currentStock = productData.stock || 0;
-                            const qtyToRestore = Number(item.cantidad) || 0;
-                            const newStock = currentStock + qtyToRestore;
-                            transaction.update(productRef, { stock: newStock });
+                    if (item.tipo === 'producto' && item.id) {
+                        productQtyMap.set(item.id, (productQtyMap.get(item.id) || 0) + (Number(item.cantidad) || 0));
+                    }
+                }
+                const prodEntries = Array.from(productQtyMap.entries());
+                const prodDocs = await Promise.all(
+                    prodEntries.map(([pid]) => transaction.get(doc(db, 'productos', pid)))
+                );
 
-                            // Log movement for cancellation
-                            const movementRef = doc(collection(db, 'movimientos_inventario'));
-                            const selectedLocal = locales.find(l => l.id === saleData.local_id);
-                            const clientName = (saleData as any).cliente_id ? (clients.find(c => c.id === saleData.cliente_id)?.nombre || 'Cliente') : 'Cliente';
+                for (let idx = 0; idx < prodEntries.length; idx++) {
+                    const [pid, qtyToRestore] = prodEntries[idx];
+                    const productRef = doc(db, 'productos', pid);
+                    const productDoc = prodDocs[idx];
+                    if (productDoc.exists()) {
+                        const productData = productDoc.data() as Product;
+                        const currentStock = productData.stock || 0;
+                        const newStock = currentStock + qtyToRestore;
+                        transaction.update(productRef, { stock: newStock });
 
-                            transaction.set(movementRef, {
-                                date: Timestamp.now(),
-                                local_id: saleData.local_id,
-                                product_id: productRef.id,
-                                presentation_id: (productData as any).presentation_id || 'default',
-                                from: currentStock,
-                                to: newStock,
-                                cause: 'Cancelación de venta',
-                                staff_id: 'system',
-                                comment: `Venta cancelada/revertida`,
-                                product_name: productData.nombre,
-                                staff_name: 'Sistema',
-                                local_name: selectedLocal?.name || 'Local',
-                                concepto: `Cancelación de venta: ${clientName}`
-                            });
-                        }
+                        // Log movement for cancellation
+                        const movementRef = doc(collection(db, 'movimientos_inventario'));
+                        const selectedLocal = locales.find(l => l.id === saleData.local_id);
+                        const clientName = (saleData as any).cliente_id ? (clients.find(c => c.id === saleData.cliente_id)?.nombre || 'Cliente') : 'Cliente';
+
+                        transaction.set(movementRef, {
+                            date: Timestamp.now(),
+                            local_id: saleData.local_id,
+                            product_id: productRef.id,
+                            presentation_id: (productData as any).presentation_id || 'default',
+                            from: currentStock,
+                            to: newStock,
+                            cause: 'Cancelación de venta',
+                            staff_id: 'system',
+                            comment: `Venta cancelada/revertida`,
+                            product_name: productData.nombre,
+                            staff_name: 'Sistema',
+                            local_name: selectedLocal?.name || 'Local',
+                            concepto: `Cancelación de venta: ${clientName}`
+                        });
                     }
                 }
 
@@ -3682,7 +3807,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     };
 
     async function onSubmit(data: SaleFormData) {
-        if (!db) return;
+        if (!db || isSubmittingRef.current) return;
+        isSubmittingRef.current = true;
         setIsSubmitting(true);
         try {
             // Pre-transaction: Try to find existing sale by reservationId
@@ -4188,6 +4314,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 description: error.message || 'No se pudo registrar la venta. Por favor, intenta de nuevo.',
             });
         } finally {
+            isSubmittingRef.current = false;
             setIsSubmitting(false);
         }
     }
@@ -5232,7 +5359,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                                     console.error("Error updating reservation status on snapshot:", resErr);
                                                                                 }
                                                                             }
-                                                                            await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'));
+                                                                            await finalizeSaleProcess(form.getValues('cliente_id'), form.getValues('local_id'), confirmedSaleId);
 
                                                                         } catch (err) {
                                                                             console.error("Error confirming manual payment:", err);

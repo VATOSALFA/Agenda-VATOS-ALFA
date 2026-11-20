@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
-import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -131,7 +130,7 @@ export default function ProductSalesPage() {
         setIsProductDetailModalOpen(true);
     };
 
-    const triggerDownload = () => {
+    const triggerDownload = async () => {
         if (filteredProductItems.length === 0) {
             toast({ title: "No hay datos para exportar", variant: "destructive" });
             return;
@@ -177,6 +176,7 @@ export default function ProductSalesPage() {
             };
         });
 
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Detalle de Ventas');

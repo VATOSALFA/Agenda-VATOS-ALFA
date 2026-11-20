@@ -311,34 +311,27 @@
     animation: btnBorderLaser 3.2s linear infinite;
   }
 
-  /* Keyframe para el parpadeo del punto indicador del carrusel de Staff */
+  /* Keyframe para el parpadeo del punto indicador del carrusel de Staff (GPU composited) */
   @keyframes dotBlink {
     0% {
       opacity: 1;
       transform: scale(1);
-      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
     }
     20% {
       opacity: 0.15;
       transform: scale(0.75);
-      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
     }
     50% {
       opacity: 1;
       transform: scale(1.35);
-      background-color: #60a5fa;
-      box-shadow: 0 0 10px 3px rgba(59, 130, 246, 0.85);
     }
     75% {
       opacity: 0.3;
       transform: scale(0.9);
-      box-shadow: 0 0 2px rgba(59, 130, 246, 0.3);
     }
     100% {
       opacity: 1;
       transform: scale(1);
-      background-color: #3b82f6;
-      box-shadow: 0 0 0 rgba(59, 130, 246, 0);
     }
   }
 
@@ -465,7 +458,7 @@
 
   .animate-smoke-rim-glow {
     animation: smokeRimGlow 1.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-    will-change: transform, opacity, box-shadow;
+    will-change: transform, opacity;
   }
 
   .animate-gold-ray {

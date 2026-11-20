@@ -12,13 +12,12 @@ import {
   type Firestore,
 } from 'firebase/firestore';
 import { isClientWithApp } from './client-app-helper';
+import { verifyBenefitSignatureServer } from '@/lib/actions/benefit-verification';
 
 export const MONTH_NAMES_ES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
-
-export const VATOS_BENEFIT_SIGN_SALT = 'VA_SECURE_TOKEN_SALT_2026_VATOS_ALFA_SECURITY_KEY';
 
 /**
  * Requisito mínimo de antigüedad para desbloquear el Regalo de Cumpleaños:
@@ -471,7 +470,7 @@ export function validateClientBirthdayForBenefit(clientData: any): BirthdayValid
 }
 
 /**
- * Verifica la firma criptográfica del código QR para prevenir folios falsificados
+ * Verifica la firma criptográfica del código QR en el servidor para prevenir folios falsificados
  */
 export async function verifyBenefitSignature(
   clientId: string,
@@ -482,46 +481,14 @@ export async function verifyBenefitSignature(
   fallbackBenefitId?: string
 ): Promise<boolean> {
   if (!signature) return false;
-
-  const candidates = Array.from(
-    new Set(
-      [
-        benefitId,
-        fallbackBenefitId,
-        'regalo_cumpleanos',
-        'decimo_corte',
-        'juntos_es_mejor',
-        'invita_amigo',
-        'beneficio_alfa',
-      ].filter(Boolean)
-    )
-  ) as string[];
-
-  for (const candidateId of candidates) {
-    try {
-      const rawString = `${clientId}:${folio}:${candidateId}:${year}:${VATOS_BENEFIT_SIGN_SALT}`;
-      if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
-        const msgBuffer = new TextEncoder().encode(rawString);
-        const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-        const expectedToken = hashHex.slice(0, 16);
-        if (expectedToken === signature.toUpperCase()) return true;
-      }
-    } catch (_) {}
-
-    // Fallback determinista
-    let hash = 0;
-    const str = `${clientId}:${folio}:${candidateId}:${year}:${VATOS_BENEFIT_SIGN_SALT}`;
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i);
-      hash |= 0;
-    }
-    const fallbackToken = Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
-    if (fallbackToken === signature.toUpperCase()) return true;
-  }
-
-  return false;
+  return await verifyBenefitSignatureServer(
+    clientId,
+    folio,
+    benefitId,
+    year,
+    signature,
+    fallbackBenefitId
+  );
 }
 
 export const REFERRAL_DISCOUNT_PERCENT = 20;

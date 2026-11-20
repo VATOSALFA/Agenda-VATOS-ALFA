@@ -73,7 +73,8 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
     if (!user?.email) return;
     setIsResendingInvite(true);
     try {
-      const result = await resendUserInvitation(user.email, user.name);
+      const idToken = await auth.currentUser?.getIdToken();
+      const result = await resendUserInvitation(user.email, user.name, idToken);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -197,13 +198,15 @@ export function UserModal({ isOpen, onClose, onDataSaved, user, roles }: UserMod
         toast({ title: "Cambios realizados con éxito" });
       } else {
         // NEW USER FLOW VIA SERVER ACTION
+        const idToken = await auth.currentUser?.getIdToken();
         const result = await inviteUser({
           email: data.email,
           name: fullName,
           role: roleToSave || '',
           permissions: permissionsForRole,
           local_id: data.local_id || null,
-          avatarUrl: data.avatarUrl
+          avatarUrl: data.avatarUrl,
+          idToken,
         });
 
         if (!result.success) {

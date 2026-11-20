@@ -120,6 +120,8 @@ export async function computeFinancialStatementForRange(
 
   salesSnap.forEach((doc) => {
     const sale = doc.data();
+    // Excluir ventas aún pendientes de cobro y anticipos ya absorbidos por una venta final (evita doble conteo)
+    if (sale.pago_estado === 'Pendiente' || sale.absorbed_in_sale_id) return;
     totalTickets++;
     const saleTotal = Number(sale.total || 0);
     const realPaid =
@@ -542,14 +544,15 @@ export const subagenteAuditorForenseAntiroboTool = ai.defineTool(
     const days = Math.min(90, Math.max(1, diasAtras));
     const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
+    const cutoffTs = admin.firestore.Timestamp.fromDate(cutoffDate);
     const [canceladasSnap, auditSnap, salesSnap, cortesSnap] = await Promise.all([
-      db.collection('ventas_canceladas').get(),
-      db.collection('audit_logs').get(),
+      db.collection('ventas_canceladas').where('eliminada_el', '>=', cutoffTs).limit(200).get(),
+      db.collection('audit_logs').where('timestamp', '>=', cutoffTs).limit(250).get(),
       db
         .collection('ventas')
-        .where('fecha_hora_venta', '>=', admin.firestore.Timestamp.fromDate(cutoffDate))
+        .where('fecha_hora_venta', '>=', cutoffTs)
         .get(),
-      db.collection('cortes_caja').get(),
+      db.collection('cortes_caja').where('fecha_corte', '>=', cutoffTs).limit(100).get(),
     ]);
 
     const activeSalesByClient = new Map<string, any[]>();

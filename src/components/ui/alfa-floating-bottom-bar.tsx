@@ -57,6 +57,7 @@ export function AlfaFloatingBottomBar({
   return (
     <aside
       aria-label="Barra de acciones rápidas y reserva"
+      aria-hidden={!isVisible}
       className={`fixed bottom-0 left-0 w-screen max-w-[100vw] h-16 bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] border-t border-[#2d3a60]/60 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.5)] backdrop-blur-md z-[100] flex items-center justify-center px-4 pb-safe transition-all duration-300 ease-out ${
         isVisible
           ? 'translate-y-0 opacity-100 pointer-events-auto'
@@ -75,6 +76,7 @@ export function AlfaFloatingBottomBar({
           type="button"
           variant="alfa"
           size="icon"
+          tabIndex={isVisible ? 0 : -1}
           onClick={handleOpenMaps}
           className="w-12 h-12 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_12px_rgba(59,130,246,0.3)] cursor-pointer shrink-0"
           title="Cómo llegar (Google Maps)"
@@ -89,6 +91,7 @@ export function AlfaFloatingBottomBar({
             type="button"
             variant="alfa"
             size="icon"
+            tabIndex={isVisible ? 0 : -1}
             onClick={onOpenJanetChat}
             className="w-12 h-12 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_12px_rgba(59,130,246,0.3)] cursor-pointer"
             title="Plática en vivo con Janet y Recepción"
@@ -122,6 +125,7 @@ export function AlfaFloatingBottomBar({
               type="button"
               variant="alfa"
               size="icon"
+              tabIndex={isVisible ? 0 : -1}
               onClick={totalItems > 0 ? onConfirmCartClick : onBookingClick}
               disabled={isBooking}
               className="w-12 h-12 rounded-full shadow-[0_4px_16px_rgba(0,0,0,0.5),0_0_12px_rgba(59,130,246,0.3)] cursor-pointer"

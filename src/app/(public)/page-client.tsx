@@ -1,14 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useFirestoreQuery } from '@/hooks/use-firestore';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { getBranchOperationalStatus } from '@/lib/branch-status';
 import Link from 'next/link';
-import { ArrowRight, Scissors, User, Plus, Minus, ShoppingBag, Eye, MapPin, ChevronDown, Clock, Check, ChevronRight, Image as ImageIcon, Sparkles, Star, StarHalf, Video, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone, Menu, BookOpen } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { ArrowRight, Scissors, User, Plus, ShoppingBag, MapPin, Clock, Check, Image as ImageIcon, Sparkles, Star, StarHalf, Info, X, Share2, ExternalLink, Calendar, Users, Award, Bot, Smartphone, Menu, BookOpen } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,8 +13,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/firebase-auth-context';
-import { db } from '@/lib/firebase-client';
-import { doc, getDoc } from 'firebase/firestore';
 import { VatosButton } from '@/components/ui/vatos-button';
 import { ParallaxHero } from '@/components/ui/parallax-hero';
 import { toast } from '@/hooks/use-toast';
@@ -26,7 +21,10 @@ import { AlfaServicesSection } from '@/components/ui/alfa-services-section';
 import { AlfaHeroBackground } from '@/components/ui/alfa-hero-background';
 import { ScrollProgressBar } from '@/components/ui/scroll-progress-bar';
 import { ScrollReveal } from '@/components/ui/scroll-reveal';
+import { LazySection } from '@/components/ui/lazy-section';
 import { getServiceLocalImage } from '@/lib/service-images';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
+import type { PublicLandingData } from '@/lib/public-landing-data';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import { AlfaFloatingBottomBar } from '@/components/ui/alfa-floating-bottom-bar';
 
@@ -157,6 +155,7 @@ function PromoMedia({ url, name, className, cover = true, muted = true, controls
                 sizes="(max-width: 768px) 150px, 300px"
                 className={cn(cover ? 'object-cover' : 'object-contain', className)}
                 loading="lazy"
+                unoptimized={shouldBypassImageOptimization(url)}
                 onError={(e) => {
                     const target = e.target as HTMLElement;
                     if (target.parentElement) {
@@ -168,15 +167,15 @@ function PromoMedia({ url, name, className, cover = true, muted = true, controls
     );
 }
 
-export default function LandingPageClient() {
-    const { data: services, loading: loadingServices } = useFirestoreQuery<any>('servicios');
-    const { data: professionals, loading: loadingProfessionals } = useFirestoreQuery<any>('profesionales');
-    const { data: products, loading: loadingProducts } = useFirestoreQuery<any>('productos');
-    const { data: empresa, loading: loadingEmpresa } = useFirestoreQuery<any>('empresa');
-    const { data: locales, loading: loadingLocales } = useFirestoreQuery<any>('locales');
-    const { data: settingsData, loading: loadingSettings } = useFirestoreQuery<any>('settings');
-    const { data: categories } = useFirestoreQuery<any>('categorias_servicios');
-    const { data: promotions } = useFirestoreQuery<any>('promociones');
+export default function LandingPageClient({ initialData }: { initialData?: PublicLandingData }) {
+    const [services, setServices] = useState<any[]>(initialData?.services ?? []);
+    const [professionals, setProfessionals] = useState<any[]>(initialData?.professionals ?? []);
+    const [products, setProducts] = useState<any[]>(initialData?.products ?? []);
+    const [empresa, setEmpresa] = useState<any[]>(initialData?.empresa ?? []);
+    const [locales, setLocales] = useState<any[]>(initialData?.locales ?? []);
+    const [settingsData, setSettingsData] = useState<any[]>(initialData?.settingsData ?? []);
+    const [categories, setCategories] = useState<any[]>(initialData?.categories ?? []);
+    const [promotions, setPromotions] = useState<any[]>(initialData?.promotions ?? []);
 
     // Filter active promotions (active and not expired)
     const d = new Date();
@@ -200,16 +199,17 @@ export default function LandingPageClient() {
 
 
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const isPreview = searchParams.get('preview') === 'true';
     const { user, loading: authLoading } = useAuth();
 
     // Check if user is logged in to redirect to admin side
     useEffect(() => {
-        if (!authLoading && user && !isPreview) {
-            router.push('/agenda');
+        if (!authLoading && user) {
+            const isPreview = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === 'true';
+            if (!isPreview) {
+                router.push('/agenda');
+            }
         }
-    }, [user, authLoading, router, isPreview]);
+    }, [user, authLoading, router]);
 
     // Cart stored as array of Service IDs to allow multiples
     const [cart, setCart] = useState<string[]>([]);
@@ -224,99 +224,118 @@ export default function LandingPageClient() {
     const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
     const [termsModalOpen, setTermsModalOpen] = useState(false);
     const [isJanetChatOpen, setIsJanetChatOpen] = useState(false);
+    const [hasOpenedJanet, setHasOpenedJanet] = useState(false);
     const [isAppDownloadOpen, setIsAppDownloadOpen] = useState(false);
+    const [hasOpenedAppModal, setHasOpenedAppModal] = useState(false);
+    const [forceMountSections, setForceMountSections] = useState(false);
 
-    // Galería de Cortes Reales en vivo (sincronizada en espejo con App Móvil y Sitio Web)
-    const [cortesReales, setCortesReales] = useState<any[]>([]);
+    // Galería de Cortes Reales y Pase Alfa (precargados en servidor con ISR; respaldo dinámico solo si falló SSR)
+    const [cortesReales, setCortesReales] = useState<any[]>(initialData?.cortesReales ?? []);
+    const [paseAlfaConfig, setPaseAlfaConfig] = useState<any>(initialData?.paseAlfaConfig ?? null);
+
     useEffect(() => {
+        if (initialData?.fetchedOnServer) return;
+
         let isMounted = true;
-        async function fetchCortesReales() {
-            // 1. Probar primero configuracion/app_movil (autorizado públicamente en reglas de Firestore)
+        async function fetchPublicFallbackData() {
             try {
-                const appMovilRef = doc(db, 'configuracion', 'app_movil');
-                const appSnap = await getDoc(appMovilRef);
-                if (appSnap.exists()) {
-                    const appData = appSnap.data();
+                const [{ db }, firestore] = await Promise.all([
+                    import('@/lib/firebase-client'),
+                    import('firebase/firestore'),
+                ]);
+                if (!isMounted || !db) return;
+
+                const mapSnap = (snap: any) =>
+                    snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+
+                const [
+                    serviciosRes,
+                    profesionalesRes,
+                    productosRes,
+                    empresaRes,
+                    localesRes,
+                    settingsRes,
+                    categoriasRes,
+                    promocionesRes,
+                    appMovilRes,
+                ] = await Promise.allSettled([
+                    firestore.getDocs(firestore.collection(db, 'servicios')),
+                    firestore.getDocs(firestore.collection(db, 'profesionales')),
+                    firestore.getDocs(firestore.collection(db, 'productos')),
+                    firestore.getDocs(firestore.collection(db, 'empresa')),
+                    firestore.getDocs(firestore.collection(db, 'locales')),
+                    firestore.getDocs(firestore.collection(db, 'settings')),
+                    firestore.getDocs(firestore.collection(db, 'categorias_servicios')),
+                    firestore.getDocs(firestore.collection(db, 'promociones')),
+                    firestore.getDoc(firestore.doc(db, 'configuracion', 'app_movil')),
+                ]);
+
+                if (!isMounted) return;
+                if (serviciosRes.status === 'fulfilled') setServices(mapSnap(serviciosRes.value));
+                if (profesionalesRes.status === 'fulfilled') setProfessionals(mapSnap(profesionalesRes.value));
+                if (productosRes.status === 'fulfilled') setProducts(mapSnap(productosRes.value));
+                if (empresaRes.status === 'fulfilled') setEmpresa(mapSnap(empresaRes.value));
+                if (localesRes.status === 'fulfilled') setLocales(mapSnap(localesRes.value));
+                if (settingsRes.status === 'fulfilled') setSettingsData(mapSnap(settingsRes.value));
+                if (categoriasRes.status === 'fulfilled') setCategories(mapSnap(categoriasRes.value));
+                if (promocionesRes.status === 'fulfilled') setPromotions(mapSnap(promocionesRes.value));
+
+                let cortesResolved = false;
+                let resolvedPaseAlfa: any = null;
+
+                if (appMovilRes.status === 'fulfilled' && appMovilRes.value.exists()) {
+                    const appData = appMovilRes.value.data();
                     if (Array.isArray(appData.inspiracion_alfa_web)) {
-                        const webItems = appData.inspiracion_alfa_web.filter(
-                            (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                        setCortesReales(
+                            appData.inspiracion_alfa_web.filter(
+                                (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                            )
                         );
-                        if (isMounted) {
-                            setCortesReales(webItems);
-                            return;
-                        }
-                    }
-                    if (Array.isArray(appData.inspiracion_alfa) && appData.inspiracion_alfa.length > 0) {
+                        cortesResolved = true;
+                    } else if (Array.isArray(appData.inspiracion_alfa) && appData.inspiracion_alfa.length > 0) {
                         const activeItems = appData.inspiracion_alfa.filter(
                             (item: any) => item.activo !== false && item.mostrarEnWeb !== false
                         );
-                        if (activeItems.length > 0 && isMounted) {
+                        if (activeItems.length > 0) {
                             setCortesReales(activeItems);
-                            return;
+                            cortesResolved = true;
                         }
                     }
-                }
-            } catch (appErr) {
-                console.warn('Cortes reales fallback from app_movil notice:', appErr);
-            }
-
-            // 2. Probar configuracion/inspiracion_alfa
-            try {
-                const docRef = doc(db, 'configuracion', 'inspiracion_alfa');
-                const snap = await getDoc(docRef);
-                if (snap.exists() && Array.isArray(snap.data().items) && snap.data().items.length > 0) {
-                    const activeItems = snap.data().items.filter(
-                        (item: any) => item.activo !== false && item.mostrarEnWeb !== false
-                    );
-                    if (activeItems.length > 0 && isMounted) {
-                        setCortesReales(activeItems);
-                        return;
+                    if (appData.pase_alfa) {
+                        resolvedPaseAlfa = appData.pase_alfa;
                     }
                 }
+
+                try {
+                    const paSnap = await firestore.getDoc(firestore.doc(db, 'configuracion', 'pase_alfa'));
+                    if (paSnap.exists()) {
+                        resolvedPaseAlfa = paSnap.data();
+                    }
+                } catch {}
+                if (isMounted && resolvedPaseAlfa) {
+                    setPaseAlfaConfig(resolvedPaseAlfa);
+                }
+
+                if (!cortesResolved) {
+                    try {
+                        const inspSnap = await firestore.getDoc(firestore.doc(db, 'configuracion', 'inspiracion_alfa'));
+                        if (isMounted && inspSnap.exists() && Array.isArray(inspSnap.data().items)) {
+                            const activeItems = inspSnap.data().items.filter(
+                                (item: any) => item.activo !== false && item.mostrarEnWeb !== false
+                            );
+                            if (activeItems.length > 0) setCortesReales(activeItems);
+                        }
+                    } catch {}
+                }
             } catch (err) {
-                console.warn('Cortes reales fallback from inspiracion_alfa notice:', err);
+                console.warn('Public landing fallback fetch warning:', err);
             }
         }
-        fetchCortesReales();
+        fetchPublicFallbackData();
         return () => {
             isMounted = false;
         };
-    }, []);
-
-    // Configuración y Beneficios de Pase Alfa en vivo (sincronizada en espejo con App Móvil y Sitio Web)
-    const [paseAlfaConfig, setPaseAlfaConfig] = useState<any>(null);
-    useEffect(() => {
-        let isMounted = true;
-        async function fetchPaseAlfaConfig() {
-            try {
-                // 1. Probar configuracion/pase_alfa
-                const paRef = doc(db, 'configuracion', 'pase_alfa');
-                const paSnap = await getDoc(paRef);
-                if (paSnap.exists() && isMounted) {
-                    setPaseAlfaConfig(paSnap.data());
-                    return;
-                }
-            } catch (err) {
-                console.warn('Pase Alfa config fetch from configuracion/pase_alfa notice:', err);
-            }
-
-            try {
-                // 2. Probar configuracion/app_movil (campo pase_alfa)
-                const appMovilRef = doc(db, 'configuracion', 'app_movil');
-                const appSnap = await getDoc(appMovilRef);
-                if (appSnap.exists() && appSnap.data().pase_alfa && isMounted) {
-                    setPaseAlfaConfig(appSnap.data().pase_alfa);
-                    return;
-                }
-            } catch (err) {
-                console.warn('Pase Alfa config fallback notice:', err);
-            }
-        }
-        fetchPaseAlfaConfig();
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+    }, [initialData?.fetchedOnServer]);
 
     // Auto-select branch if only one exists or set default
     useEffect(() => {
@@ -329,13 +348,14 @@ export default function LandingPageClient() {
     }, [locales, selectedBranch]);
 
     const activeLocales = locales?.filter((l: any) => l.status === 'active') || [];
+    const visibleProductsCount = products?.filter((p: any) => p.active && Number(p.stock) > 0 && p.visible_en_web !== false).length || 0;
     const currentBranchObj = activeLocales.find((l: any) => l.id === selectedBranch);
     const currentBranchName = currentBranchObj
         ? (currentBranchObj.name?.toLowerCase().includes('sombrerete') || currentBranchObj.name?.includes('Suc1') ? 'Sucursal Sombrerete' : currentBranchObj.name)
         : 'Sucursal Sombrerete';
 
     // Reactividad en tiempo real para el horario y estado de apertura de la sucursal
-    const [currentTime, setCurrentTime] = useState<Date>(new Date());
+    const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
     useEffect(() => {
         const timer = setInterval(() => {
             setCurrentTime(new Date());
@@ -364,8 +384,6 @@ export default function LandingPageClient() {
     const branchStatus = useMemo(() => {
         return getBranchOperationalStatus(effectiveBranchObj, currentTime);
     }, [effectiveBranchObj, currentTime]);
-
-    const isLoading = loadingServices || loadingEmpresa || loadingLocales || loadingSettings || authLoading;
 
     const websiteSettings = settingsData?.find((d: any) => d.id === 'website') || {};
     const companyName = empresa?.[0]?.name || 'VATOS ALFA Barber Shop';
@@ -556,18 +574,21 @@ export default function LandingPageClient() {
     const heroContentScale = useTransform(smoothHeroScroll, [0, 0.75], [1, 0.90]);
 
     const scrollToSection = (id: string) => {
-        const el = document.getElementById(id);
-        if (el) {
-            const offset = 75;
-            const bodyRect = document.body.getBoundingClientRect().top;
-            const elementRect = el.getBoundingClientRect().top;
-            const elementPosition = elementRect - bodyRect;
-            const offsetPosition = elementPosition - offset;
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
+        setForceMountSections(true);
+        requestAnimationFrame(() => {
+            const el = document.getElementById(id);
+            if (el) {
+                const offset = 75;
+                const bodyRect = document.body.getBoundingClientRect().top;
+                const elementRect = el.getBoundingClientRect().top;
+                const elementPosition = elementRect - bodyRect;
+                const offsetPosition = elementPosition - offset;
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        });
     };
 
     // Manejo inteligente de Descarga de App Móvil (tienda directa si está en celular y configurado, o modal)
@@ -591,6 +612,7 @@ export default function LandingPageClient() {
         }
 
         // En caso contrario (desktop o aún sin links asignados), abrir el modal oficial de descarga
+        setHasOpenedAppModal(true);
         setIsAppDownloadOpen(true);
     };
 
@@ -599,27 +621,18 @@ export default function LandingPageClient() {
         <ScrollProgressBar />
         <div className="flex flex-col min-h-screen bg-background text-foreground animation-fade-in pb-20">
 
-            {/* SEO & Bot Purpose Verification */}
-            <div className="sr-only">
-                <h2>VATOS ALFA Barber Shop - Plataforma de Reservas</h2>
-                <p>Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.</p>
-                <nav>
-                    <Link href="/blog" prefetch={false}>Blog</Link>
-                    <Link href="/privacidad" prefetch={false}>Aviso de Privacidad</Link>
-                    <Link href="/terminos" prefetch={false}>Términos y Condiciones</Link>
-                </nav>
-            </div>
             {/* Header */}
             <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-muted/90 md:backdrop-blur md:supports-[backdrop-filter]:bg-muted/80">
                 <div className="container flex h-16 items-center justify-between px-4 md:px-6">
                     <div className="flex items-center gap-2 font-bold text-xl tracking-tight">
-                        <Link href="/" prefetch={false} className="flex items-center gap-2">
+                        <Link href="/" prefetch={false} className="flex items-center gap-2" aria-label={companyName}>
                             <Image 
                                 src="/logo-v-400x400.webp" 
                                 alt="VATOS ALFA" 
                                 width={36}
                                 height={36}
                                 priority
+                                unoptimized={true}
                                 className="h-9 w-9 rounded-full object-cover border border-slate-300 aspect-square" 
                             />
                             <span className="hidden sm:inline-block">{companyName}</span>
@@ -636,20 +649,30 @@ export default function LandingPageClient() {
                                 title="Descargar App Móvil"
                                 aria-label="Descargar App Móvil"
                             >
-                                <Smartphone className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                                <Smartphone className="h-3.5 w-3.5 text-blue-400 shrink-0" aria-hidden="true" />
                                 <span>Descargar App</span>
                             </button>
                         )}
 
-                        {/* 1. Botón Reservar Cita (Oficial Alfa) */}
-                        <Link href="/reservar" prefetch={false}>
-                            <Button 
-                                variant="alfa" 
-                                size="sm" 
-                                className="h-9 px-3 sm:px-4 text-xs font-bold rounded-xl shadow-[0_4px_15px_rgba(32,42,73,0.6)] cursor-pointer shrink-0"
-                            >
-                                Reservar Cita
-                            </Button>
+                        {/* 1. Botón Reservar Cita (Oficial Alfa — Link directo sin button anidado) */}
+                        <Link
+                            href="/reservar"
+                            prefetch={false}
+                            className="btn-vatos-alfa font-bold select-none p-[1.5px] border-none overflow-hidden relative inline-flex items-center justify-center rounded-xl h-9 text-xs shadow-[0_4px_15px_rgba(32,42,73,0.6)] cursor-pointer shrink-0 ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                            <span
+                                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none animate-conic-laser z-0"
+                                aria-hidden="true"
+                            />
+                            <span className="relative z-[1] inline-flex items-center justify-center w-full h-full text-white overflow-hidden select-none pointer-events-none bg-gradient-to-b from-[#18223c] to-[#0d1424] rounded-[10.5px]">
+                                <span
+                                    className="absolute inset-0 w-1/2 h-full -skew-x-20 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-btn-light-sweep pointer-events-none z-[2]"
+                                    aria-hidden="true"
+                                />
+                                <span className="relative z-10 inline-flex items-center justify-center gap-1.5 w-full h-full px-3 sm:px-4 py-1">
+                                    Reservar Cita
+                                </span>
+                            </span>
                         </Link>
 
                         {/* 2. Sucursal (Sin contenedor, bare icon y texto limpio) */}
@@ -666,7 +689,7 @@ export default function LandingPageClient() {
                                 setSelectedBranch(val);
                             }}
                         >
-                            <SelectTrigger className="h-auto p-0 border-0 border-none bg-transparent hover:bg-transparent text-xs font-semibold text-foreground hover:text-blue-600 transition-colors shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-auto gap-1 cursor-pointer max-w-[130px] sm:max-w-none">
+                            <SelectTrigger aria-label="Seleccionar sucursal" className="h-auto p-0 border-0 border-none bg-transparent hover:bg-transparent text-xs font-semibold text-foreground hover:text-blue-600 transition-colors shadow-none focus:ring-0 focus:outline-none focus-visible:ring-0 w-auto gap-1 cursor-pointer max-w-[130px] sm:max-w-none">
                                 <div className="flex items-center gap-1 truncate">
                                     <MapPin className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                                     <SelectValue placeholder="Suc. Sombrerete" />
@@ -796,6 +819,9 @@ export default function LandingPageClient() {
 
             {/* Main Content Landmark */}
             <main className="flex-1">
+                <p className="sr-only">
+                    Bienvenido a VATOS ALFA Barber Shop. En nuestra página principal podrás agendar citas de barbería, ver nuestro catálogo de productos y conocer a nuestros profesionales. Estamos ubicados en Santiago de Querétaro y ofrecemos servicios premium de corte de cabello y barba.
+                </p>
                 {/* Hero Institucional Vatos Alfa (Concepto 2: Malla Geométrica & Haces Láser - Viewport Completo 100vh) */}
                 <section
                     ref={heroRef}
@@ -899,18 +925,18 @@ export default function LandingPageClient() {
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-red-400/90 shadow-[0_0_6px_rgba(248,113,113,0.6)]"></span>
                                     )}
                                 </span>
-                                <span>{branchStatus.fullBadgeText}</span>
+                                <span suppressHydrationWarning>{branchStatus.fullBadgeText}</span>
                             </div>
 
                             {/* 2. Titular con Acento de Luz (Azul Institucional Vatos Alfa Puro) */}
-                            <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white mb-6 leading-[1.1] animate-in slide-in-from-bottom-5 duration-700">
+                            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black tracking-tight text-white mb-6 leading-[1.1] animate-in slide-in-from-bottom-5 duration-700">
                                 {sloganParts.first}{" "}
                                 {sloganParts.second && (
                                     <span className="block sm:inline text-transparent bg-clip-text bg-gradient-to-r from-[#dbeafe] via-[#60a5fa] to-[#2563eb] drop-shadow-[0_0_35px_rgba(59,130,246,0.45)]">
                                         {sloganParts.second}
                                     </span>
                                 )}
-                            </h2>
+                            </h1>
 
                             {/* 3. Subtítulo Persuasivo */}
                             <p className="text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed font-medium animate-in slide-in-from-bottom-5 duration-1000 delay-150">
@@ -968,7 +994,7 @@ export default function LandingPageClient() {
                 >
 
                     {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
-                    <AlfaGoldSmokeBurst key={selectedPro?.id || 'pro-smoke'} />
+                    {selectedPro && <AlfaGoldSmokeBurst key={selectedPro?.id || 'pro-smoke'} />}
 
                     {/* Contenedor Oficial del Modal */}
                     <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
@@ -1009,8 +1035,9 @@ export default function LandingPageClient() {
                                             alt={`${selectedPro.publicName || selectedPro.name || 'Barbero'} - Barbero Profesional en ${companyName} ${currentBranchName} Querétaro`}
                                             fill
                                             sizes="(max-width: 640px) 150px, 220px"
+                                            quality={85}
                                             className="object-cover transition-transform duration-500 group-hover:scale-105"
-                                            unoptimized={true}
+                                            unoptimized={shouldBypassImageOptimization(selectedPro.avatarUrl)}
                                         />
                                     ) : (
                                         <div className="h-full w-full bg-slate-800 flex items-center justify-center">
@@ -1068,9 +1095,9 @@ export default function LandingPageClient() {
             <ScrollReveal distance={20}>
                 <section id="descripcion" className="py-6 sm:py-8 bg-slate-50 border-b border-border/60 flex flex-col justify-center scroll-mt-20">
                     <div className="container max-w-3xl mx-auto px-4 text-center">
-                        <h1 className="text-sm sm:text-base md:text-lg font-black tracking-wider uppercase text-[#202A49] dark:text-white mb-2">
+                        <h2 className="text-sm sm:text-base md:text-lg font-black tracking-wider uppercase text-[#202A49] dark:text-white mb-2">
                             Especialistas en Cortes y Barbas en Querétaro
-                        </h1>
+                        </h2>
                         <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed max-w-2xl mx-auto font-medium">
                             {companyDescription}
                         </p>
@@ -1089,7 +1116,7 @@ export default function LandingPageClient() {
                                         href="#beneficios" 
                                         onClick={(e) => {
                                             e.preventDefault();
-                                            document.getElementById('beneficios')?.scrollIntoView({ behavior: 'smooth' });
+                                            scrollToSection('beneficios');
                                         }}
                                         className="group relative inline-flex items-center gap-3 px-6 py-3 rounded-full bg-slate-950 text-white font-bold text-xs sm:text-sm tracking-wide uppercase transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(59,130,246,0.6)] border border-blue-500/30 overflow-hidden shadow-md"
                                     >
@@ -1116,13 +1143,15 @@ export default function LandingPageClient() {
                                 </h2>
                             </div>
 
-                            <Team360Gallery
-                                barbers={filteredProfessionals}
-                                onSelectBarber={(pro) => setSelectedPro(pro)}
-                                onBookBarber={(pro) => router.push(`/reservar?professionalId=${pro.id}`)}
-                                branchName={currentBranchName}
-                                companyName={companyName}
-                            />
+                            <LazySection minHeight="480px" forceMount={forceMountSections}>
+                                <Team360Gallery
+                                    barbers={filteredProfessionals}
+                                    onSelectBarber={(pro) => setSelectedPro(pro)}
+                                    onBookBarber={(pro) => router.push(`/reservar?professionalId=${pro.id}`)}
+                                    branchName={currentBranchName}
+                                    companyName={companyName}
+                                />
+                            </LazySection>
                         </div>
                     </section>
                 </ScrollReveal>
@@ -1150,52 +1179,66 @@ export default function LandingPageClient() {
             {/* 3. Inspiración Alfa: Carrusel 3D Cilíndrico de Cortes Reales (Estilo App Móvil) */}
             <ScrollReveal className="w-full">
                 <section id="inspiracion" className="min-h-[100svh] flex flex-col justify-center bg-[#0b101e] border-y border-slate-800 scroll-mt-20">
-                    <Alfa3DCarousel
-                        stylesList={cortesReales.length > 0 ? cortesReales : undefined}
-                        onBookStyle={(style) => {
-                            router.push('/reservar' + (style.serviceMatchId ? `?serviceId=${style.serviceMatchId}` : ''));
-                        }}
-                    />
+                    <LazySection minHeight="420px" forceMount={forceMountSections}>
+                        <Alfa3DCarousel
+                            stylesList={cortesReales.length > 0 ? cortesReales : undefined}
+                            onBookStyle={(style) => {
+                                router.push('/reservar' + (style.serviceMatchId ? `?serviceId=${style.serviceMatchId}` : ''));
+                            }}
+                        />
+                    </LazySection>
                 </section>
             </ScrollReveal>
 
             {/* Products Section (Estilo App Móvil: Tarjetas Cuadradas, 2 Columnas Móvil) */}
             {
-                products && products.length > 0 && (
-                    <ScrollReveal>
-                        <AlfaProductsSection
-                            products={products}
-                            onSelectProduct={(product) => setSelectedProduct(product)}
-                            onAddToCart={(productId) => addToProductCart(productId)}
-                            productCart={productCart}
-                            getProductCount={getProductCount}
-                            formatPrice={formatPrice}
-                        />
-                    </ScrollReveal>
+                visibleProductsCount > 0 && (
+                    <div id="productos" className="scroll-mt-20">
+                        <ScrollReveal>
+                            <LazySection minHeight="420px" forceMount={forceMountSections}>
+                                <AlfaProductsSection
+                                    products={products}
+                                    onSelectProduct={(product) => setSelectedProduct(product)}
+                                    onAddToCart={(productId) => addToProductCart(productId)}
+                                    productCart={productCart}
+                                    getProductCount={getProductCount}
+                                    formatPrice={formatPrice}
+                                />
+                            </LazySection>
+                        </ScrollReveal>
+                    </div>
                 )
             }
 
             {/* 4. Beneficios Exclusivos y Pase Alfa Club (Estilo App Móvil) */}
             {paseAlfaConfig?.mostrar_en_web !== false && (
-                <AlfaBenefitsSection
-                    paseAlfaData={paseAlfaConfig}
-                    onBookBenefit={(_benefit) => {
-                        router.push('/reservar');
-                    }}
-                    onDownloadApp={handleAppDownloadClick}
-                />
+                <div id="beneficios" className="scroll-mt-20">
+                    <LazySection minHeight="520px" forceMount={forceMountSections}>
+                        <AlfaBenefitsSection
+                            paseAlfaData={paseAlfaConfig}
+                            onBookBenefit={(_benefit) => {
+                                router.push('/reservar');
+                            }}
+                            onDownloadApp={handleAppDownloadClick}
+                        />
+                    </LazySection>
+                </div>
             )}
 
             {/* 5. Promociones Especiales y Ofertas en Formato Vertical */}
             {activePromotions && activePromotions.length > 0 && (
-                <ScrollReveal>
-                    <AlfaPromotionsSection
-                        promotions={activePromotions}
-                        onBookPromotion={(_promo) => {
-                            router.push('/reservar');
-                        }}
-                    />
-                </ScrollReveal>
+                <div id="promociones" className="scroll-mt-20">
+                    <ScrollReveal>
+                        <LazySection minHeight="360px" forceMount={forceMountSections}>
+                            <AlfaPromotionsSection
+                                promotions={activePromotions}
+                                onBookPromotion={(_promo) => {
+                                    router.push('/reservar');
+                                }}
+                            />
+                        </LazySection>
+                    </ScrollReveal>
+                </div>
             )}
 
             {/* Service Details Modal (Estilo App Móvil con Cabecera Oficial y Botón de Agendar) */}
@@ -1206,7 +1249,7 @@ export default function LandingPageClient() {
                 >
 
                     {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
-                    <AlfaGoldSmokeBurst key={selectedService?.id || 'smoke'} />
+                    {selectedService && <AlfaGoldSmokeBurst key={selectedService?.id || 'smoke'} />}
 
                     {/* Contenedor Oficial del Modal */}
                     <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
@@ -1248,8 +1291,10 @@ export default function LandingPageClient() {
                                             src={modalImg}
                                             alt={selectedService?.name || 'Servicio'}
                                             fill
+                                            sizes="(max-width: 640px) 100vw, 220px"
+                                            quality={85}
                                             className="object-cover"
-                                            unoptimized={true}
+                                            unoptimized={shouldBypassImageOptimization(modalImg)}
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
@@ -1347,7 +1392,7 @@ export default function LandingPageClient() {
                 >
 
                     {/* Resplandor de Luz Dorada Mate (Puro destello de luz, sin marco perimetral) */}
-                    <AlfaGoldSmokeBurst key={selectedProduct?.id || 'product-smoke'} />
+                    {selectedProduct && <AlfaGoldSmokeBurst key={selectedProduct?.id || 'product-smoke'} />}
 
                     {/* Contenedor Oficial del Modal */}
                     <div className="relative z-10 w-full bg-white rounded-2xl overflow-hidden shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6)] border-2 border-blue-500 flex flex-col max-h-[90vh]">
@@ -1385,8 +1430,10 @@ export default function LandingPageClient() {
                                             src={selectedProduct.images[0]}
                                             alt={selectedProduct?.nombre || 'Producto'}
                                             fill
+                                            sizes="(max-width: 640px) 100vw, 220px"
+                                            quality={85}
                                             className="object-cover"
-                                            unoptimized={true}
+                                            unoptimized={shouldBypassImageOptimization(selectedProduct.images[0])}
                                         />
                                     ) : (
                                         <div className="w-full h-full flex items-center justify-center bg-slate-800 text-slate-400">
@@ -1492,8 +1539,10 @@ export default function LandingPageClient() {
                     </div>
                     
                     <button 
+                        type="button"
                         onClick={() => setSelectedPromotion(null)}
                         className="absolute top-4 right-4 bg-black/40 backdrop-blur-lg border border-white/20 text-white p-2.5 rounded-full hover:bg-white/20 transition-colors z-50 shadow-lg"
+                        aria-label="Cerrar promoción"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -1551,26 +1600,31 @@ export default function LandingPageClient() {
                     }
                 }}
                 onConfirmCartClick={handleBooking}
-                onOpenJanetChat={() => setIsJanetChatOpen(true)}
+                onOpenJanetChat={() => {
+                    setHasOpenedJanet(true);
+                    setIsJanetChatOpen(true);
+                }}
                 branchName={currentBranchName}
                 branchAddress={currentBranchObj?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro'}
                 companyName={companyName}
             />
 
             {/* Modal de Chat Interactivo con Janet / Recepción */}
-            <JanetChatModal
-                isOpen={isJanetChatOpen}
-                onOpenChange={setIsJanetChatOpen}
-                branchName={currentBranchName}
-                branchAddress={currentBranchObj?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro'}
-                onNavigateToBooking={() => {
-                    if (selectedBranch && selectedBranch !== 'coming-soon') {
-                        router.push(`/reservar?branchId=${selectedBranch}`);
-                    } else {
-                        router.push('/reservar');
-                    }
-                }}
-            />
+            {hasOpenedJanet && (
+                <JanetChatModal
+                    isOpen={isJanetChatOpen}
+                    onOpenChange={setIsJanetChatOpen}
+                    branchName={currentBranchName}
+                    branchAddress={currentBranchObj?.address || 'Av. Sombrerete 1001, Col. Cipreses, Querétaro'}
+                    onNavigateToBooking={() => {
+                        if (selectedBranch && selectedBranch !== 'coming-soon') {
+                            router.push(`/reservar?branchId=${selectedBranch}`);
+                        } else {
+                            router.push('/reservar');
+                        }
+                    }}
+                />
+            )}
 
             {/* Locations / Branches Section */}
             {
@@ -1635,7 +1689,10 @@ export default function LandingPageClient() {
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
-                                                    onClick={() => setIsJanetChatOpen(true)}
+                                                    onClick={() => {
+                                                        setHasOpenedJanet(true);
+                                                        setIsJanetChatOpen(true);
+                                                    }}
                                                     className="w-full text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1.5 font-semibold"
                                                 >
                                                     <Bot className="h-4 w-4 text-blue-600" />
@@ -1655,7 +1712,7 @@ export default function LandingPageClient() {
             {/* Footer */}
             <footer id="footer" className="py-12 border-t border-slate-200 bg-slate-50 text-center text-sm text-slate-700 scroll-mt-20">
                 <div className="container px-4 flex flex-col items-center gap-4 text-slate-700">
-                    <p>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
+                    <p suppressHydrationWarning>© {new Date().getFullYear()} {companyName}. Todos los derechos reservados.</p>
 
                     {websiteSettings.privacyPolicyEnabled !== false && (
                         <div className="flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-700">
@@ -1740,12 +1797,14 @@ export default function LandingPageClient() {
             <VerticalSectionNavigator />
 
             {/* Modal Oficial de Descarga de App Móvil */}
-            <AppDownloadModal
-                isOpen={isAppDownloadOpen}
-                onOpenChange={setIsAppDownloadOpen}
-                playStoreUrl={effectivePlayStoreUrl}
-                appStoreUrl={effectiveAppStoreUrl}
-            />
+            {hasOpenedAppModal && (
+                <AppDownloadModal
+                    isOpen={isAppDownloadOpen}
+                    onOpenChange={setIsAppDownloadOpen}
+                    playStoreUrl={effectivePlayStoreUrl}
+                    appStoreUrl={effectiveAppStoreUrl}
+                />
+            )}
 
         </div>
         </ParallaxHero>

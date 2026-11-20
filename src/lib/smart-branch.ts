@@ -761,6 +761,8 @@ export async function finalizeSmartSaleLoyalty(params: {
   let targetStampsConfig = 9;
   let nivelesConfig: any = null;
   let coinsMult = 1;
+  let coinsActivo = true;
+  let coinsPorPeso = 1;
 
   try {
     const paseSnap = await getDoc(doc(db, 'configuracion', 'pase_alfa'));
@@ -769,6 +771,11 @@ export async function finalizeSmartSaleLoyalty(params: {
       const sReq = Number(pData.sellosRequeridos || 10);
       targetStampsConfig = sReq === 10 ? 9 : Math.max(1, sReq);
       nivelesConfig = pData.niveles_config || null;
+      if (pData.alfa_coins_config) {
+        coinsActivo = pData.alfa_coins_config.activo !== false;
+        const rate = Number(pData.alfa_coins_config.coins_por_peso ?? pData.alfa_coins_config.coinsPorPeso ?? 1);
+        if (Number.isFinite(rate) && rate >= 0) coinsPorPeso = rate;
+      }
       if (pData.multiplicador_coins_config) {
         const multEval = evaluateActiveCoinsMultiplier(pData.multiplicador_coins_config, now);
         coinsMult = multEval.multiplier || 1;
@@ -849,7 +856,7 @@ export async function finalizeSmartSaleLoyalty(params: {
   }
 
   if (hasApp) {
-    pointsEarned = saleTotal > 0 ? Math.floor(saleTotal) * coinsMult : 0;
+    pointsEarned = coinsActivo && realMoneySpent > 0 ? Math.floor(realMoneySpent * coinsPorPeso) * coinsMult : 0;
     loyaltySnapshot.alfa_coins_ganados = pointsEarned;
 
     if (pointsEarned > 0) {
@@ -877,7 +884,9 @@ export async function finalizeSmartSaleLoyalty(params: {
     if (stampsAdded > 0) {
       nextStamps = Math.min(targetStampsConfig, currStamps + stampsAdded);
       clientUpdatePayload.cortes_acumulados = nextStamps;
+      clientUpdatePayload.cortesAcumulados = nextStamps;
       clientUpdatePayload.corte_gratis_disponible = nextStamps >= targetStampsConfig;
+      clientUpdatePayload.corteGratisDisponible = nextStamps >= targetStampsConfig;
       clientUpdatePayload.ultimo_sello_fecha = todayStr;
       clientUpdatePayload.visitas_elegibles_historicas = increment(1);
       loyaltySnapshot.visita_elegible_sumada = 1;

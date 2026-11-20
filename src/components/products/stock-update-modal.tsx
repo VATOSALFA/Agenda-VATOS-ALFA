@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { doc, updateDoc, increment, collection, addDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, runTransaction, Timestamp } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { sendStockAlert } from '@/ai/flows/send-stock-alert-flow';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -86,10 +86,52 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
       const productRef = doc(db, 'productos', product.id);
       const stockChange = data.changeType === 'add' ? data.quantity : -data.quantity;
 
-      const currentStock = product.stock || 0;
-      const newStock = currentStock + stockChange;
+      let localName = 'Local no especificado';
+      if (selectedLocalId) {
+        const foundLocal = locales?.find((l: any) => l.id === selectedLocalId);
+        if (foundLocal) localName = foundLocal.name;
+      } else if (activeLocalId === 'unknown_local') {
+        localName = 'Inventario Global / Admin';
+      }
 
-      if (newStock < 0) {
+      const txResult = await runTransaction(db, async (tx) => {
+        const freshProdSnap = await tx.get(productRef);
+        const currentStock = freshProdSnap.exists()
+          ? Number(freshProdSnap.data()?.stock || 0)
+          : (product.stock || 0);
+        const computedNewStock = currentStock + stockChange;
+
+        if (computedNewStock < 0) {
+          return { ok: false as const, newStock: computedNewStock };
+        }
+
+        tx.update(productRef, { stock: computedNewStock });
+
+        const movementRef = doc(collection(db, 'movimientos_inventario'));
+        const movement: Omit<StockMovement, 'id'> = {
+          date: Timestamp.now(),
+          local_id: activeLocalId,
+          product_id: product.id,
+          presentation_id: product.presentation_id || 'default',
+          from: currentStock,
+          to: computedNewStock,
+          cause: 'Manual Adjustment',
+          staff_id: user?.uid || 'unknown',
+          comment: data.comment || '',
+        };
+
+        tx.set(movementRef, {
+          ...movement,
+          product_name: product.nombre,
+          staff_name: user?.displayName || user?.email || 'Desconocido',
+          local_name: localName,
+          concepto: 'Cambio de stock',
+        });
+
+        return { ok: true as const, newStock: computedNewStock };
+      });
+
+      if (!txResult.ok) {
         toast({
           variant: 'destructive',
           title: 'Stock insuficiente',
@@ -99,39 +141,7 @@ export function StockUpdateModal({ product, isOpen, onClose, onStockUpdated }: S
         return;
       }
 
-      await updateDoc(productRef, {
-        stock: increment(stockChange),
-      });
-
-      // Registrar movimiento de stock
-      const movement: Omit<StockMovement, 'id'> = {
-        date: Timestamp.now(),
-        local_id: activeLocalId,
-        product_id: product.id,
-        presentation_id: product.presentation_id || 'default',
-        from: currentStock,
-        to: newStock,
-        cause: 'Manual Adjustment',
-        staff_id: user?.uid || 'unknown',
-        comment: data.comment || '',
-      };
-
-
-      let localName = 'Local no especificado';
-      if (selectedLocalId) {
-        const foundLocal = locales?.find((l: any) => l.id === selectedLocalId);
-        if (foundLocal) localName = foundLocal.name;
-      } else if (activeLocalId === 'unknown_local') {
-        localName = 'Inventario Global / Admin';
-      }
-
-      await addDoc(collection(db, 'movimientos_inventario'), {
-        ...movement,
-        product_name: product.nombre,
-        staff_name: user?.displayName || user?.email || 'Desconocido',
-        local_name: localName,
-        concepto: 'Cambio de stock',
-      });
+      const newStock = txResult.newStock;
 
 
       if (product.stock_alarm_threshold && newStock <= product.stock_alarm_threshold && product.notification_email) {

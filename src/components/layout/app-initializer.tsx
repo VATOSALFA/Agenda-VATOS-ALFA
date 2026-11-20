@@ -103,13 +103,15 @@ export default function AppInitializer() {
         />
       )}
 
-      <NewSaleSheet
-        isOpen={isSaleSheetOpen}
-        onOpenChange={setIsSaleSheetOpen}
-        initialData={saleInitialData}
-        onSaleComplete={onDataRefresh}
-        forceMaximize={saleTrigger}
-      />
+      {isSaleSheetOpen && (
+        <NewSaleSheet
+          isOpen={isSaleSheetOpen}
+          onOpenChange={setIsSaleSheetOpen}
+          initialData={saleInitialData}
+          onSaleComplete={onDataRefresh}
+          forceMaximize={saleTrigger}
+        />
+      )}
 
       {isQrScannerOpen && (
         <QRScannerModal

@@ -12,7 +12,11 @@ import {
 } from '@/lib/ai/agent-utils';
 import { getAgentTools } from '@/lib/ai/agent-tools';
 import { executeFallbackLogic } from '@/lib/ai/agent-fallback';
-import { getClientDetailsForChat } from '@/lib/actions/conversation-actions';
+import { getClientDetailsForChatInternal } from '@/lib/ai/client-chat-details';
+import { checkRateLimit, getRequestIp, verifyStaffAccess } from '@/lib/server-auth';
+
+const MAX_MEDIA_BYTES = 5 * 1024 * 1024;
+const MAX_DATA_URI_CHARS = 7 * 1024 * 1024;
 
 
 
@@ -33,6 +37,7 @@ async function resolveMediaForGenkit(
   };
 
   if (rawUrl.startsWith('data:')) {
+    if (rawUrl.length > MAX_DATA_URI_CHARS) return null;
     const match = rawUrl.match(/^data:([^,]+),(.+)$/);
     if (match) {
       const header = match[1];
@@ -49,18 +54,33 @@ async function resolveMediaForGenkit(
 
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     try {
-      const response = await fetch(rawUrl);
-      if (!response.ok) return { url: rawUrl, contentType: cleanMimeType(fallbackMime) };
+      const parsed = new URL(rawUrl);
+      const allowedHosts = new Set([
+        'firebasestorage.googleapis.com',
+        'storage.googleapis.com',
+        'vatosalfa.com',
+        'www.vatosalfa.com',
+        'graph.facebook.com',
+        'lookaside.fbsbx.com',
+      ]);
+      if (parsed.protocol !== 'https:' || !allowedHosts.has(parsed.hostname.toLowerCase())) {
+        return null;
+      }
+      const response = await fetch(parsed.toString(), { redirect: 'error' });
+      if (!response.ok) return null;
+      const contentLen = Number(response.headers.get('content-length') || 0);
+      if (contentLen > MAX_MEDIA_BYTES) return null;
       const headerMime = response.headers.get('content-type') || fallbackMime;
       const normalizedMime = cleanMimeType(headerMime);
       const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > MAX_MEDIA_BYTES) return null;
       const base64Data = Buffer.from(arrayBuffer).toString('base64');
       return {
         url: `data:${normalizedMime};base64,${base64Data}`,
         contentType: normalizedMime,
       };
     } catch (_) {
-      return { url: rawUrl, contentType: cleanMimeType(fallbackMime) };
+      return null;
     }
   }
 
@@ -105,6 +125,24 @@ export async function processAgentMessage({
   channel?: 'whatsapp' | 'simulador' | 'web' | 'app';
 }) {
   try {
+    if (channel !== 'web') {
+      await verifyStaffAccess();
+    } else {
+      if (!/^web_[a-z0-9_-]{6,80}$/i.test(String(conversationId || ''))) {
+        return { success: false, error: 'Identificador de conversación web inválido.' };
+      }
+      const ip = await getRequestIp();
+      const rlIp = checkRateLimit(`web_chat:${ip}`, 15, 60_000);
+      const rlConv = checkRateLimit(`web_conv:${conversationId}`, 12, 60_000);
+      if (!rlIp.allowed || !rlConv.allowed) {
+        return {
+          success: false,
+          error: `Demasiados mensajes enviados. Intenta en ${Math.max(rlIp.retryAfterSec, rlConv.retryAfterSec)}s.`,
+        };
+      }
+      userMessage = String(userMessage || '').slice(0, 1500);
+    }
+
     const db = getDb();
     const convRef = db.collection('conversaciones').doc(conversationId);
     const convDoc = await convRef.get();
@@ -166,26 +204,31 @@ export async function processAgentMessage({
       ...(Object.keys(msgMetadata).length > 0 ? { metadata: msgMetadata } : {}),
     });
 
-    // Cargar configuración personalizada del Asistente Sofía desde Firestore
+    // Cargar configuración personalizada del Asistente Sofía y Garantías con caché TTL de 120s
+    const gCache = globalThis as unknown as {
+      __vaSofiaCfgCache?: { sofia: any; garantias: any; expiresAt: number };
+    };
     let sofiaConfig: any = null;
-    try {
-      const sofiaDoc = await db.collection('settings').doc('sofia').get();
-      if (sofiaDoc.exists) {
-        sofiaConfig = sofiaDoc.data();
-      }
-    } catch (e) {
-      // Usar valores predeterminados
-    }
-
-    // Cargar configuración de Garantías y Retoques desde Firestore
     let garantiasConfig: any = null;
-    try {
-      const garantiasDoc = await db.collection('settings').doc('garantias').get();
-      if (garantiasDoc.exists) {
-        garantiasConfig = garantiasDoc.data();
+    if (gCache.__vaSofiaCfgCache && Date.now() < gCache.__vaSofiaCfgCache.expiresAt) {
+      sofiaConfig = gCache.__vaSofiaCfgCache.sofia;
+      garantiasConfig = gCache.__vaSofiaCfgCache.garantias;
+    } else {
+      try {
+        const [sofiaDoc, garantiasDoc] = await Promise.all([
+          db.collection('settings').doc('sofia').get(),
+          db.collection('settings').doc('garantias').get(),
+        ]);
+        sofiaConfig = sofiaDoc.exists ? sofiaDoc.data() : null;
+        garantiasConfig = garantiasDoc.exists ? garantiasDoc.data() : null;
+        gCache.__vaSofiaCfgCache = {
+          sofia: sofiaConfig,
+          garantias: garantiasConfig,
+          expiresAt: Date.now() + 120_000,
+        };
+      } catch (e) {
+        // Usar valores predeterminados
       }
-    } catch (e) {
-      // Usar valores predeterminados
     }
 
     const botActive = sofiaConfig ? sofiaConfig.botActive !== false : true;
@@ -356,6 +399,7 @@ export async function processAgentMessage({
       clientEmail: resolvedClientEmail,
       clientNotes,
       clientId: convData?.cliente_id,
+      channel,
       simulation: channel === 'simulador' || conversationId.startsWith('sim-sandbox'),
     };
 
@@ -377,8 +421,10 @@ export async function processAgentMessage({
       let clientRegisteredEmail = resolvedClientEmail;
       let clientRegisteredPhone = resolvedClientPhone;
 
+      // En canal web anónimo no inyectamos datos privados de terceros obtenidos solo por teléfono no verificado
+      if (channel !== 'web') {
       try {
-        const details = await getClientDetailsForChat({
+        const details = await getClientDetailsForChatInternal({
           phone: clientPhone,
           clientId: convData?.cliente_id,
           email: resolvedClientEmail,
@@ -459,6 +505,7 @@ export async function processAgentMessage({
         }
       } catch (profileErr) {
         // ignore
+      }
       }
 
       if (!isClientInDatabase) {
@@ -850,7 +897,7 @@ ${fileUrl ? `El cliente adjuntó un archivo o documento llamado "${fileName || '
             }
           }
 
-          if (resolvedAudioMedia) {
+          if (resolvedAudioMedia && !transcribedAudioText) {
             try {
               return await ai.generate({
                 model: 'googleai/gemini-3.5-flash-lite',
@@ -1018,34 +1065,63 @@ export async function getWebConversationMessages({
   conversationId: string;
 }) {
   try {
+    let isStaff = false;
+    try {
+      await verifyStaffAccess();
+      isStaff = true;
+    } catch {
+      isStaff = false;
+    }
+
+    if (!isStaff) {
+      if (!/^web_[a-z0-9_-]{6,80}$/i.test(String(conversationId || ''))) {
+        return {
+          success: false,
+          messages: [],
+          error: 'Identificador de conversación web inválido.',
+        };
+      }
+      const ip = await getRequestIp();
+      const rlMsgs = checkRateLimit(`web_msgs:${ip}`, 30, 60_000);
+      if (!rlMsgs.allowed) {
+        return {
+          success: false,
+          messages: [],
+          error: `Demasiadas solicitudes. Intenta en ${rlMsgs.retryAfterSec}s.`,
+        };
+      }
+    }
+
     const db = getDb();
     const convRef = db.collection('conversaciones').doc(conversationId);
     const snap = await convRef.collection('mensajes').orderBy('timestamp', 'asc').get();
 
-    const messages = snap.docs.map((d) => {
-      const data = d.data();
-      let formattedTime = '';
-      if (data.timestamp?.toDate) {
-        formattedTime = data.timestamp.toDate().toISOString();
-      } else if (data.timestamp instanceof Date) {
-        formattedTime = data.timestamp.toISOString();
-      } else if (typeof data.timestamp === 'string') {
-        formattedTime = data.timestamp;
-      } else {
-        formattedTime = new Date().toISOString();
-      }
+    const messages = snap.docs
+      .filter((d) => isStaff || d.data()?.tipo !== 'nota_interna')
+      .map((d) => {
+        const data = d.data();
+        let formattedTime = '';
+        if (data.timestamp?.toDate) {
+          formattedTime = data.timestamp.toDate().toISOString();
+        } else if (data.timestamp instanceof Date) {
+          formattedTime = data.timestamp.toISOString();
+        } else if (typeof data.timestamp === 'string') {
+          formattedTime = data.timestamp;
+        } else {
+          formattedTime = new Date().toISOString();
+        }
 
-      return {
-        id: d.id,
-        conversation_id: conversationId,
-        de: data.de,
-        texto: data.texto,
-        timestamp: formattedTime,
-        tipo: data.tipo || 'texto',
-        mediaUrl: data.mediaUrl || null,
-        metadata: data.metadata || null,
-      };
-    });
+        return {
+          id: d.id,
+          conversation_id: conversationId,
+          de: data.de,
+          texto: data.texto,
+          timestamp: formattedTime,
+          tipo: data.tipo || 'texto',
+          mediaUrl: data.mediaUrl || null,
+          metadata: data.metadata || null,
+        };
+      });
 
     const convDoc = await convRef.get();
     const convData = convDoc.exists ? convDoc.data() : null;

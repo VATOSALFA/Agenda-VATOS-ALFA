@@ -5,7 +5,6 @@ import type { DateRange } from "react-day-picker";
 import { format, startOfDay, endOfDay, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import { Timestamp, where, orderBy } from 'firebase/firestore';
-import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -187,7 +186,7 @@ export default function TipsPage() {
         setCurrentPage(1);
     };
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (filteredTips.length === 0) {
             toast({
                 variant: "destructive",
@@ -206,6 +205,7 @@ export default function TipsPage() {
             'Propina': tip.tip
         }));
 
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Propinas");

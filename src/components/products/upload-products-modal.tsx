@@ -4,7 +4,6 @@
 
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import * as XLSX from 'xlsx';
 import { useToast } from '@/hooks/use-toast';
 import { writeBatch, collection, doc, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
@@ -42,9 +41,10 @@ export function UploadProductsModal({ isOpen, onOpenChange, onUploadComplete }: 
     const file = acceptedFiles[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         try {
           const bstr = event.target?.result;
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(bstr, { type: 'binary', cellDates: true });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];

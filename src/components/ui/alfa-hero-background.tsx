@@ -29,7 +29,7 @@ export function AlfaHeroBackground() {
   const yBeams = useTransform(smoothScroll, [0, 1], [0, 140]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0 overflow-hidden pointer-events-none select-none">
+    <div ref={containerRef} aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none select-none">
       {/* 1. Base Gradient: Deep Midnight Navy */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#060a14] via-[#0b1328] to-[#070b16]" />
 
@@ -96,9 +96,10 @@ export function AlfaHeroBackground() {
       >
         <Image
           src="/logo-v-400x400.webp"
-          alt="Vatos Alfa Mark"
+          alt=""
+          aria-hidden="true"
           fill
-          priority
+          sizes="(max-width: 640px) 340px, 580px"
           className="object-contain filter grayscale contrast-200"
           unoptimized={true}
         />

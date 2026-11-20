@@ -30,11 +30,13 @@ export function VerticalSectionNavigator() {
   return (
     <aside
       aria-label="Volver arriba"
+      aria-hidden={!canScrollUp}
       className="hidden md:flex fixed right-3 lg:right-5 top-1/2 -translate-y-1/2 z-40 select-none pointer-events-auto"
     >
       {/* Botón Subir al Inicio (Bare icon limpio, sin contenedor ni cajas con fondo) */}
       <button
         type="button"
+        tabIndex={canScrollUp ? 0 : -1}
         onClick={handleScrollTop}
         aria-label="Ir al inicio de la página"
         title="Ir al inicio"

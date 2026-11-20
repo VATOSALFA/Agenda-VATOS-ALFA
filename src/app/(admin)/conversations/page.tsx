@@ -1268,9 +1268,10 @@ export default function ConversationsDashboardPage() {
 
   const [isProcessingAction, setIsProcessingAction] = useState<boolean>(false);
 
-  // Background checker for pending appointment chat reminders
+  // Background checker for pending appointment chat reminders (every 15 min when tab is visible)
   useEffect(() => {
     const runReminderCheck = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         await checkAndSendPendingChatReminders();
       } catch (e) {
@@ -1278,7 +1279,7 @@ export default function ConversationsDashboardPage() {
       }
     };
     runReminderCheck();
-    const interval = setInterval(runReminderCheck, 60000); // Check every minute
+    const interval = setInterval(runReminderCheck, 15 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
 

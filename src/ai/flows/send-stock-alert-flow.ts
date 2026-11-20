@@ -8,6 +8,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { sendEmail } from '@/lib/services/email';
+import { escapeHtml, verifyStaffAccess } from '@/lib/server-auth';
 
 const StockAlertInputSchema = z.object({
     productName: z.string().describe("The name of the product that is low on stock."),
@@ -18,7 +19,15 @@ const StockAlertInputSchema = z.object({
 type StockAlertInput = z.infer<typeof StockAlertInputSchema>;
 
 export async function sendStockAlert(input: StockAlertInput): Promise<string> {
-    const subject = `⚠️ Alerta de Stock Bajo: ${input.productName}`;
+    await verifyStaffAccess();
+
+    const parsed = StockAlertInputSchema.parse(input);
+    const safeProductName = escapeHtml(parsed.productName.slice(0, 120));
+    const safeStock = Number.isFinite(parsed.currentStock) ? Number(parsed.currentStock) : 0;
+    const rawImg = String(parsed.productImage || '').trim();
+    const safeImageUrl = /^https:\/\//i.test(rawImg) ? escapeHtml(rawImg) : '';
+
+    const subject = `⚠️ Alerta de Stock Bajo: ${parsed.productName.slice(0, 120)}`;
 
     // Construct HTML Email
     const htmlContent = `
@@ -43,10 +52,10 @@ export async function sendStockAlert(input: StockAlertInput): Promise<string> {
                 <h1>Alerta de Inventario</h1>
             </div>
             <div class="content">
-                ${input.productImage ? `<img src="${input.productImage}" alt="${input.productName}" class="product-image" />` : ''}
-                <h2>${input.productName}</h2>
+                ${safeImageUrl ? `<img src="${safeImageUrl}" alt="${safeProductName}" class="product-image" />` : ''}
+                <h2>${safeProductName}</h2>
                 <p class="label">Stock Actual en Locales</p>
-                <div class="stock-count">${input.currentStock}</div>
+                <div class="stock-count">${safeStock}</div>
                 <p style="color: #4b5563; margin-top: 20px;">
                     El inventario de este producto ha descendido por debajo del límite permitido. 
                     Se recomienda reabastecer lo antes posible para evitar quiebres de stock.
@@ -62,10 +71,10 @@ export async function sendStockAlert(input: StockAlertInput): Promise<string> {
 
     try {
         await sendEmail({
-            to: input.recipientEmail,
+            to: parsed.recipientEmail,
             subject: subject,
             html: htmlContent,
-            text: `El producto ${input.productName} tiene un stock bajo de ${input.currentStock}.`
+            text: `El producto ${parsed.productName} tiene un stock bajo de ${safeStock}.`
         });
 
         console.log(`Stock alert sent to ${input.recipientEmail} for ${input.productName}`);

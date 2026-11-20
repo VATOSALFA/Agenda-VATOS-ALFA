@@ -40,7 +40,6 @@ import type { Reservation, Service, Profesional, Role } from '@/lib/types';
 import { where } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { useToast } from '@/hooks/use-toast';
-import * as XLSX from 'xlsx';
 
 const reservationStatuses = [
     { id: 'Reservado', label: 'Reservado' },
@@ -235,7 +234,7 @@ export default function ReservationsReportPage() {
         };
     }, [reservations, isLoading]);
 
-    const handleDownload = () => {
+    const handleDownload = async () => {
         if (reservations.length === 0) {
             toast({
                 variant: "destructive",
@@ -268,6 +267,7 @@ export default function ReservationsReportPage() {
             'Reservas': d.value
         }));
 
+        const XLSX = await import('xlsx');
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(reservationsData), "Reservas");
         XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(servicesData), "Ranking Servicios");

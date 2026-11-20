@@ -142,8 +142,7 @@ const sendAppointmentRemindersFlow = ai.defineFlow(
       const q = query(
         collection(db, 'reservas'),
         where('fecha', '==', format(targetTimeStart, 'yyyy-MM-dd')),
-        where('estado', '!=', 'Confirmado'),
-        where('estado', '!=', 'Cancelado')
+        where('estado', 'not-in', ['Confirmado', 'Cancelado'])
       );
 
       const reservationsSnap = await getDocs(q);

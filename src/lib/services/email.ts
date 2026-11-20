@@ -1,7 +1,7 @@
 
+import 'server-only';
 import { Resend } from 'resend';
-import { db } from '@/lib/firebase-client';
-import { doc, getDoc } from 'firebase/firestore';
+import { getDb } from '@/lib/firebase-server';
 
 const resendApiKey = process.env.RESEND_API_KEY || '';
 
@@ -20,36 +20,40 @@ const getResendClient = () => {
 
 // Default sender email - fallback if Firebase config is not available
 const DEFAULT_SENDER = 'Agenda VATOS ALFA <contacto@vatosalfa.com>';
+let cachedSender: { value: string; expiresAt: number } | null = null;
 
-// Get the primary sender email from Firebase configuration
+// Get the primary sender email from Firebase Admin configuration (cached 5 min)
 export const getPrimarySenderEmail = async (): Promise<string> => {
+    if (cachedSender && Date.now() < cachedSender.expiresAt) {
+        return cachedSender.value;
+    }
     try {
-        if (!db) {
-            console.warn('Firebase DB not available, using default sender.');
-            return DEFAULT_SENDER;
-        }
+        const db = getDb();
+        const emailConfigDoc = await db.collection('configuracion').doc('emails').get();
 
-        const emailConfigDoc = await getDoc(doc(db, 'configuracion', 'emails'));
-
-        if (emailConfigDoc.exists()) {
-            const data = emailConfigDoc.data();
+        if (emailConfigDoc.exists) {
+            const data = emailConfigDoc.data() || {};
             const senders = data.senders || [];
 
             // Find the primary sender
             const primarySender = senders.find((s: any) => s.isPrimary && s.confirmed);
 
             if (primarySender) {
-                // Format as "Display Name <email>" for better email appearance
-                return `Agenda VATOS ALFA <${primarySender.email}>`;
+                const formatted = `Agenda VATOS ALFA <${primarySender.email}>`;
+                cachedSender = { value: formatted, expiresAt: Date.now() + 5 * 60 * 1000 };
+                return formatted;
             }
 
             // Fallback: use first confirmed sender if no primary is set
             const confirmedSender = senders.find((s: any) => s.confirmed);
             if (confirmedSender) {
-                return `Agenda VATOS ALFA <${confirmedSender.email}>`;
+                const formatted = `Agenda VATOS ALFA <${confirmedSender.email}>`;
+                cachedSender = { value: formatted, expiresAt: Date.now() + 5 * 60 * 1000 };
+                return formatted;
             }
         }
 
+        cachedSender = { value: DEFAULT_SENDER, expiresAt: Date.now() + 5 * 60 * 1000 };
         return DEFAULT_SENDER;
     } catch (error) {
         console.error('Error fetching primary sender:', error);

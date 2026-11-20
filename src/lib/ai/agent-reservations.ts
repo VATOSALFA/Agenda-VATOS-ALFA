@@ -7,10 +7,34 @@ export function assertLiveAgentMutation() {
   if (context) context.mutationAttempted = true;
 }
 
-// Identity comes from the conversation, never from a model-supplied reservation ID.
+// Identity comes from the conversation, never from a model-supplied reservation ID or phone on web.
 export async function getClientReservations(phone?: string) {
   const context = chatContextStorage.getStore();
-  const candidatePhones = [phone, context?.clientPhone].filter((p): p is string => Boolean(p && p.trim()));
+  const db = getDb();
+  const { todayIso } = getMexicoDateInfo();
+
+  // En canal web anónimo: jamás consultar por teléfono arbitrario; solo citas creadas dentro de esta sesión web
+  if (context?.channel === 'web') {
+    if (!context.conversationId) return [];
+    const sessionSnap = await db
+      .collection('reservas')
+      .where('conversation_id', '==', context.conversationId)
+      .get();
+    return sessionSnap.docs
+      .filter((doc) => isUpcomingReservation(doc.data()))
+      .sort((a, b) =>
+        `${a.data().fecha} ${a.data().hora_inicio || a.data().time || ''}`.localeCompare(
+          `${b.data().fecha} ${b.data().hora_inicio || b.data().time || ''}`
+        )
+      );
+  }
+
+  const authoritativePhones = context?.clientPhone
+    ? [context.clientPhone]
+    : phone
+      ? [phone]
+      : [];
+  const candidatePhones = authoritativePhones.filter((p): p is string => Boolean(p && p.trim()));
   const isWebOrSimPhone = candidatePhones.some(p => p.startsWith('web') || p.startsWith('sim'));
   const normalizedPhones = candidatePhones.map(normalizeClientPhone).filter(Boolean);
 
@@ -18,7 +42,6 @@ export async function getClientReservations(phone?: string) {
     throw new Error('No hay un teléfono válido para identificar al cliente. Solicita apoyo de recepción.');
   }
 
-  const db = getDb();
   const ids = new Set<string>();
   if (context?.clientId) {
     ids.add(context.clientId);
@@ -31,7 +54,6 @@ export async function getClientReservations(phone?: string) {
     }
   }
 
-  const { todayIso } = getMexicoDateInfo();
   // Consultar concurrentemente reservas reales y reservas_sandbox para soporte completo en simulador y localhost
   const [realSnap, sandboxSnap] = await Promise.all([
     db.collection('reservas').where('fecha', '>=', todayIso).get(),

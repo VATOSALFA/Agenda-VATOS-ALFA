@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import type { DateRange } from "react-day-picker";
 import { format, subDays } from "date-fns";
 import { es } from "date-fns/locale";
-import * as XLSX from 'xlsx';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,7 +149,7 @@ export default function CommissionsPage() {
 
     const hasStationCashRetained = (overallSummary.totalCashRetained || 0) > 0;
 
-    const triggerDownload = () => {
+    const triggerDownload = async () => {
         if (summaryByProfessional.length === 0) {
             toast({ title: "No hay datos para exportar", variant: "destructive" });
             return;
@@ -170,6 +169,7 @@ export default function CommissionsPage() {
             return baseRow;
         });
 
+        const XLSX = await import('xlsx');
         const worksheet = XLSX.utils.json_to_sheet(dataForExcel);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Comisiones");

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteUser } from '@/lib/actions/delete-user';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase-client';
+import { db, auth } from '@/lib/firebase-client';
 import { useToast } from '@/hooks/use-toast';
 import { allPermissionCategories, allPermissions, roleIcons, initialRoles, type PermissionCategory } from '@/lib/permissions';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -186,7 +186,8 @@ export default function UsersPage() {
     const handleResendInviteFromTable = async (user: User) => {
         setResendingUserId(user.id);
         try {
-            const result = await resendUserInvitation(user.email, user.name);
+            const idToken = await auth.currentUser?.getIdToken();
+            const result = await resendUserInvitation(user.email, user.name, idToken);
             if (!result.success) {
                 throw new Error(result.error);
             }
@@ -214,7 +215,8 @@ export default function UsersPage() {
     const handleDeleteUser = async () => {
         if (!userToDelete) return;
         try {
-            const result = await deleteUser(userToDelete.id);
+            const idToken = await auth.currentUser?.getIdToken();
+            const result = await deleteUser(userToDelete.id, idToken);
             if (!result.success) {
                 throw new Error(result.error);
             }

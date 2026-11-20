@@ -63,7 +63,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { cn } from '@/lib/utils';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { doc, getDoc, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment, deleteField } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, deleteDoc, updateDoc, collection, query, where, getDocs, runTransaction, increment, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { CancelReservationModal } from './cancel-reservation-modal';
@@ -149,9 +149,30 @@ export function ReservationDetailModal({
 
   const { data: locales } = useFirestoreQuery<Local>('locales');
   const { data: professionals } = useFirestoreQuery<Profesional>('profesionales');
-  const { data: allClients } = useFirestoreQuery<Client>('clientes');
+  const [singleClientDoc, setSingleClientDoc] = useState<Client | null>(null);
   const { data: allUsers } = useFirestoreQuery<any>('usuarios');
   const { data: bookingRulesData } = useFirestoreQuery<ReglasReservasConfig>('configuracion', undefined, where('__name__', '==', 'reglas_reservas'));
+
+  useEffect(() => {
+    if (!isOpen || !db || !reservation?.cliente_id) {
+      setSingleClientDoc(null);
+      return;
+    }
+    const unsub = onSnapshot(
+      doc(db, 'clientes', reservation.cliente_id),
+      (snap) => {
+        if (snap.exists()) {
+          setSingleClientDoc({ id: snap.id, ...(snap.data() as any) } as Client);
+        } else {
+          setSingleClientDoc(null);
+        }
+      },
+      (err) => {
+        console.error('Error listening to client doc:', err);
+      }
+    );
+    return () => unsub();
+  }, [isOpen, db, reservation?.cliente_id]);
 
   const bookingRules = bookingRulesData?.[0] || DEFAULT_BOOKING_RULES;
   const maxInasistenciasPermitidas = bookingRules.max_inasistencias_permitidas ?? 2;
@@ -190,12 +211,9 @@ export function ReservationDetailModal({
 
   // Cliente completo (desde BD o reservation.customer)
   const clientData: Client | null = useMemo(() => {
-    if (reservation.cliente_id && allClients) {
-      const found = allClients.find(c => c.id === reservation.cliente_id);
-      if (found) return found;
-    }
+    if (singleClientDoc) return singleClientDoc;
     return reservation.customer || null;
-  }, [reservation.cliente_id, reservation.customer, allClients]);
+  }, [singleClientDoc, reservation.customer]);
 
   // Historial de reservas del cliente para métricas en vivo sincronizadas con su ficha
   const [clientReservations, setClientReservations] = useState<Reservation[]>([]);
@@ -797,10 +815,7 @@ export function ReservationDetailModal({
     return encodeURIComponent(message);
   };
 
-  const matchedClient = useMemo(() => {
-    if (!reservation?.cliente_id || !allClients) return null;
-    return allClients.find((c: any) => c.id === reservation.cliente_id) || null;
-  }, [reservation?.cliente_id, allClients]);
+  const matchedClient = singleClientDoc;
 
   const effectivePhone = useMemo(() => {
     return (

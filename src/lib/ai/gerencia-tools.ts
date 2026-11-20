@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, parseISO } from 'date-fns';
@@ -2885,32 +2886,38 @@ export async function ejecutarIngresoStockInventario({
     };
   }
 
-  const currentStock = Number(targetProduct.stock ?? 0);
   const unitsToAdd = Math.max(1, Math.round(Number(cantidad) || 1));
-  const newStock = currentStock + unitsToAdd;
-
-  // Actualizar stock oficial en el producto
-  await db.collection('productos').doc(targetProduct.id).update({
-    stock: newStock,
-    updated_at: FieldValue.serverTimestamp(),
-  });
-
-  // Registrar movimiento en movimientos_inventario para auditoría
   const auditMotivo = motivo?.trim() || 'Ingreso de mercancía por Gerencia';
-  await db.collection('movimientos_inventario').add({
-    date: Timestamp.now(),
-    local_id: 'rkbEgvwP67JliXQ1Qeyj', // Suc. Sombrerete
-    product_id: targetProduct.id,
-    presentation_id: targetProduct.presentation_id || 'default',
-    from: currentStock,
-    to: newStock,
-    cause: auditMotivo,
-    staff_id: caller.auditUserId,
-    staff_name: caller.operatorName,
-    local_name: 'Suc. Sombrerete',
-    concepto: `Ingreso de mercancía por ${caller.assistantName}`,
-    comment: `${unitsToAdd} unidad(es) ingresada(s) al inventario a solicitud de ${caller.operatorName}`,
-    product_name: targetProduct.nombre,
+
+  const { currentStock, newStock } = await db.runTransaction(async (tx) => {
+    const prodRef = db.collection('productos').doc(targetProduct.id);
+    const freshSnap = await tx.get(prodRef);
+    const cur = freshSnap.exists ? Number(freshSnap.data()?.stock ?? 0) : Number(targetProduct.stock ?? 0);
+    const updated = cur + unitsToAdd;
+
+    tx.update(prodRef, {
+      stock: updated,
+      updated_at: FieldValue.serverTimestamp(),
+    });
+
+    const movRef = db.collection('movimientos_inventario').doc();
+    tx.set(movRef, {
+      date: Timestamp.now(),
+      local_id: 'rkbEgvwP67JliXQ1Qeyj', // Suc. Sombrerete
+      product_id: targetProduct.id,
+      presentation_id: targetProduct.presentation_id || 'default',
+      from: cur,
+      to: updated,
+      cause: auditMotivo,
+      staff_id: caller.auditUserId,
+      staff_name: caller.operatorName,
+      local_name: 'Suc. Sombrerete',
+      concepto: `Ingreso de mercancía por ${caller.assistantName}`,
+      comment: `${unitsToAdd} unidad(es) ingresada(s) al inventario a solicitud de ${caller.operatorName}`,
+      product_name: targetProduct.nombre,
+    });
+
+    return { currentStock: cur, newStock: updated };
   });
 
   // Si había recordatorios pendientes sobre ingresar este producto, completarlos automáticamente
@@ -4790,9 +4797,21 @@ export const gestionarExencionYCodigosAnticipoSucursalTool = ai.defineTool(
 
     // ACCIÓN 1: GENERAR CÓDIGO DE UN SOLO USO DE 4 DÍGITOS
     if (accion === 'generar_codigo_un_uso') {
+      const WEAK_TEMP_CODES = new Set([
+        '0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999',
+        '1234', '4321', '2345', '3456', '4567', '5678', '6789', '9876',
+      ]);
+      const generateStrongPin = () => {
+        for (let attempt = 0; attempt < 20; attempt++) {
+          const code = String(crypto.randomInt(1000, 10000));
+          if (!WEAK_TEMP_CODES.has(code)) return code;
+        }
+        return String(crypto.randomInt(1000, 10000));
+      };
+
       let pin = '';
       for (let i = 0; i < 10; i++) {
-        const candidate = String(Math.floor(1000 + Math.random() * 9000));
+        const candidate = generateStrongPin();
         const existing = await db
           .collection('codigos_autorizacion')
           .where('code', '==', candidate)
@@ -4803,7 +4822,7 @@ export const gestionarExencionYCodigosAnticipoSucursalTool = ai.defineTool(
           break;
         }
       }
-      if (!pin) pin = String(Math.floor(1000 + Math.random() * 9000));
+      if (!pin) pin = generateStrongPin();
 
       const mins = vigenciaMinutos && vigenciaMinutos > 0 ? vigenciaMinutos : 30;
       const now = new Date();
@@ -4827,7 +4846,7 @@ export const gestionarExencionYCodigosAnticipoSucursalTool = ai.defineTool(
 
       await db.collection('audit_logs').add({
         action: `Generar Código 1 Uso (${caller.assistantName})`,
-        details: `Se generó el código temporal de un solo uso [${pin}] válido por ${mins} min. Motivo: ${cleanReason}`,
+        details: `Se generó el código temporal de un solo uso [***${pin.slice(-1)}] válido por ${mins} min. Motivo: ${cleanReason}`,
         userId: caller.auditUserId,
         userName: `${caller.creatorDisplay} (${caller.auditUserRole})`,
         userRole: caller.auditUserRole,

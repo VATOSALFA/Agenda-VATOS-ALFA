@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { ChevronLeft, ChevronRight, Sparkles, Calendar, ArrowRight, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { shouldBypassImageOptimization } from '@/lib/image-optimization';
 
 export interface BarberItem {
   id: string;
@@ -132,9 +133,12 @@ export function Team360Gallery({
       }
     };
 
-    updateDimensions();
+    const rafId = requestAnimationFrame(updateDimensions);
     window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updateDimensions);
+    };
   }, []);
 
   const stopAnimation = useCallback(() => {
@@ -191,17 +195,19 @@ export function Team360Gallery({
     setCenterScale(1);
   }, []);
 
-  // Autoplay management
+  // Autoplay management (solo anima mientras la galería es visible en pantalla)
+  const stageWrapperRef = useRef<HTMLDivElement>(null);
+  const isVisibleRef = useRef(false);
   const autoPlayTimer = useRef<NodeJS.Timeout | null>(null);
   const idleTimeout = useRef<NodeJS.Timeout | null>(null);
   const isInteracting = useRef(false);
 
   const startAutoPlay = useCallback(() => {
     if (autoPlayTimer.current) clearInterval(autoPlayTimer.current);
-    if (numSlots <= 1) return;
+    if (numSlots <= 1 || !isVisibleRef.current) return;
 
     autoPlayTimer.current = setInterval(() => {
-      if (!isInteracting.current) {
+      if (!isInteracting.current && isVisibleRef.current) {
         const nextIndex = (selectedSlotIndexRef.current + 1) % numSlots;
         const targetAngle = rotationRef.current - angleStep;
 
@@ -231,8 +237,34 @@ export function Team360Gallery({
   }, [startAutoPlay]);
 
   useEffect(() => {
-    startAutoPlay();
+    if (typeof IntersectionObserver === 'undefined') {
+      isVisibleRef.current = true;
+      startAutoPlay();
+      return () => {
+        pauseAutoPlay();
+        stopAnimation();
+        if (idleTimeout.current) clearTimeout(idleTimeout.current);
+      };
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisibleRef.current = entry.isIntersecting;
+        if (entry.isIntersecting) {
+          startAutoPlay();
+        } else {
+          pauseAutoPlay();
+        }
+      },
+      { rootMargin: '50px' }
+    );
+
+    if (stageWrapperRef.current) {
+      observer.observe(stageWrapperRef.current);
+    }
+
     return () => {
+      observer.disconnect();
       pauseAutoPlay();
       stopAnimation();
       if (idleTimeout.current) clearTimeout(idleTimeout.current);
@@ -348,7 +380,7 @@ export function Team360Gallery({
   const firstName = activeName.split(' ')[0];
 
   return (
-    <div className={cn("w-full py-4 md:py-8 select-none overflow-hidden", className)}>
+    <div ref={stageWrapperRef} className={cn("w-full py-4 md:py-8 select-none overflow-hidden", className)}>
       <div className="max-w-5xl xl:max-w-6xl mx-auto px-2 sm:px-4">
         {/* 3D Orbit Carousel Stage */}
         <div
@@ -384,9 +416,19 @@ export function Team360Gallery({
             return (
               <div
                 key={`thumb_${barber.id}_${index}`}
+                role="button"
+                tabIndex={isCurrentCenter ? -1 : 0}
+                aria-hidden={isCurrentCenter || undefined}
+                aria-label={`Seleccionar a ${barber.publicName || barber.name || 'Barbero'}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleThumbClick(index);
+                }}
+                onKeyDown={(e) => {
+                  if (!isCurrentCenter && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    handleThumbClick(index);
+                  }
                 }}
                 className={cn(
                   "absolute transition-opacity duration-200 cursor-pointer",
@@ -406,11 +448,12 @@ export function Team360Gallery({
                       src={barber.avatarUrl}
                       alt={`${barber.publicName || barber.name || 'Barbero'} - Barbero Profesional en ${companyName || 'VATOS ALFA Barber Shop'} ${branchName || 'Querétaro'}`}
                       fill
-                      quality={75}
+                      quality={80}
+                      loading="lazy"
                       sizes="160px"
                       className="object-cover"
                       draggable={false}
-                      unoptimized={true}
+                      unoptimized={shouldBypassImageOptimization(barber.avatarUrl)}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-400 font-bold">
@@ -433,7 +476,16 @@ export function Team360Gallery({
             }}
           >
             <div
+              role="button"
+              tabIndex={0}
+              aria-label={`Ver biografía de ${activeName}`}
               onClick={() => onSelectBarber?.(activeBarber)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectBarber?.(activeBarber);
+                }
+              }}
               className="w-full h-full rounded-3xl overflow-hidden bg-slate-900 border-2 border-slate-700/70 shadow-[0_20px_45px_rgba(15,23,42,0.45)] relative group cursor-pointer hover:border-blue-500 transition-colors"
             >
               {activeBarber?.avatarUrl ? (
@@ -441,12 +493,12 @@ export function Team360Gallery({
                   src={activeBarber.avatarUrl}
                   alt={`${activeName} - Especialista en Barbería y Cuidado Masculino en ${companyName || 'VATOS ALFA Barber Shop'} ${branchName || 'Querétaro'}`}
                   fill
-                  quality={85}
-                  priority
+                  quality={80}
+                  loading="lazy"
                   sizes="300px"
                   className="object-cover group-hover:scale-105 transition-transform duration-500"
                   draggable={false}
-                  unoptimized={true}
+                  unoptimized={shouldBypassImageOptimization(activeBarber.avatarUrl)}
                 />
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-white gap-2">

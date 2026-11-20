@@ -1,7 +1,9 @@
+import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/firebase-server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { normalizePhoneForLookup } from '@/lib/phone-utils';
+import { checkRateLimit, getRequestIp } from '@/lib/server-auth';
 
 async function getCandidateTokens(db: any): Promise<string[]> {
     const tokens = new Set<string>();
@@ -190,6 +192,13 @@ async function processApprovedPayment(
         }
     }
 
+    const mpPaymentIdStr = paymentInfo?.id ? String(paymentInfo.id) : '';
+    const processedRef = mpPaymentIdStr
+        ? db.collection('mp_processed_payments').doc(mpPaymentIdStr)
+        : null;
+
+    let txOutcome: string = 'processed';
+
     await db.runTransaction(async (t: any) => {
         // ============================================================
         // 1. PRE-READ ALL DOCUMENTS FIRST (Firestore Transaction Rule)
@@ -197,10 +206,20 @@ async function processApprovedPayment(
         const reservaRef = db.collection('reservas').doc(external_reference);
         const saleRef = db.collection('ventas').doc(external_reference);
 
-        const [reservaDoc, saleDoc] = await Promise.all([
+        const [reservaDoc, saleDoc, processedSnap] = await Promise.all([
             t.get(reservaRef),
             t.get(saleRef),
+            processedRef ? t.get(processedRef) : Promise.resolve(null),
         ]);
+
+        if (processedSnap && processedSnap.exists) {
+            const boundRef = processedSnap.data()?.external_reference;
+            if (boundRef && boundRef !== external_reference) {
+                throw new Error(`REPLAY_DETECTED:${mpPaymentIdStr}:${boundRef}`);
+            }
+            txOutcome = 'already_processed';
+            return;
+        }
 
         let linkedReservaRef: any = null;
         let linkedReservaDoc: any = null;
@@ -230,6 +249,14 @@ async function processApprovedPayment(
         // ============================================================
         // 2. PERFORM WRITES (No t.get() allowed below this point)
         // ============================================================
+        if (processedRef) {
+            t.set(processedRef, {
+                payment_id: mpPaymentIdStr,
+                external_reference,
+                amount: paid,
+                processed_at: new Date(),
+            });
+        }
 
         const determinePaymentStatus = (total: number, paidAmt: number) => {
             if (total > 0 && paidAmt >= total * 0.99) return 'Pagado';
@@ -339,16 +366,26 @@ async function processApprovedPayment(
                 : 0;
             const total = Number(data.totalAmount || data.precio || data.total || itemsSum || 0);
             const realTotal = total > 0 ? total : paid;
-            const newPaymentStatus = determinePaymentStatus(realTotal, paid);
-            const saldoPendiente = newPaymentStatus === 'Pagado' ? 0 : Math.max(0, realTotal - paid);
+            const prevPaid = (data.mercado_pago_id && String(data.mercado_pago_id) === String(paymentInfo.id))
+                ? 0
+                : Number(data.anticipo_pagado || data.anticipoPagado || 0);
+            const totalPaidNow = prevPaid + paid;
+            const expectedDeposit = Number(data.anticipo_esperado || 0);
+            const meetsDeposit = expectedDeposit <= 0 || totalPaidNow + 1 >= expectedDeposit;
+            const newPaymentStatus = meetsDeposit
+                ? determinePaymentStatus(realTotal, totalPaidNow)
+                : 'partial_payment';
+            const saldoPendiente = newPaymentStatus === 'Pagado' ? 0 : Math.max(0, realTotal - totalPaidNow);
 
             // Ensure Spanish Agenda fields exist even if document was previously created with English keys
-            const backfillFields = buildAgendaReservationFields(data, external_reference, realTotal, paid, saldoPendiente);
+            const backfillFields = buildAgendaReservationFields(data, external_reference, realTotal, totalPaidNow, saldoPendiente);
 
             t.update(reservaRef, {
                 ...backfillFields,
                 pago_estado: newPaymentStatus,
-                estado: (data.estado === 'Asiste' || data.estado === 'Completado') ? data.estado : 'Confirmado',
+                estado: (data.estado === 'Asiste' || data.estado === 'Completado')
+                    ? data.estado
+                    : (meetsDeposit ? 'Confirmado' : 'Pendiente de pago'),
                 updatedAt: paidAtDate,
             });
 
@@ -362,11 +399,11 @@ async function processApprovedPayment(
                     subtotal: realTotal,
                     descuento: { valor: 0, tipo: 'fixed', monto: 0 },
                     metodo_pago: 'mercadopago',
-                    monto_pagado_real: paid,
-                    monto_anticipo: paid,
-                    anticipoPagado: paid,
-                    anticipo_pagado: paid,
-                    monto_pagado: paid,
+                    monto_pagado_real: totalPaidNow,
+                    monto_anticipo: totalPaidNow,
+                    anticipoPagado: totalPaidNow,
+                    anticipo_pagado: totalPaidNow,
+                    monto_pagado: totalPaidNow,
                     saldo_pendiente: saldoPendiente,
                     items: backfillFields.items,
                     cliente_id: backfillFields.cliente_id,
@@ -380,7 +417,7 @@ async function processApprovedPayment(
                     professional_id: backfillFields.barbero_id || null,
                     estado: 'completed',
                     status: 'completed',
-                    pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : 'deposit_paid',
+                    pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : (meetsDeposit ? 'deposit_paid' : 'partial_payment'),
                     tipo: 'anticipo',
                     tipo_venta: 'anticipo',
                     modalidad_pago_online: newPaymentStatus === 'Pagado' ? 'pago_total' : 'anticipo',
@@ -391,7 +428,7 @@ async function processApprovedPayment(
                         efectivo: 0,
                         tarjeta: 0,
                         transferencia: 0,
-                        pagos_en_linea: paid,
+                        pagos_en_linea: totalPaidNow,
                     },
                 });
             } else {
@@ -402,27 +439,27 @@ async function processApprovedPayment(
                         cliente_id: backfillFields.cliente_id,
                         cliente_nombre: backfillFields.cliente_nombre,
                         professional_id: backfillFields.barbero_id || null,
-                        pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : 'deposit_paid',
+                        pago_estado: newPaymentStatus === 'Pagado' ? 'Pagado' : (meetsDeposit ? 'deposit_paid' : 'partial_payment'),
                         mercado_pago_status: 'approved',
                         mercado_pago_id: String(paymentInfo.id),
-                        monto_pagado_real: paid,
-                        monto_anticipo: paid,
-                        anticipoPagado: paid,
-                        anticipo_pagado: paid,
-                        monto_pagado: paid,
+                        monto_pagado_real: totalPaidNow,
+                        monto_anticipo: totalPaidNow,
+                        anticipoPagado: totalPaidNow,
+                        anticipo_pagado: totalPaidNow,
+                        monto_pagado: totalPaidNow,
                         saldo_pendiente: saldoPendiente,
                         fecha_pago: paidAtDate,
                         detalle_pago_combinado: {
                             efectivo: 0,
                             tarjeta: 0,
                             transferencia: 0,
-                            pagos_en_linea: paid,
+                            pagos_en_linea: totalPaidNow,
                         },
                     });
                 }
             }
 
-            console.log(`[Next.js] Reservation ${external_reference} updated with advance payment ($${paid} MXN, status: ${newPaymentStatus}).`);
+            console.log(`[Next.js] Reservation ${external_reference} updated with advance payment ($${paid} MXN, total=${totalPaidNow}, status: ${newPaymentStatus}).`);
             return;
         }
 
@@ -443,7 +480,7 @@ async function processApprovedPayment(
 
             for (let i = 0; i < bookingRefsAndDocs.length; i++) {
                 const { booking, targetId, resRef, resDoc } = bookingRefsAndDocs[i];
-                const bTotal = bookingTotals[i] || (i === 0 ? paidAmount : 0);
+                const bTotal = bookingTotals[i] || Number(booking.total || 0);
                 let bPaid = 0;
                 if (bookingRefsAndDocs.length === 1) {
                     bPaid = paidAmount;
@@ -458,20 +495,33 @@ async function processApprovedPayment(
                 }
                 remainingToDistribute = Math.max(0, Math.round((remainingToDistribute - bPaid) * 100) / 100);
                 const bSaldo = Math.max(0, bTotal - bPaid);
+                const expectedDue = Number(booking.amountDue || 0) > 0
+                    ? Number(booking.amountDue)
+                    : (bTotal > 0 ? Math.min(bTotal, Math.max(50, Math.round(bTotal * 0.5))) : paidAmount);
+                const meetsBookingDue = bTotal > 0 ? bPaid + 1 >= expectedDue : false;
 
                 const agendaFields = buildAgendaReservationFields(booking, targetId, bTotal, bPaid, bSaldo);
+                const resolvedBookingEstado = meetsBookingDue ? 'Confirmado' : 'Pendiente de pago';
+                const resolvedPagoEstado = meetsBookingDue
+                    ? determinePaymentStatus(bTotal, bPaid)
+                    : 'partial_payment';
 
                 if (resDoc.exists) {
                     const existingData = resDoc.data() || {};
                     t.update(resRef, {
                         ...agendaFields,
-                        estado: (existingData.estado === 'Asiste' || existingData.estado === 'Completado') ? existingData.estado : 'Confirmado',
+                        pago_estado: resolvedPagoEstado,
+                        estado: (existingData.estado === 'Asiste' || existingData.estado === 'Completado')
+                            ? existingData.estado
+                            : resolvedBookingEstado,
                         updatedAt: paidAtDate,
                     });
                 } else {
                     t.set(resRef, {
                         ...booking,
                         ...agendaFields,
+                        pago_estado: resolvedPagoEstado,
+                        estado: resolvedBookingEstado,
                         creado_en: paidAtDate,
                         createdAt: paidAtDate,
                         updatedAt: paidAtDate,
@@ -687,21 +737,49 @@ async function processApprovedPayment(
         }
     });
 
-    // Si la reserva provino del chatbot, notificar automáticamente en el chat del cliente
+        if (txOutcome === 'already_processed') {
+            console.log(`[Next.js] Payment ${mpPaymentIdStr} already processed atomically for ${external_reference}.`);
+            return 'already_processed';
+        }
+
+        // Si la reserva provino del chatbot, notificar automáticamente en el chat del cliente
     try {
         const resDoc = await db.collection('reservas').doc(external_reference).get();
         if (resDoc.exists) {
             const resData = resDoc.data()!;
-            if ((resData.canal_reserva === 'chatbot' || resData.origen === 'chatbot') && resData.cliente_telefono) {
-                const cleanPhone = resData.cliente_telefono.replace(/\D/g, '');
-                const searchKey = cleanPhone.length >= 10 && !String(resData.cliente_telefono).startsWith('+')
-                    ? cleanPhone.slice(-10)
-                    : cleanPhone;
-                const convsSnap = await db.collection('conversaciones').get();
-                const targetConv = convsSnap.docs.find((d: any) => {
-                    const p = (d.data().cliente_telefono || d.data().telefono || '').replace(/\D/g, '');
-                    return (searchKey && (p.includes(searchKey) || d.id.includes(searchKey)));
-                });
+            if ((resData.canal_reserva === 'chatbot' || resData.origen === 'chatbot') && (resData.cliente_telefono || resData.conversation_id)) {
+                let targetConv: any = null;
+                if (resData.conversation_id) {
+                    const directConv = await db.collection('conversaciones').doc(String(resData.conversation_id)).get();
+                    if (directConv.exists) targetConv = directConv;
+                }
+                if (!targetConv && resData.cliente_id && resData.cliente_id !== 'unknown') {
+                    const byClientSnap = await db
+                        .collection('conversaciones')
+                        .where('cliente_id', '==', resData.cliente_id)
+                        .limit(1)
+                        .get();
+                    if (!byClientSnap.empty) targetConv = byClientSnap.docs[0];
+                }
+                if (!targetConv && resData.cliente_telefono) {
+                    const phoneInfo = normalizePhoneForLookup(resData.cliente_telefono);
+                    const variants = Array.from(new Set([
+                        resData.cliente_telefono,
+                        ...phoneInfo.variants,
+                    ].filter(Boolean))).slice(0, 10);
+                    if (variants.length > 0) {
+                        const byPhoneSnap = await db
+                            .collection('conversaciones')
+                            .where('cliente_telefono', 'in', variants)
+                            .limit(1)
+                            .get();
+                        if (!byPhoneSnap.empty) targetConv = byPhoneSnap.docs[0];
+                    }
+                    if (!targetConv && phoneInfo.primary) {
+                        const byDocId = await db.collection('conversaciones').doc(phoneInfo.primary).get();
+                        if (byDocId.exists) targetConv = byDocId;
+                    }
+                }
 
                 if (targetConv) {
                     const timeStr = resData.hora_inicio ? ` a las ${resData.hora_inicio}` : '';
@@ -729,10 +807,19 @@ async function processApprovedPayment(
 
 export async function GET(req: NextRequest) {
     try {
+        const ip = await getRequestIp();
+        const rl = checkRateLimit(`mp_verify:${ip}`, 20, 60_000);
+        if (!rl.allowed) {
+            return NextResponse.json(
+                { verified: false, error: 'Too many requests' },
+                { status: 429 }
+            );
+        }
+
         const url = new URL(req.url);
-        const reservationId = url.searchParams.get('reservationId');
-        if (!reservationId) {
-            return NextResponse.json({ error: 'Missing reservationId' }, { status: 400 });
+        const reservationId = String(url.searchParams.get('reservationId') || '').trim();
+        if (!reservationId || !/^[a-zA-Z0-9_-]{6,64}$/.test(reservationId)) {
+            return NextResponse.json({ error: 'Invalid reservationId' }, { status: 400 });
         }
 
         const db = getDb();
@@ -750,7 +837,6 @@ export async function GET(req: NextRequest) {
                     return NextResponse.json({
                         verified: true,
                         reservationId: existingRes.id,
-                        paymentId: rData.mercado_pago_id || rData.deposit_payment_id,
                         amount: rData.anticipo_pagado || rData.monto_pagado,
                         status: 'approved',
                     });
@@ -778,7 +864,6 @@ export async function GET(req: NextRequest) {
                 return NextResponse.json({
                     verified: true,
                     reservationId,
-                    paymentId: approvedPayment.id,
                     amount: approvedPayment.transaction_amount,
                     status: 'approved',
                 });
@@ -788,7 +873,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ verified: false });
     } catch (error: any) {
         console.error('[Next.js] GET Verify Payment Error:', error);
-        return NextResponse.json({ verified: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ verified: false, error: 'Error verifying payment' }, { status: 500 });
     }
 }
 
@@ -797,23 +882,79 @@ export async function POST(req: NextRequest) {
 
     try {
         const url = new URL(req.url);
-        const queryId = url.searchParams.get('id') || url.searchParams.get('data.id');
+        const queryId = url.searchParams.get('data.id') || url.searchParams.get('id');
         const queryTopic = url.searchParams.get('topic') || url.searchParams.get('type');
 
         const body = await req.json().catch(() => ({}));
         const dataId = queryId || body?.data?.id || body?.id;
         const topic = queryTopic || body?.type || 'unknown';
 
-        if (!dataId) {
-            console.warn("[Next.js] Missing ID in webhook.");
-            return NextResponse.json({ error: "Bad Request: ID missing" }, { status: 400 });
+        if (!dataId || !/^\d{4,30}$/.test(String(dataId).trim())) {
+            console.warn("[Next.js] Missing or malformed ID in webhook:", dataId);
+            return NextResponse.json({ error: "Bad Request: Invalid ID" }, { status: 400 });
         }
 
-        console.log(`[Next.js] Topic: ${topic}, ID: ${dataId}`);
+        const cleanDataId = String(dataId).trim();
+        console.log(`[Next.js] Topic: ${topic}, ID: ${cleanDataId}`);
 
-        if (String(dataId) === "123456") {
+        if (cleanDataId === "123456" && process.env.NODE_ENV !== 'production') {
             console.log("[Next.js] Test simulation detected. Returning OK.");
             return NextResponse.json({ status: "OK" });
+        }
+
+        // Validar firma HMAC y ventana anti-replay ANTES de cualquier lectura de BD o API externa
+        const webhookSecrets = [
+            process.env.MP_WEB_WEBHOOK_SECRET?.trim(),
+            process.env.MP_WEBHOOK_SECRET?.trim(),
+            process.env.MERCADO_PAGO_WEBHOOK_SECRET?.trim(),
+            process.env.MP_TERMINAL_WEBHOOK_SECRET?.trim(),
+        ].filter((s): s is string => Boolean(s));
+
+        if (webhookSecrets.length === 0) {
+            if (process.env.NODE_ENV === 'production') {
+                console.error('[Next.js] Webhook secrets not configured in production.');
+                return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+            }
+        } else {
+            const xSignature = req.headers.get('x-signature') || '';
+            const xRequestId = req.headers.get('x-request-id') || '';
+            const sigParts = xSignature.split(',');
+            let ts = '';
+            let v1 = '';
+            for (const part of sigParts) {
+                const [k, val] = part.split('=').map((s) => s.trim());
+                if (k === 'ts') ts = val || '';
+                if (k === 'v1') v1 = val || '';
+            }
+            if (!ts || !v1 || !xRequestId || !/^[0-9a-f]+$/i.test(v1) || !/^\d{10,16}$/.test(ts)) {
+                console.error('[Next.js] Webhook missing/malformed x-signature headers.');
+                return NextResponse.json({ error: 'Unauthorized: missing signature' }, { status: 401 });
+            }
+            const rawTsNum = Number(ts);
+            const tsMs = rawTsNum > 1e12 ? rawTsNum : rawTsNum * 1000;
+            if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 15 * 60 * 1000) {
+                console.error('[Next.js] Webhook timestamp outside replay window.');
+                return NextResponse.json({ error: 'Unauthorized: expired signature timestamp' }, { status: 401 });
+            }
+
+            const candidateManifests = queryId
+                ? [`id:${String(queryId).trim().toLowerCase()};request-id:${xRequestId};ts:${ts};`]
+                : [
+                    `request-id:${xRequestId};ts:${ts};`,
+                    `id:${cleanDataId.toLowerCase()};request-id:${xRequestId};ts:${ts};`,
+                ];
+            const receivedBuf = Buffer.from(v1, 'hex');
+            const validSig = webhookSecrets.some((sec) => {
+                return candidateManifests.some((manifest) => {
+                    const expectedHex = crypto.createHmac('sha256', sec).update(manifest).digest('hex');
+                    const expectedBuf = Buffer.from(expectedHex, 'hex');
+                    return expectedBuf.length === receivedBuf.length && crypto.timingSafeEqual(expectedBuf, receivedBuf);
+                });
+            });
+            if (!validSig) {
+                console.error('[Next.js] Webhook invalid HMAC signature.');
+                return NextResponse.json({ error: 'Unauthorized: invalid signature' }, { status: 401 });
+            }
         }
 
         const db = getDb();
@@ -821,8 +962,7 @@ export async function POST(req: NextRequest) {
         let paymentInfo: any = null;
 
         for (const token of candidateTokens) {
-            // 1. Try fetching as a direct Payment
-            const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${dataId}`, {
+            const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(cleanDataId)}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -830,8 +970,7 @@ export async function POST(req: NextRequest) {
                 paymentInfo = await paymentRes.json();
                 break;
             } else {
-                // 2. Try fetching as a Merchant Order
-                const orderRes = await fetch(`https://api.mercadopago.com/merchant_orders/${dataId}`, {
+                const orderRes = await fetch(`https://api.mercadopago.com/merchant_orders/${encodeURIComponent(cleanDataId)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -839,8 +978,7 @@ export async function POST(req: NextRequest) {
                     const orderInfo = await orderRes.json();
                     const approvedPayment = orderInfo.payments?.find((p: any) => p.status === 'approved');
                     if (approvedPayment) {
-                        // Fetch the full payment object so metadata.booking_json is preserved!
-                        const fullPayRes = await fetch(`https://api.mercadopago.com/v1/payments/${approvedPayment.id}`, {
+                        const fullPayRes = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(String(approvedPayment.id))}`, {
                             headers: { 'Authorization': `Bearer ${token}` }
                         }).catch(() => null);
                         if (fullPayRes && fullPayRes.ok) {
@@ -862,21 +1000,33 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const external_reference = body?.data?.external_reference || paymentInfo?.external_reference;
+        // SECURITY: Usar EXCLUSIVAMENTE external_reference devuelto por la API de Mercado Pago (nunca body)
+        const external_reference = paymentInfo?.external_reference;
 
         if (!paymentInfo || paymentInfo.status !== 'approved' || !external_reference) {
-            console.error(`[Next.js] Could not verify/process payment ${dataId}`);
+            console.error(`[Next.js] Could not verify/process payment ${cleanDataId}`);
             return NextResponse.json({ status: "OK (Ignored)" });
         }
 
         console.log(`[Next.js] API Check: Status=${paymentInfo.status}, Ref=${external_reference}, Amount=${paymentInfo.transaction_amount}`);
 
-        await processApprovedPayment(db, paymentInfo, external_reference, body);
+        try {
+            const procResult = await processApprovedPayment(db, paymentInfo, external_reference, body);
+            if (procResult === 'already_processed') {
+                return NextResponse.json({ status: "OK (Already processed)" });
+            }
+        } catch (procErr: any) {
+            if (String(procErr?.message || '').startsWith('REPLAY_DETECTED:')) {
+                console.error(`[Next.js] ${procErr.message}`);
+                return NextResponse.json({ error: 'Replay detected' }, { status: 403 });
+            }
+            throw procErr;
+        }
 
         return NextResponse.json({ status: "OK" });
 
     } catch (error: any) {
         console.error('[Next.js] Webhook Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal webhook error' }, { status: 500 });
     }
 }

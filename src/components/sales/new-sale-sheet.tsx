@@ -507,15 +507,22 @@ const ResumenCarrito = ({
                     <>
                         <div
                             className={cn(
-                                "flex items-center gap-1 bg-muted/20 border rounded-xl p-1.5 transition-colors",
+                                "flex flex-col gap-1.5 bg-muted/20 border rounded-xl p-2 transition-colors",
                                 referralError ? "border-red-500/60 bg-red-500/5" : "border-border/60"
                             )}
                         >
-                            <Users className="h-3.5 w-3.5 text-[#C5A880] ml-1 shrink-0" />
-                            <span className="text-[10px] font-semibold text-muted-foreground hidden sm:inline mr-1 shrink-0">
-                                Invita Amigo:
-                            </span>
-                            <div className="flex-1 flex items-center gap-1 min-w-0">
+                            <div className="flex items-center justify-between text-xs px-0.5">
+                                <div className="flex items-center gap-1.5">
+                                    <Users className="h-3.5 w-3.5 text-[#C5A880] shrink-0" />
+                                    <span className="text-[11px] font-semibold text-foreground">
+                                        Código Invita a un Amigo
+                                    </span>
+                                </div>
+                                <span className="text-[10px] font-medium text-[#C5A880]">
+                                    20% desc.
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1 w-full min-w-0">
                                 <Input
                                     value={referralPrefixPart}
                                     maxLength={4}
@@ -566,7 +573,7 @@ const ResumenCarrito = ({
                                     }}
                                     placeholder="NOMBRE"
                                     aria-label="Nombre en el código"
-                                    className="h-7 flex-1 min-w-[64px] text-center text-[11px] font-mono font-semibold uppercase px-1.5 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
+                                    className="h-7 flex-1 min-w-[50px] text-center text-[11px] font-mono font-semibold uppercase px-1.5 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
                                 />
                                 <span className="font-mono font-bold text-xs text-muted-foreground select-none shrink-0">-</span>
                                 <Input
@@ -594,27 +601,27 @@ const ResumenCarrito = ({
                                     }}
                                     placeholder="XXXX"
                                     aria-label="Últimos 4 caracteres del código"
-                                    className="h-7 w-14 shrink-0 text-center text-[11px] font-mono font-bold uppercase px-1 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
+                                    className="h-7 w-12 shrink-0 text-center text-[11px] font-mono font-bold uppercase px-1 bg-background/80 border-border/60 rounded-lg focus-visible:ring-1 focus-visible:ring-[#C5A880]"
                                 />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    disabled={
+                                        isValidatingReferral ||
+                                        referralPrefixPart.trim().length !== 4 ||
+                                        referralNamePart.trim().length < 2 ||
+                                        referralSuffixPart.trim().length !== 4
+                                    }
+                                    onClick={handleTriggerReferralValidation}
+                                    className="h-7 px-2.5 sm:px-3 text-[10px] font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black rounded-lg shrink-0 ml-0.5"
+                                >
+                                    {isValidatingReferral ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        'Validar'
+                                    )}
+                                </Button>
                             </div>
-                            <Button
-                                type="button"
-                                size="sm"
-                                disabled={
-                                    isValidatingReferral ||
-                                    referralPrefixPart.trim().length !== 4 ||
-                                    referralNamePart.trim().length < 2 ||
-                                    referralSuffixPart.trim().length !== 4
-                                }
-                                onClick={handleTriggerReferralValidation}
-                                className="h-7 px-2.5 text-[10px] font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black rounded-lg shrink-0"
-                            >
-                                {isValidatingReferral ? (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                    'Validar'
-                                )}
-                            </Button>
                         </div>
                         {referralError && (
                             <p className="text-[11px] text-red-400 font-medium px-1 leading-snug">

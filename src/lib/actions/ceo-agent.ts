@@ -129,8 +129,8 @@ export async function getCeoExecutiveDashboardSnapshot(idToken: string) {
     hasCustomMasterPin: Boolean(securityDoc.exists && securityDoc.data()?.pinHash),
     mesActualNombre: `${MONTH_NAMES_ES[currentMonthIdx].toUpperCase()} ${currentYear}`,
     mesAnteriorNombre: `${MONTH_NAMES_ES[prevDate.getMonth()].toUpperCase()} ${prevDate.getFullYear()}`,
-    finanzasMesActual,
-    finanzasMesAnterior,
+    finanzasMesActual: JSON.parse(JSON.stringify(finanzasMesActual)),
+    finanzasMesAnterior: JSON.parse(JSON.stringify(finanzasMesAnterior)),
     radarOperativo: {
       ventasEliminadas15Dias,
       quejasPendientesCount,

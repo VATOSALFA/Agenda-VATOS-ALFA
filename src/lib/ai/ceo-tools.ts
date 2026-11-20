@@ -327,7 +327,17 @@ export async function computeFinancialStatementForRange(
       utilidadNetaTotalConsolidada: round2(utilidadNetaTotalConsolidada),
       margenNetoPorcentaje: round2(margenNetoPorcentaje),
     },
-    declaracionFiscalResico: monthlyDocData?.declaracion_fiscal || null,
+    declaracionFiscalResico: monthlyDocData?.declaracion_fiscal
+      ? JSON.parse(JSON.stringify(monthlyDocData.declaracion_fiscal, (_k, v) => {
+          if (v && typeof v === 'object' && typeof v.toDate === 'function') {
+            return v.toDate().toISOString();
+          }
+          if (v && typeof v === 'object' && typeof v._seconds === 'number') {
+            return new Date(v._seconds * 1000).toISOString();
+          }
+          return v;
+        }))
+      : null,
     rendimientoPorBarbero: Object.values(barberMetrics)
       .filter((b) => b.serviciosRealizados > 0 || b.propinasRecibidas > 0)
       .map((b) => ({

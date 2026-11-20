@@ -21,8 +21,81 @@ export function PwaUpdateBanner() {
     // Determinar si es una página pública (landing page, reservas públicas, etc.)
     const isPublicPage = pathname === '/' || pathname.startsWith('/reservar') || pathname === '/privacidad' || pathname === '/terminos' || pathname.startsWith('/promociones/');
 
+    // Auto-recuperación ante chunks obsoletos (404 / MIME text/plain tras nuevo despliegue)
+    useEffect(() => {
+        if (typeof window === 'undefined' || process.env.NODE_ENV === 'development') return;
+
+        const RELOAD_GUARD_KEY = 'vatos_alfa_chunk_reload_ts';
+        const tryRecoverStaleChunks = async () => {
+            try {
+                const lastReload = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) || '0');
+                if (Date.now() - lastReload < 30000) return;
+                sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map((r) => r.unregister()));
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((key) => caches.delete(key)));
+                }
+            } catch (_) {
+                // Ignore cleanup errors
+            }
+            window.location.reload();
+        };
+
+        const handleResourceOrChunkError = (event: ErrorEvent) => {
+            const target = event.target as HTMLElement | null;
+            const src =
+                (target as HTMLScriptElement | null)?.src ||
+                (target as HTMLLinkElement | null)?.href ||
+                '';
+            const msg = String(event.message || '');
+            const isStaleNextAsset =
+                src.includes('/_next/static/') ||
+                msg.includes('ChunkLoadError') ||
+                msg.includes('Loading chunk');
+            if (isStaleNextAsset) {
+                tryRecoverStaleChunks();
+            }
+        };
+
+        const handlePromiseRejection = (event: PromiseRejectionEvent) => {
+            const reasonMsg = String((event.reason && (event.reason.message || event.reason)) || '');
+            if (
+                reasonMsg.includes('ChunkLoadError') ||
+                reasonMsg.includes('Loading chunk') ||
+                reasonMsg.includes('Failed to fetch dynamically imported module')
+            ) {
+                tryRecoverStaleChunks();
+            }
+        };
+
+        window.addEventListener('error', handleResourceOrChunkError, true);
+        window.addEventListener('unhandledrejection', handlePromiseRejection);
+        return () => {
+            window.removeEventListener('error', handleResourceOrChunkError, true);
+            window.removeEventListener('unhandledrejection', handlePromiseRejection);
+        };
+    }, []);
+
     useEffect(() => {
         if (typeof window === 'undefined' || isPublicPage || process.env.NODE_ENV === 'development') return;
+
+        const clearSilentCaches = async () => {
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map((r) => r.update().catch(() => {})));
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map((key) => caches.delete(key)));
+                }
+            } catch (_) {}
+        };
 
         const checkVersion = async () => {
             try {
@@ -30,11 +103,15 @@ export function PwaUpdateBanner() {
                 const res = await fetch(`/version.json?t=${Date.now()}`);
                 if (!res.ok) return;
                 const data: UpdateInfo = await res.json();
-                if ((data as any).silent || (data as any).showModal === false) {
-                    return;
-                }
                 const serverVersion = data.version;
                 const localVersion = process.env.NEXT_PUBLIC_BUILD_VERSION;
+
+                if ((data as any).silent || (data as any).showModal === false) {
+                    if (serverVersion && localVersion && serverVersion !== localVersion) {
+                        await clearSilentCaches();
+                    }
+                    return;
+                }
 
                 if (serverVersion && localVersion && serverVersion !== localVersion) {
                     setUpdateInfo(data);

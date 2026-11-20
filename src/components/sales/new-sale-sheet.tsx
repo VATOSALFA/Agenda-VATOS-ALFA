@@ -77,6 +77,8 @@ import {
     calculateJuntosMinPurchase,
     calculateJuntosRewardCoins,
     JUNTOS_REWARD_COINS_PER_PERSON,
+    formatJuntosDaysEs,
+    formatJuntosHour12,
     evaluateClientAlfaTier,
     calculatePaseAlfaStatsFromSales,
     evaluatePaseAlfaStampsForSale,
@@ -653,7 +655,7 @@ const ResumenCarrito = ({
                                 {appliedBenefit.isReferralBenefit
                                     ? (appliedBenefit.isReferralBlocked ? '⛔ Invitación Bloqueada' : `Invita a un Amigo (${REFERRAL_DISCOUNT_PERCENT}% Desc.)`)
                                     : appliedBenefit.isJuntosBenefit
-                                    ? 'JUNTOS ES MEJOR (+400 Coins c/u)'
+                                    ? `JUNTOS ES MEJOR (+${Number(juntosConfig?.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON} Coins c/u)`
                                     : appliedBenefit.isFreeCutBlocked
                                     ? '⛔ Corte Gratis No Aplicable'
                                     : (appliedBenefit.benefitTitle || 'Beneficio Alfa Aplicado')}
@@ -692,7 +694,7 @@ const ResumenCarrito = ({
                                             ? `✓ Grupo con App (1 Ticket · ${1 + (appliedBenefit.companions?.length || 0)} participantes)`
                                             : appliedBenefit.juntosMode === 'companions_separate_tickets'
                                             ? '✓ Grupo con App (Ticket Individual Verificado)'
-                                            : '✓ Acompañantes menores sin app (Lun-Mié 10:00 a 14:00 hrs)'}
+                                            : `✓ Acompañantes menores sin app (${formatJuntosDaysEs(juntosConfig?.dias_semana)} ${formatJuntosHour12(juntosConfig?.hora_inicio)} a ${formatJuntosHour12(juntosConfig?.hora_fin)})`}
                                     </p>
                                 </div>
                             ) : appliedBenefit.folio ? (
@@ -759,7 +761,7 @@ const ResumenCarrito = ({
                                             Hijos menores sin app:
                                         </p>
                                         <p className="text-[10px] text-muted-foreground leading-tight font-sans">
-                                            +400 Alfa Coins c/u (sin límite de hijos)
+                                            +{juntosCoinsPerPerson} Alfa Coins c/u (sin límite de hijos)
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-1.5 shrink-0 bg-muted/40 p-1 rounded-lg border border-border/60">
@@ -790,12 +792,12 @@ const ResumenCarrito = ({
                             {mode === 'companions_single_ticket' && companionsList.length > 0 && (
                                 <div className="bg-black/20 p-2 rounded-lg border border-[#C5A880]/15 space-y-1">
                                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider font-sans">
-                                        Acompañantes verificados (+400 Coins a cada cuenta):
+                                        Acompañantes verificados (+{juntosCoinsPerPerson} Coins a cada cuenta):
                                     </p>
                                     {companionsList.map((comp: any) => (
                                         <div key={comp.id} className="flex items-center justify-between text-[11px] font-sans">
                                             <span className="text-foreground font-medium truncate">{comp.name}</span>
-                                            <span className="text-[#C5A880] font-semibold shrink-0">+400 Coins</span>
+                                            <span className="text-[#C5A880] font-semibold shrink-0">+{juntosCoinsPerPerson} Coins</span>
                                         </div>
                                     ))}
                                 </div>
@@ -818,9 +820,9 @@ const ResumenCarrito = ({
                                         : !isAmountEligible
                                         ? `⚠️ Falta $${formatMoney(Math.max(0, requiredTotal - effectiveMoneyPaid))} MXN en dinero real (sin AlfaCoins) para alcanzar $${formatMoney(requiredTotal)} MXN.`
                                         : mode === 'companions_single_ticket'
-                                        ? `✓ Requisitos cubiertos: se abonarán +400 Alfa Coins al titular y +400 a cada acompañante al cobrar.`
+                                        ? `✓ Requisitos cubiertos: se abonarán +${juntosCoinsPerPerson} Alfa Coins al titular y +${juntosCoinsPerPerson} a cada acompañante al cobrar.`
                                         : mode === 'companions_separate_tickets'
-                                        ? `✓ Requisitos cubiertos: pago individual validado. Los +400 Alfa Coins de cada integrante se acreditarán al completar el pago de todo el grupo hoy.`
+                                        ? `✓ Requisitos cubiertos: pago individual validado. Los +${juntosCoinsPerPerson} Alfa Coins de cada integrante se acreditarán al completar el pago de todo el grupo hoy.`
                                         : `✓ Requisitos cubiertos: se abonarán +${totalReward} Alfa Coins al titular (${participantsInTicket} participantes) al cobrar.`}
                                 </p>
                             </div>
@@ -1951,6 +1953,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const grpFolio = `VA-JUNTOS-GRP-${todayStr}-${selectedClient.id}`;
+        const juntosCoins = Number(juntosConfig?.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
 
         getDoc(doc(db, 'canjes_beneficios', grpFolio))
             .then(snap => {
@@ -1968,20 +1971,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             juntosMode: 'companions_separate_tickets',
                             juntosGroupId: data.grupoId || undefined,
                             companions: grpMembers,
-                            rewardCoinsPerPerson: JUNTOS_REWARD_COINS_PER_PERSON,
+                            rewardCoinsPerPerson: juntosCoins,
                             isScheduleValid: true,
                             minorsCount: 0,
                         });
                         setJuntosMinorsCount(0);
                         toast({
                             title: '🤝 Grupo "Juntos es Mejor" Detectado',
-                            description: `${selectedClient.nombre} forma parte de un grupo verificado hoy. Al completar el pago de todo el grupo se acreditarán +${JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins a cada integrante.`,
+                            description: `${selectedClient.nombre} forma parte de un grupo verificado hoy. Al completar el pago de todo el grupo se acreditarán +${juntosCoins} Alfa Coins a cada integrante.`,
                         });
                     }
                 }
             })
             .catch(() => {});
-    }, [isOpen, db, selectedClient?.id, appliedBenefit, toast]);
+    }, [isOpen, db, selectedClient?.id, appliedBenefit, toast, juntosConfig?.coins_por_persona]);
 
     const handleRemoveAppliedBenefit = useCallback(() => {
         if (appliedBenefit?.isReferralBenefit) {
@@ -2711,31 +2714,77 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 loyaltySnapshot.juntos_mode = mode;
                 loyaltySnapshot.prev_ultimo_canje_juntos_fecha = String((selectedClient as any).ultimo_canje_juntos_fecha || '');
 
+                const creditJuntosBonusToMember = async (
+                    memberId: string,
+                    bonusAmount: number,
+                    mergeIntoExistingSaleReward: boolean
+                ) => {
+                    const cRef = doc(db, 'clientes', memberId);
+                    const cSnap = await getDoc(cRef);
+                    const cData: any = cSnap.exists() ? cSnap.data() : {};
+                    const prevCoins = Number(
+                        cData.alfaCoins ??
+                            cData.alfa_coins ??
+                            cData.puntos_lealtad ??
+                            cData.puntosLealtad ??
+                            cData.puntos ??
+                            0
+                    );
+                    const currStamps = Number(cData.cortes_acumulados ?? cData.cortesAcumulados ?? 0);
+                    const nowIso = new Date().toISOString();
+
+                    let nextPendingReward: Record<string, any>;
+                    if (
+                        mergeIntoExistingSaleReward &&
+                        cData.recompensa_pendiente &&
+                        cData.recompensa_pendiente.id === loyaltySnapshot.recompensa_pendiente_id
+                    ) {
+                        nextPendingReward = {
+                            ...cData.recompensa_pendiente,
+                            coins_ganadas: Number(cData.recompensa_pendiente.coins_ganadas || 0) + bonusAmount,
+                            coins_actuales: Number(cData.recompensa_pendiente.coins_actuales || prevCoins) + bonusAmount,
+                            juntos_bonus_coins: bonusAmount,
+                            fecha: nowIso,
+                        };
+                    } else {
+                        nextPendingReward = {
+                            id: `reward_juntos_${Date.now()}_${memberId.slice(-4)}`,
+                            tipo_recompensa: 'juntos_es_mejor',
+                            sello_agregado: false,
+                            sellos_ganados: 0,
+                            sellos_anteriores: currStamps,
+                            sellos_actuales: currStamps,
+                            meta_sellos: targetStampsConfig,
+                            corte_gratis_desbloqueado: Boolean(cData.corte_gratis_disponible),
+                            coins_ganadas: bonusAmount,
+                            coins_anteriores: prevCoins,
+                            coins_actuales: prevCoins + bonusAmount,
+                            fecha: nowIso,
+                        };
+                    }
+
+                    await updateDoc(cRef, {
+                        puntos: increment(bonusAmount),
+                        alfaCoins: increment(bonusAmount),
+                        alfa_coins: increment(bonusAmount),
+                        puntosLealtad: increment(bonusAmount),
+                        puntos_lealtad: increment(bonusAmount),
+                        ultimo_canje_juntos_fecha: todayStr,
+                        recompensa_pendiente: nextPendingReward,
+                    });
+                };
+
                 if (isMet) {
                     if (mode === 'companions_single_ticket' && companionsList.length > 0) {
                         // Acreditar al titular y a cada acompañante verificado en su propia cuenta
                         const titularCoins = juntosCoins;
-                        await updateDoc(doc(db, 'clientes', selectedClient.id), {
-                            puntos: increment(titularCoins),
-                            alfaCoins: increment(titularCoins),
-                            alfa_coins: increment(titularCoins),
-                            puntosLealtad: increment(titularCoins),
-                            puntos_lealtad: increment(titularCoins),
-                            ultimo_canje_juntos_fecha: todayStr,
-                        });
+                        await creditJuntosBonusToMember(selectedClient.id, titularCoins, true);
                         totalBonusCoinsCredited += titularCoins;
                         loyaltySnapshot.juntos_titular_coins_awarded = titularCoins;
 
                         for (const comp of companionsList) {
                             if (comp?.id && comp.id !== selectedClient.id) {
-                                await updateDoc(doc(db, 'clientes', comp.id), {
-                                    puntos: increment(juntosCoins),
-                                    alfaCoins: increment(juntosCoins),
-                                    alfa_coins: increment(juntosCoins),
-                                    puntosLealtad: increment(juntosCoins),
-                                    puntos_lealtad: increment(juntosCoins),
-                                    ultimo_canje_juntos_fecha: todayStr,
-                                });
+                                await creditJuntosBonusToMember(comp.id, juntosCoins, false);
                                 totalBonusCoinsCredited += juntosCoins;
                                 companionsAwardedForSnapshot.push({
                                     id: comp.id,
@@ -2747,6 +2796,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         folio: comp.folio,
                                         estado: 'canjeado',
                                         utilizado_en_venta: true,
+                                        pagado: true,
                                         fecha_aplicacion: Timestamp.now(),
                                         fecha_canje_dia: todayStr,
                                         clienteId: comp.id,
@@ -2768,14 +2818,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     } else if (mode === 'companions_separate_tickets') {
                         // Cobro separado en grupo: si retener_coins_tickets_separados es false, acreditar al instante; si es true (default), esperar a que TODOS paguen hoy
                         if (juntosConfig?.retener_coins_tickets_separados === false) {
-                            await updateDoc(doc(db, 'clientes', selectedClient.id), {
-                                puntos: increment(juntosCoins),
-                                alfaCoins: increment(juntosCoins),
-                                alfa_coins: increment(juntosCoins),
-                                puntosLealtad: increment(juntosCoins),
-                                puntos_lealtad: increment(juntosCoins),
-                                ultimo_canje_juntos_fecha: todayStr,
-                            });
+                            await creditJuntosBonusToMember(selectedClient.id, juntosCoins, true);
                             totalBonusCoinsCredited = juntosCoins;
                             loyaltySnapshot.juntos_titular_coins_awarded = juntosCoins;
 
@@ -2792,6 +2835,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 fecha_pago: Timestamp.now(),
                                 fecha_canje_dia: todayStr,
                                 totalVenta: total,
+                                ...(finalizedSaleId ? { ventaId: finalizedSaleId } : {}),
                             }, { merge: true });
 
                             const myGrpSnap = await getDoc(doc(db, 'canjes_beneficios', myGrpDocId));
@@ -2830,16 +2874,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             } else {
                                 for (const member of memberSnaps) {
                                     if (member.data?.recompensaAcreditada) continue;
-                                    await updateDoc(doc(db, 'clientes', member.id), {
-                                        puntos: increment(juntosCoins),
-                                        alfaCoins: increment(juntosCoins),
-                                        alfa_coins: increment(juntosCoins),
-                                        puntosLealtad: increment(juntosCoins),
-                                        puntos_lealtad: increment(juntosCoins),
-                                        ultimo_canje_juntos_fecha: todayStr,
-                                    });
-                                    await setDoc(doc(db, 'canjes_beneficios', member.docId), {
-                                        folio: member.docId,
+                                    const isCurrentSaleClient = member.id === selectedClient.id;
+                                    await creditJuntosBonusToMember(member.id, juntosCoins, isCurrentSaleClient);
+
+                                    const completedPayload = {
                                         estado: 'canjeado',
                                         utilizado_en_venta: true,
                                         pagado: true,
@@ -2847,10 +2885,50 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         fecha_canje_dia: todayStr,
                                         rewardCoins: juntosCoins,
                                         recompensaAcreditada: true,
+                                    };
+                                    await setDoc(doc(db, 'canjes_beneficios', member.docId), {
+                                        folio: member.docId,
+                                        ...completedPayload,
                                     }, { merge: true });
 
+                                    // Quemar también el folio original del QR del miembro para evitar reuso
+                                    const origFolio = member.data?.originalFolio;
+                                    if (origFolio && origFolio !== member.docId) {
+                                        await setDoc(doc(db, 'canjes_beneficios', origFolio), {
+                                            folio: origFolio,
+                                            clienteId: member.id,
+                                            clienteNombre: member.nombre,
+                                            benefitId: 'juntos_es_mejor',
+                                            benefitTitle: 'JUNTOS ES MEJOR',
+                                            isJuntosBenefit: true,
+                                            ...completedPayload,
+                                        }, { merge: true });
+                                    }
+
+                                    // Si este integrante pagó previamente antes de cerrar el grupo (caso mixto), actualizar su venta previa para permitir reversión
+                                    if (!isCurrentSaleClient && member.data?.ventaId) {
+                                        try {
+                                            const prevSaleRef = doc(db, 'ventas', member.data.ventaId);
+                                            const prevSaleSnap = await getDoc(prevSaleRef);
+                                            if (prevSaleSnap.exists()) {
+                                                const prevLoyalty = prevSaleSnap.data()?.lealtad_aplicada || {};
+                                                await updateDoc(prevSaleRef, {
+                                                    beneficio_aplicado: 'JUNTOS ES MEJOR',
+                                                    beneficio_folio: member.docId,
+                                                    lealtad_aplicada: {
+                                                        ...prevLoyalty,
+                                                        is_juntos_applied: true,
+                                                        juntos_mode: 'companions_separate_tickets',
+                                                        beneficio_folio: member.docId,
+                                                        juntos_titular_coins_awarded: juntosCoins,
+                                                    },
+                                                });
+                                            }
+                                        } catch (_) {}
+                                    }
+
                                     totalBonusCoinsCredited += juntosCoins;
-                                    if (member.id === selectedClient.id) {
+                                    if (isCurrentSaleClient) {
                                         loyaltySnapshot.juntos_titular_coins_awarded = juntosCoins;
                                     } else {
                                         companionsAwardedForSnapshot.push({
@@ -2873,14 +2951,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     } else {
                         // Modalidad Hijos Menores sin App: juntosCoins * (1 + N) todo a la cuenta del papá/mamá
                         const bonusCoins = juntosCoins * (1 + Math.max(0, countMinors));
-                        await updateDoc(doc(db, 'clientes', selectedClient.id), {
-                            puntos: increment(bonusCoins),
-                            alfaCoins: increment(bonusCoins),
-                            alfa_coins: increment(bonusCoins),
-                            puntosLealtad: increment(bonusCoins),
-                            puntos_lealtad: increment(bonusCoins),
-                            ultimo_canje_juntos_fecha: todayStr,
-                        });
+                        await creditJuntosBonusToMember(selectedClient.id, bonusCoins, true);
                         totalBonusCoinsCredited = bonusCoins;
                         loyaltySnapshot.juntos_titular_coins_awarded = bonusCoins;
 

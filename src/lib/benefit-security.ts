@@ -1072,6 +1072,156 @@ export function calculateJuntosRewardCoins(minorsCount: number = 0): number {
   return JUNTOS_REWARD_COINS_PER_PERSON * (1 + safeCount);
 }
 
+export interface TodayQualifyingSaleInfo {
+  saleId: string;
+  realMoneyPaid: number;
+  servicesCount: number;
+  createdAtIso: string;
+  reservationId?: string;
+}
+
+export interface ClientTodayJuntosStatus {
+  hasPaidToday: boolean;
+  meetsIndividualMin: boolean;
+  totalQualifyingMoney: number;
+  totalQualifyingServices: number;
+  qualifyingSales: TodayQualifyingSaleInfo[];
+  primarySaleId?: string;
+  ineligibleSalesNote?: string;
+}
+
+function toLocalYYYYMMDD(rawTs: any): string {
+  if (!rawTs) return '';
+  let d: Date | null = null;
+  if (rawTs instanceof Date) {
+    d = rawTs;
+  } else if (typeof rawTs.toDate === 'function') {
+    d = rawTs.toDate();
+  } else if (typeof rawTs._seconds === 'number') {
+    d = new Date(rawTs._seconds * 1000);
+  } else if (typeof rawTs.seconds === 'number') {
+    d = new Date(rawTs.seconds * 1000);
+  } else if (typeof rawTs === 'string') {
+    const parsed = new Date(rawTs);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+  if (!d || isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function toIsoStringSafe(rawTs: any): string {
+  if (!rawTs) return new Date().toISOString();
+  let d: Date | null = null;
+  if (rawTs instanceof Date) d = rawTs;
+  else if (typeof rawTs.toDate === 'function') d = rawTs.toDate();
+  else if (typeof rawTs._seconds === 'number') d = new Date(rawTs._seconds * 1000);
+  else if (typeof rawTs.seconds === 'number') d = new Date(rawTs.seconds * 1000);
+  else if (typeof rawTs === 'string') {
+    const parsed = new Date(rawTs);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+  return d && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+}
+
+/**
+ * Evalúa las ventas reales registradas hoy para un cliente y determina si cumplen
+ * el consumo mínimo en dinero real y sin cupones incompatibles para "Juntos es Mejor".
+ */
+export function evaluateClientSalesForJuntosToday(
+  salesDocs: any[],
+  todayStr: string,
+  unitMinPrice: number
+): ClientTodayJuntosStatus {
+  const qualifyingSales: TodayQualifyingSaleInfo[] = [];
+  let totalQualifyingMoney = 0;
+  let totalQualifyingServices = 0;
+  let hasAnyPaidToday = false;
+  let ineligibleNote = '';
+
+  const safeUnitMin = Math.max(1, Number(unitMinPrice) || 140);
+
+  for (const s of salesDocs || []) {
+    const statusLower = String(s.status || '').toLowerCase().trim();
+    const pagoLower = String(s.pago_estado || '').toLowerCase().trim();
+    if (statusLower === 'cancelled' || statusLower === 'cancelada' || statusLower === 'eliminada' || pagoLower === 'cancelado') {
+      continue;
+    }
+
+    const lealtadFecha = String(s.lealtad_aplicada?.fecha_dia || '').trim();
+    const saleDay = lealtadFecha || toLocalYYYYMMDD(s.fecha_hora_venta || s.fecha_pago || s.creado_en);
+    if (saleDay !== todayStr) continue;
+
+    hasAnyPaidToday = true;
+
+    if (s.lealtad_aplicada?.is_juntos_applied === true) {
+      if (!ineligibleNote) ineligibleNote = 'Una venta de hoy ya fue utilizada en "Juntos es Mejor".';
+      continue;
+    }
+
+    const beneficioTitle = String(s.beneficio_aplicado || '').trim().toLowerCase();
+    const isIncompatibleBenefit =
+      s.lealtad_aplicada?.corte_gratis_canjeado === true ||
+      Boolean(s.codigo_promocion) ||
+      Number(s.descuento_promocion || 0) > 0 ||
+      (Boolean(beneficioTitle) && !beneficioTitle.includes('juntos'));
+
+    if (isIncompatibleBenefit) {
+      if (!ineligibleNote) ineligibleNote = 'La venta de hoy ya incluye otro cupón o cortesía no acumulable.';
+      continue;
+    }
+
+    const rawRealPaid =
+      s.monto_pagado_real !== undefined && s.monto_pagado_real !== null
+        ? Number(s.monto_pagado_real)
+        : Number(s.total || 0) + Number(s.anticipoPagado || 0);
+    const realMoneyPaid = Math.round(rawRealPaid * 100) / 100;
+
+    const itemsArr = Array.isArray(s.items) ? s.items : [];
+    const servicesCount = itemsArr.reduce(
+      (acc: number, it: any) => acc + (it?.tipo === 'servicio' ? Number(it?.cantidad || 1) : 0),
+      0
+    );
+
+    const usedAlfaCoins = Number(s.descuento_alfacoins || 0) > 0 || Number(s.alfacoins_canjeados || 0) > 0;
+    if (usedAlfaCoins && realMoneyPaid < safeUnitMin) {
+      if (!ineligibleNote) {
+        ineligibleNote = `La venta de hoy utilizó Alfa Coins y el pago efectivo ($${realMoneyPaid.toFixed(2)}) no cubre el mínimo de $${safeUnitMin.toFixed(2)} MXN.`;
+      }
+      continue;
+    }
+
+    if (realMoneyPaid > 0 && servicesCount > 0) {
+      qualifyingSales.push({
+        saleId: String(s.id || ''),
+        realMoneyPaid,
+        servicesCount,
+        createdAtIso: toIsoStringSafe(s.fecha_hora_venta || s.fecha_pago || s.creado_en),
+        reservationId: s.reservationId || undefined,
+      });
+      totalQualifyingMoney += realMoneyPaid;
+      totalQualifyingServices += servicesCount;
+    } else if (!ineligibleNote) {
+      ineligibleNote = 'La venta de hoy no registra al menos 1 servicio pagado en dinero real.';
+    }
+  }
+
+  totalQualifyingMoney = Math.round(totalQualifyingMoney * 100) / 100;
+  const sortedByAmount = [...qualifyingSales].sort((a, b) => b.realMoneyPaid - a.realMoneyPaid);
+
+  return {
+    hasPaidToday: hasAnyPaidToday,
+    meetsIndividualMin: totalQualifyingMoney >= safeUnitMin && totalQualifyingServices >= 1,
+    totalQualifyingMoney,
+    totalQualifyingServices,
+    qualifyingSales,
+    primarySaleId: sortedByAmount[0]?.saleId || undefined,
+    ineligibleSalesNote: qualifyingSales.length === 0 ? ineligibleNote || undefined : undefined,
+  };
+}
+
 export function normalizeReferralNamePrefix(rawName?: string): string {
   if (!rawName) return 'VIP';
   const cleaned = rawName
@@ -2283,6 +2433,9 @@ export async function revertSaleLoyaltyAndBenefits(
     if (isJuntos && clientData.ultimo_canje_juntos_fecha === saleDayStr) {
       clientUpdate.ultimo_canje_juntos_fecha = snap?.prev_ultimo_canje_juntos_fecha || '';
     }
+    if (isJuntos && clientData.recompensa_pendiente?.tipo_recompensa === 'juntos_es_mejor') {
+      clientUpdate.recompensa_pendiente = null;
+    }
 
     // Guardar actualización consolidada en el documento del cliente
     await updateDoc(doc(db, 'clientes', clientId), clientUpdate);
@@ -2369,6 +2522,9 @@ export async function revertSaleLoyaltyAndBenefits(
             };
             if (compData.ultimo_canje_juntos_fecha === saleDayStr) {
               compUpdate.ultimo_canje_juntos_fecha = '';
+            }
+            if (compData.recompensa_pendiente?.tipo_recompensa === 'juntos_es_mejor') {
+              compUpdate.recompensa_pendiente = null;
             }
             await updateDoc(compRef, compUpdate);
           }

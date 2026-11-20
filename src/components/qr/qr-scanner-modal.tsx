@@ -83,6 +83,10 @@ import {
   evaluateClientAlfaTier,
   MIN_BIRTHDAY_ELIGIBLE_VISITS,
   countEligibleHaircutVisitsFromSales,
+  evaluateClientSalesForJuntosToday,
+  formatJuntosDaysEs,
+  formatJuntosHour12,
+  type ClientTodayJuntosStatus,
 } from '@/lib/benefit-security';
 
 interface QRScannerModalProps {
@@ -160,8 +164,23 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const [juntosOption, setJuntosOption] = useState<'minors' | 'companions_app' | null>(null);
   const [juntosMinorsCount, setJuntosMinorsCount] = useState<number>(1);
   const [juntosCompanions, setJuntosCompanions] = useState<
-    Array<{ id: string; nombre: string; telefono?: string; folio?: string }>
+    Array<{
+      id: string;
+      nombre: string;
+      telefono?: string;
+      folio?: string;
+      todaySales?: ClientTodayJuntosStatus | null;
+      todayReservation?: any | null;
+      clientObj?: Client;
+    }>
   >([]);
+  const [titularTodaySales, setTitularTodaySales] = useState<ClientTodayJuntosStatus | null>(null);
+  const [juntosCompletedSummary, setJuntosCompletedSummary] = useState<{
+    coinsPerPerson: number;
+    totalCoins: number;
+    mode: 'minors' | 'companions';
+    members: Array<{ nombre: string; coins: number }>;
+  } | null>(null);
   const [isScanningCompanion, setIsScanningCompanion] = useState<boolean>(false);
   const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
   const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
@@ -245,6 +264,165 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const scannerRef = useRef<any>(null);
   const scannerContainerId = 'vatos-qr-reader-element';
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isProcessingRef = useRef<boolean>(false);
+  const lastScanLockRef = useRef<{ text: string; ts: number }>({ text: '', ts: 0 });
+  const handleScanTextRef = useRef<(decodedText: string) => void>(() => {});
+  const juntosConfigRef = useRef<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
+
+  useEffect(() => {
+    juntosConfigRef.current = juntosConfig;
+  }, [juntosConfig]);
+
+  const getJuntosUnitMinPrice = useCallback(
+    (cfg: JuntosEsMejorConfig = juntosConfigRef.current) =>
+      cfg.consumo_minimo_tipo === 'monto_fijo'
+        ? Number(cfg.consumo_minimo_monto) || currentHaircutPrice || 140
+        : currentHaircutPrice || 140,
+    [currentHaircutPrice]
+  );
+
+  const buildPreloadedItemsFromRes = useCallback((resObj: any) => {
+    if (!resObj) return [];
+    if (Array.isArray(resObj.items) && resObj.items.length > 0) return resObj.items;
+    if (Array.isArray(resObj.servicios) && resObj.servicios.length > 0) {
+      return resObj.servicios.map((s: any) => ({
+        id: s.id,
+        nombre: s.nombre,
+        precio: s.precio,
+        cantidad: s.cantidad || 1,
+        tipo: 'servicio',
+        barbero_id: resObj.barbero_id || resObj.barberoId || '',
+      }));
+    }
+    return [];
+  }, []);
+
+  const fetchClientTodayJuntosSales = useCallback(
+    async (clientId: string, unitMinPrice: number): Promise<ClientTodayJuntosStatus> => {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const emptyStatus: ClientTodayJuntosStatus = {
+        hasPaidToday: false,
+        meetsIndividualMin: false,
+        totalQualifyingMoney: 0,
+        totalQualifyingServices: 0,
+        qualifyingSales: [],
+      };
+      if (!db || !clientId) return emptyStatus;
+      try {
+        const snap = await getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', clientId)));
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        return evaluateClientSalesForJuntosToday(docs, todayStr, unitMinPrice);
+      } catch (err) {
+        console.warn('Error consultando ventas de hoy para Juntos es Mejor:', err);
+        return emptyStatus;
+      }
+    },
+    []
+  );
+
+  const findClientAndTodayReservations = useCallback(
+    async (opts: { clientId?: string; phone?: string; clientNumber?: string }) => {
+      if (!db) return { client: null as Client | null, unpaidRes: null as any, anyRes: null as any };
+      let found: Client | null = null;
+      if (opts.clientId) {
+        const snap = await getDoc(doc(db, 'clientes', opts.clientId));
+        if (snap.exists()) found = { id: snap.id, ...snap.data() } as Client;
+      }
+      if (!found && opts.phone) {
+        const cleanPhone = opts.phone.replace(/\D/g, '').slice(-10);
+        if (cleanPhone) {
+          const snapPhone = await getDocs(query(collection(db, 'clientes'), where('telefono', '==', cleanPhone)));
+          if (!snapPhone.empty) found = { id: snapPhone.docs[0].id, ...snapPhone.docs[0].data() } as Client;
+        }
+      }
+      if (!found && opts.clientNumber) {
+        const snapNumStr = await getDocs(query(collection(db, 'clientes'), where('numero_cliente', '==', opts.clientNumber)));
+        if (!snapNumStr.empty) {
+          found = { id: snapNumStr.docs[0].id, ...snapNumStr.docs[0].data() } as Client;
+        } else {
+          const snapNumInt = await getDocs(query(collection(db, 'clientes'), where('numero_cliente', '==', Number(opts.clientNumber))));
+          if (!snapNumInt.empty) found = { id: snapNumInt.docs[0].id, ...snapNumInt.docs[0].data() } as Client;
+        }
+      }
+
+      let unpaidRes: any = null;
+      let anyRes: any = null;
+      if (found) {
+        try {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const snapRes = await getDocs(query(collection(db, 'reservas'), where('fecha', '==', todayStr)));
+          const excludedStatuses = ['cancelado', 'cancelada', 'no asiste', 'no_asiste'];
+          const cleanClientPhone = (found.telefono || '').replace(/\D/g, '').slice(-10);
+          const clientMatches = snapRes.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter((r: any) => {
+              const st = String(r.estado || '').toLowerCase().trim();
+              if (excludedStatuses.includes(st)) return false;
+              const resPhone = String(r.telefono || r.cliente_telefono || '').replace(/\D/g, '').slice(-10);
+              return r.cliente_id === found?.id || (cleanClientPhone && resPhone === cleanClientPhone);
+            });
+          anyRes = clientMatches[0] || null;
+          unpaidRes =
+            clientMatches.find((r: any) => {
+              const st = String(r.estado || '').toLowerCase().trim();
+              return st !== 'completado' && st !== 'finalizado' && r.pago_estado !== 'Pagado';
+            }) || null;
+        } catch (e) {
+          console.warn('Error buscando cita de hoy:', e);
+        }
+      }
+      return { client: found, unpaidRes, anyRes };
+    },
+    []
+  );
+
+  const checkClientJuntosPeriodUsed = useCallback(
+    async (
+      clientId: string,
+      lastJuntosDate: string | undefined,
+      cfg: JuntosEsMejorConfig = juntosConfigRef.current
+    ): Promise<{ used: boolean; usedDate?: string; freqLabel: string }> => {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const freqLabel = cfg.limite_frecuencia === 'diario' ? 'hoy' : cfg.limite_frecuencia === 'mensual' ? 'este mes' : 'esta semana';
+      if (isSameJuntosPeriod(lastJuntosDate, todayStr, cfg.limite_frecuencia)) {
+        return { used: true, usedDate: lastJuntosDate, freqLabel };
+      }
+      if (!db || !clientId) return { used: false, freqLabel };
+      try {
+        const snapCanjes = await getDocs(query(collection(db, 'canjes_beneficios'), where('clienteId', '==', clientId)));
+        let foundDate = '';
+        const foundUsed = snapCanjes.docs.some(dSnap => {
+          const d = dSnap.data();
+          if (d.estado !== 'canjeado') return false;
+          const isJuntosDoc =
+            d.benefitId === 'juntos_es_mejor' ||
+            d.isJuntosBenefit === true ||
+            (d.folio || '').startsWith('VA-JUNTOS');
+          if (!isJuntosDoc) return false;
+          let dStr = d.fecha_canje_dia || d.fechaStr || '';
+          if (!dStr) {
+            const dt = d.fechaCanje?.toDate
+              ? d.fechaCanje.toDate()
+              : d.canjeadoEn?.toDate
+              ? d.canjeadoEn.toDate()
+              : d.fecha_aplicacion?.toDate
+              ? d.fecha_aplicacion.toDate()
+              : null;
+            dStr = dt ? format(dt, 'yyyy-MM-dd') : '';
+          }
+          if (dStr && isSameJuntosPeriod(dStr, todayStr, cfg.limite_frecuencia)) {
+            foundDate = dStr;
+            return true;
+          }
+          return false;
+        });
+        return { used: foundUsed, usedDate: foundDate || undefined, freqLabel };
+      } catch {
+        return { used: false, freqLabel };
+      }
+    },
+    []
+  );
 
   // Iniciar / detener cámara
   const stopCamera = useCallback(async () => {
@@ -263,21 +441,32 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
   const handleScanText = useCallback(
     async (decodedText: string) => {
-      if (isProcessing) return;
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true;
       setIsProcessing(true);
+
+      // Pausar de inmediato el lector para evitar lecturas múltiples en frames consecutivos (tablet)
+      try {
+        if (scannerRef.current?.isScanning) {
+          scannerRef.current.pause(true);
+        }
+      } catch (_) {}
 
       try {
         let clientIdToSearch = '';
         let phoneToSearch = '';
         let clientNumberToSearch = '';
         let promoCodeToSearch = '';
+        let isOfficialAppQr = false;
         let detectedBenefit: any = null;
+        const activeJuntosCfg = juntosConfigRef.current;
 
         // Intentar parsear como JSON
         try {
           const parsed = JSON.parse(decodedText);
           if (parsed && typeof parsed === 'object') {
             if (parsed.type === 'VATOS_ALFA_BENEFIT_REDEMPTION' || parsed.benefitId) {
+              isOfficialAppQr = true;
               const rawFolio = parsed.folio || `VA-BNF-${Date.now().toString().slice(-6)}`;
               const isRefQR =
                 parsed.benefitId === 'invita_amigo' ||
@@ -290,7 +479,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 rawFolio.startsWith('VA-JUNTOS') ||
                 (parsed.benefitTitle || '').toLowerCase().includes('juntos');
 
-              const schedJuntos = isJuntosQR ? validateJuntosSchedule() : { isValid: true, reason: undefined };
+              const schedJuntos = isJuntosQR ? validateJuntosSchedule(new Date(), undefined, activeJuntosCfg) : { isValid: true, reason: undefined };
 
               detectedBenefit = {
                 folio: rawFolio,
@@ -304,7 +493,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 isReferralBenefit: isRefQR,
                 isJuntosBenefit: isJuntosQR,
                 referralCode: parsed.referralCode || '',
-                rewardCoins: isRefQR ? REFERRAL_HOST_REWARD_COINS : isJuntosQR ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
+                rewardCoins: isRefQR
+                  ? REFERRAL_HOST_REWARD_COINS
+                  : isJuntosQR
+                  ? (Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON)
+                  : undefined,
                 minPurchase: isRefQR ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
                 terminos: parsed.terminos || parsed.terms || '',
                 descripcion: parsed.descripcion || parsed.description || '',
@@ -318,6 +511,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               clientIdToSearch = parsed.clientId || '';
               phoneToSearch = parsed.phone || parsed.clientPhone || '';
             } else if (parsed.type === 'VATOS_ALFA_CLIENT_PASS') {
+              isOfficialAppQr = true;
               clientIdToSearch = parsed.clientId || '';
               phoneToSearch = parsed.phone || '';
             } else if (parsed.type === 'VATOS_ALFA_PROMO') {
@@ -332,10 +526,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           // No es JSON, puede ser formato compacto (VA:P: / VA:T: / VA:B:) o texto plano
           const clean = decodedText.trim();
           if (clean.startsWith('VA:P:')) {
+            isOfficialAppQr = true;
             clientIdToSearch = clean.slice(5).trim();
           } else if (clean.startsWith('VA:T:')) {
             phoneToSearch = clean.slice(5).trim();
           } else if (clean.startsWith('VA:B:')) {
+            isOfficialAppQr = true;
             const parts = clean.split(':');
             const bId = parts[2] || 'beneficio_alfa';
             const cId = parts[3] || '';
@@ -344,11 +540,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             const bRefCode = parts[6] || '';
             const isRefB = bId === 'invita_amigo';
             const isJuntosB = bId === 'juntos_es_mejor';
-            const schedJuntos = isJuntosB ? validateJuntosSchedule() : { isValid: true, reason: undefined };
+            const schedJuntos = isJuntosB ? validateJuntosSchedule(new Date(), undefined, activeJuntosCfg) : { isValid: true, reason: undefined };
 
             clientIdToSearch = cId;
             detectedBenefit = {
               folio: bFolio,
+              clientId: cId,
+              rawBenefitId: bId,
               benefitTitle:
                 bId === 'decimo_corte'
                   ? '10.° Corte Gratis'
@@ -364,7 +562,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               isJuntosBenefit: isJuntosB,
               referralCode: bRefCode,
               discount: isRefB ? REFERRAL_DISCOUNT_PERCENT : isJuntosB ? 0 : 100,
-              rewardCoins: isRefB ? REFERRAL_HOST_REWARD_COINS : isJuntosB ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
+              rewardCoins: isRefB
+                ? REFERRAL_HOST_REWARD_COINS
+                : isJuntosB
+                ? (Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON)
+                : undefined,
               minPurchase: isRefB ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
               signature: bSig,
               year: new Date().getFullYear(),
@@ -375,7 +577,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           } else if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-') || clean.startsWith('VA-JUNTOS-')) {
             const isRefFolio = clean.startsWith('VA-REF-');
             const isJuntosFolio = clean.startsWith('VA-JUNTOS-');
-            const schedJuntos = isJuntosFolio ? validateJuntosSchedule() : { isValid: true, reason: undefined };
+            const schedJuntos = isJuntosFolio ? validateJuntosSchedule(new Date(), undefined, activeJuntosCfg) : { isValid: true, reason: undefined };
 
             detectedBenefit = {
               folio: clean,
@@ -486,34 +688,21 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
         // MODO ESCANEO DE ACOMPAÑANTE CON APP ("JUNTOS ES MEJOR")
         if (isScanningCompanion && scannedBenefit?.isJuntosBenefit) {
-          let compClient: Client | null = null;
-          if (clientIdToSearch) {
-            const snap = await getDoc(doc(db, 'clientes', clientIdToSearch));
-            if (snap.exists()) {
-              compClient = { id: snap.id, ...snap.data() } as Client;
-            }
+          if (!isOfficialAppQr) {
+            playBeep(false);
+            toast({
+              variant: 'destructive',
+              title: '⛔ QR Oficial Requerido',
+              description: 'Escanea el código QR oficial de la App Móvil del acompañante (Beneficio Juntos es Mejor o Pase Alfa).',
+            });
+            return;
           }
-          if (!compClient && phoneToSearch) {
-            const cleanPhone = phoneToSearch.replace(/\D/g, '').slice(-10);
-            const qPhone = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
-            const snapPhone = await getDocs(qPhone);
-            if (!snapPhone.empty) {
-              compClient = { id: snapPhone.docs[0].id, ...snapPhone.docs[0].data() } as Client;
-            }
-          }
-          if (!compClient && clientNumberToSearch) {
-            const qNumStr = query(collection(db, 'clientes'), where('numero_cliente', '==', clientNumberToSearch));
-            const snapNumStr = await getDocs(qNumStr);
-            if (!snapNumStr.empty) {
-              compClient = { id: snapNumStr.docs[0].id, ...snapNumStr.docs[0].data() } as Client;
-            } else {
-              const qNumInt = query(collection(db, 'clientes'), where('numero_cliente', '==', Number(clientNumberToSearch)));
-              const snapNumInt = await getDocs(qNumInt);
-              if (!snapNumInt.empty) {
-                compClient = { id: snapNumInt.docs[0].id, ...snapNumInt.docs[0].data() } as Client;
-              }
-            }
-          }
+
+          const { client: compClient, unpaidRes: compUnpaidRes } = await findClientAndTodayReservations({
+            clientId: clientIdToSearch,
+            phone: phoneToSearch,
+            clientNumber: clientNumberToSearch,
+          });
 
           if (!compClient) {
             playBeep(false);
@@ -535,7 +724,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             return;
           }
 
-          if (juntosCompanions.some(c => c.id === compClient!.id)) {
+          if (juntosCompanions.some(c => c.id === compClient.id)) {
             playBeep(false);
             toast({
               variant: 'destructive',
@@ -567,27 +756,36 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           }
 
           // Verificar que el acompañante no haya canjeado ya en el periodo configurado "Juntos es Mejor"
-          const todayStr = format(new Date(), 'yyyy-MM-dd');
-          const compLastJuntos = (compClient as any).ultimo_canje_juntos_fecha;
-          const freqLabel = juntosConfig.limite_frecuencia === 'diario' ? 'hoy' : juntosConfig.limite_frecuencia === 'mensual' ? 'este mes' : 'esta semana';
-          if (isSameJuntosPeriod(compLastJuntos, todayStr, juntosConfig.limite_frecuencia)) {
+          const compPeriodCheck = await checkClientJuntosPeriodUsed(
+            compClient.id,
+            (compClient as any).ultimo_canje_juntos_fecha,
+            activeJuntosCfg
+          );
+          if (compPeriodCheck.used) {
             playBeep(false);
             toast({
               variant: 'destructive',
               title: '⛔ Límite de Frecuencia Alcanzado',
-              description: `${compClient.nombre} ya utilizó la promoción "Juntos es Mejor" ${freqLabel} (${compLastJuntos}).`,
+              description: `${compClient.nombre} ya utilizó la promoción "Juntos es Mejor" ${compPeriodCheck.freqLabel}${compPeriodCheck.usedDate ? ` (${compPeriodCheck.usedDate})` : ''}.`,
             });
             return;
           }
 
+          const unitMin = getJuntosUnitMinPrice(activeJuntosCfg);
+          const compSales = await fetchClientTodayJuntosSales(compClient.id, unitMin);
           const compFullName = `${compClient.nombre} ${compClient.apellido || ''}`.trim();
+          const rewardCoinsCfg = Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+
           setJuntosCompanions(prev => [
             ...prev,
             {
-              id: compClient!.id,
+              id: compClient.id,
               nombre: compFullName,
-              telefono: compClient!.telefono || '',
-              folio: detectedBenefit?.folio || `VA-JUNTOS-${compClient!.id.slice(0, 5).toUpperCase()}`,
+              telefono: compClient.telefono || '',
+              folio: detectedBenefit?.folio || `VA-JUNTOS-${compClient.id.slice(0, 5).toUpperCase()}`,
+              todaySales: compSales,
+              todayReservation: compUnpaidRes,
+              clientObj: compClient,
             },
           ]);
           setIsScanningCompanion(false);
@@ -595,7 +793,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           playBeep(true);
           toast({
             title: '✓ Acompañante Verificado',
-            description: `${compFullName} agregado al grupo (+${JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins).`,
+            description: compSales.meetsIndividualMin
+              ? `${compFullName} agregado (Ya pagó $${formatMoney(compSales.totalQualifyingMoney)} hoy ✓).`
+              : `${compFullName} agregado al grupo (+${rewardCoinsCfg} Alfa Coins).`,
           });
           return;
         }
@@ -604,6 +804,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         setJuntosOption(null);
         setJuntosMinorsCount(1);
         setJuntosCompanions([]);
+        setTitularTodaySales(null);
+        setJuntosCompletedSummary(null);
         setIsScanningCompanion(false);
 
         // Verificar si el folio del beneficio ya fue canjeado previamente
@@ -632,68 +834,17 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           }
         }
 
-        // 1. Buscar si es un Cliente
-        let foundClient: Client | null = null;
-
-        if (clientIdToSearch) {
-          const snap = await getDoc(doc(db, 'clientes', clientIdToSearch));
-          if (snap.exists()) {
-            foundClient = { id: snap.id, ...snap.data() } as Client;
-          }
-        }
-
-        if (!foundClient && phoneToSearch) {
-          const cleanPhone = phoneToSearch.replace(/\D/g, '').slice(-10);
-          const qPhone = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
-          const snapPhone = await getDocs(qPhone);
-          if (!snapPhone.empty) {
-            foundClient = { id: snapPhone.docs[0].id, ...snapPhone.docs[0].data() } as Client;
-          }
-        }
-
-        if (!foundClient && clientNumberToSearch) {
-          const qNumStr = query(collection(db, 'clientes'), where('numero_cliente', '==', clientNumberToSearch));
-          const snapNumStr = await getDocs(qNumStr);
-          if (!snapNumStr.empty) {
-            foundClient = { id: snapNumStr.docs[0].id, ...snapNumStr.docs[0].data() } as Client;
-          } else {
-            const qNumInt = query(collection(db, 'clientes'), where('numero_cliente', '==', Number(clientNumberToSearch)));
-            const snapNumInt = await getDocs(qNumInt);
-            if (!snapNumInt.empty) {
-              foundClient = { id: snapNumInt.docs[0].id, ...snapNumInt.docs[0].data() } as Client;
-            }
-          }
-        }
-
-        // Buscar cita de hoy del cliente antes de validar horarios de promociones
-        let clientResForToday: any = null;
-        if (foundClient) {
-          try {
-            const todayStr = format(new Date(), 'yyyy-MM-dd');
-            const qRes = query(
-              collection(db, 'reservas'),
-              where('fecha', '==', todayStr)
-            );
-            const snapRes = await getDocs(qRes);
-            const excludedStatuses = ['cancelado', 'cancelada', 'no asiste', 'no_asiste', 'completado', 'finalizado'];
-            const cleanClientPhone = (foundClient.telefono || '').replace(/\D/g, '').slice(-10);
-            clientResForToday =
-              snapRes.docs
-                .map(d => ({ id: d.id, ...d.data() }))
-                .find((r: any) => {
-                  const st = String(r.estado || '').toLowerCase().trim();
-                  if (excludedStatuses.includes(st)) return false;
-                  if (r.pago_estado === 'Pagado') return false;
-                  const resPhone = String(r.telefono || r.cliente_telefono || '').replace(/\D/g, '').slice(-10);
-                  return (
-                    r.cliente_id === foundClient?.id ||
-                    (cleanClientPhone && resPhone === cleanClientPhone)
-                  );
-                }) || null;
-          } catch (e) {
-            console.warn('Error buscando cita de hoy:', e);
-          }
-        }
+        // 1. Buscar si es un Cliente y sus citas de hoy (una sola consulta consolidada)
+        const {
+          client: resolvedClient,
+          unpaidRes: clientResForToday,
+          anyRes: clientAnyResToday,
+        } = await findClientAndTodayReservations({
+          clientId: clientIdToSearch,
+          phone: phoneToSearch,
+          clientNumber: clientNumberToSearch,
+        });
+        let foundClient: Client | null = resolvedClient;
         setTodayReservation(clientResForToday);
 
         if (detectedBenefit) {
@@ -736,8 +887,23 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               detectedBenefit.blockReason =
                 '⛔ CLIENTE NO ENCONTRADO: Este código QR no pertenece a ningún cliente registrado en el sistema oficial de VATOS ALFA.';
             } else if (!detectedBenefit.isBlocked) {
-              // 2. Validar día y horario oficial configurado desde Panel Pase Alfa
-              const schedResult = validateJuntosSchedule(new Date(), clientResForToday?.hora_inicio, juntosConfig);
+              const unitMin = getJuntosUnitMinPrice(activeJuntosCfg);
+              const titularSales = await fetchClientTodayJuntosSales(foundClient.id, unitMin);
+              setTitularTodaySales(titularSales);
+
+              // 2. Validar día y horario oficial configurado (por hora actual, hora de cita o venta pagada hoy)
+              let schedResult = validateJuntosSchedule(new Date(), clientAnyResToday?.hora_inicio, activeJuntosCfg);
+              if (!schedResult.isValid && titularSales.qualifyingSales.length > 0) {
+                const saleSchedResult = validateJuntosSchedule(
+                  new Date(titularSales.qualifyingSales[0].createdAtIso),
+                  clientAnyResToday?.hora_inicio,
+                  activeJuntosCfg
+                );
+                if (saleSchedResult.isValid) {
+                  schedResult = saleSchedResult;
+                }
+              }
+
               detectedBenefit.isScheduleValid = schedResult.isValid;
               detectedBenefit.scheduleWarning = schedResult.reason;
 
@@ -746,50 +912,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 detectedBenefit.blockReason = schedResult.reason;
               } else {
                 // 3. Validar Anti-Farming según frecuencia configurada (semanal / mensual / diario)
-                const todayStr = format(new Date(), 'yyyy-MM-dd');
-                const lastJuntosDate = (foundClient as any).ultimo_canje_juntos_fecha;
-                const freqText = juntosConfig.limite_frecuencia === 'diario' ? 'hoy' : juntosConfig.limite_frecuencia === 'mensual' ? 'este mes' : 'esta semana';
-                if (isSameJuntosPeriod(lastJuntosDate, todayStr, juntosConfig.limite_frecuencia)) {
+                const periodCheck = await checkClientJuntosPeriodUsed(
+                  foundClient.id,
+                  (foundClient as any).ultimo_canje_juntos_fecha,
+                  activeJuntosCfg
+                );
+                if (periodCheck.used) {
                   detectedBenefit.isBlocked = true;
-                  detectedBenefit.blockReason = `⛔ LÍMITE DE FRECUENCIA ALCANZADO: El cliente "${foundClient.nombre}" ya utilizó la promoción "Juntos es Mejor" ${freqText} (el ${lastJuntosDate}).`;
+                  detectedBenefit.blockReason = `⛔ LÍMITE DE FRECUENCIA ALCANZADO: "${foundClient.nombre}" ya utilizó la promoción "Juntos es Mejor" ${periodCheck.freqLabel}${periodCheck.usedDate ? ` (el ${periodCheck.usedDate})` : ''}.`;
                 } else {
-                  try {
-                    const qCanjesHoy = query(
-                      collection(db, 'canjes_beneficios'),
-                      where('clienteId', '==', foundClient.id)
-                    );
-                    const snapCanjesHoy = await getDocs(qCanjesHoy);
-                    let usedWeekDate = '';
-                    const usedThisPeriod = snapCanjesHoy.docs.some(dSnap => {
-                      const d = dSnap.data();
-                      if (d.estado !== 'canjeado') return false;
-                      const isJuntosDoc =
-                        d.benefitId === 'juntos_es_mejor' ||
-                        d.isJuntosBenefit === true ||
-                        (d.folio || '').startsWith('VA-JUNTOS');
-                      if (!isJuntosDoc) return false;
-                      let dStr = d.fecha_canje_dia || d.fechaStr || '';
-                      if (!dStr) {
-                        const dt = d.fechaCanje?.toDate
-                          ? d.fechaCanje.toDate()
-                          : d.canjeadoEn?.toDate
-                          ? d.canjeadoEn.toDate()
-                          : d.fecha_aplicacion?.toDate
-                          ? d.fecha_aplicacion.toDate()
-                          : null;
-                        dStr = dt ? format(dt, 'yyyy-MM-dd') : '';
-                      }
-                      if (dStr && isSameJuntosPeriod(dStr, todayStr, juntosConfig.limite_frecuencia)) {
-                        usedWeekDate = dStr;
-                        return true;
-                      }
-                      return false;
-                    });
-                    if (usedThisPeriod) {
-                      detectedBenefit.isBlocked = true;
-                      detectedBenefit.blockReason = `⛔ LÍMITE DE FRECUENCIA ALCANZADO: Ya existe un canje de "Juntos es Mejor" registrado ${freqText} (${usedWeekDate}) para ${foundClient.nombre}.`;
-                    }
-                  } catch (_) {}
+                  setJuntosOption('companions_app');
                 }
               }
             }
@@ -1028,29 +1160,6 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           setScannedPromo(null);
           await stopCamera();
 
-          // Buscar cita de hoy para check-in si tenemos cliente
-          if (foundClient) {
-            try {
-              const todayStr = format(new Date(), 'yyyy-MM-dd');
-              const qRes = query(
-                collection(db, 'reservas'),
-                where('fecha', '==', todayStr),
-                where('estado', 'in', ['Pendiente', 'Confirmada', 'Reservado', 'Asiste'])
-              );
-              const snapRes = await getDocs(qRes);
-              const clientRes = snapRes.docs
-                .map(d => ({ id: d.id, ...d.data() }))
-                .find(
-                  (r: any) =>
-                    r.cliente_id === foundClient?.id ||
-                    (foundClient?.telefono && r.telefono === foundClient.telefono)
-                );
-              setTodayReservation(clientRes || null);
-            } catch (e) {
-              console.warn('Error buscando cita de hoy:', e);
-            }
-          }
-
           if (isBlocked) {
             toast({
               variant: 'destructive',
@@ -1111,11 +1220,40 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           description: err.message || 'No se pudo procesar el código.',
         });
       } finally {
+        isProcessingRef.current = false;
         setIsProcessing(false);
+        // Si la cámara sigue activa y quedó en pausa (p. ej. QR inválido o acompañante duplicado), reanudar suavemente
+        setTimeout(() => {
+          try {
+            if (scannerRef.current && typeof scannerRef.current.resume === 'function') {
+              scannerRef.current.resume();
+            }
+          } catch (_) {}
+        }, 900);
       }
     },
-    [isProcessing, stopCamera, toast, isScanningCompanion, scannedBenefit, scannedClient, juntosCompanions, beneficiosList]
+    [
+      stopCamera,
+      toast,
+      isScanningCompanion,
+      scannedBenefit,
+      scannedClient,
+      juntosCompanions,
+      beneficiosList,
+      findClientAndTodayReservations,
+      fetchClientTodayJuntosSales,
+      checkClientJuntosPeriodUsed,
+      getJuntosUnitMinPrice,
+      currentHaircutPrice,
+      decimaConfig,
+      referralConfig,
+      targetStamps,
+    ]
   );
+
+  useEffect(() => {
+    handleScanTextRef.current = handleScanText;
+  }, [handleScanText]);
 
   const handleScanFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1147,7 +1285,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
         const decodedText = await scanner.scanFile(file, false);
         if (decodedText) {
-          handleScanText(decodedText);
+          handleScanTextRef.current(decodedText);
         }
 
         if (createdTemporary) {
@@ -1167,7 +1305,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     },
-    [handleScanText, toast]
+    [toast]
   );
 
   const startCamera = useCallback(async (forcedDeviceId?: string) => {
@@ -1207,9 +1345,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       if (!container) return;
       container.innerHTML = '';
 
-      // Configuración de escaneo de alta velocidad en todo el visor (sin obligar a centrar en cuadro pequeño)
+      // Configuración de escaneo fluida pero controlada para evitar ráfagas en tablet
       const qrScanConfig: any = {
-        fps: 25,
+        fps: 12,
         disableFlip: false,
       };
 
@@ -1255,7 +1393,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             config,
             qrScanConfig,
             decodedText => {
-              handleScanText(decodedText);
+              const nowMs = Date.now();
+              if (isProcessingRef.current) return;
+              if (lastScanLockRef.current.text === decodedText && nowMs - lastScanLockRef.current.ts < 2500) {
+                return;
+              }
+              lastScanLockRef.current = { text: decodedText, ts: nowMs };
+              handleScanTextRef.current(decodedText);
             },
             _error => {
               // Frame continuo sin código detectado
@@ -1316,11 +1460,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
       setCameraError(msg);
     }
-  }, [isOpen, isScanningCompanion, scannedClient, scannedPromo, scannedBenefit, activeTab, selectedCameraId, stopCamera, handleScanText]);
+  }, [isOpen, isScanningCompanion, scannedClient, scannedPromo, scannedBenefit, activeTab, selectedCameraId, stopCamera]);
 
   // Manejar apertura y cierre del modal
   useEffect(() => {
     if (isOpen) {
+      isProcessingRef.current = false;
+      lastScanLockRef.current = { text: '', ts: 0 };
       setScannedClient(null);
       setScannedPromo(null);
       setScannedBenefit(null);
@@ -1328,6 +1474,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       setJuntosOption(null);
       setJuntosMinorsCount(1);
       setJuntosCompanions([]);
+      setTitularTodaySales(null);
+      setJuntosCompletedSummary(null);
       setIsScanningCompanion(false);
       setManualInput('');
       setActiveTab('camera');
@@ -1336,9 +1484,23 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       }, 300);
       return () => clearTimeout(timer);
     } else {
+      isProcessingRef.current = false;
+      lastScanLockRef.current = { text: '', ts: 0 };
       stopCamera();
     }
   }, [isOpen]);
+
+  // Iniciar cámara limpiamente al activar escaneo de acompañante en "Juntos es Mejor"
+  useEffect(() => {
+    if (isOpen && isScanningCompanion && activeTab === 'camera') {
+      isProcessingRef.current = false;
+      lastScanLockRef.current = { text: '', ts: 0 };
+      const timer = setTimeout(() => {
+        startCamera();
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, isScanningCompanion, activeTab, startCamera]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -1720,15 +1882,261 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     }
   };
 
+  // Acción: Acreditar Post-Pago atómicamente en "Juntos es Mejor" (cuando el ticket o grupo ya pagó hoy)
+  const handleCreditJuntosPostPayment = async (mode: 'minors' | 'companions') => {
+    if (!scannedBenefit || !scannedClient || scannedBenefit.isBlocked || !db) return;
+    if (mode === 'companions' && juntosCompanions.length === 0) return;
+
+    setIsRedeemingBenefit(true);
+    try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const nowIso = new Date().toISOString();
+      const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+      const safeMinors = mode === 'minors' ? Math.max(1, juntosMinorsCount) : 0;
+      const titularFullName = `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim();
+      const groupId = `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}`;
+
+      const participants =
+        mode === 'minors'
+          ? [
+              {
+                id: scannedClient.id,
+                nombre: titularFullName,
+                telefono: scannedClient.telefono || '',
+                folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+                coins: juntosCoins * (1 + safeMinors),
+                sales: titularTodaySales?.qualifyingSales || [],
+                primarySaleId: titularTodaySales?.primarySaleId || '',
+              },
+            ]
+          : [
+              {
+                id: scannedClient.id,
+                nombre: titularFullName,
+                telefono: scannedClient.telefono || '',
+                folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+                coins: juntosCoins,
+                sales: titularTodaySales?.qualifyingSales || [],
+                primarySaleId: titularTodaySales?.primarySaleId || '',
+              },
+              ...juntosCompanions.map(c => ({
+                id: c.id,
+                nombre: c.nombre,
+                telefono: c.telefono || '',
+                folio: c.folio || `VA-JUNTOS-${c.id.slice(0, 5).toUpperCase()}`,
+                coins: juntosCoins,
+                sales: c.todaySales?.qualifyingSales || [],
+                primarySaleId: c.todaySales?.primarySaleId || '',
+              })),
+            ];
+
+      await runTransaction(db, async (tx) => {
+        // 1. TODAS LAS LECTURAS PRIMERO (clientes, canjes_beneficios, ventas)
+        const clientRefs = participants.map(p => doc(db, 'clientes', p.id));
+        const clientSnaps = await Promise.all(clientRefs.map(r => tx.get(r)));
+
+        const grpRefs = participants.map(p => doc(db, 'canjes_beneficios', `VA-JUNTOS-GRP-${todayStr}-${p.id}`));
+        const grpSnaps = await Promise.all(grpRefs.map(r => tx.get(r)));
+
+        const uniqueOrigFolios = Array.from(new Set(participants.map(p => p.folio).filter(Boolean)));
+        const origFolioRefs = uniqueOrigFolios.map(f => doc(db, 'canjes_beneficios', f));
+        const origFolioSnaps = await Promise.all(origFolioRefs.map(r => tx.get(r)));
+
+        const allSaleRefsMap = new Map<string, any>();
+        for (const p of participants) {
+          for (const s of p.sales) {
+            if (s.saleId && !allSaleRefsMap.has(s.saleId)) {
+              allSaleRefsMap.set(s.saleId, doc(db, 'ventas', s.saleId));
+            }
+          }
+        }
+        const uniqueSaleIds = Array.from(allSaleRefsMap.keys());
+        const saleSnapsArr = await Promise.all(uniqueSaleIds.map(id => tx.get(allSaleRefsMap.get(id))));
+        const saleSnapsById = new Map<string, any>();
+        uniqueSaleIds.forEach((id, idx) => saleSnapsById.set(id, saleSnapsArr[idx]));
+
+        // 2. VALIDACIONES DENTRO DE TRANSACCIÓN
+        if (uniqueSaleIds.length === 0) {
+          throw new Error('No se encontraron ventas pagadas calificables hoy para acreditar este beneficio.');
+        }
+
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const cSnap = clientSnaps[i];
+          if (!cSnap.exists()) {
+            throw new Error(`El cliente "${p.nombre}" no existe en la base de datos.`);
+          }
+          const cData = cSnap.data() || {};
+          if (isSameJuntosPeriod(cData.ultimo_canje_juntos_fecha, todayStr, juntosConfig.limite_frecuencia)) {
+            throw new Error(`"${p.nombre}" ya recibió el beneficio "Juntos es Mejor" en este periodo.`);
+          }
+          const gData = grpSnaps[i].exists() ? grpSnaps[i].data() : null;
+          if (gData && (gData.estado === 'canjeado' || gData.recompensaAcreditada === true)) {
+            throw new Error(`El registro grupal de "${p.nombre}" ya fue acreditado anteriormente.`);
+          }
+        }
+
+        for (const oSnap of origFolioSnaps) {
+          if (oSnap.exists() && oSnap.data()?.estado === 'canjeado') {
+            throw new Error(`El folio "${oSnap.id}" ya fue canjeado anteriormente.`);
+          }
+        }
+
+        for (const sId of uniqueSaleIds) {
+          const sSnap = saleSnapsById.get(sId);
+          if (!sSnap?.exists()) {
+            throw new Error('Una de las ventas del día ya no se encuentra disponible.');
+          }
+          const sData = sSnap.data() || {};
+          const stLower = String(sData.status || '').toLowerCase();
+          if (stLower === 'cancelled' || stLower === 'cancelada' || stLower === 'eliminada' || sData.pago_estado === 'Cancelado') {
+            throw new Error('Una de las ventas de hoy fue cancelada.');
+          }
+          if (sData.lealtad_aplicada?.is_juntos_applied === true) {
+            throw new Error('Una de las ventas seleccionadas ya acreditó un canje de "Juntos es Mejor".');
+          }
+        }
+
+        // 3. TODAS LAS ESCRITURAS DESPUÉS DE LECTURAS
+        const resolvedJuntosMode = mode === 'minors' ? 'minors_post_paid' : 'companions_post_paid';
+        const primaryPayerIdx = participants.findIndex(m => m.sales.length > 0 && Boolean(m.primarySaleId));
+        const fallbackPrimarySaleId = primaryPayerIdx >= 0 ? participants[primaryPayerIdx].primarySaleId : null;
+
+        for (let i = 0; i < participants.length; i++) {
+          const p = participants[i];
+          const cData = clientSnaps[i].data() || {};
+          const prevCoins = Number(
+            cData.alfaCoins ?? cData.alfa_coins ?? cData.puntosLealtad ?? cData.puntos_lealtad ?? cData.puntos ?? 0
+          );
+          const currStamps = Number(cData.cortes_acumulados ?? cData.cortesAcumulados ?? 0);
+          const rewardId = `reward_juntos_${Date.now()}_${i}`;
+
+          tx.update(clientRefs[i], {
+            puntos: increment(p.coins),
+            alfaCoins: increment(p.coins),
+            alfa_coins: increment(p.coins),
+            puntosLealtad: increment(p.coins),
+            puntos_lealtad: increment(p.coins),
+            ultimo_canje_juntos_fecha: todayStr,
+            actualizado_en: serverTimestamp(),
+            recompensa_pendiente: {
+              id: rewardId,
+              tipo_recompensa: 'juntos_es_mejor',
+              sello_agregado: false,
+              sellos_ganados: 0,
+              sellos_anteriores: currStamps,
+              sellos_actuales: currStamps,
+              meta_sellos: targetStamps,
+              corte_gratis_desbloqueado: Boolean(cData.corte_gratis_disponible),
+              coins_ganadas: p.coins,
+              coins_anteriores: prevCoins,
+              coins_actuales: prevCoins + p.coins,
+              fecha: nowIso,
+            },
+          });
+
+          const grpDocId = `VA-JUNTOS-GRP-${todayStr}-${p.id}`;
+          const baseCanjePayload = {
+            benefitId: 'juntos_es_mejor',
+            benefitTitle: 'JUNTOS ES MEJOR',
+            isJuntosBenefit: true,
+            juntosMode: resolvedJuntosMode,
+            grupoId: groupId,
+            grupoMiembros: participants.map(m => ({ id: m.id, nombre: m.nombre })),
+            clienteId: p.id,
+            clienteNombre: p.nombre,
+            telefono: p.telefono,
+            grupoTitularId: scannedClient.id,
+            grupoTitularNombre: titularFullName,
+            fechaStr: todayStr,
+            fecha_canje_dia: todayStr,
+            anio: new Date().getFullYear(),
+            estado: 'canjeado',
+            pagado: true,
+            utilizado_en_venta: true,
+            recompensaAcreditada: true,
+            rewardCoins: p.coins,
+            minorsCount: mode === 'minors' ? safeMinors : 0,
+            ventaId: p.primarySaleId || fallbackPrimarySaleId || null,
+            canjeadoEn: serverTimestamp(),
+            fechaCanje: serverTimestamp(),
+            sucursal: 'Sombrerete',
+          };
+
+          tx.set(grpRefs[i], { folio: grpDocId, originalFolio: p.folio, ...baseCanjePayload }, { merge: true });
+          if (p.folio && p.folio !== grpDocId) {
+            tx.set(doc(db, 'canjes_beneficios', p.folio), { folio: p.folio, ...baseCanjePayload }, { merge: true });
+          }
+
+          const unlinkedCompanionsAwarded =
+            i === primaryPayerIdx && mode === 'companions'
+              ? participants
+                  .filter((comp, idx) => idx !== primaryPayerIdx && comp.sales.length === 0)
+                  .map(comp => ({
+                    id: comp.id,
+                    coins: comp.coins,
+                    folio: `VA-JUNTOS-GRP-${todayStr}-${comp.id}`,
+                  }))
+              : [];
+
+          for (const s of p.sales) {
+            const sSnap = saleSnapsById.get(s.saleId);
+            const prevLoyalty = sSnap?.data()?.lealtad_aplicada || {};
+            const isPrimary = s.saleId === p.primarySaleId;
+            tx.update(allSaleRefsMap.get(s.saleId), {
+              beneficio_aplicado: 'JUNTOS ES MEJOR',
+              beneficio_folio: grpDocId,
+              lealtad_aplicada: {
+                ...prevLoyalty,
+                is_juntos_applied: true,
+                juntos_mode: resolvedJuntosMode,
+                beneficio_folio: grpDocId,
+                prev_ultimo_canje_juntos_fecha: String(cData.ultimo_canje_juntos_fecha || ''),
+                juntos_titular_coins_awarded: isPrimary ? p.coins : 0,
+                ...(isPrimary && unlinkedCompanionsAwarded.length > 0
+                  ? { juntos_companions_awarded: unlinkedCompanionsAwarded }
+                  : {}),
+              },
+            });
+          }
+        }
+      });
+
+      const totalAwarded = participants.reduce((acc, p) => acc + p.coins, 0);
+      playBeep(true);
+      setJuntosCompletedSummary({
+        coinsPerPerson: juntosCoins,
+        totalCoins: totalAwarded,
+        mode,
+        members: participants.map(p => ({ nombre: p.nombre, coins: p.coins })),
+      });
+      toast({
+        title: '🪙 ¡Juntos es Mejor Acreditado!',
+        description:
+          mode === 'minors'
+            ? `Se abonaron +${totalAwarded} Alfa Coins a ${titularFullName} (Titular + ${safeMinors} menor(es)).`
+            : `Se abonaron +${juntosCoins} Alfa Coins a cada cuenta (${participants.map(p => p.nombre).join(', ')}).`,
+      });
+    } catch (err: any) {
+      console.error('Error acreditando Juntos es Mejor post-pago:', err);
+      playBeep(false);
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo acreditar',
+        description: err.message || 'Ocurrió un error validando las ventas.',
+      });
+    } finally {
+      setIsRedeemingBenefit(false);
+    }
+  };
+
   // Acción: Aplicar "Juntos es Mejor" en modalidad Menores de Edad (Sin App) y abrir Caja
   const handleApplyJuntosMinors = () => {
     if (!scannedBenefit || !scannedClient || scannedBenefit.isBlocked) return;
     const safeMinors = Math.max(1, juntosMinorsCount);
     const totalParticipants = 1 + safeMinors;
     const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
-    const juntosUnitMin = juntosConfig.consumo_minimo_tipo === 'monto_fijo'
-      ? (Number(juntosConfig.consumo_minimo_monto) || currentHaircutPrice)
-      : currentHaircutPrice;
+    const juntosUnitMin = getJuntosUnitMinPrice();
     const totalCoins = juntosCoins * totalParticipants;
     const minPurchaseAmount = juntosUnitMin * totalParticipants;
 
@@ -1744,17 +2152,26 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       rewardCoins: totalCoins,
       minPurchase: minPurchaseAmount,
     };
+    const preloadedItems = buildPreloadedItemsFromRes(todayReservation);
     document.dispatchEvent(
       new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
         detail: fromCashbox
           ? { client: scannedClient, benefitRedeemed: juntosPayload }
-          : { client: scannedClient, benefitRedeemed: juntosPayload, items: [], reservationId: todayReservation?.id || undefined, anticipoPagado: todayReservation?.anticipoPagado || 0 },
+          : {
+              client: scannedClient,
+              benefitRedeemed: juntosPayload,
+              items: preloadedItems,
+              reservationId: todayReservation?.id || undefined,
+              anticipoPagado: todayReservation?.anticipoPagado || 0,
+            },
       })
     );
   };
 
-  // Acción: Aplicar "Juntos es Mejor" en modalidad Acompañantes con App
-  const handleApplyJuntosCompanions = async (separateTickets: boolean) => {
+  // Acción: Aplicar "Juntos es Mejor" en modalidad Acompañantes con App (1 Ticket, Tickets Separados/Mixto o Solo Vincular)
+  const handleApplyJuntosCompanions = async (
+    action: 'single_ticket' | 'separate_tickets_cashbox' | 'link_only'
+  ) => {
     if (!scannedBenefit || !scannedClient || scannedBenefit.isBlocked || !db) return;
     if (juntosCompanions.length === 0) {
       toast({
@@ -1769,26 +2186,37 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     try {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const titularFullName = `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim();
-
       const groupId = `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}`;
+      const separateTickets = action !== 'single_ticket';
+
       const allGroupMembers = [
         {
           id: scannedClient.id,
           nombre: titularFullName,
           telefono: scannedClient.telefono || '',
           folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+          hasPaidQualifying: Boolean(titularTodaySales?.meetsIndividualMin),
+          primarySaleId: titularTodaySales?.primarySaleId || null,
+          todayReservation,
+          clientObj: scannedClient,
         },
-        ...juntosCompanions,
+        ...juntosCompanions.map(c => ({
+          id: c.id,
+          nombre: c.nombre,
+          telefono: c.telefono || '',
+          folio: c.folio || `VA-JUNTOS-${c.id.slice(0, 5).toUpperCase()}`,
+          hasPaidQualifying: Boolean(c.todaySales?.meetsIndividualMin),
+          primarySaleId: c.todaySales?.primarySaleId || null,
+          todayReservation: c.todayReservation || null,
+          clientObj: c.clientObj || ({ id: c.id, nombre: c.nombre, telefono: c.telefono } as Client),
+        })),
       ];
 
       const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
-      const juntosUnitMin = juntosConfig.consumo_minimo_tipo === 'monto_fijo'
-        ? (Number(juntosConfig.consumo_minimo_monto) || currentHaircutPrice)
-        : currentHaircutPrice;
+      const juntosUnitMin = getJuntosUnitMinPrice();
 
       if (separateTickets) {
-        // Guardar autorización de grupo pre-verificada para TODOS los integrantes (Titular + Acompañantes)
-        // Los Alfa Coins de cada integrante quedan en espera (si retener_coins_tickets_separados) hasta que TODOS completen su pago hoy.
+        // Guardar autorización de grupo pre-verificada para TODOS (incluyendo quién ya pagó hoy en escenario mixto)
         await Promise.all(
           allGroupMembers.map(member => {
             const docId = `VA-JUNTOS-GRP-${todayStr}-${member.id}`;
@@ -1811,7 +2239,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 fechaStr: todayStr,
                 anio: new Date().getFullYear(),
                 estado: 'pendiente_cobro_grupo',
-                pagado: false,
+                pagado: member.hasPaidQualifying,
+                utilizado_en_venta: member.hasPaidQualifying,
+                ...(member.primarySaleId ? { ventaId: member.primarySaleId } : {}),
                 recompensaAcreditada: false,
                 rewardCoins: juntosCoins,
                 creadoEn: serverTimestamp(),
@@ -1822,34 +2252,67 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           })
         );
 
-        toast({
-          title: '✓ Grupo Vinculado para Cobro Separado',
-          description: `Cobra a ${titularFullName} y después a ${juntosCompanions.map(c => c.nombre).join(', ')}. Los +${juntosCoins} Alfa Coins de cada uno se acreditarán automáticamente cuando TODOS paguen su ticket hoy.`,
-        });
+        if (action === 'link_only') {
+          playBeep(true);
+          toast({
+            title: '🤝 Grupo Vinculado para Hoy',
+            description: `${allGroupMembers.map(m => m.nombre).join(' + ')} quedaron vinculados. Cuando completen sus pagos en Caja recibirán +${juntosCoins} Alfa Coins c/u.`,
+          });
+          onOpenChange(false);
+          return;
+        }
       }
 
-      const totalParticipantsInTicket = separateTickets ? 1 : 1 + juntosCompanions.length;
+      // Elegir cliente objetivo para abrir Caja:
+      // En tickets separados / mixto, abrir directamente con el primer integrante pendiente de cobro
+      const targetMemberToCharge = separateTickets
+        ? allGroupMembers.find(m => !m.hasPaidQualifying) || allGroupMembers[0]
+        : allGroupMembers[0];
+
+      const totalParticipantsInTicket = separateTickets ? 1 : allGroupMembers.length;
+
+      if (separateTickets) {
+        const alreadyPaidNames = allGroupMembers.filter(m => m.hasPaidQualifying).map(m => m.nombre);
+        toast({
+          title: '✓ Grupo Vinculado para Cobro Separado',
+          description:
+            alreadyPaidNames.length > 0
+              ? `${alreadyPaidNames.join(', ')} ya pagó hoy. Al cobrar ahora a ${targetMemberToCharge.nombre} se acreditarán los +${juntosCoins} Alfa Coins a todos.`
+              : `Cobra a ${targetMemberToCharge.nombre} y después al siguiente integrante. Los +${juntosCoins} Alfa Coins de cada uno se acreditarán al pagar todos hoy.`,
+        });
+      }
 
       onOpenChange(false);
       const juntosCompanionsPayload = {
         ...scannedBenefit,
-        folio: separateTickets ? `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}` : scannedBenefit.folio,
+        folio: separateTickets ? `VA-JUNTOS-GRP-${todayStr}-${targetMemberToCharge.id}` : scannedBenefit.folio,
         isJuntosBenefit: true,
         benefitId: 'juntos_es_mejor',
         benefitTitle: 'JUNTOS ES MEJOR',
         juntosMode: separateTickets ? 'companions_separate_tickets' : 'companions_single_ticket',
         juntosGroupId: separateTickets ? groupId : undefined,
         minorsCount: 0,
-        companions: separateTickets ? allGroupMembers.map(m => ({ id: m.id, name: m.nombre })) : juntosCompanions.map(c => ({ id: c.id, name: c.nombre, folio: c.folio })),
+        companions: separateTickets
+          ? allGroupMembers.map(m => ({ id: m.id, name: m.nombre }))
+          : juntosCompanions.map(c => ({ id: c.id, name: c.nombre, folio: c.folio })),
         companionsWithApp: juntosCompanions,
         rewardCoins: juntosCoins * totalParticipantsInTicket,
         minPurchase: juntosUnitMin * totalParticipantsInTicket,
       };
+      const targetRes = targetMemberToCharge.todayReservation;
+      const preloadedItems = buildPreloadedItemsFromRes(targetRes);
+
       document.dispatchEvent(
         new CustomEvent(fromCashbox ? 'apply-qr-to-sale' : 'new-sale', {
           detail: fromCashbox
-            ? { client: scannedClient, benefitRedeemed: juntosCompanionsPayload }
-            : { client: scannedClient, benefitRedeemed: juntosCompanionsPayload, items: [], reservationId: todayReservation?.id || undefined, anticipoPagado: todayReservation?.anticipoPagado || 0 },
+            ? { client: targetMemberToCharge.clientObj, benefitRedeemed: juntosCompanionsPayload }
+            : {
+                client: targetMemberToCharge.clientObj,
+                benefitRedeemed: juntosCompanionsPayload,
+                items: preloadedItems,
+                reservationId: targetRes?.id || undefined,
+                anticipoPagado: targetRes?.anticipoPagado || 0,
+              },
         })
       );
     } catch (err: any) {
@@ -1865,6 +2328,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
   // Acción: Volver a escanear otro cliente
   const handleResetScanner = () => {
+    isProcessingRef.current = false;
+    lastScanLockRef.current = { text: '', ts: 0 };
     setScannedClient(null);
     setScannedPromo(null);
     setScannedBenefit(null);
@@ -1872,6 +2337,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     setJuntosOption(null);
     setJuntosMinorsCount(1);
     setJuntosCompanions([]);
+    setTitularTodaySales(null);
+    setJuntosCompletedSummary(null);
     setIsScanningCompanion(false);
     setManualInput('');
     setActiveTab('camera');
@@ -1897,13 +2364,16 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       ((isBenefitDecimoCorte && !scannedBenefit?.isRedeemed) ||
         (fromCashbox && Boolean(scannedClient) && freeCutAvailable && !scannedBenefit))
   );
+  const isJuntosRedemptionView = Boolean(
+    !isScanningCompanion && scannedBenefit?.isJuntosBenefit && !scannedBenefit?.isRedeemed
+  );
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl bg-[#0F172A] border border-[#C5A880]/30 text-white shadow-2xl p-0 overflow-hidden z-[200]" overlayClassName="z-[190]">
+        <DialogContent className="sm:max-w-xl bg-[#0F172A] border-2 border-blue-500 rounded-2xl text-white shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-0 overflow-hidden z-[200]" overlayClassName="z-[190]">
           {/* Header */}
-          <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-[#C5A880]/30 relative overflow-hidden">
+          <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-blue-500/30 relative overflow-hidden">
             {/* Haz de luz animado sutil */}
             <div className="header-light-beam" aria-hidden="true" />
 
@@ -1911,16 +2381,24 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               <div className="flex items-center gap-2.5">
                 {isFreeCutRedemptionView ? (
                   <Scissors className="h-5 w-5 text-[#C5A880] shrink-0" />
+                ) : isJuntosRedemptionView ? (
+                  <Users className="h-5 w-5 text-[#C5A880] shrink-0" />
                 ) : (
                   <QrCode className="h-5 w-5 text-[#C5A880] shrink-0" />
                 )}
                 <div>
                   <DialogTitle className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
-                    {isFreeCutRedemptionView ? 'DÉCIMO CORTE GRATIS' : 'Lector QR • VATOS ALFA'}
+                    {isFreeCutRedemptionView
+                      ? 'DÉCIMO CORTE GRATIS'
+                      : isJuntosRedemptionView
+                      ? 'JUNTOS ES MEJOR'
+                      : 'Lector QR • VATOS ALFA'}
                   </DialogTitle>
                   <DialogDescription className="text-xs text-[#C5A880]/90">
                     {isFreeCutRedemptionView
                       ? 'Confirmación de canje de cortesía en caja'
+                      : isJuntosRedemptionView
+                      ? `+${Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins c/u • ${formatJuntosDaysEs(juntosConfig.dias_semana)} ${formatJuntosHour12(juntosConfig.hora_inicio)} a ${formatJuntosHour12(juntosConfig.hora_fin)}`
                       : 'Escanea el Pase Alfa o cupón del cliente desde su app móvil'}
                   </DialogDescription>
                 </div>
@@ -1928,7 +2406,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             </div>
           </DialogHeader>
 
-          <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto">
+          <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto scrollbar-thin">
             {/* VISTA SIMPLIFICADA: DÉCIMO CORTE GRATIS (SOLO CLIENTE + EQUIVALENCIA + APLICAR) */}
             {isFreeCutRedemptionView && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -2003,8 +2481,533 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               </div>
             )}
 
+            {/* VISTA SIMPLIFICADA: JUNTOS ES MEJOR */}
+            {isJuntosRedemptionView && (() => {
+              const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+              const unitMinPrice = getJuntosUnitMinPrice();
+              const titularFullName = scannedClient
+                ? `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim()
+                : (scannedBenefit?.clientName || 'Cliente');
+
+              // Caso 1: Beneficio acreditado con éxito en este flujo (post-pago)
+              if (juntosCompletedSummary) {
+                return (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="bg-[#161E35] border-2 border-blue-500/60 rounded-2xl p-5 shadow-lg space-y-4">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="h-6 w-6 text-blue-400 shrink-0" />
+                        <div>
+                          <h3 className="text-base font-bold text-white">Beneficio Acreditado en Cuentas</h3>
+                          <p className="text-xs text-slate-300">
+                            Se abonaron +{juntosCompletedSummary.totalCoins} Alfa Coins en total.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {juntosCompletedSummary.members.map((m, idx) => (
+                          <div
+                            key={`${m.nombre}-${idx}`}
+                            className="p-2.5 rounded-xl bg-[#0F172A] border border-white/10 flex items-center justify-between text-xs"
+                          >
+                            <span className="text-white font-semibold truncate">{m.nombre}</span>
+                            <span className="text-[#C5A880] font-bold font-sans shrink-0">
+                              +{m.coins} Alfa Coins
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleResetScanner}
+                          className="bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs h-10"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                          Escanear otro código
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="alfa"
+                          onClick={() => onOpenChange(false)}
+                          className="text-xs h-10 text-white"
+                        >
+                          Cerrar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Caso 2: Beneficio bloqueado por horario, día, firma o límite de frecuencia
+              if (scannedBenefit?.isBlocked) {
+                return (
+                  <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="bg-[#161E35] border border-red-500/40 rounded-2xl p-5 shadow-lg space-y-4">
+                      {scannedClient && (
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-11 w-11 border border-[#C5A880]/60 shrink-0">
+                            <AvatarImage
+                              src={scannedClient.fotoUrl || scannedClient.avatarUrl || (scannedClient as any)?.foto_perfil_url}
+                              alt={titularFullName}
+                              className="object-cover"
+                            />
+                            <AvatarFallback className="text-sm font-bold bg-[#202A49] text-[#C5A880]">
+                              {scannedClient.nombre?.charAt(0)}
+                              {scannedClient.apellido?.charAt(0) || ''}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-400">Titular</p>
+                            <h3 className="text-sm font-bold text-white truncate">{titularFullName}</h3>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-200 space-y-1">
+                        <span className="font-bold text-red-400 flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                          <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                          Canje Denegado
+                        </span>
+                        <p className="text-xs text-red-100 leading-relaxed">{scannedBenefit.blockReason}</p>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleResetScanner}
+                        className="w-full bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs h-10"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5 mr-1.5 text-slate-400" />
+                        Escanear otro código
+                      </Button>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Caso 3: Beneficio válido — Flujo simplificado con soporte Pre-Pago, Al Llegar, Post-Pago y Mixto
+              const safeMinors = Math.max(1, juntosMinorsCount);
+              const minorsTotalParticipants = 1 + safeMinors;
+              const minorsReqAmount = unitMinPrice * minorsTotalParticipants;
+              const minorsTotalCoins = juntosCoins * minorsTotalParticipants;
+              const titularPaidMinorsCover = Boolean(
+                titularTodaySales &&
+                  titularTodaySales.totalQualifyingMoney >= minorsReqAmount &&
+                  titularTodaySales.totalQualifyingServices >= minorsTotalParticipants
+              );
+
+              const groupSize = 1 + juntosCompanions.length;
+              const groupMinTotal = unitMinPrice * groupSize;
+              const titularPaidOk = Boolean(titularTodaySales?.meetsIndividualMin);
+              const groupMembersStatus = [
+                {
+                  id: scannedClient?.id || '',
+                  nombre: titularFullName,
+                  isTitular: true,
+                  todaySales: titularTodaySales,
+                  hasPaidIndividual: titularPaidOk,
+                },
+                ...juntosCompanions.map(c => ({
+                  id: c.id,
+                  nombre: c.nombre,
+                  isTitular: false,
+                  todaySales: c.todaySales || null,
+                  hasPaidIndividual: Boolean(c.todaySales?.meetsIndividualMin),
+                })),
+              ];
+
+              const unpaidMembers = groupMembersStatus.filter(m => !m.hasPaidIndividual);
+              const allPaidSeparately = juntosCompanions.length > 0 && unpaidMembers.length === 0;
+              const singleTicketPayer =
+                juntosCompanions.length > 0 && !allPaidSeparately
+                  ? groupMembersStatus.find(
+                      m =>
+                        m.todaySales &&
+                        m.todaySales.totalQualifyingMoney >= groupMinTotal &&
+                        m.todaySales.totalQualifyingServices >= groupSize
+                    ) || null
+                  : null;
+              const allGroupPaid = allPaidSeparately || Boolean(singleTicketPayer);
+              const hasMixedPayments = !allGroupPaid && unpaidMembers.length < groupMembersStatus.length;
+
+              return (
+                <div className="space-y-3.5 animate-in fade-in zoom-in-95 duration-200">
+                  {/* Tarjeta compacta del Titular */}
+                  <div className="bg-[#161E35] border border-white/15 rounded-2xl p-3.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="h-11 w-11 border-2 border-[#C5A880] shrink-0">
+                          <AvatarImage
+                            src={scannedClient?.fotoUrl || scannedClient?.avatarUrl || (scannedClient as any)?.foto_perfil_url}
+                            alt={titularFullName}
+                            className="object-cover"
+                          />
+                          <AvatarFallback className="text-sm font-bold bg-[#202A49] text-[#C5A880]">
+                            {(scannedClient?.nombre || 'C').charAt(0)}
+                            {scannedClient?.apellido?.charAt(0) || ''}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h3 className="text-sm font-bold text-white truncate">{titularFullName}</h3>
+                            {scannedClient?.numero_cliente && (
+                              <span className="text-[11px] font-medium text-[#C5A880]">
+                                #{scannedClient.numero_cliente}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            Folio: <span className="font-mono">{scannedBenefit?.folio}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {titularTodaySales?.meetsIndividualMin ? (
+                        <Badge className="bg-blue-500/15 text-blue-300 border-blue-500/40 text-[11px] font-semibold font-sans shrink-0">
+                          ✓ Pagó hoy ${formatMoney(titularTodaySales.totalQualifyingMoney)}
+                        </Badge>
+                      ) : todayReservation ? (
+                        <Badge className="bg-[#202A49] text-slate-200 border-blue-500/30 text-[11px] font-medium font-sans shrink-0">
+                          Cita hoy {todayReservation.hora_inicio || ''}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-white/5 text-slate-300 border-white/15 text-[11px] font-medium font-sans shrink-0">
+                          Pendiente de cobro
+                        </Badge>
+                      )}
+                    </div>
+
+                    {titularTodaySales?.ineligibleSalesNote && (
+                      <p className="text-[11px] text-slate-400 border-t border-white/10 pt-1.5">
+                        Nota: {titularTodaySales.ineligibleSalesNote}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Selector limpio de Modalidad */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setJuntosOption('companions_app')}
+                      className={cn(
+                        'p-3 rounded-xl border text-left transition-all flex flex-col gap-1',
+                        juntosOption === 'companions_app'
+                          ? 'bg-[#202A49] border-2 border-blue-500 shadow-md'
+                          : 'bg-[#161E35] border-white/15 hover:border-blue-400/60'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Smartphone className="h-4 w-4 text-blue-400 shrink-0" />
+                          Amigos / Familia (App)
+                        </span>
+                        {juntosOption === 'companions_app' && (
+                          <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-300 leading-tight font-sans">
+                        +{juntosCoins} Alfa Coins a la cuenta de cada uno.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setJuntosOption('minors')}
+                      className={cn(
+                        'p-3 rounded-xl border text-left transition-all flex flex-col gap-1',
+                        juntosOption === 'minors'
+                          ? 'bg-[#202A49] border-2 border-blue-500 shadow-md'
+                          : 'bg-[#161E35] border-white/15 hover:border-blue-400/60'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <Users className="h-4 w-4 text-[#C5A880] shrink-0" />
+                          Hijos menores (sin App)
+                        </span>
+                        {juntosOption === 'minors' && (
+                          <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0" />
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-300 leading-tight font-sans">
+                        +{juntosCoins} Alfa Coins por hijo directo al titular.
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Opción A: Amigos / Familia con App */}
+                  {juntosOption === 'companions_app' && (
+                    <div className="p-3.5 rounded-xl bg-[#161E35] border border-blue-500/40 space-y-3 animate-in fade-in duration-150">
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                          Integrantes del grupo
+                        </p>
+
+                        {groupMembersStatus.map((member, idx) => (
+                          <div
+                            key={member.id || idx}
+                            className="p-2.5 rounded-lg bg-[#0F172A] border border-white/10 flex items-center justify-between gap-2 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-white font-semibold truncate">
+                                {idx + 1}. {member.nombre} {member.isTitular ? '(Titular)' : ''}
+                              </p>
+                              <p
+                                className={cn(
+                                  'text-[11px] font-sans',
+                                  member.hasPaidIndividual ? 'text-blue-400' : 'text-slate-400'
+                                )}
+                              >
+                                {member.hasPaidIndividual
+                                  ? `✓ Pagó hoy $${formatMoney(member.todaySales?.totalQualifyingMoney || 0)} MXN`
+                                  : 'Por cobrar'}
+                              </p>
+                              {!member.hasPaidIndividual && !member.isTitular && member.todaySales?.ineligibleSalesNote && (
+                                <p className="text-[10px] text-slate-400">{member.todaySales.ineligibleSalesNote}</p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[#C5A880] font-bold font-sans">+{juntosCoins} Coins</span>
+                              {!member.isTitular && (
+                                <button
+                                  type="button"
+                                  onClick={() => setJuntosCompanions(prev => prev.filter(c => c.id !== member.id))}
+                                  className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                                  title="Quitar acompañante"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsScanningCompanion(true);
+                          setActiveTab('camera');
+                        }}
+                        className="w-full bg-transparent border-blue-500/50 text-blue-300 hover:bg-blue-500/15 text-xs font-semibold h-9"
+                      >
+                        <QrCode className="h-4 w-4 mr-1.5 text-blue-400" />
+                        {juntosCompanions.length === 0
+                          ? 'Escanear QR del Acompañante'
+                          : 'Escanear otro acompañante'}
+                      </Button>
+
+                      {juntosCompanions.length > 0 && (
+                        <div className="pt-2.5 border-t border-white/10 space-y-2.5">
+                          {allGroupPaid ? (
+                            <>
+                              <div className="p-2.5 rounded-lg bg-blue-500/15 border border-blue-500/40 text-xs text-blue-200 font-sans">
+                                ✓ Pago verificado hoy para todos (
+                                {singleTicketPayer
+                                  ? `1 ticket de $${formatMoney(singleTicketPayer.todaySales?.totalQualifyingMoney || 0)} MXN`
+                                  : `${groupSize} tickets individuales`}
+                                ). Listos para recibir +{juntosCoins} Alfa Coins cada uno.
+                              </div>
+                              <Button
+                                type="button"
+                                variant="alfa"
+                                disabled={isRedeemingBenefit}
+                                onClick={() => handleCreditJuntosPostPayment('companions')}
+                                className="w-full text-xs h-10 text-white"
+                              >
+                                {isRedeemingBenefit ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                                ) : (
+                                  <Coins className="h-4 w-4 mr-1.5 text-[#C5A880]" />
+                                )}
+                                Acreditar +{juntosCoins} Coins a c/u Ahora
+                              </Button>
+                            </>
+                          ) : hasMixedPayments ? (
+                            <>
+                              <div className="p-2.5 rounded-lg bg-[#0F172A] border border-blue-500/30 text-xs text-slate-300 font-sans">
+                                Falta cobrar a:{' '}
+                                <strong className="text-white">
+                                  {unpaidMembers.map(u => u.nombre).join(', ')}
+                                </strong>
+                                . Quien ya pagó quedará registrado automáticamente en el grupo.
+                              </div>
+                              <Button
+                                type="button"
+                                variant="alfa"
+                                disabled={isRedeemingBenefit}
+                                onClick={() => handleApplyJuntosCompanions('separate_tickets_cashbox')}
+                                className="w-full text-xs h-10 text-white"
+                              >
+                                {isRedeemingBenefit ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                                ) : (
+                                  <CreditCard className="h-4 w-4 mr-1.5" />
+                                )}
+                                Vincular y Cobrar a {unpaidMembers[0]?.nombre}
+                              </Button>
+                              {!fromCashbox && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isRedeemingBenefit}
+                                  onClick={() => handleApplyJuntosCompanions('link_only')}
+                                  className="w-full bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs h-9"
+                                >
+                                  Solo Vincular (Cobrar después)
+                                </Button>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[11px] text-slate-400 text-center">
+                                ¿Cómo realizarán el cobro en recepción?
+                              </p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <Button
+                                  type="button"
+                                  variant="alfa"
+                                  disabled={isRedeemingBenefit}
+                                  onClick={() => handleApplyJuntosCompanions('single_ticket')}
+                                  className="text-xs h-10 text-white font-sans"
+                                >
+                                  <CreditCard className="h-4 w-4 mr-1.5" />
+                                  1 Solo Ticket (${formatMoney(groupMinTotal)})
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isRedeemingBenefit}
+                                  onClick={() => handleApplyJuntosCompanions('separate_tickets_cashbox')}
+                                  className="bg-transparent border-blue-500/60 text-blue-300 hover:bg-blue-500/15 font-bold text-xs h-10 font-sans"
+                                >
+                                  <Users className="h-4 w-4 mr-1.5 text-blue-400" />
+                                  Tickets Separados (${formatMoney(unitMinPrice)} c/u)
+                                </Button>
+                              </div>
+                              {!fromCashbox && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={isRedeemingBenefit}
+                                  onClick={() => handleApplyJuntosCompanions('link_only')}
+                                  className="w-full bg-transparent border-white/20 text-slate-300 hover:bg-white/10 text-xs h-9"
+                                >
+                                  Solo Vincular al Llegar (Cobrar después)
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Opción B: Hijos Menores sin App */}
+                  {juntosOption === 'minors' && (
+                    <div className="p-3.5 rounded-xl bg-[#161E35] border border-white/15 space-y-3 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-white">¿Cuántos hijos menores asisten?</p>
+                          <p className="text-[11px] text-slate-400 font-sans">
+                            +{juntosCoins} Alfa Coins por cada hijo (sin límite)
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 bg-[#0F172A] px-2.5 py-1.5 rounded-lg border border-white/15">
+                          <button
+                            type="button"
+                            onClick={() => setJuntosMinorsCount(prev => Math.max(1, prev - 1))}
+                            disabled={juntosMinorsCount <= 1}
+                            className="text-slate-300 hover:text-white disabled:opacity-30 p-1 transition-colors"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="text-sm font-bold text-white min-w-[24px] text-center font-sans">
+                            {safeMinors}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setJuntosMinorsCount(prev => prev + 1)}
+                            className="text-slate-300 hover:text-white p-1 transition-colors"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-[#0F172A]/90 border border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs font-sans">
+                        <span className="text-slate-300">
+                          Consumo mínimo ({minorsTotalParticipants} serv.):{' '}
+                          <strong className="text-white font-semibold">${formatMoney(minorsReqAmount)} MXN</strong>
+                        </span>
+                        <span className="text-[#C5A880] font-bold">+{minorsTotalCoins} Alfa Coins</span>
+                      </div>
+
+                      {titularPaidMinorsCover ? (
+                        <>
+                          <div className="p-2.5 rounded-lg bg-blue-500/15 border border-blue-500/40 text-xs text-blue-200 font-sans">
+                            ✓ Pago de ${formatMoney(titularTodaySales!.totalQualifyingMoney)} MXN ({titularTodaySales!.totalQualifyingServices} serv.) detectado hoy.
+                          </div>
+                          <Button
+                            type="button"
+                            variant="alfa"
+                            disabled={isRedeemingBenefit}
+                            onClick={() => handleCreditJuntosPostPayment('minors')}
+                            className="w-full text-xs h-10 text-white"
+                          >
+                            {isRedeemingBenefit ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                            ) : (
+                              <Coins className="h-4 w-4 mr-1.5 text-[#C5A880]" />
+                            )}
+                            Acreditar +{minorsTotalCoins} Alfa Coins Ahora
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          {titularTodaySales?.hasPaidToday && (
+                            <p className="text-[11px] text-slate-400 font-sans">
+                              Pagó hoy ${formatMoney(titularTodaySales.totalQualifyingMoney)} ({titularTodaySales.totalQualifyingServices} serv.) — para acreditar sin volver a cobrar se requieren ${formatMoney(minorsReqAmount)} ({minorsTotalParticipants} serv.).
+                            </p>
+                          )}
+                          <Button
+                            type="button"
+                            variant="alfa"
+                            onClick={handleApplyJuntosMinors}
+                            className="w-full text-xs h-10 text-white"
+                          >
+                            <CreditCard className="h-4 w-4 mr-1.5" />
+                            Aplicar con {safeMinors} {safeMinors === 1 ? 'Menor' : 'Menores'} en Caja
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-1 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleResetScanner}
+                      className="text-xs text-slate-400 hover:text-white"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                      Escanear otro código
+                    </Button>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* VISTA 1: RESULTADO DE CLIENTE O BENEFICIO ESCANEADO */}
-            {!isFreeCutRedemptionView && !isScanningCompanion && (scannedClient || scannedBenefit) && (
+            {!isFreeCutRedemptionView && !isJuntosRedemptionView && !isScanningCompanion && (scannedClient || scannedBenefit) && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
                 {/* TARJETA DESTACADA DE BENEFICIO ESCANEADO */}
                 {scannedBenefit && (
@@ -2126,221 +3129,6 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                             🪙 Recompensa al Anfitrión: Al cobrarse la primera visita equivalente a 1 Corte de cabello vigente (${formatMoney(currentHaircutPrice)} MXN antes de desc. / ${formatMoney(calculateReferralMinNetPurchase(currentHaircutPrice))} MXN neto), su anfitrión recibirá 500 Alfa Coins y notificación en su App.
                           </p>
                         </div>
-                      </div>
-                    )}
-
-                    {/* PANEL INTERACTIVO RECEPCIÓN: JUNTOS ES MEJOR */}
-                    {scannedBenefit.isJuntosBenefit && !scannedBenefit.isBlocked && (
-                      <div className="mt-3.5 p-3.5 rounded-xl bg-[#0F172A]/95 border-2 border-blue-500 space-y-3 relative z-10">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-blue-400 shrink-0" />
-                            <span className="text-xs font-bold text-white">
-                              ¿Con quién asiste {scannedClient?.nombre || 'el cliente'} hoy?
-                            </span>
-                          </div>
-                          <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[10px] font-semibold">
-                            +{JUNTOS_REWARD_COINS_PER_PERSON} Coins c/u
-                          </Badge>
-                        </div>
-
-                        {/* Dos opciones principales para Recepción */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setJuntosOption('minors')}
-                            className={cn(
-                              'p-3 rounded-xl border text-left transition-all flex flex-col gap-1',
-                              juntosOption === 'minors'
-                                ? 'bg-[#202A49] border-2 border-[#C5A880] shadow-md'
-                                : 'bg-[#161E35] border-white/15 hover:border-blue-400/60'
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <Users className="h-4 w-4 text-[#C5A880] shrink-0" />
-                                Son menores de edad
-                              </span>
-                              {juntosOption === 'minors' && (
-                                <CheckCircle2 className="h-4 w-4 text-[#C5A880] shrink-0" />
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-300 leading-tight">
-                              Hijos sin celular. Los Alfa Coins de todos se suman a la cuenta del papá/mamá.
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setJuntosOption('companions_app')}
-                            className={cn(
-                              'p-3 rounded-xl border text-left transition-all flex flex-col gap-1',
-                              juntosOption === 'companions_app'
-                                ? 'bg-[#202A49] border-2 border-[#C5A880] shadow-md'
-                                : 'bg-[#161E35] border-white/15 hover:border-blue-400/60'
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                                <Smartphone className="h-4 w-4 text-blue-400 shrink-0" />
-                                Cada uno tiene su App
-                              </span>
-                              {juntosOption === 'companions_app' && (
-                                <CheckCircle2 className="h-4 w-4 text-[#C5A880] shrink-0" />
-                              )}
-                            </div>
-                            <span className="text-[11px] text-slate-300 leading-tight">
-                              Amigos o familiares con cuenta propia (+400 Alfa Coins en la app de cada uno).
-                            </span>
-                          </button>
-                        </div>
-
-                        {/* OPCIÓN 1: HIJOS MENORES DE EDAD (SIN LÍMITE) */}
-                        {juntosOption === 'minors' && (
-                          <div className="p-3 rounded-xl bg-[#161E35] border border-[#C5A880]/40 space-y-3 animate-in fade-in duration-150">
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <p className="text-xs font-bold text-white">
-                                  ¿Cuántos hijos menores de edad asisten?
-                                </p>
-                                <p className="text-[11px] text-slate-300">
-                                  Sin límite de menores (+{JUNTOS_REWARD_COINS_PER_PERSON} Alfa Coins por cada hijo)
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 bg-[#0F172A] px-2.5 py-1.5 rounded-lg border border-white/15">
-                                <button
-                                  type="button"
-                                  onClick={() => setJuntosMinorsCount(prev => Math.max(1, prev - 1))}
-                                  disabled={juntosMinorsCount <= 1}
-                                  className="text-slate-300 hover:text-white disabled:opacity-30 p-1 transition-colors"
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </button>
-                                <span className="text-sm font-bold text-white min-w-[24px] text-center font-sans">
-                                  {juntosMinorsCount}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setJuntosMinorsCount(prev => prev + 1)}
-                                  className="text-slate-300 hover:text-white p-1 transition-colors"
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="p-2.5 rounded-lg bg-[#0F172A]/80 border border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 text-xs">
-                              <span className="text-slate-300">
-                                Consumo mínimo ({1 + juntosMinorsCount} cortes × ${formatMoney(currentHaircutPrice)}):{' '}
-                                <strong className="text-white font-semibold font-sans">
-                                  ${formatMoney(currentHaircutPrice * (1 + juntosMinorsCount))}
-                                </strong>
-                              </span>
-                              <span className="text-[#C5A880] font-bold font-sans">
-                                Total a acreditar: +{JUNTOS_REWARD_COINS_PER_PERSON * (1 + juntosMinorsCount)} Alfa Coins
-                              </span>
-                            </div>
-
-                            <Button
-                              type="button"
-                              onClick={handleApplyJuntosMinors}
-                              className="w-full btn-vatos-alfa font-bold text-xs h-10 text-white"
-                            >
-                              <CreditCard className="h-4 w-4 mr-1.5" />
-                              Aplicar con {juntosMinorsCount} {juntosMinorsCount === 1 ? 'Menor' : 'Menores'} y Pasar a Caja
-                            </Button>
-                          </div>
-                        )}
-
-                        {/* OPCIÓN 2: CADA UNO TIENE SU APLICACIÓN */}
-                        {juntosOption === 'companions_app' && (
-                          <div className="p-3 rounded-xl bg-[#161E35] border border-blue-500/40 space-y-3 animate-in fade-in duration-150">
-                            <div className="space-y-1.5">
-                              <p className="text-[11px] font-semibold text-slate-300 uppercase tracking-wide">
-                                Participantes verificados en el grupo:
-                              </p>
-                              <div className="p-2 rounded-lg bg-[#0F172A] border border-white/10 flex items-center justify-between text-xs">
-                                <span className="text-white font-semibold truncate">
-                                  1. {scannedClient?.nombre} {scannedClient?.apellido || ''} (Titular)
-                                </span>
-                                <span className="text-[#C5A880] font-bold shrink-0 font-sans">
-                                  +{JUNTOS_REWARD_COINS_PER_PERSON} Coins
-                                </span>
-                              </div>
-
-                              {juntosCompanions.map((comp, idx) => (
-                                <div
-                                  key={comp.id}
-                                  className="p-2 rounded-lg bg-[#0F172A] border border-blue-500/40 flex items-center justify-between text-xs"
-                                >
-                                  <span className="text-white font-semibold truncate">
-                                    {idx + 2}. {comp.nombre} (Verificado ✓)
-                                  </span>
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    <span className="text-[#C5A880] font-bold font-sans">
-                                      +{JUNTOS_REWARD_COINS_PER_PERSON} Coins
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setJuntosCompanions(prev => prev.filter(c => c.id !== comp.id))
-                                      }
-                                      className="text-slate-400 hover:text-red-400 p-0.5"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => {
-                                setIsScanningCompanion(true);
-                                setActiveTab('camera');
-                                setTimeout(() => startCamera(), 150);
-                              }}
-                              className="w-full border-blue-500/50 text-blue-300 hover:bg-blue-500/15 text-xs font-semibold h-9"
-                            >
-                              <QrCode className="h-4 w-4 mr-1.5 text-blue-400" />
-                              {juntosCompanions.length === 0
-                                ? 'Escanear QR del Acompañante'
-                                : 'Escanear otro acompañante con App'}
-                            </Button>
-
-                            {juntosCompanions.length > 0 && (
-                              <div className="pt-2 border-t border-white/10 space-y-2">
-                                <p className="text-[11px] text-slate-300 text-center">
-                                  ¿Cómo realizarán su pago en recepción?
-                                </p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  <Button
-                                    type="button"
-                                    disabled={isRedeemingBenefit}
-                                    onClick={() => handleApplyJuntosCompanions(false)}
-                                    className="bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10"
-                                  >
-                                    <CreditCard className="h-4 w-4 mr-1.5" />
-                                    1 Solo Ticket (${formatMoney(currentHaircutPrice * (1 + juntosCompanions.length))})
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    disabled={isRedeemingBenefit}
-                                    onClick={() => handleApplyJuntosCompanions(true)}
-                                    className="border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/15 font-bold text-xs h-10"
-                                  >
-                                    <Users className="h-4 w-4 mr-1.5" />
-                                    Tickets Separados (${formatMoney(currentHaircutPrice)} c/u)
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     )}
 
@@ -2707,8 +3495,35 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             )}
 
             {/* VISTA 3: ESCÁNER ACTIVO (CÁMARA / MANUAL) */}
-            {!scannedClient && !scannedPromo && !scannedBenefit && (
+            {(isScanningCompanion || (!scannedClient && !scannedPromo && !scannedBenefit)) && (
               <div className="space-y-3">
+                {isScanningCompanion && (
+                  <div className="p-3 rounded-xl bg-[#161E35] border-2 border-blue-500/60 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Users className="h-4 w-4 text-blue-400 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">
+                          Escaneando acompañante de {scannedClient?.nombre || 'Titular'}
+                        </p>
+                        <p className="text-[11px] text-slate-300 truncate">
+                          Muestra el QR de Juntos es Mejor o Pase Alfa del acompañante.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        setIsScanningCompanion(false);
+                        await stopCamera();
+                      }}
+                      className="bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs h-8 shrink-0"
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
                 {/* Selector de modo */}
                 <div className="flex bg-[#161E35] p-1 rounded-xl border border-white/10">
                   <button

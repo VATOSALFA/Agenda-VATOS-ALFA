@@ -2306,12 +2306,16 @@ export async function revertSaleLoyaltyAndBenefits(
           ? Number(snap.prev_cortes_acumulados)
           : targetStamps;
       clientUpdate.cortes_acumulados = restoredStamps;
+      clientUpdate.cortesAcumulados = restoredStamps;
       clientUpdate.corte_gratis_disponible = true;
+      clientUpdate.corteGratisDisponible = true;
       summary.push(`10.° Corte Gratis restaurado (${restoredStamps}/${targetStamps} sellos)`);
     } else if (stampsAwardedInSale > 0) {
       const nextStamps = Math.max(0, currentStamps - stampsAwardedInSale);
       clientUpdate.cortes_acumulados = nextStamps;
+      clientUpdate.cortesAcumulados = nextStamps;
       clientUpdate.corte_gratis_disponible = nextStamps >= targetStamps;
+      clientUpdate.corteGratisDisponible = nextStamps >= targetStamps;
       if (clientData.ultimo_sello_fecha === saleDayStr) {
         clientUpdate.ultimo_sello_fecha =
           snap?.prev_ultimo_sello_fecha !== undefined
@@ -2346,6 +2350,7 @@ export async function revertSaleLoyaltyAndBenefits(
       Math.max(0, currentVisits - visitAdded)
     );
     clientUpdate.citas_asistidas = nextVisits;
+    clientUpdate.citasAsistidas = nextVisits;
     clientUpdate.visitas_totales = nextVisits;
 
     if (clientData.ultima_visita_fecha === saleDayStr && !remainingVisitDays.has(saleDayStr)) {

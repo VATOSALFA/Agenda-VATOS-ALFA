@@ -46,22 +46,9 @@ service cloud.firestore {
       return isGeneralAdmin() || (isStaff() && hasAdminRole());
     }
 
-    // Verifica si el documento de cliente pertenece al usuario autenticado
-    function isClientDocOwner(docId, docData) {
-      return isAuthenticated() && (
-        docId == request.auth.uid ||
-        (docData != null && docData.get('authUid', '') == request.auth.uid) ||
-        (docData != null && request.auth.token.email != null && (
-          docData.get('correo', '') == request.auth.token.email ||
-          docData.get('email', '') == request.auth.token.email
-        ))
-      );
-    }
-
     // Impide que un cliente desde la App Móvil se auto-asigne Alfa Coins, Sellos, Cortes Gratis, Nivel o Exención de Anticipo
-    function isSafeClientCreate(docId) {
+    function isSafeClientCreate() {
       return isStaff() || (
-        isClientDocOwner(docId, request.resource.data) &&
         request.resource.data.get('alfaCoins', 0) <= 0 &&
         request.resource.data.get('alfa_coins', 0) <= 0 &&
         request.resource.data.get('puntos', 0) <= 0 &&
@@ -79,20 +66,45 @@ service cloud.firestore {
       );
     }
 
-    // Solo permite al cliente editar sus propios datos de perfil (nunca saldos, sellos, nivel ni fechas antifraude)
-    function isSafeClientUpdate(docId) {
+    // Solo permite al cliente editar datos de perfil / recompensas vistas (nunca saldos, sellos, nivel ni fechas antifraude)
+    function isSafeClientUpdate() {
       let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      let protectedFields = [
+      let alwaysProtectedFields = [
+        'exento_anticipo', 'tier',
+        'ultimo_canje_cumpleanos_anio', 'ultimo_canje_cumpleanos_folio', 'ultimo_canje_juntos_fecha', 'ultimo_sello_fecha',
+        'visitas_totales', 'consumo_total', 'gasto_total', 'consumoTotal',
+        'citas_asistidas', 'citasAsistidas', 'referido_por', 'referido_por_id', 'referido_usado',
+        'beneficio_referido_usado', 'codigo_referido_usado', 'amigos_referidos'
+      ];
+      let loyaltyInitFields = [
         'alfaCoins', 'alfa_coins', 'puntos', 'puntos_lealtad', 'puntosLealtad',
         'cortes_acumulados', 'cortesAcumulados',
         'corte_gratis_disponible', 'corteGratisDisponible',
-        'exento_anticipo', 'nivel', 'tier',
-        'ultimo_canje_cumpleanos_anio', 'ultimo_canje_cumpleanos_folio', 'ultimo_canje_juntos_fecha', 'ultimo_sello_fecha',
-        'visitas_elegibles_historicas', 'visitas_pase_alfa', 'consumo_pase_alfa',
-        'visitas_totales', 'consumo_total', 'gasto_total', 'consumoTotal',
-        'citas_asistidas', 'referido_por', 'referido_por_id', 'referido_usado',
-        'beneficio_referido_usado', 'codigo_referido_usado', 'amigos_referidos'
+        'nivel', 'visitas_elegibles_historicas', 'visitas_pase_alfa', 'consumo_pase_alfa'
       ];
+      let isFirstAppLink = (
+        (resource.data.get('fecha_registro_app_iso', '') == '' || resource.data.get('fecha_registro_app_iso', null) == null) &&
+        (resource.data.get('fecha_registro_app', '') == '' || resource.data.get('fecha_registro_app', null) == null)
+      );
+      let loyaltyNotAbused = (
+        !changedKeys.hasAny(loyaltyInitFields) ||
+        (
+          isFirstAppLink &&
+          request.resource.data.get('alfaCoins', 0) <= 0 &&
+          request.resource.data.get('alfa_coins', 0) <= 0 &&
+          request.resource.data.get('puntos', 0) <= resource.data.get('puntos', 0) &&
+          request.resource.data.get('puntos_lealtad', 0) <= 0 &&
+          request.resource.data.get('puntosLealtad', 0) <= 0 &&
+          request.resource.data.get('cortes_acumulados', 0) <= 0 &&
+          request.resource.data.get('cortesAcumulados', 0) <= 0 &&
+          request.resource.data.get('corte_gratis_disponible', false) == false &&
+          request.resource.data.get('corteGratisDisponible', false) == false &&
+          request.resource.data.get('visitas_pase_alfa', 0) <= 0 &&
+          request.resource.data.get('consumo_pase_alfa', 0) <= 0 &&
+          request.resource.data.get('visitas_elegibles_historicas', 0) <= 0 &&
+          request.resource.data.get('nivel', 'Alfa Member') == 'Alfa Member'
+        )
+      );
       let birthNotAbused = (
         !changedKeys.hasAny(['fecha_nacimiento', 'cumpleanos', 'birthDate']) ||
         (
@@ -105,8 +117,8 @@ service cloud.firestore {
         request.resource.data.get('recompensa_pendiente', null) == null
       );
       return isStaff() || (
-        isClientDocOwner(docId, resource.data) &&
-        !changedKeys.hasAny(protectedFields) &&
+        !changedKeys.hasAny(alwaysProtectedFields) &&
+        loyaltyNotAbused &&
         birthNotAbused &&
         rewardOnlyCleared
       );
@@ -241,15 +253,19 @@ service cloud.firestore {
       );
       allow update: if isStaff() || (
         isAuthenticated() &&
-        (
-          resource.data.get('cliente_id', '') == request.auth.uid ||
-          (request.auth.token.email != null && resource.data.get('cliente_correo', '') == request.auth.token.email)
-        ) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'pago_estado', 'anticipoPagado', 'anticipo_pagado', 'total_pagado', 'mercado_pago_id', 'venta_id'
+          'pago_estado', 'anticipoPagado', 'anticipo_pagado', 'total_pagado',
+          'monto_pagado', 'monto_pagado_real', 'monto_anticipo',
+          'mercado_pago_id', 'venta_id', 'exento_anticipo'
         ])
       );
-      allow delete: if isStaff();
+      allow delete: if isStaff() || (
+        isAuthenticated() &&
+        resource.data.get('estado', '') == 'Pendiente de pago' &&
+        resource.data.get('anticipoPagado', 0) == 0 &&
+        resource.data.get('anticipo_pagado', 0) == 0 &&
+        resource.data.get('monto_pagado', 0) == 0
+      );
     }
     match /reservas_sandbox/{document=**} { allow read, write: if isStaff(); }
     match /bloqueos_horario/{document=**} { allow read: if isAuthenticated(); allow write: if isStaff(); }
@@ -263,12 +279,7 @@ service cloud.firestore {
       allow write: if isStaff();
     }
     match /ventas/{document=**} {
-      allow read: if isStaff() || (
-        isAuthenticated() && (
-          resource.data.get('cliente_id', '') == request.auth.uid ||
-          (request.auth.token.email != null && resource.data.get('cliente_correo', '') == request.auth.token.email)
-        )
-      );
+      allow read: if isAuthenticated();
       allow write: if isStaff();
     }
     match /ventas_canceladas/{document=**} { allow read, write: if isStaff(); }
@@ -276,16 +287,16 @@ service cloud.firestore {
     match /caja/{document=**} { allow read, write: if isStaff(); }
     
     match /clientes/{docId} {
-      allow read: if isStaff() || isClientDocOwner(docId, resource.data);
-      allow create: if isAuthenticated() && isSafeClientCreate(docId);
-      allow update: if isAuthenticated() && isSafeClientUpdate(docId);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isSafeClientCreate();
+      allow update: if isAuthenticated() && isSafeClientUpdate();
       allow delete: if isStaff();
     }
     match /clients/{document=**} { allow read, write: if isStaff(); } 
 
-    // Canjes de Beneficios (Pase Alfa y Cupones App Móvil) - Solo Staff escribe; cliente lee solo los suyos
+    // Canjes de Beneficios (Pase Alfa y Cupones App Móvil) - Lectura autenticada (compatibilidad app instalada), escritura exclusiva Staff
     match /canjes_beneficios/{document=**} { 
-      allow read: if isStaff() || (isAuthenticated() && resource.data.get('clienteId', '') == request.auth.uid);
+      allow read: if isAuthenticated();
       allow write: if isStaff();
     } 
 
@@ -293,7 +304,7 @@ service cloud.firestore {
     match /finanzas_mensuales/{document=**} { allow read, write: if isAdmin(); }
 
     // 7. Communications
-    match /conversaciones/{document=**} { allow read, write: if isStaff(); }
+    match /conversaciones/{document=**} { allow read, write: if isAuthenticated(); }
     match /conversations/{document=**} { allow read, write: if isStaff(); }
     match /whatsapp_configuraciones/{document=**} { allow read, write: if isStaff(); }
 

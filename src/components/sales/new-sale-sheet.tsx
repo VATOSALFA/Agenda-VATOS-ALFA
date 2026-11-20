@@ -2442,30 +2442,44 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const coinsMult = activeCoinsMultiplier?.multiplier || 1;
 
+        const effectiveClientId = targetClient?.id || clientId;
+        let liveClient: any = targetClient;
+        if (db && effectiveClientId) {
+            try {
+                const freshClientSnap = await getDoc(doc(db, 'clientes', effectiveClientId));
+                if (freshClientSnap.exists()) {
+                    liveClient = { ...(targetClient || {}), ...freshClientSnap.data(), id: effectiveClientId };
+                }
+            } catch (e) {
+                console.warn('No se pudo obtener el perfil en vivo del cliente antes de acreditar lealtad:', e);
+            }
+        }
+        const liveHasApp = Boolean((liveClient && isClientWithApp(liveClient)) || hasAppDownloaded);
+
         const loyaltySnapshot: SaleLoyaltySnapshot = {
             aplicado: true,
-            cliente_id: targetClient?.id || clientId || '',
+            cliente_id: liveClient?.id || clientId || '',
             fecha_dia: todayStr,
             consumo_real_sumado: 0,
             visita_asistida_sumada: 0,
-            prev_ultima_visita_fecha: String((targetClient as any)?.ultima_visita_fecha || ''),
+            prev_ultima_visita_fecha: String((liveClient as any)?.ultima_visita_fecha || ''),
             visita_elegible_sumada: 0,
             alfa_coins_ganados: 0,
             alfa_coins_canjeados: 0,
             multiplicador_aplicado: coinsMult,
             sellos_ganados: 0,
             corte_gratis_canjeado: false,
-            prev_cortes_acumulados: Number(targetClient?.cortes_acumulados ?? targetClient?.cortesAcumulados ?? 0),
-            prev_corte_gratis_disponible: Boolean((targetClient as any)?.corte_gratis_disponible),
-            prev_ultimo_sello_fecha: String((targetClient as any)?.ultimo_sello_fecha ?? ''),
+            prev_cortes_acumulados: Number(liveClient?.cortes_acumulados ?? liveClient?.cortesAcumulados ?? 0),
+            prev_corte_gratis_disponible: Boolean((liveClient as any)?.corte_gratis_disponible),
+            prev_ultimo_sello_fecha: String((liveClient as any)?.ultimo_sello_fecha ?? ''),
             beneficio_folio: appliedBenefit?.folio || undefined,
             beneficio_id: appliedBenefit?.benefitId || appliedBenefit?.id || undefined,
         };
 
         // 1. Actualizar Consumo Histórico ($ MXN), Visitas Históricas, Sellos, AlfaCoins y Nivel (Pase Alfa Club)
-        if (db && targetClient) {
+        if (db && liveClient) {
             try {
-                const clientRef = doc(db, 'clientes', targetClient.id);
+                const clientRef = doc(db, 'clientes', liveClient.id);
                 const realMoneySpent = Math.max(0, Math.round((total + Number(anticipoPagado || 0)) * 100) / 100);
                 const hasServiceInCart = cart.some(it => it.tipo === 'servicio');
                 const isFreeCutRedemption = Boolean(
@@ -2474,7 +2488,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     appliedBenefit?.folio?.startsWith('VA-CORTE')
                 );
 
-                const alreadyCountedToday = (targetClient as any).ultima_visita_fecha === todayStr;
+                const alreadyCountedToday = (liveClient as any).ultima_visita_fecha === todayStr;
                 const freeCutCountsAsVisit = decimaConfig.contar_como_visita_nivel === true;
                 const visitDelta = (!isFreeCutRedemption || freeCutCountsAsVisit) && hasServiceInCart && !alreadyCountedToday ? 1 : 0;
 
@@ -2483,19 +2497,17 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 loyaltySnapshot.corte_gratis_canjeado = isFreeCutRedemption;
 
                 // Evaluar nivel antes y después de la compra actual
-                const prevEvaluated = evaluateClientAlfaTier(targetClient, nivelesConfig, {
-                    overrideVisits:
-                        reconciledClientStats?.clientId === targetClient.id
-                            ? reconciledClientStats.visits
-                            : undefined,
-                    overrideSpend:
-                        reconciledClientStats?.clientId === targetClient.id
-                            ? reconciledClientStats.spend
-                            : undefined,
+                const liveClientId = String(liveClient.id || effectiveClientId || '');
+                const hasReconciledStats = Boolean(
+                    reconciledClientStats && liveClientId && reconciledClientStats.clientId === liveClientId
+                );
+                const prevEvaluated = evaluateClientAlfaTier(liveClient, nivelesConfig, {
+                    overrideVisits: hasReconciledStats ? reconciledClientStats!.visits : undefined,
+                    overrideSpend: hasReconciledStats ? reconciledClientStats!.spend : undefined,
                     forceEvaluateWhenPaused: true,
                 });
 
-                const nextEvaluated = evaluateClientAlfaTier(targetClient, nivelesConfig, {
+                const nextEvaluated = evaluateClientAlfaTier(liveClient, nivelesConfig, {
                     overrideVisits: prevEvaluated.visitasHistoricas + visitDelta,
                     overrideSpend: Math.round((prevEvaluated.consumoHistorico + realMoneySpent) * 100) / 100,
                     forceEvaluateWhenPaused: true,
@@ -2507,7 +2519,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 const updatePayload: Record<string, any> = {};
 
                 // Los niveles y ascensos son exclusivos para usuarios que tienen la app móvil
-                if (hasAppDownloaded && nextEvaluated.tierName && nextEvaluated.tierName !== 'Sin Nivel') {
+                if (liveHasApp && nextEvaluated.tierName && nextEvaluated.tierName !== 'Sin Nivel') {
                     updatePayload.nivel = nextEvaluated.tierName;
                 }
 
@@ -2515,22 +2527,23 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     updatePayload.consumo_total = increment(realMoneySpent);
                     updatePayload.gasto_total = increment(realMoneySpent);
                     updatePayload.consumoTotal = increment(realMoneySpent);
-                    if (hasAppDownloaded) {
+                    if (liveHasApp) {
                         updatePayload.consumo_pase_alfa = increment(realMoneySpent);
                     }
                 }
 
                 if (visitDelta > 0) {
                     updatePayload.citas_asistidas = increment(1);
+                    updatePayload.citasAsistidas = increment(1);
                     updatePayload.visitas_totales = increment(1);
                     updatePayload.ultima_visita_fecha = todayStr;
-                    if (hasAppDownloaded) {
+                    if (liveHasApp) {
                         updatePayload.visitas_pase_alfa = increment(1);
                     }
                 }
 
                 // Si el cliente tiene la App descargada, actualizar también sus AlfaCoins y Sello del Pase Alfa
-                if (hasAppDownloaded) {
+                if (liveHasApp) {
                     const coinsPerPeso = coinsConfig.activo !== false ? Math.max(0, Number(coinsConfig.coins_por_peso ?? 1)) : 0;
                     // Usar realMoneySpent (incluye anticipo/pago total online) para no perder Alfa Coins al pagar por adelantado
                     const pointsEarned = realMoneySpent > 0 && coinsPerPeso > 0 ? Math.floor(realMoneySpent * coinsPerPeso) * coinsMult : 0;
@@ -2548,7 +2561,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         updatePayload.puntos_lealtad = increment(deltaCoins);
                     }
 
-                    const currStamps = Number(targetClient.cortes_acumulados ?? targetClient.cortesAcumulados ?? 0);
+                    const currStamps = Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0);
                     let nextStamps = currStamps;
                     let stampAdded = false;
 
@@ -2558,7 +2571,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             : currentHaircutPrice;
 
                     const stampEvaluation = evaluatePaseAlfaStampsForSale({
-                        client: targetClient,
+                        client: liveClient,
                         hasAppDownloaded: true,
                         cart,
                         realMoneySpent,
@@ -2575,7 +2588,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         updatePayload.cortesAcumulados = 0;
                         updatePayload.corte_gratis_disponible = false;
                         updatePayload.corteGratisDisponible = false;
-                        updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
+                        updatePayload.ultimo_sello_fecha = (liveClient as any).ultimo_sello_fecha ?? '';
                         nextStamps = 0;
                     } else if (stampsToAward > 0) {
                         nextStamps = Math.min(targetStampsConfig, currStamps + stampsToAward);
@@ -2599,7 +2612,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         // Preservar explícitamente el campo ('' si nunca ha acreditado sello hoy)
                         // para que un servicio menor (ej. ceja $30) o compra de producto no bloquee
                         // un corte elegible más tarde ese mismo día.
-                        updatePayload.ultimo_sello_fecha = (targetClient as any).ultimo_sello_fecha ?? '';
+                        updatePayload.ultimo_sello_fecha = (liveClient as any).ultimo_sello_fecha ?? '';
                     }
 
                     const didLevelUp = Boolean(
@@ -2610,11 +2623,11 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                     if (stampAdded || pointsEarned > 0 || didLevelUp) {
                         const prevCoins = Number(
-                            targetClient.alfaCoins ??
-                            targetClient.alfa_coins ??
-                            targetClient.puntos_lealtad ??
-                            targetClient.puntosLealtad ??
-                            targetClient.puntos ??
+                            liveClient.alfaCoins ??
+                            liveClient.alfa_coins ??
+                            liveClient.puntos_lealtad ??
+                            liveClient.puntosLealtad ??
+                            liveClient.puntos ??
                             0
                         );
                         const newCoinsTotal = Math.max(0, prevCoins + deltaCoins);
@@ -2671,11 +2684,20 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 ) {
                     toast({
                         title: `🏆 ¡Ascenso Automático a ${nextEvaluated.tierName}!`,
-                        description: `${targetClient.nombre} ha alcanzado ${nextEvaluated.visitasHistoricas} visitas / $${formatMoney(nextEvaluated.consumoHistorico)} MXN y ahora disfruta de ${nextEvaluated.cashbackPct}% Cashback y privilegios ${nextEvaluated.tierName}.`,
+                        description: `${liveClient.nombre || 'El cliente'} ha alcanzado ${nextEvaluated.visitasHistoricas} visitas / $${formatMoney(nextEvaluated.consumoHistorico)} MXN y ahora disfruta de ${nextEvaluated.cashbackPct}% Cashback y privilegios ${nextEvaluated.tierName}.`,
                     });
                 }
             } catch (e) {
                 console.error("Error updating client loyalty & tier in Firestore:", e);
+                loyaltySnapshot.aplicado = false;
+                loyaltySnapshot.sellos_ganados = 0;
+                loyaltySnapshot.alfa_coins_ganados = 0;
+                loyaltySnapshot.recompensa_pendiente_id = undefined;
+                toast({
+                    variant: 'destructive',
+                    title: 'Error al actualizar Pase Alfa',
+                    description: 'La venta se guardó, pero no se pudieron acreditar sellos/Alfa Coins en el perfil del cliente.',
+                });
             }
         }
 

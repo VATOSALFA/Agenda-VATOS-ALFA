@@ -729,7 +729,9 @@ En la sesión de Beatriz (Administradora del Local), **tienes plenas facultades 
       }
     }
   } catch (err: any) {
-    throw new Error(`Error al procesar solicitud en Janet Gerencia: ${err?.message || 'Error desconocido'}`);
+    console.error('Error al procesar solicitud en Janet Gerencia:', err);
+    responseText =
+      'Tuve una breve intermitencia al procesar la solicitud con la agenda de la sucursal. Por favor repíteme tu indicación para realizarla de inmediato.';
   }
 
   // Sanitizar respuesta para eliminar artefactos markdown crudos (---, ###, ****, etc.)

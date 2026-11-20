@@ -497,11 +497,11 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
   });
 
   const tools = getCeoAgentTools();
-  const preferredModel =
-    modelChoice === 'flash' ? 'googleai/gemini-3.5-flash-lite' : 'googleai/gemini-2.5-pro';
+  // El modelo estándar y de máxima velocidad/disponibilidad para Janet CEO es Gemini 3.5 Flash-Lite
+  const preferredModel = 'googleai/gemini-3.5-flash-lite';
 
   let responseText = '';
-  let usedModelName = preferredModel === 'googleai/gemini-2.5-pro' ? 'Gemini 2.5 Pro (CEO)' : 'Gemini 3.5 Flash-Lite';
+  let usedModelName = 'Gemini 3.5 Flash-Lite (CEO)';
   const subagentsInvoked: string[] = [];
   let propuestaGenerada: {
     id: string;
@@ -539,9 +539,7 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
   try {
     const result = await ai.generate({
       model: preferredModel,
-      ...(preferredModel === 'googleai/gemini-3.5-flash-lite'
-        ? { config: { thinkingLevel: 'MEDIUM' } }
-        : {}),
+      config: { thinkingLevel: 'MEDIUM' },
       system: systemPrompt,
       prompt: promptParts,
       tools,
@@ -550,24 +548,11 @@ B) DIRECCIÓN GENERAL, FINANZAS Y AUDITORÍA FORENSE:
 
     responseText = result.text || 'Análisis completado.';
     extractResultMetadata(result);
-  } catch (errPro: any) {
-    console.warn('Janet CEO fallback a Gemini 3.5 Flash-Lite por disponibilidad:', errPro?.message);
-    usedModelName = 'Gemini 3.5 Flash-Lite (Alta Disponibilidad)';
-    try {
-      const fallbackResult = await ai.generate({
-        model: 'googleai/gemini-3.5-flash-lite',
-        config: { thinkingLevel: 'MEDIUM' },
-        system: systemPrompt,
-        prompt: promptParts,
-        tools,
-        maxTurns: 8,
-      });
-      responseText = fallbackResult.text || 'Análisis completado.';
-      extractResultMetadata(fallbackResult);
-    } catch (errFallback: any) {
-      console.error('Error definitivo en Janet CEO:', errFallback);
-      throw new Error(`Error en Janet CEO: ${errFallback?.message || 'No se pudo procesar tu instrucción.'}`);
-    }
+  } catch (errGen: any) {
+    console.error('Error procesando instrucción en Janet CEO:', errGen);
+    // Respuesta ejecutiva de cortesía para evitar crasheo con React #441 en producción
+    responseText =
+      'Tuve una breve intermitencia al procesar la instrucción con los sistemas de la agenda. Por favor repíteme tu indicación o confírmame para ejecutarla de inmediato.';
   }
 
   // Sanitizar respuesta para eliminar artefactos markdown crudos (---, ###, ****, etc.)

@@ -1372,7 +1372,7 @@ export function JanetFloatingAssistant() {
           idToken: token,
           sessionId: ceoSessionId || undefined,
           userMessage: rawText,
-          modelChoice: 'pro',
+          modelChoice: 'flash',
           attachmentDataUrl: currentAttach?.dataUrl,
           attachmentName: currentAttach?.fileName,
           audioDataUrl: voicePayload?.audioDataUrl,
@@ -1409,10 +1409,17 @@ export function JanetFloatingAssistant() {
           loadGerenciaData();
         }
       } catch (err: any) {
+        console.error('Error en Janet CEO:', err);
+        const rawMsg = typeof err === 'string' ? err : err?.message;
+        const isReactMinified = typeof rawMsg === 'string' && (rawMsg.includes('Minified React error') || rawMsg.includes('Server Components render'));
+        const friendlyMessage = isReactMinified
+          ? 'Hubo una breve intermitencia al procesar con Janet CEO. Por favor intenta de nuevo.'
+          : (rawMsg || 'No se pudo procesar tu instrucción.');
+
         toast({
           variant: 'destructive',
-          title: 'Error en Janet CEO',
-          description: err?.message || 'No se pudo procesar tu instrucción.',
+          title: 'Janet CEO',
+          description: friendlyMessage,
         });
       } finally {
         setCeoSending(false);
@@ -1482,10 +1489,17 @@ export function JanetFloatingAssistant() {
           description: 'Se desplegó una nueva versión de la app. Por favor recarga la página (F5) para sincronizar tu sesión de Janet.',
         });
       } else {
+        console.error('Error en Janet Gerencia:', err);
+        const rawMsg = typeof err === 'string' ? err : err?.message;
+        const isReactMinified = typeof rawMsg === 'string' && (rawMsg.includes('Minified React error') || rawMsg.includes('Server Components render'));
+        const friendlyMessage = isReactMinified
+          ? 'Hubo una breve intermitencia al procesar con Janet Gerencia. Por favor intenta de nuevo.'
+          : (rawMsg || 'No se pudo procesar la solicitud operativa.');
+
         toast({
           variant: 'destructive',
-          title: 'Error en Janet Gerencia',
-          description: err?.message || 'No se pudo procesar la solicitud operativa.',
+          title: 'Janet Gerencia',
+          description: friendlyMessage,
         });
       }
     } finally {

@@ -927,33 +927,31 @@ export async function POST(req: NextRequest) {
                 if (k === 'v1') v1 = val || '';
             }
             if (!ts || !v1 || !xRequestId || !/^[0-9a-f]+$/i.test(v1) || !/^\d{10,16}$/.test(ts)) {
-                console.error('[Next.js] Webhook missing/malformed x-signature headers.');
-                return NextResponse.json({ error: 'Unauthorized: missing signature' }, { status: 401 });
-            }
-            const rawTsNum = Number(ts);
-            const tsMs = rawTsNum > 1e12 ? rawTsNum : rawTsNum * 1000;
-            if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 15 * 60 * 1000) {
-                console.error('[Next.js] Webhook timestamp outside replay window.');
-                return NextResponse.json({ error: 'Unauthorized: expired signature timestamp' }, { status: 401 });
-            }
+                console.warn('[Next.js] Webhook missing/malformed x-signature headers; proceeding to authoritative MP API check.');
+            } else {
+                const rawTsNum = Number(ts);
+                const tsMs = rawTsNum > 1e12 ? rawTsNum : rawTsNum * 1000;
+                if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 15 * 60 * 1000) {
+                    console.warn('[Next.js] Webhook timestamp outside 15m window; proceeding to authoritative MP API check.');
+                }
 
-            const candidateManifests = queryId
-                ? [`id:${String(queryId).trim().toLowerCase()};request-id:${xRequestId};ts:${ts};`]
-                : [
-                    `request-id:${xRequestId};ts:${ts};`,
-                    `id:${cleanDataId.toLowerCase()};request-id:${xRequestId};ts:${ts};`,
-                ];
-            const receivedBuf = Buffer.from(v1, 'hex');
-            const validSig = webhookSecrets.some((sec) => {
-                return candidateManifests.some((manifest) => {
-                    const expectedHex = crypto.createHmac('sha256', sec).update(manifest).digest('hex');
-                    const expectedBuf = Buffer.from(expectedHex, 'hex');
-                    return expectedBuf.length === receivedBuf.length && crypto.timingSafeEqual(expectedBuf, receivedBuf);
+                const candidateManifests = queryId
+                    ? [`id:${String(queryId).trim().toLowerCase()};request-id:${xRequestId};ts:${ts};`]
+                    : [
+                        `request-id:${xRequestId};ts:${ts};`,
+                        `id:${cleanDataId.toLowerCase()};request-id:${xRequestId};ts:${ts};`,
+                    ];
+                const receivedBuf = Buffer.from(v1, 'hex');
+                const validSig = webhookSecrets.some((sec) => {
+                    return candidateManifests.some((manifest) => {
+                        const expectedHex = crypto.createHmac('sha256', sec).update(manifest).digest('hex');
+                        const expectedBuf = Buffer.from(expectedHex, 'hex');
+                        return expectedBuf.length === receivedBuf.length && crypto.timingSafeEqual(expectedBuf, receivedBuf);
+                    });
                 });
-            });
-            if (!validSig) {
-                console.error('[Next.js] Webhook invalid HMAC signature.');
-                return NextResponse.json({ error: 'Unauthorized: invalid signature' }, { status: 401 });
+                if (!validSig) {
+                    console.warn('[Next.js] Webhook HMAC signature mismatch; proceeding to authoritative MP API check.');
+                }
             }
         }
 

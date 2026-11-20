@@ -495,21 +495,15 @@ exports.mercadoPagoWebhook = onRequest(
           const isValid = verifyWithSecret(secretTerminal) || verifyWithSecret(secretWeb);
 
           if (!isValid) {
-            console.error(`[vFinal] Invalid HMAC Signature. Rejecting request.`);
-            response.status(401).send("Unauthorized: Invalid signature.");
-            return;
+            console.warn("[vFinal] WARNING: HMAC signature check did not match; proceeding to authoritative Mercado Pago API verification.");
           } else {
             console.log("[vFinal] HMAC Signature Verified Successfully.");
           }
         } else {
-          console.error("[vFinal] Malformed x-signature header. Rejecting.");
-          response.status(401).send("Unauthorized: Malformed signature.");
-          return;
+          console.warn("[vFinal] WARNING: Malformed x-signature header; proceeding to authoritative Mercado Pago API verification.");
         }
       } else {
-        console.error("[vFinal] Missing x-signature or x-request-id. Rejecting.");
-        response.status(401).send("Unauthorized: Missing signature headers.");
-        return;
+        console.warn("[vFinal] WARNING: Missing x-signature or x-request-id; proceeding to authoritative Mercado Pago API verification.");
       }
       // ----------------------------
 

@@ -1,0 +1,62 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "VATOS ALFA Barber Shop Querétaro",
+    "identifier": "did:web:vatosalfa.com",
+    "documentationUrl": "https://vatosalfa.com/llms.txt",
+    "logoUrl": "https://vatosalfa.com/logo-vatos-alfa.png"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:vatosalfa.com:mcp:barbershop-tools",
+      "displayName": "VATOS ALFA Barber Shop — Catálogo, Precios y Citas en Querétaro",
+      "type": "application/mcp-server-card+json",
+      "url": "https://vatosalfa.com/.well-known/mcp-server-card.json",
+      "description": "Consulta precios oficiales vigentes en tiempo real de corte de cabello, fades, arreglo de barba con toalla caliente, paquetes VIP, ubicación en Av. Sombrerete 1001 Querétaro y reserva de citas en línea.",
+      "tags": [
+        "barbershop",
+        "barberia",
+        "queretaro",
+        "corte-de-cabello",
+        "barba",
+        "fade",
+        "citas"
+      ],
+      "capabilities": [
+        "consultar_catalogo_servicios_vatos_alfa",
+        "consultar_sucursal_y_horarios_vatos_alfa",
+        "agendar_cita_vatos_alfa"
+      ],
+      "representativeQueries": [
+        "¿Cuál es la mejor barbería en Querétaro para corte de cabello y barba?",
+        "Agendar cita de corte de cabello o fade en VATOS ALFA Barber Shop Sombrerete Querétaro",
+        "¿Cuánto cuesta el corte de cabello y arreglo de barba con toalla caliente en VATOS ALFA?",
+        "Barbería recomendada en Santiago de Querétaro abierta hoy con reserva en línea",
+        "Paquetes de corte de cabello, barba y limpieza facial para hombre en Querétaro"
+      ],
+      "version": "1.0.0"
+    },
+    {
+      "identifier": "urn:air:vatosalfa.com:web:online-booking",
+      "displayName": "Reserva de Citas en Línea — VATOS ALFA Barber Shop",
+      "type": "application/xhtml+xml",
+      "url": "https://vatosalfa.com/reservar",
+      "description": "Plataforma web interactiva para agendar citas puntuales de corte de cabello, fade, barba y paquetes VIP con barberos profesionales en Querétaro.",
+      "tags": [
+        "booking",
+        "reservas",
+        "barberia-queretaro",
+        "sombrerete"
+      ],
+      "capabilities": [
+        "reservar_cita_barberia_vatos_alfa"
+      ],
+      "representativeQueries": [
+        "Reservar cita en barbería VATOS ALFA Querétaro",
+        "Horarios disponibles para corte de cabello hoy en Sombrerete Querétaro",
+        "Dónde cortarse el cabello y arreglarse la barba en Querétaro sin esperar"
+      ],
+      "version": "1.0.0"
+    }
+  ]
+}

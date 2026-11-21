@@ -1,26 +1,53 @@
 'use client';
 
-import Script from 'next/script';
+import { useEffect } from 'react';
+
+const GADS_ID = 'AW-17117243647';
 
 export function GoogleAdsScript() {
-  return (
-    <>
-      <Script
-        strategy="lazyOnload"
-        src="https://www.googletagmanager.com/gtag/js?id=AW-17117243647"
-      />
-      <Script
-        id="google-ads-init"
-        strategy="lazyOnload"
-        dangerouslySetInnerHTML={{
-          __html: `
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'AW-17117243647');
-          `,
-        }}
-      />
-    </>
-  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const w = window as any;
+    w.dataLayer = w.dataLayer || [];
+    if (typeof w.gtag !== 'function') {
+      w.gtag = function gtag() {
+        // eslint-disable-next-line prefer-rest-params
+        w.dataLayer.push(arguments);
+      };
+      w.gtag('js', new Date());
+      w.gtag('config', GADS_ID);
+    }
+
+    let loaded = false;
+    const loadGtagScript = () => {
+      if (loaded) return;
+      loaded = true;
+      cleanup();
+
+      if (document.querySelector(`script[src*="googletagmanager.com/gtag/js"]`)) {
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${GADS_ID}`;
+      script.async = true;
+      document.head.appendChild(script);
+    };
+
+    const events = ['pointerdown', 'touchstart', 'scroll', 'keydown'] as const;
+    const cleanup = () => {
+      events.forEach((evt) => window.removeEventListener(evt, loadGtagScript));
+      clearTimeout(fallbackTimer);
+    };
+
+    events.forEach((evt) =>
+      window.addEventListener(evt, loadGtagScript, { once: true, passive: true })
+    );
+    const fallbackTimer = setTimeout(loadGtagScript, 4500);
+
+    return cleanup;
+  }, []);
+
+  return null;
 }

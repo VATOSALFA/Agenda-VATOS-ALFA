@@ -20,7 +20,7 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: false,
-  publicExcludes: ['!janeth-fullscreen.mp4', '!**/*.mp4', '!**/*.gif', '!logo-vatos-wa.png', '!version.json', '!noprecache/**/*'],
+  publicExcludes: ['!janeth-fullscreen.mp4', '!**/*.mp4', '!**/*.gif', '!logo-vatos-wa.png', '!version.json', '!llms.txt', '!.well-known/**/*', '!noprecache/**/*'],
   workboxOptions: {
     cleanupOutdatedCaches: true,
     exclude: [
@@ -47,6 +47,9 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   turbopack: {},
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'framer-motion', 'date-fns'],
+  },
   typescript: {
     ignoreBuildErrors: false,
   },
@@ -84,16 +87,20 @@ const nextConfig = {
             value: 'camera=(self), microphone=(self), geolocation=()',
           },
           {
+            key: 'Link',
+            value: '</.well-known/ai-catalog.json>; rel="ai-catalog", </.well-known/ard.json>; rel="ard", </llms.txt>; rel="llms-txt"',
+          },
+          {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://www.googletagmanager.com https://www.google-analytics.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://www.google.com https://www.gstatic.com https://*.mercadopago.com https://*.mlstatic.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://apis.google.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.googleadservices.com https://*.googleadservices.com https://*.doubleclick.net https://www.google.com https://*.google.com https://*.google.com.mx https://www.gstatic.com https://*.gstatic.com https://*.mercadopago.com https://*.mlstatic.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https:",
               "media-src 'self' data: blob: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net https://*.run.app https://accounts.google.com https://apis.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://googleads.g.doubleclick.net https://www.googleadservices.com https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mlstatic.com https://*.mercadolibre.com",
-              "frame-src 'self' https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mercadolibre.com https://accounts.google.com https://*.firebaseapp.com https://www.googletagmanager.com https://www.google.com https://bid.g.doubleclick.net",
+              "connect-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasestorage.app https://*.cloudfunctions.net https://*.run.app https://accounts.google.com https://apis.google.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com https://www.google.com https://*.google.com https://*.google.com.mx https://*.doubleclick.net https://www.googleadservices.com https://*.googleadservices.com https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mlstatic.com https://*.mercadolibre.com",
+              "frame-src 'self' https://*.mercadopago.com https://*.mercadopago.com.mx https://*.mercadolibre.com https://accounts.google.com https://*.firebaseapp.com https://www.googletagmanager.com https://*.googletagmanager.com https://www.google.com https://*.google.com https://*.doubleclick.net",
               "worker-src 'self' blob:",
               "frame-ancestors 'self'",
               "base-uri 'self'",

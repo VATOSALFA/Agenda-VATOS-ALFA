@@ -10,6 +10,7 @@ import { getServerCompanyBootstrap, getServerSeasonalConfig } from '@/lib/public
 import { Metadata, Viewport } from 'next';
 
 import { GoogleAdsScript } from '@/components/providers/google-ads-script';
+import { WebMcpAgentTools } from '@/components/shared/webmcp-agent-tools';
 import { NetworkStatusIndicator } from '@/components/shared/network-status-indicator';
 import { PwaUpdateBanner } from '@/components/shared/pwa-update-banner';
 import { SeasonalEffectsWebOverlay } from '@/components/shared/seasonal-effects-web-overlay';
@@ -77,9 +78,13 @@ export default async function RootLayout({
     <html lang="es" className={inter.variable}>
       <head>
         <link rel="preconnect" href="https://firebasestorage.googleapis.com" crossOrigin="anonymous" />
+        <link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
+        <link rel="ard" href="/.well-known/ard.json" />
+        <link rel="llms-txt" href="/llms.txt" type="text/markdown" />
       </head>
       <body>
         <GoogleAdsScript />
+        <WebMcpAgentTools />
         <LocalProvider>
           <AuthProvider>
             <AuthGuard>

@@ -1,0 +1,55 @@
+{
+  "name": "vatos-alfa-barbershop-mcp",
+  "displayName": "VATOS ALFA Barber Shop Querétaro — WebMCP & Booking Tools",
+  "version": "1.0.0",
+  "description": "Herramientas oficiales de consulta de servicios, tarifas, horarios, ubicación en Querétaro y reserva de citas para VATOS ALFA Barber Shop.",
+  "homepage": "https://vatosalfa.com",
+  "documentationUrl": "https://vatosalfa.com/llms.txt",
+  "tools": [
+    {
+      "name": "consultar_catalogo_servicios_vatos_alfa",
+      "description": "Consulta el catálogo oficial de cortes de cabello, fades, arreglo de barba con toalla caliente, faciales y paquetes VIP con precios en MXN de VATOS ALFA Barber Shop en Querétaro.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "categoria": {
+            "type": "string",
+            "enum": ["todos", "cortes", "barba", "paquetes", "faciales"],
+            "description": "Categoría de servicios de barbería a consultar."
+          }
+        }
+      }
+    },
+    {
+      "name": "consultar_sucursal_y_horarios_vatos_alfa",
+      "description": "Obtiene la dirección exacta, teléfono, horarios de atención y enlace de ubicación de VATOS ALFA Barber Shop en Av. Sombrerete 1001, Querétaro.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "sucursal": {
+            "type": "string",
+            "description": "Nombre de la sucursal (por defecto: Sombrerete)."
+          }
+        }
+      }
+    },
+    {
+      "name": "agendar_cita_vatos_alfa",
+      "description": "Abre el flujo oficial de reserva de cita en línea en VATOS ALFA Barber Shop Querétaro con el servicio o paquete deseado.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "servicio": {
+            "type": "string",
+            "description": "Nombre del servicio o paquete a reservar (ej. Corte de cabello, El Caballero Alfa)."
+          },
+          "fecha": {
+            "type": "string",
+            "description": "Fecha deseada en formato YYYY-MM-DD."
+          }
+        },
+        "required": ["servicio"]
+      }
+    }
+  ]
+}

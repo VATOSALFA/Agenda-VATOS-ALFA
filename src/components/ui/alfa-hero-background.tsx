@@ -99,6 +99,8 @@ export function AlfaHeroBackground() {
           alt=""
           aria-hidden="true"
           fill
+          priority
+          fetchPriority="high"
           sizes="(max-width: 640px) 340px, 580px"
           className="object-contain filter grayscale contrast-200"
           unoptimized={true}

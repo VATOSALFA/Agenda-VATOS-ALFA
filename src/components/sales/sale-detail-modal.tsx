@@ -201,6 +201,7 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                 return 'Pagos en Línea';
             case 'combinado': return 'Pago Combinado';
             case 'alfacoins': return 'Alfa Coins';
+            case 'monedero': return 'Saldo Pase Alfa';
             default:
                 if (sale.pago_estado === 'deposit_paid') return 'Pagos en Línea';
                 return sale.metodo_pago || 'No especificado';
@@ -391,6 +392,12 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                             <strong className="text-foreground font-semibold">${(sale.detalle_pago_combinado.pagos_en_linea || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                                         </div>
                                     )}
+                                    {Boolean(sale.detalle_pago_combinado.monedero && sale.detalle_pago_combinado.monedero > 0) && (
+                                        <div className="flex justify-between bg-blue-500/10 border border-blue-500/20 p-2 rounded-lg">
+                                            <span className="text-blue-400">Saldo Pase Alfa:</span>
+                                            <strong className="text-blue-400 font-semibold">${(sale.detalle_pago_combinado.monedero || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -460,6 +467,17 @@ export function SaleDetailModal({ isOpen, onOpenChange, sale }: SaleDetailModalP
                                         </TableCell>
                                         <TableCell className="text-right text-xs font-bold text-[#C5A880]">
                                             -${Number((sale as any).descuento_alfacoins || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : null}
+
+                                {Number((sale as any).pago_monedero || sale.detalle_pago_combinado?.monedero || 0) > 0 ? (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={2} className="text-right text-xs text-blue-400 font-semibold">
+                                            Cubierto con Saldo Pase Alfa (Monedero Prepago)
+                                        </TableCell>
+                                        <TableCell className="text-right text-xs font-bold text-blue-400">
+                                            -${Number((sale as any).pago_monedero || sale.detalle_pago_combinado?.monedero || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </TableCell>
                                     </TableRow>
                                 ) : null}

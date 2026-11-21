@@ -101,6 +101,12 @@ import {
     type BirthdayGiftOption,
     type SaleLoyaltySnapshot,
 } from '@/lib/benefit-security';
+import {
+    DEFAULT_SALDO_PASE_ALFA_CONFIG,
+    getClientWalletBalance,
+    normalizeSaldoPaseAlfaConfig,
+    type SaldoPaseAlfaConfig,
+} from '@/lib/wallet-config';
 import { isClientWithApp } from '@/lib/client-app-helper';
 import { useLocal } from '@/contexts/local-context';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -264,6 +270,7 @@ const ResumenCarrito = ({
     vipMonthlyCourtesyApplied = false,
     vipMonthlyUsedThisMonth = false,
     onToggleVipMonthlyCourtesy,
+    walletAmountUsed = 0,
 }: any) => {
     const [referralPrefixPart, setReferralPrefixPart] = useState('ALFA');
     const [referralNamePart, setReferralNamePart] = useState('');
@@ -320,7 +327,10 @@ const ResumenCarrito = ({
     };
     const nowPreview = new Date();
     const todayPreviewStr = `${nowPreview.getFullYear()}-${String(nowPreview.getMonth() + 1).padStart(2, '0')}-${String(nowPreview.getDate()).padStart(2, '0')}`;
-    const realMoneyPreview = Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100);
+    const realMoneyPreview = Math.max(
+        0,
+        Math.round((Number(total || 0) + Number(anticipoPagado || 0) + Number(walletAmountUsed || 0)) * 100) / 100
+    );
     const stampPreview = evaluatePaseAlfaStampsForSale({
         client,
         hasAppDownloaded: Boolean(hasAppDownloaded),
@@ -924,7 +934,7 @@ const ResumenCarrito = ({
 
                     const requiredTotal = Math.round(effHaircutPrice * participantsInTicket * 100) / 100;
                     const totalReward = juntosCoinsPerPerson * participantsInTicket;
-                    const effectiveMoneyPaid = total + Number(anticipoPagado || 0);
+                    const effectiveMoneyPaid = total + Number(anticipoPagado || 0) + Number(walletAmountUsed || 0);
                     const isAmountEligible = effectiveMoneyPaid >= requiredTotal;
                     const isServicesEligible = servicesCountInCart >= participantsInTicket;
                     const isEligible = isAmountEligible && isServicesEligible;
@@ -1033,6 +1043,12 @@ const ResumenCarrito = ({
                         <div className="flex justify-between text-[#C5A880]">
                             <span>Descuento por ALFA COINS</span>
                             <span className="font-semibold font-sans">-${formatMoney(pointsDiscount || 0)} MXN</span>
+                        </div>
+                    )}
+                    {Number(walletAmountUsed || 0) > 0 && (
+                        <div className="flex justify-between text-blue-400">
+                            <span>Cubierto con Saldo Pase Alfa</span>
+                            <span className="font-semibold font-sans">-${formatMoney(Number(walletAmountUsed))} MXN</span>
                         </div>
                     )}
                     {Number(propina || 0) > 0 && (
@@ -1353,6 +1369,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
     const [anticipoPagado, setAnticipoPagado] = useState(0);
     const [redeemPoints, setRedeemPoints] = useState(false); // State for redemption
     const [alfaCoinsToUse, setAlfaCoinsToUse] = useState<number | null>(null);
+    const [useWallet, setUseWallet] = useState(false);
+    const [walletCustomAmount, setWalletCustomAmount] = useState<number | null>(null);
+    const [saldoPaseAlfaConfig, setSaldoPaseAlfaConfig] = useState<SaldoPaseAlfaConfig>(DEFAULT_SALDO_PASE_ALFA_CONFIG);
     const [appliedBenefit, setAppliedBenefit] = useState<any | null>(null);
     const [juntosMinorsCount, setJuntosMinorsCount] = useState<number>(0);
     const currentHaircutPrice = useMemo(() => getCurrentHaircutPrice(services), [services]);
@@ -1408,6 +1427,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     if (data.cumpleanos_config) {
                         setCumpleanosConfig({ ...DEFAULT_CUMPLEANOS_CONFIG, ...data.cumpleanos_config });
                     }
+                    if (data.saldo_pase_alfa_config) {
+                        setSaldoPaseAlfaConfig(normalizeSaldoPaseAlfaConfig(data.saldo_pase_alfa_config));
+                    }
                     const sReq = Number(data.sellosRequeridos || 10);
                     setTargetStampsConfig(sReq === 10 ? 9 : sReq);
                 }
@@ -1446,6 +1468,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     const cumCfg = data.cumpleanos_config || data.pase_alfa?.cumpleanos_config;
                     if (cumCfg) {
                         setCumpleanosConfig((prev) => ({ ...DEFAULT_CUMPLEANOS_CONFIG, ...cumCfg, ...prev }));
+                    }
+                    const saldoCfg = data.saldo_pase_alfa_config || data.pase_alfa?.saldo_pase_alfa_config;
+                    if (saldoCfg) {
+                        setSaldoPaseAlfaConfig((prev) => prev || normalizeSaldoPaseAlfaConfig(saldoCfg));
                     }
                 }
             },
@@ -1496,7 +1522,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         return;
                     }
                     // Evitar duplicar monto si es un anticipo que ya fue absorbido en una venta de liquidación
-                    if (s.absorbed_in_sale_id) {
+                    // o si es una recarga de Saldo Pase Alfa (el consumo se suma al gastar el saldo en servicios)
+                    if (s.absorbed_in_sale_id || s.tipo_venta === 'recarga_monedero' || d.id.startsWith('topup_')) {
                         return;
                     }
                     const saleTotal = Number(s.total ?? s.monto_pagado_real ?? 0);
@@ -1657,7 +1684,59 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         return Math.min(currentTotalBeforeCoins, calculatedDiscount);
     }, [redeemPoints, effectiveAlfaCoinsToUse, alfaCoinUnitValue, subtotal, totalDiscount, anticipoPagado]);
 
-    const total = useMemo(() => Math.max(0, subtotal - totalDiscount - anticipoPagado - pointsDiscount), [subtotal, totalDiscount, anticipoPagado, pointsDiscount]);
+    const clientWalletBalance = useMemo(() => {
+        if (!selectedClient || !hasAppDownloaded) return 0;
+        return getClientWalletBalance(selectedClient);
+    }, [selectedClient, hasAppDownloaded]);
+
+    const maxUsableWalletAmount = useMemo(() => {
+        if (!selectedClient || !hasAppDownloaded || clientWalletBalance <= 0) return 0;
+        if (saldoPaseAlfaConfig.activo === false) return 0;
+
+        const currentTotalBeforeWallet = Math.max(
+            0,
+            Math.round((subtotal - totalDiscount - anticipoPagado - pointsDiscount) * 100) / 100
+        );
+        if (currentTotalBeforeWallet <= 0) return 0;
+
+        if (saldoPaseAlfaConfig.aplicable_en === 'servicios') {
+            const servicesNet = cart.reduce((acc, item) => {
+                if (item.tipo !== 'servicio') return acc;
+                const gross = (Number(item.precio) || 0) * (Number(item.cantidad) || 1);
+                const discVal = Number(item.discountValue) || 0;
+                const disc = item.discountType === 'percentage' ? (gross * discVal) / 100 : discVal;
+                return acc + Math.max(0, gross - disc);
+            }, 0);
+            return Math.min(
+                clientWalletBalance,
+                currentTotalBeforeWallet,
+                Math.round(servicesNet * 100) / 100
+            );
+        }
+
+        return Math.min(clientWalletBalance, currentTotalBeforeWallet);
+    }, [
+        selectedClient,
+        hasAppDownloaded,
+        clientWalletBalance,
+        saldoPaseAlfaConfig,
+        subtotal,
+        totalDiscount,
+        anticipoPagado,
+        pointsDiscount,
+        cart,
+    ]);
+
+    const effectiveWalletAmountToUse = useMemo(() => {
+        if (!useWallet || maxUsableWalletAmount <= 0) return 0;
+        if (walletCustomAmount === null) return maxUsableWalletAmount;
+        return Math.round(Math.min(Math.max(0, walletCustomAmount), maxUsableWalletAmount) * 100) / 100;
+    }, [useWallet, maxUsableWalletAmount, walletCustomAmount]);
+
+    const total = useMemo(
+        () => Math.max(0, Math.round((subtotal - totalDiscount - anticipoPagado - pointsDiscount - effectiveWalletAmountToUse) * 100) / 100),
+        [subtotal, totalDiscount, anticipoPagado, pointsDiscount, effectiveWalletAmountToUse]
+    );
 
     useEffect(() => {
         if (redeemPoints && maxUsableAlfaCoins <= 0) {
@@ -1665,6 +1744,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setAlfaCoinsToUse(null);
         }
     }, [redeemPoints, maxUsableAlfaCoins]);
+
+    useEffect(() => {
+        if (useWallet && maxUsableWalletAmount <= 0) {
+            setUseWallet(false);
+            setWalletCustomAmount(null);
+        }
+    }, [useWallet, maxUsableWalletAmount]);
 
     // Verificar en tiempo real si el cliente Alfa Black VIP ya usó su cortesía mensual de Barba Express este mes
     useEffect(() => {
@@ -1745,6 +1831,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             if (!formClient) {
                 setRedeemPoints(false);
                 setAlfaCoinsToUse(null);
+                setUseWallet(false);
+                setWalletCustomAmount(null);
             }
         }
     }, [form.watch('cliente_id'), selectedClientId]);
@@ -2934,6 +3022,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
             setTransferLinkCopied(false);
             setBankDetailsCopied(false);
             setVipMonthlyCourtesyApplied(false);
+            setUseWallet(Boolean((initialData as any)?.useWallet));
+            setWalletCustomAmount(null);
 
             // Reset form fields that should not persist across sales
             form.setValue('metodo_pago', 'efectivo');
@@ -3107,6 +3197,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 setSelectedClientId(detail.client.id);
                 form.setValue('cliente_id', detail.client.id);
             }
+            if (detail.useWallet) {
+                setUseWallet(true);
+                setWalletCustomAmount(null);
+            }
             if (detail.benefitRedeemed) {
                 setAppliedBenefit(detail.benefitRedeemed);
                 setJuntosMinorsCount(Number(detail.benefitRedeemed?.minorsCount || 0));
@@ -3185,7 +3279,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         if (db && liveClient) {
             try {
                 const clientRef = doc(db, 'clientes', liveClient.id);
-                const realMoneySpent = Math.max(0, Math.round((total + Number(anticipoPagado || 0)) * 100) / 100);
+                const realMoneySpent = Math.max(
+                    0,
+                    Math.round((total + Number(anticipoPagado || 0) + Number(effectiveWalletAmountToUse || 0)) * 100) / 100
+                );
                 const hasServiceInCart = cart.some(it => it.tipo === 'servicio');
                 const isFreeCutRedemption = Boolean(
                     appliedBenefit?.benefitId === 'decimo_corte' ||
@@ -3200,6 +3297,9 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 loyaltySnapshot.consumo_real_sumado = realMoneySpent;
                 loyaltySnapshot.visita_asistida_sumada = visitDelta;
                 loyaltySnapshot.corte_gratis_canjeado = isFreeCutRedemption;
+                if ((effectiveWalletAmountToUse || 0) > 0) {
+                    loyaltySnapshot.monedero_usado = effectiveWalletAmountToUse;
+                }
 
                 // Evaluar nivel antes y después de la compra actual
                 const liveClientId = String(liveClient.id || effectiveClientId || '');
@@ -3486,7 +3586,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         : 1; // companions_separate_tickets
 
                 const reqMin = Math.round(effPrice * participantsInTicket * 100) / 100;
-                const effectiveMoneyPaid = total + Number(anticipoPagado || 0);
+                const effectiveMoneyPaid = total + Number(anticipoPagado || 0) + Number(effectiveWalletAmountToUse || 0);
                 const isAmountMet = effectiveMoneyPaid >= reqMin;
                 const isServicesMet = servicesCountInCart >= participantsInTicket;
                 const isMet = isAmountMet && isServicesMet;
@@ -3796,7 +3896,10 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     : (currentHaircutPrice || 140);
                 const referralEval = evaluateReferralPurchaseEligibility({
                     subtotal: Number(subtotal || 0),
-                    realMoneyPaid: Math.max(0, Math.round((Number(total || 0) + Number(anticipoPagado || 0)) * 100) / 100),
+                    realMoneyPaid: Math.max(
+                        0,
+                        Math.round((Number(total || 0) + Number(anticipoPagado || 0) + Number(effectiveWalletAmountToUse || 0)) * 100) / 100
+                    ),
                     currentHaircutPrice: refMinBase,
                     cart,
                     discountPercent: dynamicRefDiscountPct,
@@ -4253,6 +4356,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     uniqueProductIds.map(id => transaction.get(productRefsMap.get(id)!))
                 );
 
+                // Validar saldo real en servidor si se aplicó Saldo Pase Alfa junto con Terminal Point
+                if ((effectiveWalletAmountToUse || 0) > 0 && selectedClient?.id) {
+                    const liveClientSnap = await transaction.get(doc(db, 'clientes', selectedClient.id));
+                    const liveBal = liveClientSnap.exists() ? getClientWalletBalance(liveClientSnap.data()) : 0;
+                    if (liveBal + 0.01 < effectiveWalletAmountToUse) {
+                        throw new Error(`Saldo Pase Alfa insuficiente en servidor ($${formatMoney(liveBal)} disponibles).`);
+                    }
+                }
+
                 // Verificar stock y encolar actualizaciones
                 for (const [index, productDoc] of productDocs.entries()) {
                     const productId = uniqueProductIds[index];
@@ -4319,11 +4431,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                 });
 
                 // C. Objeto de Venta
+                const walletForTerminal = Math.max(0, Number(effectiveWalletAmountToUse || 0));
                 const saleDataToSave: any = {
                     ...formData,
                     cliente_id: selectedClient.id,
                     local_id: formData.local_id,
-                    metodo_pago: paymentMethod, // Respeta combinado o tarjeta
+                    metodo_pago: walletForTerminal > 0 ? 'combinado' : paymentMethod, // Respeta combinado o tarjeta
                     items: itemsToSave,
                     subtotal: subtotal,
                     descuento: {
@@ -4333,6 +4446,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     },
                     descuento_alfacoins: pointsDiscount || 0,
                     alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
+                    pago_monedero: walletForTerminal,
+                    monedero_descontado: false,
                     tarifa_corte_aplicada: currentHaircutPrice || 140,
                     total: subtotal - totalDiscount,
                     fecha_hora_venta: serverTimestamp(),
@@ -4355,7 +4470,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         const nonZero = [
                             effE > 0 ? 'efectivo' : null,
                             effT > 0 ? 'tarjeta' : null,
-                            effTr > 0 ? 'transferencia' : null
+                            effTr > 0 ? 'transferencia' : null,
+                            walletForTerminal > 0 ? 'monedero' : null,
                         ].filter(Boolean);
 
                         return {
@@ -4363,12 +4479,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                 efectivo: effE,
                                 tarjeta: effT,
                                 transferencia: effTr,
-                                pagos_en_linea: 0
+                                pagos_en_linea: 0,
+                                ...(walletForTerminal > 0 ? { monedero: walletForTerminal } : {}),
                             },
                             propina_metodo: propMetodo,
                             ...(nonZero.length === 1 ? { metodo_pago: nonZero[0] } : {})
                         };
-                    })() : {
+                    })() : walletForTerminal > 0 ? {
+                        propina_metodo: paymentMethod,
+                        detalle_pago_combinado: {
+                            efectivo: 0,
+                            tarjeta: total,
+                            transferencia: 0,
+                            pagos_en_linea: 0,
+                            monedero: walletForTerminal,
+                        },
+                    } : {
                         propina_metodo: paymentMethod
                     }),
                     propina: formData.propina || 0, // Registrar propina (independiente de la venta)
@@ -4635,6 +4761,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
         setStep(1);
         setRedeemPoints(false);
         setAlfaCoinsToUse(null);
+        setUseWallet(false);
+        setWalletCustomAmount(null);
         setSelectedClientId(''); // Reset redeem points state
         setAnticipoPagado(0); // Reset anticipo to prevent cross-contamination between sales
         setReservationId(undefined); // Reset reservationId to prevent modifying wrong reservation
@@ -5002,8 +5130,59 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     console.log("Updating existing sale:", saleDocRef.id);
                 }
 
+                // 2B. READ: Validar Saldo Pase Alfa en vivo antes de cualquier escritura si aplica
+                const walletUsedNow = Math.max(0, Number(effectiveWalletAmountToUse || 0));
+                let walletClientRef: DocumentReference | null = null;
+                let walletLivePrevBalance = 0;
+                let walletClientFullName = '';
+                if (walletUsedNow > 0 && data.cliente_id) {
+                    walletClientRef = doc(db, 'clientes', data.cliente_id);
+                    const walletClientSnap = await transaction.get(walletClientRef);
+                    if (!walletClientSnap.exists()) {
+                        throw new Error('No se encontró el perfil del cliente para descontar Saldo Pase Alfa.');
+                    }
+                    const wcData = walletClientSnap.data() || {};
+                    walletLivePrevBalance = getClientWalletBalance(wcData);
+                    walletClientFullName = `${wcData.nombre || ''} ${wcData.apellido || ''}`.trim();
+                    if (walletLivePrevBalance + 0.01 < walletUsedNow) {
+                        throw new Error(
+                            `Saldo Pase Alfa insuficiente en servidor ($${formatMoney(walletLivePrevBalance)} MXN disponibles vs $${formatMoney(walletUsedNow)} MXN solicitados).`
+                        );
+                    }
+                }
+
                 // --- WRITES START HERE ---
-                // 3. WRITES: Ejecutar actualizaciones de stock pendientes
+                // 3. WRITES: Ejecutar descuento atómico de Saldo Pase Alfa y actualizaciones de stock pendientes
+                if (walletUsedNow > 0 && walletClientRef) {
+                    const nextWalletBal = Math.max(0, Math.round((walletLivePrevBalance - walletUsedNow) * 100) / 100);
+                    transaction.update(walletClientRef, {
+                        saldo_monedero: nextWalletBal,
+                        saldoMonedero: nextWalletBal,
+                        saldo_pase_alfa: nextWalletBal,
+                    });
+                    const movSpendRef = doc(db, 'movimientos_monedero', `mov_spend_${saleDocRef.id}`);
+                    transaction.set(movSpendRef, {
+                        id: `mov_spend_${saleDocRef.id}`,
+                        cliente_id: data.cliente_id,
+                        cliente_nombre: walletClientFullName || 'Cliente',
+                        tipo: 'consumo_venta',
+                        es_abono: false,
+                        monto: walletUsedNow,
+                        saldo_anterior: walletLivePrevBalance,
+                        saldo_nuevo: nextWalletBal,
+                        metodo_pago: amountBeingPaidPreview(total) > 0 ? 'combinado' : 'monedero',
+                        referencia_id: saleDocRef.id,
+                        local_id: data.local_id,
+                        concepto: 'Pago de servicios/productos con Saldo Pase Alfa',
+                        creado_por_id: user?.uid || 'staff',
+                        creado_por_nombre: user?.displayName || user?.email || 'Recepción',
+                        fecha: Timestamp.now(),
+                    });
+                }
+
+                function amountBeingPaidPreview(val: number) {
+                    return Math.max(0, Number(val || 0));
+                }
 
                 for (const update of pendingStockUpdates) {
                     transaction.update(update.ref, { stock: update.newStock });
@@ -5088,11 +5267,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                 const saleDataToSave: any = {
                     ...data,
-                    metodo_pago: (total === 0 && pointsDiscount > 0)
-                        ? 'alfacoins'
-                        : (amountBeingPaid === 0 && propinaToSave === 0 && (anticipoPagado > 0 || depositSaleData)
-                            ? (depositSaleData?.metodo_pago || 'anticipo')
-                            : (data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo'))),
+                    metodo_pago: (total === 0 && walletUsedNow > 0 && propinaToSave === 0)
+                        ? 'monedero'
+                        : (total === 0 && pointsDiscount > 0 && propinaToSave === 0)
+                            ? 'alfacoins'
+                            : (amountBeingPaid === 0 && propinaToSave === 0 && (anticipoPagado > 0 || depositSaleData)
+                                ? (depositSaleData?.metodo_pago || 'anticipo')
+                                : (walletUsedNow > 0 && amountBeingPaid > 0
+                                    ? 'combinado'
+                                    : (data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo')))),
                     items: itemsToSave,
                     subtotal: subtotal,
                     descuento: {
@@ -5102,6 +5285,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     },
                     descuento_alfacoins: pointsDiscount || 0,
                     alfacoins_canjeados: effectiveAlfaCoinsToUse || 0,
+                    ...(walletUsedNow > 0 ? { pago_monedero: walletUsedNow, monedero_descontado: true } : {}),
                     tarifa_corte_aplicada: currentHaircutPrice || 140,
                     total: grandTotal, // Save the full value, not just the remainder
                     propina: propinaToSave,
@@ -5113,7 +5297,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     pago_estado: 'Pagado',
                     creado_en: serverTimestamp(),
                     anticipoPagado: anticipoPagado || (depositSaleData ? Number(depositSaleData.monto_pagado_real || depositSaleData.monto_anticipo || depositSaleData.anticipoPagado || 0) : 0),
-                    // monto_pagado_real SIEMPRE representa el ingreso de venta SIN propina
+                    // monto_pagado_real SIEMPRE representa el ingreso fresco de hoy SIN propina y SIN saldo monedero ya contabilizado al recargar
                     monto_pagado_real: isDepositLiquidation
                         ? amountBeingPaid
                         : Math.min(
@@ -5153,21 +5337,34 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         efectivo: effE,
                         tarjeta: effT,
                         transferencia: effTr,
-                        pagos_en_linea: 0
+                        pagos_en_linea: 0,
+                        ...(walletUsedNow > 0 ? { monedero: walletUsedNow } : {}),
                     };
 
                     const nonZero = [
                         effE > 0 ? 'efectivo' : null,
                         effT > 0 ? 'tarjeta' : null,
-                        effTr > 0 ? 'transferencia' : null
+                        effTr > 0 ? 'transferencia' : null,
+                        walletUsedNow > 0 ? 'monedero' : null,
                     ].filter(Boolean);
 
                     if (nonZero.length === 1) {
                         saleDataToSave.metodo_pago = nonZero[0];
+                    } else if (nonZero.length > 1) {
+                        saleDataToSave.metodo_pago = 'combinado';
                     }
                 } else {
                     saleDataToSave.propina_metodo = data.metodo_pago || (anticipoPagado > 0 ? 'anticipo' : 'efectivo');
-                    if (isDepositLiquidation) {
+                    if (walletUsedNow > 0) {
+                        const paidNow = amountBeingPaid;
+                        saleDataToSave.detalle_pago_combinado = {
+                            efectivo: data.metodo_pago === 'efectivo' ? paidNow : 0,
+                            tarjeta: data.metodo_pago === 'tarjeta' ? paidNow : 0,
+                            transferencia: data.metodo_pago === 'transferencia' ? paidNow : 0,
+                            pagos_en_linea: (data.metodo_pago === 'mercadopago' || data.metodo_pago === 'pagos_en_linea') ? paidNow : 0,
+                            monedero: walletUsedNow,
+                        };
+                    } else if (isDepositLiquidation) {
                         const paidNow = amountBeingPaid;
                         saleDataToSave.detalle_pago_combinado = {
                             efectivo: data.metodo_pago === 'efectivo' ? paidNow : 0,
@@ -5261,6 +5458,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         totalTarjeta > 0 ? 'tarjeta' : null,
                         totalTransferencia > 0 ? 'transferencia' : null,
                         totalOnline > 0 ? 'mercadopago' : null,
+                        walletUsedNow > 0 ? 'monedero' : null,
                     ].filter(Boolean);
 
                     if (nonZeroMethods.length > 1) {
@@ -5269,11 +5467,22 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             efectivo: totalEfectivo,
                             tarjeta: totalTarjeta,
                             transferencia: totalTransferencia,
-                            pagos_en_linea: totalOnline
+                            pagos_en_linea: totalOnline,
+                            ...(walletUsedNow > 0 ? { monedero: walletUsedNow } : {}),
                         };
                     } else if (nonZeroMethods.length === 1) {
                         saleDataToSave.metodo_pago = nonZeroMethods[0];
-                        delete saleDataToSave.detalle_pago_combinado;
+                        if (walletUsedNow > 0) {
+                            saleDataToSave.detalle_pago_combinado = {
+                                efectivo: 0,
+                                tarjeta: 0,
+                                transferencia: 0,
+                                pagos_en_linea: 0,
+                                monedero: walletUsedNow,
+                            };
+                        } else {
+                            delete saleDataToSave.detalle_pago_combinado;
+                        }
                     } else {
                         saleDataToSave.metodo_pago = data.metodo_pago || 'efectivo';
                         delete saleDataToSave.detalle_pago_combinado;
@@ -5803,6 +6012,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         vipMonthlyCourtesyApplied={vipMonthlyCourtesyApplied}
                                         vipMonthlyUsedThisMonth={vipMonthlyUsedThisMonth}
                                         onToggleVipMonthlyCourtesy={handleToggleVipMonthlyCourtesy}
+                                        walletAmountUsed={effectiveWalletAmountToUse}
                                     />
                                 </div>
 
@@ -6016,6 +6226,92 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             )}
                                         />
 
+                                        {/* Saldo Pase Alfa (Monedero Prepago) - Solo para clientes con App Móvil vinculada */}
+                                        {selectedClient && hasAppDownloaded && (
+                                            <div className={cn(
+                                                "p-3 rounded-xl border transition-all space-y-2",
+                                                clientWalletBalance > 0
+                                                    ? "border-blue-500/40 bg-blue-500/10 shadow-xs"
+                                                    : "border-border/60 bg-muted/20"
+                                            )}>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <Wallet className={cn("h-4 w-4 shrink-0", clientWalletBalance > 0 ? "text-blue-400" : "text-slate-400")} />
+                                                        <div className="min-w-0">
+                                                            <span className={cn("text-xs font-bold font-sans block truncate", clientWalletBalance > 0 ? "text-foreground" : "text-muted-foreground")}>
+                                                                SALDO PASE ALFA: ${formatMoney(clientWalletBalance)} MXN
+                                                            </span>
+                                                            <p className="text-[10px] text-muted-foreground font-sans">
+                                                                {clientWalletBalance > 0
+                                                                    ? maxUsableWalletAmount > 0
+                                                                        ? `Aplicable a ${saldoPaseAlfaConfig.aplicable_en === 'servicios' ? 'servicios' : 'servicios y productos'} (no cubre propinas)`
+                                                                        : saldoPaseAlfaConfig.activo === false
+                                                                            ? 'Programa temporalmente pausado'
+                                                                            : 'Sin monto aplicable en este ticket'
+                                                                    : 'Monedero prepago sin saldo disponible'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className="text-[11px] font-medium text-foreground">
+                                                            {useWallet ? 'Usando' : 'Aplicar'}
+                                                        </span>
+                                                        <Switch
+                                                            checked={useWallet}
+                                                            onCheckedChange={(val) => {
+                                                                setUseWallet(val);
+                                                                if (val && walletCustomAmount === null) {
+                                                                    setWalletCustomAmount(maxUsableWalletAmount);
+                                                                }
+                                                            }}
+                                                            disabled={maxUsableWalletAmount <= 0}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {useWallet && clientWalletBalance > 0 && (
+                                                    <div className="pt-2 border-t border-blue-500/20 space-y-2">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="text-xs text-muted-foreground">Monto de saldo a usar ($ MXN):</span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <Input
+                                                                    type="number"
+                                                                    min={1}
+                                                                    max={maxUsableWalletAmount}
+                                                                    step="0.01"
+                                                                    value={walletCustomAmount !== null ? walletCustomAmount : maxUsableWalletAmount}
+                                                                    onChange={(e) => {
+                                                                        const val = Number(e.target.value);
+                                                                        if (isNaN(val) || val <= 0) {
+                                                                            setWalletCustomAmount(0);
+                                                                        } else {
+                                                                            setWalletCustomAmount(Math.round(Math.min(val, maxUsableWalletAmount) * 100) / 100);
+                                                                        }
+                                                                    }}
+                                                                    className="h-8 w-28 text-xs font-semibold text-right bg-background border-border/70 rounded-lg px-2 font-sans"
+                                                                />
+                                                                {maxUsableWalletAmount > 0 && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        onClick={() => setWalletCustomAmount(maxUsableWalletAmount)}
+                                                                        className="h-8 px-2.5 text-[11px] font-bold text-blue-400 hover:bg-blue-500/20 rounded-lg font-sans"
+                                                                    >
+                                                                        Máx (${formatMoney(maxUsableWalletAmount)})
+                                                                    </Button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex justify-between items-center text-xs font-semibold text-blue-400 font-sans">
+                                                            <span>Cubierto con Saldo Pase Alfa:</span>
+                                                            <span className="text-sm font-bold">-${formatMoney(effectiveWalletAmountToUse)} MXN</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* Pase Alfa Club - Canjear AlfaCoins en Paso 2 (Solo para clientes con App descargada) */}
                                         {selectedClient && hasAppDownloaded && (
                                             <div className={cn(
@@ -6146,7 +6442,38 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                             </div>
                                         )}
 
-                                        {total === 0 && pointsDiscount > 0 ? (
+                                        {total === 0 && effectiveWalletAmountToUse > 0 && Number(watchedPropina || 0) === 0 ? (
+                                            <Card className="border-2 border-blue-500/60 bg-blue-500/10 rounded-xl p-4 shadow-xs space-y-2.5">
+                                                <div className="flex items-center gap-3">
+                                                    <Wallet className="h-6 w-6 text-blue-400 shrink-0" />
+                                                    <div className="space-y-0.5">
+                                                        <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider font-sans">
+                                                            Venta Cubierta 100% con Saldo Pase Alfa
+                                                        </h4>
+                                                        <p className="text-xs text-foreground/90 font-sans">
+                                                            Se descontarán <strong>${formatMoney(effectiveWalletAmountToUse)} MXN</strong> del monedero de {selectedClient?.nombre} (saldo restante: ${formatMoney(Math.max(0, clientWalletBalance - effectiveWalletAmountToUse))} MXN). No ingresa efectivo nuevo a caja hoy.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-2 border-t border-blue-500/20 flex items-center justify-between gap-2">
+                                                    <span className="text-[11px] text-muted-foreground">¿El cliente desea agregar propina aparte?</span>
+                                                    <div className="flex items-center gap-1">
+                                                        {[20, 30, 50].map((tipAmt) => (
+                                                            <Button
+                                                                key={tipAmt}
+                                                                type="button"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => form.setValue('propina', tipAmt, { shouldValidate: true })}
+                                                                className="h-6 px-2 text-[11px] font-semibold font-sans"
+                                                            >
+                                                                +${tipAmt}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </Card>
+                                        ) : total === 0 && pointsDiscount > 0 && Number(watchedPropina || 0) === 0 ? (
                                             <Card className="border-2 border-[#C5A880]/60 bg-[#C5A880]/10 rounded-xl p-4 shadow-xs">
                                                 <div className="flex items-center gap-3">
                                                     <Coins className="h-7 w-7 text-[#C5A880] shrink-0" />
@@ -6312,7 +6639,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                     <Button
                                                         type="button"
                                                         onClick={handleSendToTerminal}
-                                                        disabled={isSendingToTerminal || isWaitingForPayment || terminalsLoading || !selectedTerminalId || total <= 0 || cart.some(item => !item.barbero_id)}
+                                                        disabled={isSendingToTerminal || isWaitingForPayment || terminalsLoading || !selectedTerminalId || totalConPropina <= 0 || cart.some(item => !item.barbero_id)}
                                                         className="w-full"
                                                         variant={isWaitingForPayment ? "secondary" : "default"}
                                                     >
@@ -6383,16 +6710,65 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                                                 await revertPendingSale(confirmedSaleId);
                                                                             } else if (!webhookApprovedSaleId) {
                                                                                 const saleRef = doc(db, 'ventas', confirmedSaleId);
-                                                                                // monto_pagado_real SIEMPRE guarda el monto de la venta SIN propina
-                                                                                await updateDoc(saleRef, {
-                                                                                    pago_estado: 'Pagado',
-                                                                                    metodo_pago: paymentMethod, // Respect initial choice
-                                                                                    monto_pagado_real: total,
-                                                                                    saldo_pendiente: 0,
-                                                                                    propina: form.getValues('propina') || 0,
-                                                                                    fecha_pago: new Date(),
-                                                                                    notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
-                                                                                });
+                                                                                const walletManualAmt = Math.max(0, Number(effectiveWalletAmountToUse || 0));
+                                                                                if (walletManualAmt > 0 && selectedClient?.id) {
+                                                                                    await runTransaction(db, async (tx) => {
+                                                                                        const sSnap = await tx.get(saleRef);
+                                                                                        const cRef = doc(db, 'clientes', selectedClient.id);
+                                                                                        const cSnap = await tx.get(cRef);
+                                                                                        let didDeduct = false;
+                                                                                        if (sSnap.exists() && !sSnap.data()?.monedero_descontado && cSnap.exists()) {
+                                                                                            const cData = cSnap.data() || {};
+                                                                                            const prevW = getClientWalletBalance(cData);
+                                                                                            const nextW = Math.max(0, Math.round((prevW - walletManualAmt) * 100) / 100);
+                                                                                            tx.update(cRef, {
+                                                                                                saldo_monedero: nextW,
+                                                                                                saldoMonedero: nextW,
+                                                                                                saldo_pase_alfa: nextW,
+                                                                                            });
+                                                                                            const movRef = doc(db, 'movimientos_monedero', `mov_spend_${confirmedSaleId}`);
+                                                                                            tx.set(movRef, {
+                                                                                                id: `mov_spend_${confirmedSaleId}`,
+                                                                                                cliente_id: selectedClient.id,
+                                                                                                cliente_nombre: `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim(),
+                                                                                                tipo: 'consumo_venta',
+                                                                                                es_abono: false,
+                                                                                                monto: walletManualAmt,
+                                                                                                saldo_anterior: prevW,
+                                                                                                saldo_nuevo: nextW,
+                                                                                                metodo_pago: 'combinado',
+                                                                                                referencia_id: confirmedSaleId,
+                                                                                                local_id: form.getValues('local_id'),
+                                                                                                concepto: 'Pago combinado Saldo Pase Alfa + Terminal Point (Confirmación Manual)',
+                                                                                                creado_por_id: user?.uid || 'staff',
+                                                                                                creado_por_nombre: user?.displayName || user?.email || 'Recepción',
+                                                                                                fecha: Timestamp.now(),
+                                                                                            });
+                                                                                            didDeduct = true;
+                                                                                        }
+                                                                                        tx.update(saleRef, {
+                                                                                            pago_estado: 'Pagado',
+                                                                                            metodo_pago: 'combinado',
+                                                                                            monto_pagado_real: total,
+                                                                                            saldo_pendiente: 0,
+                                                                                            propina: form.getValues('propina') || 0,
+                                                                                            ...(didDeduct ? { monedero_descontado: true } : {}),
+                                                                                            fecha_pago: new Date(),
+                                                                                            notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]',
+                                                                                        });
+                                                                                    });
+                                                                                } else {
+                                                                                    // monto_pagado_real SIEMPRE guarda el monto de la venta SIN propina
+                                                                                    await updateDoc(saleRef, {
+                                                                                        pago_estado: 'Pagado',
+                                                                                        metodo_pago: paymentMethod, // Respect initial choice
+                                                                                        monto_pagado_real: total,
+                                                                                        saldo_pendiente: 0,
+                                                                                        propina: form.getValues('propina') || 0,
+                                                                                        fecha_pago: new Date(),
+                                                                                        notas: (form.getValues('notas') || '') + ' [Confirmación Manual de Terminal]'
+                                                                                    });
+                                                                                }
                                                                             }
                                                                             attemptedTerminalIdsRef.current.clear();
 
@@ -6802,6 +7178,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         vipMonthlyCourtesyApplied={vipMonthlyCourtesyApplied}
                                         vipMonthlyUsedThisMonth={vipMonthlyUsedThisMonth}
                                         onToggleVipMonthlyCourtesy={handleToggleVipMonthlyCourtesy}
+                                        walletAmountUsed={effectiveWalletAmountToUse}
                                     />
                                 </div>
                                 <SheetFooter className="px-3.5 py-2.5 sm:p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-background border-t border-border/60 mt-auto shrink-0 flex flex-row items-center justify-between gap-2 sm:gap-3 relative z-10 shadow-[0_-4px_15px_rgba(0,0,0,0.15)]">
@@ -6817,13 +7194,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         type="submit"
                                         variant="alfa"
                                         className="h-10 px-4 sm:px-6 text-xs font-semibold rounded-xl flex-1 sm:flex-initial"
-                                        disabled={isSubmitting || isStepTransitioning || (total > 0 && isCombinedPaymentInvalid) || (total > 0 && !paymentMethod) || (total > 0 && paymentMethod === 'tarjeta') || (total > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => item.tipo === 'servicio' && !item.barbero_id) || (total > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
+                                        disabled={isSubmitting || isStepTransitioning || (totalConPropina > 0 && isCombinedPaymentInvalid) || (totalConPropina > 0 && !paymentMethod) || (totalConPropina > 0 && paymentMethod === 'tarjeta') || (totalConPropina > 0 && paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null) || isWaitingForPayment || cart.some(item => item.tipo === 'servicio' && !item.barbero_id) || (totalConPropina > 0 && paymentMethod === 'efectivo' && amountPaid < totalConPropina)}
                                         onClick={(e) => {
                                             if (isStepTransitioning) {
                                                 e.preventDefault();
                                                 return;
                                             }
-                                            if (total === 0 && pointsDiscount > 0) {
+                                            if (total === 0 && effectiveWalletAmountToUse > 0 && Number(watchedPropina || 0) === 0) {
+                                                form.setValue('metodo_pago', 'monedero', { shouldValidate: true });
+                                            } else if (total === 0 && pointsDiscount > 0 && Number(watchedPropina || 0) === 0) {
                                                 form.setValue('metodo_pago', 'alfacoins', { shouldValidate: true });
                                             } else {
                                                 if (paymentMethod === 'efectivo' && amountPaid < totalConPropina) {
@@ -6862,13 +7241,15 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                         }}
                                     >
                                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" />}
-                                        {total === 0 && pointsDiscount > 0
-                                            ? `Finalizar (${effectiveAlfaCoinsToUse} ALFA COINS)`
-                                            : (totalConPropina === 0 && anticipoPagado > 0)
-                                                ? `Liquidar Cita ($0.00 MXN)`
-                                                : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
-                                                    ? `Usa Cobrar en Terminal arriba`
-                                                    : `Cobrar $${formatMoney(totalConPropina)} MXN`}
+                                        {total === 0 && effectiveWalletAmountToUse > 0 && Number(watchedPropina || 0) === 0
+                                            ? `Finalizar con Saldo ($${formatMoney(effectiveWalletAmountToUse)} MXN)`
+                                            : total === 0 && pointsDiscount > 0 && Number(watchedPropina || 0) === 0
+                                                ? `Finalizar (${effectiveAlfaCoinsToUse} ALFA COINS)`
+                                                : (totalConPropina === 0 && anticipoPagado > 0)
+                                                    ? `Liquidar Cita ($0.00 MXN)`
+                                                    : (paymentMethod === 'combinado' && (watchedCard || 0) > 0 && selectedTerminalId !== null)
+                                                        ? `Usa Cobrar en Terminal arriba`
+                                                        : `Cobrar $${formatMoney(totalConPropina)} MXN`}
                                     </Button>
                                 </SheetFooter>
                             </div>

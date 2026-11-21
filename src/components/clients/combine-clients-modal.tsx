@@ -22,8 +22,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { writeBatch, collection, getDocs, query, where, doc } from 'firebase/firestore';
+import { writeBatch, collection, getDocs, query, where, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
+import { getClientWalletBalance } from '@/lib/wallet-config';
 
 
 interface CombineClientsModalProps {
@@ -98,16 +99,23 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
             const batch = writeBatch(db);
 
             let extraPoints = 0;
+            let extraWallet = 0;
+            let inheritedAppLinked = Boolean(primaryClient.appVinculada || primaryClient.appInstalada);
+            let inheritedAuthUid = primaryClient.authUid || '';
             const extraNotes: string[] = [];
 
-            // Move reservations and sales from secondary clients to primary
+            // Move reservations, sales, and wallet movements from secondary clients to primary
             for (const secondaryClient of secondaryClients) {
                 const reservationsQuery = query(collection(db, 'reservas'), where('cliente_id', '==', secondaryClient.id));
                 const salesQuery = query(collection(db, 'ventas'), where('cliente_id', '==', secondaryClient.id));
+                const movsQuery = query(collection(db, 'movimientos_monedero'), where('cliente_id', '==', secondaryClient.id));
+                const recargasQuery = query(collection(db, 'recargas_monedero'), where('cliente_id', '==', secondaryClient.id));
 
-                const [reservationsSnapshot, salesSnapshot] = await Promise.all([
+                const [reservationsSnapshot, salesSnapshot, movsSnapshot, recargasSnapshot] = await Promise.all([
                     getDocs(reservationsQuery),
-                    getDocs(salesQuery)
+                    getDocs(salesQuery),
+                    getDocs(movsQuery),
+                    getDocs(recargasQuery),
                 ]);
 
                 reservationsSnapshot.forEach(docSnap => {
@@ -118,8 +126,36 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
 
-                if (secondaryClient.puntos) {
-                    extraPoints += secondaryClient.puntos;
+                movsSnapshot.forEach(docSnap => {
+                    batch.update(docSnap.ref, { cliente_id: primaryClientId });
+                });
+
+                recargasSnapshot.forEach(docSnap => {
+                    batch.update(docSnap.ref, { cliente_id: primaryClientId });
+                });
+
+                const secCoins = Number(
+                    secondaryClient.alfaCoins ??
+                    (secondaryClient as any).alfa_coins ??
+                    secondaryClient.puntosLealtad ??
+                    (secondaryClient as any).puntos_lealtad ??
+                    secondaryClient.puntos ??
+                    0
+                );
+                if (secCoins > 0) {
+                    extraPoints += secCoins;
+                }
+
+                const secWallet = getClientWalletBalance(secondaryClient);
+                if (secWallet > 0) {
+                    extraWallet = Math.round((extraWallet + secWallet) * 100) / 100;
+                }
+
+                if (secondaryClient.appVinculada || secondaryClient.appInstalada) {
+                    inheritedAppLinked = true;
+                }
+                if (!inheritedAuthUid && secondaryClient.authUid) {
+                    inheritedAuthUid = secondaryClient.authUid;
                 }
 
                 if (secondaryClient.notas && secondaryClient.notas.trim()) {
@@ -140,22 +176,39 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
             ]);
 
             const allRes = allResSnap.docs.map(d => d.data());
-            const allSales = allSalesSnap.docs.map(d => d.data());
+            const allSales = allSalesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
             const totalCount = allRes.length;
             const attendedCount = allRes.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
             const unattendedCount = allRes.filter(r => r.estado === 'No asiste').length;
             const cancelledCount = allRes.filter(r => r.estado === 'Cancelado').length;
 
-            const validSales = allSales.filter(s => !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || ''));
+            const validSales = allSales.filter(
+                s =>
+                    !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || '') &&
+                    !s.absorbed_in_sale_id &&
+                    s.tipo_venta !== 'recarga_monedero' &&
+                    !String(s.id || '').startsWith('topup_')
+            );
             const totalSpent = validSales.reduce((acc, sale) => {
+                const walletUsed = Number(sale.pago_monedero || sale.detalle_pago_combinado?.monedero || 0);
                 const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null)
-                    ? sale.monto_pagado_real
+                    ? sale.monto_pagado_real + walletUsed
                     : (sale.total || 0);
                 return acc + amount;
             }, 0);
 
-            const finalPoints = (primaryClient.puntos || 0) + extraPoints;
+            const primaryCoins = Number(
+                primaryClient.alfaCoins ??
+                (primaryClient as any).alfa_coins ??
+                primaryClient.puntosLealtad ??
+                (primaryClient as any).puntos_lealtad ??
+                primaryClient.puntos ??
+                0
+            );
+            const finalPoints = primaryCoins + extraPoints;
+            const primaryWallet = getClientWalletBalance(primaryClient);
+            const finalWallet = Math.round((primaryWallet + extraWallet) * 100) / 100;
 
             let finalNotes = primaryClient.notas || '';
             if (extraNotes.length > 0) {
@@ -163,6 +216,22 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 if (mergedText) {
                     finalNotes = finalNotes ? `${finalNotes}\n[Notas combinadas]: ${mergedText}` : `[Notas combinadas]: ${mergedText}`;
                 }
+            }
+
+            if (extraWallet > 0) {
+                const fusionMovRef = doc(collection(db, 'movimientos_monedero'));
+                batch.set(fusionMovRef, {
+                    id: fusionMovRef.id,
+                    cliente_id: primaryClientId,
+                    cliente_nombre: `${primaryClient.nombre || ''} ${primaryClient.apellido || ''}`.trim(),
+                    tipo: 'fusion_clientes',
+                    es_abono: true,
+                    monto: extraWallet,
+                    saldo_anterior: primaryWallet,
+                    saldo_nuevo: finalWallet,
+                    concepto: 'Consolidación de Saldo Pase Alfa por fusión de clientes duplicados',
+                    fecha: Timestamp.now(),
+                });
             }
 
             // Update primary client document with consolidated stats
@@ -173,7 +242,17 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 citas_no_asistidas: unattendedCount,
                 citas_canceladas: cancelledCount,
                 gasto_total: totalSpent,
+                consumo_total: totalSpent,
                 puntos: finalPoints,
+                alfaCoins: finalPoints,
+                alfa_coins: finalPoints,
+                puntosLealtad: finalPoints,
+                puntos_lealtad: finalPoints,
+                saldo_monedero: finalWallet,
+                saldoMonedero: finalWallet,
+                saldo_pase_alfa: finalWallet,
+                ...(inheritedAppLinked ? { appVinculada: true } : {}),
+                ...(inheritedAuthUid ? { authUid: inheritedAuthUid } : {}),
                 notas: finalNotes
             });
 

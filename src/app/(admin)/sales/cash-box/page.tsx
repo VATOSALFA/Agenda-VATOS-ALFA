@@ -77,6 +77,7 @@ import {
     X,
     KeyRound,
     SlidersHorizontal,
+    Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
@@ -102,6 +103,7 @@ import { db, functions, httpsCallable } from '@/lib/firebase-client';
 import { useAuth } from '@/contexts/firebase-auth-context';
 import { CashBoxClosingModal } from '@/components/sales/cash-box-closing-modal';
 import { CommissionPaymentModal } from '@/components/sales/commission-payment-modal';
+import { WalletTopupModal } from '@/components/sales/wallet-topup-modal';
 import { Switch } from '@/components/ui/switch';
 import {
     Tooltip,
@@ -186,6 +188,7 @@ export default function CashBoxPage() {
     const [isClientMounted, setIsClientMounted] = useState(false);
     const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
     const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
+    const [isWalletTopupOpen, setIsWalletTopupOpen] = useState(false);
     const [queryKey, setQueryKey] = useState(0);
 
     const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
@@ -1048,6 +1051,26 @@ export default function CashBoxPage() {
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom" className="text-xs font-medium">
                                     Pago de Comisiones
+                                </TooltipContent>
+                            </Tooltip>
+
+                            {/* Recargar Saldo Pase Alfa */}
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        onClick={() => {
+                                            playAgendaClickSound();
+                                            setIsWalletTopupOpen(true);
+                                        }}
+                                        title="Recargar Saldo Pase Alfa"
+                                        aria-label="Recargar Saldo Pase Alfa"
+                                        className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg text-[#C5A880] hover:text-foreground hover:bg-muted/60 dark:hover:text-white dark:hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer"
+                                    >
+                                        <Wallet className="h-4 w-4 text-[#C5A880]" />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs font-medium">
+                                    Recargar Saldo Pase Alfa
                                 </TooltipContent>
                             </Tooltip>
 
@@ -2451,6 +2474,13 @@ export default function CashBoxPage() {
                     </div>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <WalletTopupModal
+                isOpen={isWalletTopupOpen}
+                onOpenChange={setIsWalletTopupOpen}
+                localId={selectedLocalId !== 'todos' ? selectedLocalId : undefined}
+                onSuccess={() => setQueryKey(prev => prev + 1)}
+            />
         </>
     );
 }

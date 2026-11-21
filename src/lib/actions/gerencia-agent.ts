@@ -948,6 +948,93 @@ export async function executeApprovedGerenciaAction({
         : null;
       const reservationSnap = reservationRef ? await transaction.get(reservationRef) : null;
 
+      const isWalletTopupSale =
+        currentSaleData.tipo_venta === 'recarga_monedero' ||
+        String(saleRef.id || '').startsWith('topup_');
+      const walletUsedOnSale = Number(
+        currentSaleData.pago_monedero ||
+        currentSaleData.detalle_pago_combinado?.monedero ||
+        currentSaleData.lealtad_aplicada?.monedero_usado ||
+        0
+      );
+      const clientWalletRef =
+        (isWalletTopupSale || walletUsedOnSale > 0) && currentSaleData.cliente_id
+          ? db.collection('clientes').doc(String(currentSaleData.cliente_id))
+          : null;
+      const clientWalletSnap = clientWalletRef ? await transaction.get(clientWalletRef) : null;
+
+      // 0. Revertir o reembolsar Saldo Pase Alfa si la venta involucró monedero
+      if (clientWalletRef && clientWalletSnap && clientWalletSnap.exists) {
+        const cData = clientWalletSnap.data() || {};
+        const currWallet = Math.max(
+          0,
+          Number(cData.saldo_monedero ?? cData.saldoMonedero ?? cData.saldo_pase_alfa ?? 0) || 0
+        );
+        if (isWalletTopupSale) {
+          const topupAmt = Math.max(0, Number(currentSaleData.total || currentSaleData.monto_pagado_real || 0));
+          const bonusCoins = Math.max(0, Math.floor(Number(currentSaleData.bono_recarga_coins || 0)));
+          const nextWallet = Math.max(0, Math.round((currWallet - topupAmt) * 100) / 100);
+          const currCoins = Number(
+            cData.alfaCoins ?? cData.alfa_coins ?? cData.puntosLealtad ?? cData.puntos_lealtad ?? cData.puntos ?? 0
+          );
+          const nextCoins = Math.max(0, currCoins - bonusCoins);
+          transaction.update(clientWalletRef, {
+            saldo_monedero: nextWallet,
+            saldoMonedero: nextWallet,
+            saldo_pase_alfa: nextWallet,
+            ...(bonusCoins > 0
+              ? {
+                  puntos: nextCoins,
+                  alfaCoins: nextCoins,
+                  alfa_coins: nextCoins,
+                  puntosLealtad: nextCoins,
+                  puntos_lealtad: nextCoins,
+                }
+              : {}),
+          });
+          const revMovRef = db.collection('movimientos_monedero').doc(`mov_rev_${saleRef.id}`);
+          transaction.set(revMovRef, {
+            id: `mov_rev_${saleRef.id}`,
+            cliente_id: clientWalletSnap.id,
+            cliente_nombre: [cData.nombre, cData.apellido].filter(Boolean).join(' ').trim(),
+            tipo: 'reverso_recarga',
+            es_abono: false,
+            monto: topupAmt,
+            saldo_anterior: currWallet,
+            saldo_nuevo: nextWallet,
+            bono_alfa_coins: bonusCoins,
+            referencia_id: saleRef.id,
+            concepto: `Reverso de recarga por eliminación de venta (${motivo})`,
+            creado_por_id: managerUser.uid,
+            creado_por_nombre: managerUser.name,
+            fecha: Timestamp.now(),
+          });
+        } else if (walletUsedOnSale > 0) {
+          const nextWallet = Math.round((currWallet + walletUsedOnSale) * 100) / 100;
+          transaction.update(clientWalletRef, {
+            saldo_monedero: nextWallet,
+            saldoMonedero: nextWallet,
+            saldo_pase_alfa: nextWallet,
+          });
+          const refMovRef = db.collection('movimientos_monedero').doc(`mov_ref_${saleRef.id}`);
+          transaction.set(refMovRef, {
+            id: `mov_ref_${saleRef.id}`,
+            cliente_id: clientWalletSnap.id,
+            cliente_nombre: [cData.nombre, cData.apellido].filter(Boolean).join(' ').trim(),
+            tipo: 'reembolso_venta',
+            es_abono: true,
+            monto: walletUsedOnSale,
+            saldo_anterior: currWallet,
+            saldo_nuevo: nextWallet,
+            referencia_id: saleRef.id,
+            concepto: `Reembolso a Saldo Pase Alfa por eliminación de venta (${motivo})`,
+            creado_por_id: managerUser.uid,
+            creado_por_nombre: managerUser.name,
+            fecha: Timestamp.now(),
+          });
+        }
+      }
+
       for (let idx = 0; idx < productEntries.length; idx++) {
         const [productId, { quantity, name }] = productEntries[idx];
         const productRef = db.collection('productos').doc(productId);

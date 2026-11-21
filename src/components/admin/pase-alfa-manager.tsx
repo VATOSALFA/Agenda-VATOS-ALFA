@@ -38,6 +38,10 @@ import {
     Scissors,
     DollarSign,
     Users,
+    Wallet,
+    CreditCard,
+    Banknote,
+    Smartphone,
 } from 'lucide-react';
 import {
     Select,
@@ -81,6 +85,12 @@ import {
     type CumpleanosBenefitConfig,
     type BirthdayGiftOption,
     type BirthdayGiftType,
+    DEFAULT_SALDO_PASE_ALFA_CONFIG,
+    normalizeSaldoPaseAlfaConfig,
+    buildDefaultSaldoDescripcion,
+    buildDefaultSaldoTerminos,
+    type SaldoPaseAlfaConfig,
+    type PaqueteRecargaSaldo,
 } from '@/lib/benefit-security';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
@@ -248,6 +258,12 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
     const [autoSyncCumpleTerms, setAutoSyncCumpleTerms] = useState(true);
     const [catalogServices, setCatalogServices] = useState<Array<{ id: string; name: string; price: number }>>([]);
     const [catalogProducts, setCatalogProducts] = useState<Array<{ id: string; nombre: string; price: number }>>([]);
+
+    // Estado de Reglas Dinámicas para "Saldo Pase Alfa" (Monedero Prepago)
+    const [saldoPaseAlfaConfig, setSaldoPaseAlfaConfig] = useState<SaldoPaseAlfaConfig>(
+        DEFAULT_SALDO_PASE_ALFA_CONFIG
+    );
+    const [autoSyncSaldoTerms, setAutoSyncSaldoTerms] = useState(true);
 
     // Estado de Beneficios VIP
     const [privilegios, setPrivilegios] = useState<PrivilegioVIP[]>([]);
@@ -507,6 +523,17 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                     }
                 }
 
+                const loadedSaldoCfg = normalizeSaldoPaseAlfaConfig(
+                    (paseSnap.exists() ? paseSnap.data()?.saldo_pase_alfa_config : null) ||
+                        (appMovilSnap.exists()
+                            ? appMovilSnap.data()?.saldo_pase_alfa_config ||
+                              appMovilSnap.data()?.pase_alfa?.saldo_pase_alfa_config
+                            : null)
+                );
+                if (isMounted) {
+                    setSaldoPaseAlfaConfig(loadedSaldoCfg);
+                }
+
                 // Fallback a ajustes_sitio/membresia_vip
                 if (rawBenefits.length === 0) {
                     const docRef = doc(db, 'ajustes_sitio', 'membresia_vip');
@@ -530,6 +557,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                             terminos: item.terminos || '',
                             imagenUrl: item.imagenUrl || item.imagen || null,
                             activo: item.activo !== false,
+                            mostrarEnWeb: item.mostrarEnWeb !== false,
                             fechaLimite: item.fechaLimite || null,
                             creado_el: item.creado_el || null,
                         };
@@ -541,10 +569,40 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                         terminos: '',
                         imagenUrl: null,
                         activo: true,
+                        mostrarEnWeb: true,
                         fechaLimite: null,
                         creado_el: null,
                     };
                 });
+
+                // Garantizar que el beneficio integrado "SALDO PASE ALFA" siempre aparezca en el listado oficial
+                const hasSaldoBenefit = parsedPrivilegios.some(
+                    (p) =>
+                        p.id === 'saldo_pase_alfa' ||
+                        (p.titulo || '').toLowerCase().includes('saldo pase alfa') ||
+                        (p.titulo || '').toLowerCase().includes('monedero pase alfa')
+                );
+                if (!hasSaldoBenefit) {
+                    const defaultSaldoItem: PrivilegioVIP = {
+                        id: 'saldo_pase_alfa',
+                        titulo: 'SALDO PASE ALFA',
+                        descripcion: buildDefaultSaldoDescripcion(loadedSaldoCfg),
+                        terminos: buildDefaultSaldoTerminos(loadedSaldoCfg),
+                        imagenUrl: null,
+                        activo: loadedSaldoCfg.activo !== false,
+                        mostrarEnWeb: true,
+                        fechaLimite: null,
+                        creado_el: null,
+                    };
+                    const coinsIdx = parsedPrivilegios.findIndex((p) =>
+                        (p.titulo || '').toLowerCase().includes('alfa coin')
+                    );
+                    if (coinsIdx >= 0) {
+                        parsedPrivilegios.splice(coinsIdx + 1, 0, defaultSaldoItem);
+                    } else {
+                        parsedPrivilegios.push(defaultSaldoItem);
+                    }
+                }
 
                 if (isMounted) {
                     setPrivilegios(parsedPrivilegios);
@@ -923,6 +981,14 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                       (currentBenefit.id || '').toLowerCase().includes('ref');
             const isEditingCumpleanos = (currentBenefit.titulo || '').toLowerCase().includes('cumple') ||
                                         (currentBenefit.id || '').toLowerCase().includes('cumple');
+            const isEditingSaldo = (currentBenefit.id || '').toLowerCase() === 'saldo_pase_alfa' ||
+                                   (currentBenefit.titulo || '').toLowerCase().includes('saldo pase alfa') ||
+                                   (currentBenefit.titulo || '').toLowerCase().includes('monedero');
+
+            const cleanSaldoConfig: SaldoPaseAlfaConfig = normalizeSaldoPaseAlfaConfig({
+                ...saldoPaseAlfaConfig,
+                activo: Boolean(currentBenefit.activo),
+            });
 
             const cleanDecimaConfig: DecimaCorteConfig = {
                 ...DEFAULT_DECIMA_CONFIG,
@@ -1037,6 +1103,12 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                 const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
                 if (idx >= 0) updatedList[idx] = { ...currentBenefit };
             }
+            if (isEditingSaldo && (autoSyncSaldoTerms || !currentBenefit.terminos)) {
+                currentBenefit.descripcion = buildDefaultSaldoDescripcion(cleanSaldoConfig);
+                currentBenefit.terminos = buildDefaultSaldoTerminos(cleanSaldoConfig);
+                const idx = updatedList.findIndex((p) => p.id === currentBenefit.id);
+                if (idx >= 0) updatedList[idx] = { ...currentBenefit };
+            }
 
             const cleanNivelesPayload: NivelesClubConfig = {
                 activo: isEditingNiveles ? Boolean(currentBenefit.activo) : nivelesConfig.activo !== false,
@@ -1120,6 +1192,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                     ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                     ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                     ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
+                    ...(isEditingSaldo ? { saldo_pase_alfa_config: cleanSaldoConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
@@ -1129,6 +1202,7 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                     ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                     ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                     ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
+                    ...(isEditingSaldo ? { saldo_pase_alfa_config: cleanSaldoConfig } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
@@ -1138,6 +1212,16 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                         ...(isEditingDecima ? { decima_config: cleanDecimaConfig } : {}),
                         ...(isEditingReferral ? { referral_config: cleanReferralConfig } : {}),
                         ...(isEditingCumpleanos ? { cumpleanos_config: cleanCumpleanosConfig } : {}),
+                        ...(isEditingSaldo ? { saldo_pase_alfa_config: cleanSaldoConfig } : {}),
+                    },
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+                setDoc(doc(db, 'settings', 'app_movil'), {
+                    ...(isEditingSaldo ? { saldo_pase_alfa_config: cleanSaldoConfig } : {}),
+                    pase_alfa: {
+                        beneficios: activeTitles,
+                        beneficios_detallados: updatedList,
+                        ...(isEditingSaldo ? { saldo_pase_alfa_config: cleanSaldoConfig } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
@@ -1154,6 +1238,9 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
             }
             if (isEditingCumpleanos) {
                 setCumpleanosConfig(cleanCumpleanosConfig);
+            }
+            if (isEditingSaldo) {
+                setSaldoPaseAlfaConfig(cleanSaldoConfig);
             }
 
             setPrivilegios(updatedList);
@@ -1192,6 +1279,11 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
 
         const isNivelesBenefit = b.id === 'niveles_pase_alfa' || (b.titulo || '').toLowerCase().includes('nivel');
         const nextNivelesConfig = isNivelesBenefit ? { ...nivelesConfig, activo: nextActive } : undefined;
+        const isSaldoBenefit =
+            b.id === 'saldo_pase_alfa' ||
+            (b.titulo || '').toLowerCase().includes('saldo pase alfa') ||
+            (b.titulo || '').toLowerCase().includes('monedero');
+        const nextSaldoConfig = isSaldoBenefit ? { ...saldoPaseAlfaConfig, activo: nextActive } : undefined;
 
         try {
             await Promise.all([
@@ -1199,14 +1291,26 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                     beneficios: activeTitles,
                     beneficios_detallados: updatedList,
                     ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
+                    ...(nextSaldoConfig ? { saldo_pase_alfa_config: nextSaldoConfig } : {}),
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
                 setDoc(doc(db, 'configuracion', 'app_movil'), {
                     ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
+                    ...(nextSaldoConfig ? { saldo_pase_alfa_config: nextSaldoConfig } : {}),
                     pase_alfa: {
                         beneficios: activeTitles,
                         beneficios_detallados: updatedList,
                         ...(nextNivelesConfig ? { niveles_config: nextNivelesConfig } : {}),
+                        ...(nextSaldoConfig ? { saldo_pase_alfa_config: nextSaldoConfig } : {}),
+                    },
+                    actualizado_el: Timestamp.now(),
+                }, { merge: true }),
+                setDoc(doc(db, 'settings', 'app_movil'), {
+                    ...(nextSaldoConfig ? { saldo_pase_alfa_config: nextSaldoConfig } : {}),
+                    pase_alfa: {
+                        beneficios: activeTitles,
+                        beneficios_detallados: updatedList,
+                        ...(nextSaldoConfig ? { saldo_pase_alfa_config: nextSaldoConfig } : {}),
                     },
                     actualizado_el: Timestamp.now(),
                 }, { merge: true }),
@@ -1220,6 +1324,9 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
 
             if (nextNivelesConfig) {
                 setNivelesConfig(nextNivelesConfig);
+            }
+            if (nextSaldoConfig) {
+                setSaldoPaseAlfaConfig(nextSaldoConfig);
             }
 
             setPrivilegios(updatedList);
@@ -3471,6 +3578,442 @@ export function PaseAlfaManager({ className, onSaveSuccess, onEditingChange }: P
                                                                 id="ref-autosync"
                                                                 checked={autoSyncReferralTerms}
                                                                 onCheckedChange={setAutoSyncReferralTerms}
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* SI ES EL BENEFICIO SALDO PASE ALFA (MONEDERO PREPAGO): CONFIGURACIÓN DE PAQUETES, BONOS DE ALFA COINS Y MÉTODOS */}
+                                        {(() => {
+                                            const activeItemTitle = privilegios.find((p) => p.id === editingBenefitId)?.titulo || '';
+                                            const isSaldoMatch =
+                                                (benefitId || '').toLowerCase() === 'saldo_pase_alfa' ||
+                                                (newTitle || '').toLowerCase().includes('saldo pase alfa') ||
+                                                (newTitle || '').toLowerCase().includes('monedero') ||
+                                                activeItemTitle.toLowerCase().includes('saldo pase alfa') ||
+                                                activeItemTitle.toLowerCase().includes('monedero');
+                                            if (!isSaldoMatch) return null;
+
+                                            const handleAddPackage = () => {
+                                                const nextPkg: PaqueteRecargaSaldo = {
+                                                    id: `recarga_${Date.now()}`,
+                                                    monto: 1000,
+                                                    bono_alfa_coins: 500,
+                                                    etiqueta: '',
+                                                    activo: true,
+                                                };
+                                                setSaldoPaseAlfaConfig((prev) => ({
+                                                    ...prev,
+                                                    paquetes: [...prev.paquetes, nextPkg],
+                                                }));
+                                            };
+
+                                            const handleUpdatePackage = (
+                                                pkgId: string,
+                                                patch: Partial<PaqueteRecargaSaldo>
+                                            ) => {
+                                                setSaldoPaseAlfaConfig((prev) => ({
+                                                    ...prev,
+                                                    paquetes: prev.paquetes.map((p) =>
+                                                        p.id === pkgId ? { ...p, ...patch } : p
+                                                    ),
+                                                }));
+                                            };
+
+                                            const handleRemovePackage = (pkgId: string) => {
+                                                setSaldoPaseAlfaConfig((prev) => ({
+                                                    ...prev,
+                                                    paquetes: prev.paquetes.filter((p) => p.id !== pkgId),
+                                                }));
+                                            };
+
+                                            return (
+                                                <div className="rounded-xl border border-blue-500/35 bg-muted/15 p-3.5 sm:p-4 space-y-4">
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-border/60">
+                                                        <div className="flex items-center gap-2">
+                                                            <Wallet className="w-4 h-4 text-[#C5A880] shrink-0" />
+                                                            <div>
+                                                                <h5 className="text-xs font-bold text-foreground tracking-wide uppercase">
+                                                                    REGLAS OPERATIVAS DE SALDO PASE ALFA (MONEDERO PREPAGO)
+                                                                </h5>
+                                                                <p className="text-[11px] text-muted-foreground hidden sm:block">
+                                                                    Configura paquetes de recarga, bonos en Alfa Coins, montos libres y métodos habilitados.
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <Badge variant="outline" className="text-[10px] font-medium border-blue-500/40 text-blue-400 font-sans">
+                                                            Exclusivo App Vinculada
+                                                        </Badge>
+                                                    </div>
+
+                                                    {/* Nota informativa de regla contable */}
+                                                    <div className="rounded-lg border border-border/60 bg-background/50 p-2.5 text-[11px] text-muted-foreground leading-relaxed">
+                                                        <strong className="text-foreground">Regla contable automática:</strong> Al abonar saldo, el cliente recibe únicamente su dinero en monedero y el <strong className="text-foreground">bono promocional de Alfa Coins</strong> configurado abajo (no genera Alfa Coins regulares por pago ni comisión de barbero al recargar). Los Alfa Coins por servicio, sellos de Pase Alfa y comisiones se acreditan cada vez que consume un servicio con su saldo.
+                                                    </div>
+
+                                                    {/* 1. Paquetes de recarga con Bono de Alfa Coins */}
+                                                    <div className="space-y-2.5">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label className="text-xs font-bold text-foreground">
+                                                                Paquetes de Recarga y Bono en Alfa Coins
+                                                            </Label>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={handleAddPackage}
+                                                                className="h-7 px-2.5 text-xs font-semibold border-blue-500/40 text-blue-400 hover:bg-blue-500/10"
+                                                            >
+                                                                <Plus className="w-3.5 h-3.5 mr-1 text-slate-400" />
+                                                                Agregar paquete
+                                                            </Button>
+                                                        </div>
+
+                                                        {saldoPaseAlfaConfig.paquetes.length === 0 ? (
+                                                            <div className="rounded-lg border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                                                                Sin paquetes predefinidos. Agrega al menos un paquete sugerido (ej. $1,000.00 MXN → +500 Alfa Coins).
+                                                            </div>
+                                                        ) : (
+                                                            <div className="rounded-lg border border-border/60 divide-y divide-border/40 bg-background/40">
+                                                                {saldoPaseAlfaConfig.paquetes.map((pkg) => (
+                                                                    <div
+                                                                        key={pkg.id}
+                                                                        className="p-2.5 flex flex-wrap sm:flex-nowrap items-center gap-2.5"
+                                                                    >
+                                                                        <Switch
+                                                                            checked={pkg.activo}
+                                                                            onCheckedChange={(val) =>
+                                                                                handleUpdatePackage(pkg.id, { activo: val })
+                                                                            }
+                                                                            className="scale-75 shrink-0"
+                                                                        />
+                                                                        <div className="flex items-center gap-1.5 min-w-[130px] flex-1">
+                                                                            <span className="text-[11px] text-muted-foreground shrink-0">Recarga $</span>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={10}
+                                                                                step={50}
+                                                                                value={pkg.monto}
+                                                                                onChange={(e) =>
+                                                                                    handleUpdatePackage(pkg.id, {
+                                                                                        monto: Math.max(0, Number(e.target.value) || 0),
+                                                                                    })
+                                                                                }
+                                                                                className="h-8 text-xs font-semibold font-sans"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1.5 min-w-[140px] flex-1">
+                                                                            <Coins className="w-3.5 h-3.5 text-[#C5A880] shrink-0" />
+                                                                            <span className="text-[11px] text-muted-foreground shrink-0">Bono +</span>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min={0}
+                                                                                step={50}
+                                                                                value={pkg.bono_alfa_coins}
+                                                                                onChange={(e) =>
+                                                                                    handleUpdatePackage(pkg.id, {
+                                                                                        bono_alfa_coins: Math.max(
+                                                                                            0,
+                                                                                            Math.floor(Number(e.target.value) || 0)
+                                                                                        ),
+                                                                                    })
+                                                                                }
+                                                                                className="h-8 text-xs font-semibold font-sans"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="min-w-[120px] flex-1">
+                                                                            <Input
+                                                                                type="text"
+                                                                                placeholder="Etiqueta (ej. Popular)"
+                                                                                value={pkg.etiqueta || ''}
+                                                                                onChange={(e) =>
+                                                                                    handleUpdatePackage(pkg.id, {
+                                                                                        etiqueta: e.target.value,
+                                                                                    })
+                                                                                }
+                                                                                className="h-8 text-xs font-sans"
+                                                                            />
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemovePackage(pkg.id)}
+                                                                            className="text-slate-400 hover:text-red-400 transition-colors p-1 shrink-0"
+                                                                            title="Eliminar paquete"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 2. Monto Libre y Límites de Seguridad */}
+                                                    <div className="space-y-3 pt-2 border-t border-border/50">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <div>
+                                                                <Label className="text-xs font-semibold text-foreground">
+                                                                    Permitir monto de recarga personalizado (libre)
+                                                                </Label>
+                                                                <p className="text-[11px] text-muted-foreground">
+                                                                    Permite elegir cualquier importe dentro del mínimo y máximo autorizados.
+                                                                </p>
+                                                            </div>
+                                                            <Switch
+                                                                checked={saldoPaseAlfaConfig.permitir_monto_libre}
+                                                                onCheckedChange={(val) =>
+                                                                    setSaldoPaseAlfaConfig((prev) => ({
+                                                                        ...prev,
+                                                                        permitir_monto_libre: val,
+                                                                    }))
+                                                                }
+                                                                className="scale-90"
+                                                            />
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] text-muted-foreground">
+                                                                    Recarga mínima ($ MXN)
+                                                                </Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={10}
+                                                                    step={50}
+                                                                    value={saldoPaseAlfaConfig.monto_minimo}
+                                                                    onChange={(e) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            monto_minimo: Math.max(10, Number(e.target.value) || 10),
+                                                                        }))
+                                                                    }
+                                                                    className="h-8 text-xs font-semibold font-sans"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] text-muted-foreground">
+                                                                    Recarga máxima ($ MXN)
+                                                                </Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={100}
+                                                                    step={100}
+                                                                    value={saldoPaseAlfaConfig.monto_maximo}
+                                                                    onChange={(e) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            monto_maximo: Math.max(100, Number(e.target.value) || 100),
+                                                                        }))
+                                                                    }
+                                                                    className="h-8 text-xs font-semibold font-sans"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[11px] text-muted-foreground">
+                                                                    Tope saldo acumulado ($ MXN)
+                                                                </Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    min={500}
+                                                                    step={500}
+                                                                    value={saldoPaseAlfaConfig.tope_saldo_acumulado}
+                                                                    onChange={(e) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            tope_saldo_acumulado: Math.max(
+                                                                                500,
+                                                                                Number(e.target.value) || 500
+                                                                            ),
+                                                                        }))
+                                                                    }
+                                                                    className="h-8 text-xs font-semibold font-sans"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {saldoPaseAlfaConfig.permitir_monto_libre && (
+                                                            <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/40 px-3 py-2">
+                                                                <Label className="text-xs text-foreground cursor-pointer">
+                                                                    Otorgar el bono del paquete alcanzado cuando recarguen un monto libre (ej. $1,200 gana bono de $1,000)
+                                                                </Label>
+                                                                <Switch
+                                                                    checked={saldoPaseAlfaConfig.bono_escalon_en_monto_libre}
+                                                                    onCheckedChange={(val) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            bono_escalon_en_monto_libre: val,
+                                                                        }))
+                                                                    }
+                                                                    className="scale-90 shrink-0"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 3. Métodos de Recarga Permitidos y Uso */}
+                                                    <div className="space-y-2.5 pt-2 border-t border-border/50">
+                                                        <Label className="text-xs font-bold text-foreground">
+                                                            Canales y Métodos de Recarga Habilitados
+                                                        </Label>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Smartphone className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                    <span className="text-xs font-medium">Mercado Pago App (Tarjeta / SPEI)</span>
+                                                                </div>
+                                                                <Switch
+                                                                    checked={saldoPaseAlfaConfig.metodos_permitidos.mercadopago_app}
+                                                                    onCheckedChange={(val) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            metodos_permitidos: {
+                                                                                ...prev.metodos_permitidos,
+                                                                                mercadopago_app: val,
+                                                                            },
+                                                                        }))
+                                                                    }
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Banknote className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                    <span className="text-xs font-medium">Efectivo en Sucursal</span>
+                                                                </div>
+                                                                <Switch
+                                                                    checked={saldoPaseAlfaConfig.metodos_permitidos.efectivo_sucursal}
+                                                                    onCheckedChange={(val) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            metodos_permitidos: {
+                                                                                ...prev.metodos_permitidos,
+                                                                                efectivo_sucursal: val,
+                                                                            },
+                                                                        }))
+                                                                    }
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <CreditCard className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                    <span className="text-xs font-medium">Terminal Point en Sucursal</span>
+                                                                </div>
+                                                                <Switch
+                                                                    checked={saldoPaseAlfaConfig.metodos_permitidos.terminal_sucursal}
+                                                                    onCheckedChange={(val) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            metodos_permitidos: {
+                                                                                ...prev.metodos_permitidos,
+                                                                                terminal_sucursal: val,
+                                                                            },
+                                                                        }))
+                                                                    }
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <DollarSign className="h-4 w-4 text-slate-400 shrink-0" />
+                                                                    <span className="text-xs font-medium">Transferencia en Sucursal</span>
+                                                                </div>
+                                                                <Switch
+                                                                    checked={saldoPaseAlfaConfig.metodos_permitidos.transferencia_sucursal}
+                                                                    onCheckedChange={(val) =>
+                                                                        setSaldoPaseAlfaConfig((prev) => ({
+                                                                            ...prev,
+                                                                            metodos_permitidos: {
+                                                                                ...prev.metodos_permitidos,
+                                                                                transferencia_sucursal: val,
+                                                                            },
+                                                                        }))
+                                                                    }
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 4. Alcance de Uso y Citas */}
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-xs font-semibold text-foreground">
+                                                                ¿En qué se puede usar el Saldo?
+                                                            </Label>
+                                                            <Select
+                                                                value={saldoPaseAlfaConfig.aplicable_en}
+                                                                onValueChange={(val: 'ambos' | 'servicios') =>
+                                                                    setSaldoPaseAlfaConfig((prev) => ({
+                                                                        ...prev,
+                                                                        aplicable_en: val,
+                                                                    }))
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent className="border-2 border-blue-500 rounded-xl">
+                                                                    <SelectItem value="ambos" className="text-xs">
+                                                                        Servicios y Productos de Tienda
+                                                                    </SelectItem>
+                                                                    <SelectItem value="servicios" className="text-xs">
+                                                                        Únicamente Servicios de Barbería
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-background/40 px-3 py-2 self-end h-8">
+                                                            <span className="text-xs font-medium truncate pr-2">
+                                                                Pagar anticipos/citas en App
+                                                            </span>
+                                                            <Switch
+                                                                checked={saldoPaseAlfaConfig.permitir_pago_citas_app}
+                                                                onCheckedChange={(val) =>
+                                                                    setSaldoPaseAlfaConfig((prev) => ({
+                                                                        ...prev,
+                                                                        permitir_pago_citas_app: val,
+                                                                    }))
+                                                                }
+                                                                className="scale-75 shrink-0"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Auto-sync T&C footer */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border/60">
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                const c = normalizeSaldoPaseAlfaConfig({
+                                                                    ...saldoPaseAlfaConfig,
+                                                                    activo: newActivo,
+                                                                });
+                                                                setNewDescripcion(buildDefaultSaldoDescripcion(c));
+                                                                setNewTerminos(buildDefaultSaldoTerminos(c));
+                                                                toast({
+                                                                    title: 'Textos actualizados',
+                                                                    description: 'Descripción y Términos regenerados con las reglas actuales de Saldo Pase Alfa.',
+                                                                });
+                                                            }}
+                                                            className="h-7 text-[11px] px-2.5"
+                                                        >
+                                                            Regenerar Desc. y T&C
+                                                        </Button>
+                                                        <div className="flex items-center gap-2">
+                                                            <Label htmlFor="saldo-autosync" className="text-[11px] text-muted-foreground cursor-pointer">
+                                                                Actualizar Términos automáticamente al guardar
+                                                            </Label>
+                                                            <Switch
+                                                                id="saldo-autosync"
+                                                                checked={autoSyncSaldoTerms}
+                                                                onCheckedChange={setAutoSyncSaldoTerms}
                                                                 className="scale-90"
                                                             />
                                                         </div>

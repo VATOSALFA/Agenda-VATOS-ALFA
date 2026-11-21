@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   deleteField,
   doc,
@@ -236,7 +237,12 @@ export function isSaleCountedForPaseAlfa(saleData: any, clientData: any): boolea
   ) {
     return false;
   }
-  if (saleData.absorbed_in_sale_id || saleData.tipo_venta === 'anticipo') {
+  if (
+    saleData.absorbed_in_sale_id ||
+    saleData.tipo_venta === 'anticipo' ||
+    saleData.tipo_venta === 'recarga_monedero' ||
+    String(saleData.id || '').startsWith('topup_')
+  ) {
     return false;
   }
 
@@ -335,7 +341,12 @@ export function countEligibleHaircutVisitsFromSales(
     ) {
       continue;
     }
-    if (s.absorbed_in_sale_id || s.tipo_venta === 'anticipo') {
+    if (
+      s.absorbed_in_sale_id ||
+      s.tipo_venta === 'anticipo' ||
+      s.tipo_venta === 'recarga_monedero' ||
+      String(s.id || '').startsWith('topup_')
+    ) {
       continue;
     }
     if (clientData && !isSaleCountedForPaseAlfa(s, clientData)) {
@@ -534,6 +545,32 @@ export const DEFAULT_COINS_CONFIG: AlfaCoinsConfig = {
   minimo_canje_coins: 0,
   tope_descuento_pct: 100,
   aplicable_en: 'ambos',
+};
+
+import {
+  type PaqueteRecargaSaldo,
+  type SaldoPaseAlfaConfig,
+  DEFAULT_SALDO_PASE_ALFA_CONFIG,
+  normalizeSaldoPaseAlfaConfig,
+  getClientWalletBalance,
+  hasClientLinkedApp,
+  calculateTopupBonusCoins,
+  validateTopupAmountRules,
+  buildDefaultSaldoDescripcion,
+  buildDefaultSaldoTerminos,
+} from './wallet-config';
+
+export {
+  type PaqueteRecargaSaldo,
+  type SaldoPaseAlfaConfig,
+  DEFAULT_SALDO_PASE_ALFA_CONFIG,
+  normalizeSaldoPaseAlfaConfig,
+  getClientWalletBalance,
+  hasClientLinkedApp,
+  calculateTopupBonusCoins,
+  validateTopupAmountRules,
+  buildDefaultSaldoDescripcion,
+  buildDefaultSaldoTerminos,
 };
 
 export interface ReferralProgramConfig {
@@ -1326,7 +1363,16 @@ export function evaluateClientSalesForJuntosToday(
   for (const s of salesDocs || []) {
     const statusLower = String(s.status || '').toLowerCase().trim();
     const pagoLower = String(s.pago_estado || '').toLowerCase().trim();
-    if (statusLower === 'cancelled' || statusLower === 'cancelada' || statusLower === 'eliminada' || pagoLower === 'cancelado') {
+    if (
+      statusLower === 'cancelled' ||
+      statusLower === 'cancelada' ||
+      statusLower === 'eliminada' ||
+      pagoLower === 'cancelado' ||
+      s.tipo_venta === 'recarga_monedero' ||
+      s.tipo_venta === 'anticipo' ||
+      String(s.id || '').startsWith('topup_') ||
+      String(s.id || '').startsWith('deposit_')
+    ) {
       continue;
     }
 
@@ -1353,10 +1399,12 @@ export function evaluateClientSalesForJuntosToday(
       continue;
     }
 
+    const walletPaid = Number(s.pago_monedero || s.detalle_pago_combinado?.monedero || 0);
+    const depositPaid = Number(s.anticipoPagado || s.anticipo_pagado || 0);
     const rawRealPaid =
       s.monto_pagado_real !== undefined && s.monto_pagado_real !== null
-        ? Number(s.monto_pagado_real)
-        : Number(s.total || 0) + Number(s.anticipoPagado || 0);
+        ? Number(s.monto_pagado_real) + walletPaid + (s.deposit_sale_id ? depositPaid : 0)
+        : Number(s.total || 0) + depositPaid;
     const realMoneyPaid = Math.round(rawRealPaid * 100) / 100;
 
     const itemsArr = Array.isArray(s.items) ? s.items : [];
@@ -2246,6 +2294,11 @@ export interface SaleLoyaltySnapshot {
   juntos_titular_coins_awarded?: number;
   juntos_companions_awarded?: { id: string; coins: number; folio?: string }[];
   prev_ultimo_canje_juntos_fecha?: string;
+  // Saldo Pase Alfa (Monedero Prepago)
+  monedero_usado?: number;
+  is_wallet_topup?: boolean;
+  topup_amount?: number;
+  topup_bonus_coins?: number;
 }
 
 /**
@@ -2308,6 +2361,79 @@ export async function revertSaleLoyaltyAndBenefits(
     }
 
     const clientData: any = { id: clientDocSnap.id, ...clientDocSnap.data() };
+
+    // CASO ESPECIAL: Reversión de una Recarga de Saldo Pase Alfa (`tipo_venta === 'recarga_monedero'`)
+    if (
+      saleData.tipo_venta === 'recarga_monedero' ||
+      snap?.is_wallet_topup ||
+      String(saleId).startsWith('topup_')
+    ) {
+      const topupAmount = Math.max(
+        0,
+        Math.round(
+          Number(snap?.topup_amount ?? saleData.total ?? saleData.monto_pagado_real ?? 0) * 100
+        ) / 100
+      );
+      const topupBonusCoins = Math.max(
+        0,
+        Math.floor(Number(snap?.topup_bonus_coins ?? saleData.bono_recarga_coins ?? 0))
+      );
+
+      const currWallet = getClientWalletBalance(clientData);
+      const nextWallet = Math.max(0, Math.round((currWallet - topupAmount) * 100) / 100);
+
+      const currCoins = Number(
+        clientData.alfaCoins ??
+          clientData.alfa_coins ??
+          clientData.puntosLealtad ??
+          clientData.puntos_lealtad ??
+          clientData.puntos ??
+          0
+      );
+      const nextCoins = Math.max(0, currCoins - topupBonusCoins);
+
+      const walletRevertUpdate: Record<string, any> = {
+        saldo_monedero: nextWallet,
+        saldoMonedero: nextWallet,
+        saldo_pase_alfa: nextWallet,
+      };
+      if (topupBonusCoins > 0) {
+        walletRevertUpdate.puntos = nextCoins;
+        walletRevertUpdate.alfaCoins = nextCoins;
+        walletRevertUpdate.alfa_coins = nextCoins;
+        walletRevertUpdate.puntosLealtad = nextCoins;
+        walletRevertUpdate.puntos_lealtad = nextCoins;
+      }
+      if (clientData.recompensa_pendiente?.tipo_recompensa === 'recarga_saldo') {
+        walletRevertUpdate.recompensa_pendiente = null;
+      }
+
+      await updateDoc(doc(db, 'clientes', clientId), walletRevertUpdate);
+
+      if (topupAmount > 0) {
+        await addDoc(collection(db, 'movimientos_monedero'), {
+          cliente_id: clientId,
+          cliente_nombre: `${clientData.nombre || ''} ${clientData.apellido || ''}`.trim(),
+          tipo: 'reversion_recarga',
+          monto: topupAmount,
+          es_abono: false,
+          saldo_anterior: currWallet,
+          saldo_nuevo: nextWallet,
+          bono_alfa_coins: -topupBonusCoins,
+          referencia_id: saleId,
+          local_id: saleData.local_id || '',
+          notas: 'Reversión automática por eliminación de recarga en Caja',
+          creado_en: Timestamp.now(),
+        }).catch(() => {});
+        summary.push(`-$${topupAmount.toFixed(2)} MXN descontados de Saldo Pase Alfa`);
+      }
+      if (topupBonusCoins > 0) {
+        summary.push(`-${topupBonusCoins} Alfa Coins de bono de recarga retirados`);
+      }
+
+      return { reverted: true, summary };
+    }
+
     const paseAlfaData: any = paseAlfaSnap?.exists() ? paseAlfaSnap.data() : {};
     const nivelesConfig = paseAlfaData?.niveles_config || null;
     const rawSellosReq = Number(paseAlfaData?.sellosRequeridos || 10);
@@ -2342,7 +2468,9 @@ export async function revertSaleLoyaltyAndBenefits(
           st === 'pendiente' ||
           st === 'pending_payment' ||
           st === 'pendiente_anticipo' ||
-          s.absorbed_in_sale_id
+          s.absorbed_in_sale_id ||
+          s.tipo_venta === 'recarga_monedero' ||
+          d.id.startsWith('topup_')
         ) {
           return;
         }
@@ -2452,6 +2580,27 @@ export async function revertSaleLoyaltyAndBenefits(
         : 0;
 
     const clientUpdate: Record<string, any> = {};
+
+    // A.0 Reembolsar Saldo Pase Alfa si la venta eliminada usó saldo del monedero prepago
+    const walletUsedInSale = Math.max(
+      0,
+      Math.round(
+        Number(
+          snap?.monedero_usado ??
+            saleData.pago_monedero ??
+            saleData.detalle_pago_combinado?.monedero ??
+            0
+        ) * 100
+      ) / 100
+    );
+    const prevWalletBeforeRefund = getClientWalletBalance(clientData);
+    if (walletUsedInSale > 0) {
+      const refundedWallet = Math.round((prevWalletBeforeRefund + walletUsedInSale) * 100) / 100;
+      clientUpdate.saldo_monedero = refundedWallet;
+      clientUpdate.saldoMonedero = refundedWallet;
+      clientUpdate.saldo_pase_alfa = refundedWallet;
+      summary.push(`+$${walletUsedInSale.toFixed(2)} MXN reembolsados a Saldo Pase Alfa`);
+    }
 
     // A. Revertir Alfa Coins del cliente (restar ganados + bonos Juntos y devolver canjeados)
     const currentClientCoins = Number(
@@ -2653,6 +2802,22 @@ export async function revertSaleLoyaltyAndBenefits(
 
     // Guardar actualización consolidada en el documento del cliente
     await updateDoc(doc(db, 'clientes', clientId), clientUpdate);
+
+    if (walletUsedInSale > 0) {
+      await addDoc(collection(db, 'movimientos_monedero'), {
+        cliente_id: clientId,
+        cliente_nombre: `${clientData.nombre || ''} ${clientData.apellido || ''}`.trim(),
+        tipo: 'reembolso_cancelacion',
+        monto: walletUsedInSale,
+        es_abono: true,
+        saldo_anterior: prevWalletBeforeRefund,
+        saldo_nuevo: Math.round((prevWalletBeforeRefund + walletUsedInSale) * 100) / 100,
+        referencia_id: saleId,
+        local_id: saleData.local_id || '',
+        notas: 'Reembolso automático por cancelación/eliminación de venta',
+        creado_en: Timestamp.now(),
+      }).catch(() => {});
+    }
 
     // F. Si fue un canje de referido y se premiaron 500 Alfa Coins al anfitrión, revertirlos del anfitrión
     let referrerId = snap?.referrer_id || '';

@@ -209,11 +209,16 @@ export function useCommissionsData(activeFilters: CommissionsFilters, queryKey: 
         const nextCashRetainedMap: Record<string, { name: string; amount: number }> = {};
 
         filteredSales.forEach(sale => {
+            // Las recargas de Saldo Pase Alfa no generan comisión (la comisión se paga al consumir el servicio real)
+            if (sale.tipo_venta === 'recarga_monedero' || String(sale.id || '').startsWith('topup_')) {
+                return;
+            }
             // Strict check: Commissions are ONLY for fully paid sales
             if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
                 return;
             }
-            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
+            const walletCovered = Number((sale as any).pago_monedero || sale.detalle_pago_combinado?.monedero || 0);
+            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0) + walletCovered;
             if (sale.pago_estado !== 'Pagado' && (sale.total - totalCovered) > 1) {
                 return;
             }

@@ -164,6 +164,90 @@ export async function GET(
     }
 
     const db = getDb();
+
+    // Manejo dedicado de recargas en línea de Saldo Pase Alfa (topup_*)
+    if (reservationId.startsWith('topup_')) {
+      const recargaDoc = await db.collection('recargas_monedero').doc(reservationId).get();
+      if (!recargaDoc.exists) {
+        if (wantsJson) {
+          return NextResponse.json({ error: 'Solicitud de recarga no encontrada' }, { status: 404 });
+        }
+        return new NextResponse(
+          renderStatusHtml(
+            'Recarga no encontrada',
+            'El enlace de recarga solicitado no existe o expiró.',
+            'Ir a VATOS ALFA',
+            'https://vatosalfa.com'
+          ),
+          { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+
+      const recData = recargaDoc.data() || {};
+      const statusParam = String(req.nextUrl.searchParams.get('status') || '').toLowerCase();
+      const montoStr = `$${Number(recData.monto || 0).toLocaleString('es-MX', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} MXN`;
+      const bonoCoins = Number(recData.bono_alfa_coins || 0);
+      const bonoStr = bonoCoins > 0 ? ` y +${bonoCoins} Alfa Coins promocionales` : '';
+
+      if (recData.acreditado === true || recData.estado === 'aprobada' || statusParam === 'approved') {
+        if (wantsJson) {
+          return NextResponse.json({
+            id: reservationId,
+            status: 'approved',
+            acreditado: Boolean(recData.acreditado),
+            monto: Number(recData.monto || 0),
+            bonoCoins,
+          });
+        }
+        return new NextResponse(
+          renderStatusHtml(
+            '¡Recarga de Saldo Confirmada!',
+            `Tu abono de ${montoStr}${bonoStr} se acreditó en tu Saldo Pase Alfa. Ya puedes cerrar esta ventana y volver a la App Móvil VATOS ALFA.`,
+            'Ir a VATOS ALFA',
+            'https://vatosalfa.com'
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+
+      if (statusParam === 'pending') {
+        return new NextResponse(
+          renderStatusHtml(
+            'Recarga en Proceso de Validación',
+            `Tu transferencia o pago por ${montoStr} está siendo confirmado por Mercado Pago. Tu Saldo Pase Alfa se actualizará automáticamente en la App Móvil en cuanto se acredite.`,
+            'Ir a VATOS ALFA',
+            'https://vatosalfa.com'
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+
+      if (statusParam === 'failure') {
+        return new NextResponse(
+          renderStatusHtml(
+            'Pago no completado',
+            'No se realizó ningún cargo. Puedes cerrar esta ventana e intentarlo nuevamente desde tu App Móvil VATOS ALFA.',
+            'Ir a VATOS ALFA',
+            'https://vatosalfa.com'
+          ),
+          { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        );
+      }
+
+      if (recData.init_point) {
+        if (wantsJson) {
+          return NextResponse.json({
+            id: recData.mercado_pago_preference_id || reservationId,
+            initPoint: recData.init_point,
+          });
+        }
+        return NextResponse.redirect(recData.init_point, 302);
+      }
+    }
+
     let resDoc = await db.collection('reservas').doc(reservationId).get();
 
     // Si se pasó el folio (ej. VA-312104) en vez del ID de documento de Firestore, buscar por folio

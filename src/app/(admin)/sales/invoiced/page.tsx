@@ -76,6 +76,9 @@ function formatPaymentMethodName(saleOrMethod: any): string {
     if (rawMethod === 'alfacoins' || rawMethod === 'alfa_coins') {
         return 'Alfa Coins';
     }
+    if (rawMethod === 'monedero' || rawMethod === 'saldo_pase_alfa') {
+        return 'Saldo Pase Alfa';
+    }
 
     // Fallback: If sale object was passed without rawMethod but marked as deposit_paid
     if (typeof saleOrMethod === 'object' && saleOrMethod?.pago_estado === 'deposit_paid') {
@@ -647,10 +650,15 @@ export default function InvoicedSalesPage() {
     };
 
     const getSaleConcept = (sale: Sale) => {
+        if (sale.tipo_venta === 'recarga_monedero' || String(sale.id || '').startsWith('topup_')) {
+            return 'Recarga Saldo';
+        }
         if (!sale.items || sale.items.length === 0) return 'N/A';
         const hasService = sale.items.some(item => item.tipo === 'servicio');
         const hasProduct = sale.items.some(item => item.tipo === 'producto');
+        const hasWalletTopup = sale.items.some((item: any) => item.tipo === 'recarga_monedero');
 
+        if (hasWalletTopup) return 'Recarga Saldo';
         if (hasService && hasProduct) return 'Mixto';
         if (hasService) return 'Servicio';
         if (hasProduct) return 'Producto';
@@ -814,6 +822,7 @@ export default function InvoicedSalesPage() {
                                     <SelectItem value="tarjeta">Terminal Point</SelectItem>
                                     <SelectItem value="transferencia">Transferencia</SelectItem>
                                     <SelectItem value="Pagos en linea">Pagos en Línea</SelectItem>
+                                    <SelectItem value="monedero">Saldo Pase Alfa</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

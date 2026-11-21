@@ -62,7 +62,10 @@ service cloud.firestore {
         request.resource.data.get('visitas_pase_alfa', 0) <= 0 &&
         request.resource.data.get('consumo_pase_alfa', 0) <= 0 &&
         request.resource.data.get('visitas_elegibles_historicas', 0) <= 0 &&
-        request.resource.data.get('citas_asistidas', 0) <= 0
+        request.resource.data.get('citas_asistidas', 0) <= 0 &&
+        request.resource.data.get('saldo_monedero', 0) <= 0 &&
+        request.resource.data.get('saldoMonedero', 0) <= 0 &&
+        request.resource.data.get('saldo_pase_alfa', 0) <= 0
       );
     }
 
@@ -71,6 +74,7 @@ service cloud.firestore {
       let changedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let alwaysProtectedFields = [
         'exento_anticipo', 'tier',
+        'saldo_monedero', 'saldoMonedero', 'saldo_pase_alfa', 'total_recargado_monedero', 'ultima_recarga_monedero',
         'ultimo_canje_cumpleanos_anio', 'ultimo_canje_cumpleanos_folio', 'ultimo_canje_juntos_fecha', 'ultimo_sello_fecha',
         'ultimo_canje_cortesia_vip_mes', 'ultimo_canje_cortesia_vip_folio', 'fecha_ultimo_canje_cortesia_vip',
         'visitas_totales', 'consumo_total', 'gasto_total', 'consumoTotal',
@@ -300,6 +304,23 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow write: if isStaff();
     } 
+
+    // Bitácora y Órdenes de Saldo Pase Alfa (Monedero Prepago)
+    match /movimientos_monedero/{movId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff();
+      allow delete: if isGeneralAdmin();
+    }
+    match /recargas_monedero/{recargaId} {
+      allow read: if isAuthenticated();
+      allow create: if isStaff() || (
+        isAuthenticated() &&
+        request.resource.data.get('estado', 'pendiente') == 'pendiente' &&
+        request.resource.data.get('acreditado', false) == false
+      );
+      allow update: if isStaff();
+      allow delete: if isGeneralAdmin();
+    }
 
     match /finanzas/{document=**} { allow read, write: if isAdmin(); }
     match /finanzas_mensuales/{document=**} { allow read, write: if isAdmin(); }

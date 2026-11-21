@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, ShieldCheck, Wallet, Plus, type LucideIcon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +28,8 @@ import { ArrowUpDown } from 'lucide-react';
 import { NewClientForm } from './new-client-form';
 import { getClientAppInfo, isClientWithApp } from '@/lib/client-app-helper';
 import { parseBirthMonthAndDay, formatBirthdaySpanish, calculatePaseAlfaStatsFromSales, evaluateClientAlfaTier } from '@/lib/benefit-security';
+import { getClientWalletBalance } from '@/lib/wallet-config';
+import { WalletTopupModal } from '@/components/sales/wallet-topup-modal';
 
 interface ClientDetailModalProps {
   client: Client;
@@ -95,6 +97,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
 
   const [liveClient, setLiveClient] = useState<Client>(client);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isWalletTopupOpen, setIsWalletTopupOpen] = useState(false);
+  const [walletMovements, setWalletMovements] = useState<any[]>([]);
+  const [walletMovementsLoading, setWalletMovementsLoading] = useState(false);
 
   useEffect(() => {
     setLiveClient(client);
@@ -160,6 +165,39 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const appInfo = useMemo(() => getClientAppInfo(liveClient), [liveClient]);
   const hasAppLinked = appInfo.hasApp;
   const alfaCoins = hasAppLinked ? Number(liveClient.alfaCoins ?? liveClient.alfa_coins ?? liveClient.puntosLealtad ?? liveClient.puntos_lealtad ?? liveClient.puntos ?? 0) : 0;
+  const walletBalance = hasAppLinked ? getClientWalletBalance(liveClient) : 0;
+
+  useEffect(() => {
+    if (!isOpen || !client?.id || !db) {
+      setWalletMovements([]);
+      return;
+    }
+    setWalletMovementsLoading(true);
+    try {
+      const qMovs = query(
+        collection(db, 'movimientos_monedero'),
+        where('cliente_id', '==', client.id)
+      );
+      const unsubMovs = onSnapshot(
+        qMovs,
+        (snap) => {
+          const rows = snap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as any))
+            .sort((a, b) => {
+              const tA = a.fecha?.seconds ? a.fecha.seconds * 1000 : new Date(a.fecha || 0).getTime();
+              const tB = b.fecha?.seconds ? b.fecha.seconds * 1000 : new Date(b.fecha || 0).getTime();
+              return (tB || 0) - (tA || 0);
+            });
+          setWalletMovements(rows);
+          setWalletMovementsLoading(false);
+        },
+        () => setWalletMovementsLoading(false)
+      );
+      return () => unsubMovs();
+    } catch {
+      setWalletMovementsLoading(false);
+    }
+  }, [isOpen, client?.id]);
   const stamps = hasAppLinked ? Number(liveClient.cortes_acumulados ?? liveClient.cortesAcumulados ?? 0) : 0;
   const freeCutReady = hasAppLinked && Boolean(liveClient.corte_gratis_disponible ?? liveClient.corteGratisDisponible ?? stamps >= 9);
 
@@ -335,11 +373,21 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
     return sales.filter(sale => !['Pendiente', 'Anulado', 'Cancelado'].includes(sale.pago_estado || ''));
   }, [sales, salesLoading]);
 
+  const serviceConsumptionSales = useMemo(() => {
+    return validSales.filter(
+      (sale: any) =>
+        !sale.absorbed_in_sale_id &&
+        sale.tipo_venta !== 'recarga_monedero' &&
+        !String(sale.id || '').startsWith('topup_')
+    );
+  }, [validSales]);
+
   const totalSpent = salesLoading
     ? 0
-    : validSales.reduce((acc, sale) => {
+    : serviceConsumptionSales.reduce((acc, sale: any) => {
+      const walletUsed = Number(sale.pago_monedero || sale.detalle_pago_combinado?.monedero || 0);
       const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null)
-        ? sale.monto_pagado_real
+        ? sale.monto_pagado_real + walletUsed
         : (sale.total || 0);
       return acc + amount;
     }, 0);
@@ -853,7 +901,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <StatCard title="Citas asistidas" value={reservationsLoading ? '...' : attendedAppointments} icon={UserCheck} />
                     <StatCard title="Citas no asistidas" value={reservationsLoading ? '...' : unattendedAppointments} icon={UserX} />
                     <StatCard title="Citas canceladas" value={reservationsLoading ? '...' : cancelledAppointments} icon={XCircle} />
-                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${validSales.length} compras`} />
+                    <StatCard title="Gasto Total" value={salesLoading ? '...' : `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={PiggyBank} description={`${serviceConsumptionSales.length} compras`} />
                     <StatCard title="ALFA COINS (App)" value={hasAppLinked ? alfaCoins : 0} icon={Sparkles} description={hasAppLinked ? "Monedas digitales en app" : "Requiere App Móvil"} />
                     <StatCard title="Pase Alfa" value={hasAppLinked ? `${stamps} / 10` : "No activo"} icon={Scissors} description={hasAppLinked ? (freeCutReady ? '¡10.° Corte DISPONIBLE!' : `Faltan ${Math.max(0, 10 - stamps)} visitas`) : "Disponible con App"} />
                     <StatCard title="Nivel del Cliente" value={hasAppLinked ? clientLevel : "Sin Nivel"} icon={Award} description={hasAppLinked ? "Categoría Pase Alfa" : "Requiere App Móvil"} />
@@ -933,7 +981,11 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                   </TableCell>
                                   <TableCell className="py-1.5 px-3 text-xs">{professionalNames}</TableCell>
                                   <TableCell className="py-1.5 px-3 text-xs">
-                                    {isAnticipo ? (
+                                    {sale.tipo_venta === 'recarga_monedero' || sale.id.startsWith('topup_') ? (
+                                      <span className="inline-flex items-center text-xs font-semibold text-[#C5A880]">
+                                        Recarga Saldo
+                                      </span>
+                                    ) : isAnticipo ? (
                                       <span className="inline-flex items-center text-xs font-semibold text-blue-400">
                                         Anticipo (50%)
                                       </span>
@@ -948,7 +1000,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                     )}
                                   </TableCell>
                                   <TableCell className="py-1.5 px-3 text-xs capitalize text-foreground font-medium">
-                                    {sale.metodo_pago || 'N/A'}
+                                    {sale.metodo_pago === 'monedero' ? 'Saldo Pase Alfa' : (sale.metodo_pago || 'N/A')}
                                   </TableCell>
                                   <TableCell className="py-1.5 px-3 text-xs text-right">
                                     <div className="flex flex-col items-end">
@@ -1007,10 +1059,30 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <div className="bg-[#1E293B] border border-blue-500/35 rounded-xl px-3.5 py-2 flex items-center gap-3">
+                          <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Saldo Pase Alfa</p>
+                            <p className="text-base sm:text-lg font-black text-blue-300 flex items-center gap-1.5 font-sans">
+                              <Wallet className="h-4 w-4 text-blue-400" />
+                              ${walletBalance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setIsWalletTopupOpen(true)}
+                            className="h-7 px-2.5 text-[11px] font-semibold border-blue-500/50 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 hover:text-white cursor-pointer"
+                          >
+                            <Plus className="h-3 w-3 mr-1 text-blue-300" />
+                            Recargar
+                          </Button>
+                        </div>
+
                         <div className="bg-[#1E293B] border border-[#C5A880]/30 rounded-xl px-4 py-2 text-center">
                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Balance ALFA COINS</p>
-                          <p className="text-lg font-black text-[#C5A880] flex items-center justify-center gap-1">
+                          <p className="text-lg font-black text-[#C5A880] flex items-center justify-center gap-1 font-sans">
                             <Sparkles className="h-4 w-4 text-[#C5A880]" />
                             {alfaCoins}
                           </p>
@@ -1096,6 +1168,82 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                       </div>
                     )}
                   </div>
+
+                  {/* Historial de Movimientos de Saldo Pase Alfa */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <Wallet className="h-4 w-4 text-blue-400" />
+                            Movimientos de Saldo Pase Alfa
+                          </CardTitle>
+                          <CardDescription className="text-xs">
+                            Registro de recargas, consumos en sucursal y pagos de citas con monedero prepago.
+                          </CardDescription>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setIsWalletTopupOpen(true)}
+                          className="h-8 px-3 text-xs font-semibold rounded-xl cursor-pointer"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1 text-slate-400" />
+                          Recargar Saldo
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {walletMovementsLoading ? (
+                        <Skeleton className="h-24 w-full" />
+                      ) : walletMovements.length > 0 ? (
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="h-8 bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                                <TableHead className="py-1 px-3 text-xs font-semibold">Fecha</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold">Concepto</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right">Movimiento</TableHead>
+                                <TableHead className="py-1 px-3 text-xs font-semibold text-right">Saldo Final</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {walletMovements.slice(0, 15).map((mov: any) => {
+                                const isCredit = Boolean(mov.es_abono);
+                                return (
+                                  <TableRow key={mov.id} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                    <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">
+                                      {formatDate(mov.fecha, true)}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs font-medium text-foreground">
+                                      {mov.concepto || mov.tipo}
+                                    </TableCell>
+                                    <TableCell
+                                      className={cn(
+                                        'py-1.5 px-3 text-xs text-right font-semibold font-sans',
+                                        isCredit ? 'text-blue-400' : 'text-foreground'
+                                      )}
+                                    >
+                                      {isCredit ? '+' : '-'}${Number(mov.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs text-right font-medium text-muted-foreground font-sans">
+                                      ${Number(mov.saldo_nuevo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground space-y-1">
+                          <Wallet className="h-6 w-6 mx-auto text-muted-foreground/40" />
+                          <p className="text-xs">Sin movimientos de Saldo Pase Alfa registrados.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
 
                   {/* Historial de Canjes de Beneficios con QR */}
                   <Card>
@@ -1226,6 +1374,12 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
         </div>
       </DialogContent>
     </Dialog>
+
+    <WalletTopupModal
+      isOpen={isWalletTopupOpen}
+      onOpenChange={setIsWalletTopupOpen}
+      client={liveClient}
+    />
     </>
   );
 }

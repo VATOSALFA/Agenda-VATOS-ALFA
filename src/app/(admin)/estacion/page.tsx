@@ -372,7 +372,14 @@ function EstacionContent() {
     let cardTipsEarned = 0;
 
     todayBranchSales.forEach((sale) => {
-      if ((sale as any).absorbed_in_sale_id || sale.tipo_venta === 'anticipo') return;
+      if (
+        (sale as any).absorbed_in_sale_id ||
+        sale.tipo_venta === 'anticipo' ||
+        sale.tipo_venta === 'recarga_monedero' ||
+        String(sale.id || '').startsWith('topup_')
+      ) {
+        return;
+      }
 
       // Efectivo retenido en la estación de este barbero
       if (sale.cobrado_por_barbero_id === activeBarber.id) {

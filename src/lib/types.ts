@@ -54,6 +54,30 @@ export interface Client {
   ultimo_canje_cortesia_vip_mes?: string;
   ultimo_canje_cortesia_vip_folio?: string;
   fecha_ultimo_canje_cortesia_vip?: any;
+  saldo_monedero?: number;
+  saldoMonedero?: number;
+  saldo_pase_alfa?: number;
+  total_recargado_monedero?: number;
+  ultima_recarga_monedero?: any;
+}
+
+export interface MovimientoMonedero {
+  id?: string;
+  cliente_id: string;
+  cliente_nombre?: string;
+  tipo: 'recarga' | 'consumo_venta' | 'pago_cita_app' | 'reembolso_cancelacion' | 'reversion_recarga' | 'fusion_clientes';
+  monto: number; // positivo para abonos/reembolsos, negativo o absoluto según movimiento
+  es_abono: boolean;
+  saldo_anterior: number;
+  saldo_nuevo: number;
+  bono_alfa_coins?: number;
+  metodo_pago?: string;
+  referencia_id?: string; // venta_id, reserva_id o recarga_id
+  local_id?: string;
+  creado_por_id?: string;
+  creado_por_nombre?: string;
+  notas?: string;
+  creado_en: any;
 }
 
 export interface CanjeBeneficio {
@@ -319,7 +343,7 @@ export interface CartItem {
   nombre: string;
   precio: number;
   cantidad: number;
-  tipo: 'producto' | 'servicio';
+  tipo: 'producto' | 'servicio' | 'recarga_monedero';
   barbero_id?: string;
   presentation_id?: string;
   discountValue?: string | number;
@@ -349,7 +373,11 @@ export interface Sale {
     tarjeta: number;
     transferencia?: number;
     pagos_en_linea?: number;
+    monedero?: number;
   };
+  pago_monedero?: number;
+  bono_recarga_coins?: number;
+  monedero_acreditado?: boolean;
   professionalNames?: string; // transient
   tipsPaidTo?: string[];
   tipPaid?: boolean;

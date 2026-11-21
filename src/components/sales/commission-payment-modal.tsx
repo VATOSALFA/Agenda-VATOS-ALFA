@@ -238,10 +238,14 @@ export function CommissionPaymentModal({ isOpen, onOpenChange, onFormSubmit, dat
         };
 
         combinedSales.forEach(sale => {
+            if (sale.tipo_venta === 'recarga_monedero' || String(sale.id || '').startsWith('topup_')) {
+                return;
+            }
             if (sale.pago_estado === 'deposit_paid' || sale.pago_estado === 'Pago Parcial' || sale.pago_estado === 'Pendiente') {
                 return;
             }
-            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0);
+            const walletCovered = Number((sale as any).pago_monedero || sale.detalle_pago_combinado?.monedero || 0);
+            const totalCovered = (sale.monto_pagado_real || 0) + (sale.anticipoPagado || 0) + Number((sale as any).descuento_alfacoins || 0) + walletCovered;
             if (sale.monto_pagado_real !== undefined && (sale.total - totalCovered) > 1) {
                 return;
             }

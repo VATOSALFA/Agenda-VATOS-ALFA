@@ -579,8 +579,186 @@ exports.mercadoPagoWebhook = onRequest(
       const { status, transaction_amount } = paymentInfo;
       console.log(`[vFinal] API Check: Status=${status}, Ref=${external_reference}`);
 
-      // Logic updated to support both Sales (Ventas) and direct Reservations
+      // Logic updated to support Online Wallet Top-Ups, Sales (Ventas), and direct Reservations
       const transactionResult = await admin.firestore().runTransaction(async (t) => {
+        const readClientWalletNum = (cObj) => {
+          if (!cObj) return 0;
+          const v = Number(cObj.saldo_monedero ?? cObj.saldoMonedero ?? cObj.saldo_pase_alfa ?? 0);
+          return Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : 0;
+        };
+
+        const isOnlineTopup = Boolean(
+          String(external_reference || '').startsWith('topup_') ||
+          paymentInfo?.metadata?.payment_purpose === 'recarga_monedero'
+        );
+
+        // CASE 0: Online Wallet Top-Up from Mobile App (topup_*)
+        if (isOnlineTopup) {
+          const recargaRef = admin.firestore().collection('recargas_monedero').doc(external_reference);
+          const saleRef = admin.firestore().collection('ventas').doc(external_reference);
+          const [recargaDoc, saleDoc] = await Promise.all([
+            t.get(recargaRef),
+            t.get(saleRef)
+          ]);
+
+          const recData = recargaDoc.exists ? (recargaDoc.data() || {}) : {};
+          const existingSale = saleDoc.exists ? (saleDoc.data() || {}) : {};
+          if (recData.acreditado === true || existingSale.monedero_acreditado === true) {
+            return;
+          }
+
+          const targetClientId = String(recData.cliente_id || paymentInfo?.metadata?.client_id || '').trim();
+          const paidAmt = Number(transaction_amount || 0);
+          if (!targetClientId || paidAmt <= 0) {
+            console.error(`[vFinal] Invalid online topup state for ${external_reference}`);
+            return;
+          }
+
+          const clientRef = admin.firestore().collection('clientes').doc(targetClientId);
+          const clientDoc = await t.get(clientRef);
+          if (!clientDoc.exists) {
+            console.error(`[vFinal] Client ${targetClientId} not found for topup ${external_reference}`);
+            return;
+          }
+
+          const cData = clientDoc.data() || {};
+          const expectedAmt = Number(recData.monto || 0);
+          const bonusCoins = (expectedAmt > 0 && Math.abs(expectedAmt - paidAmt) < 1)
+            ? Math.max(0, Math.floor(Number(recData.bono_alfa_coins || 0)))
+            : 0;
+          const prevBalance = readClientWalletNum(cData);
+          const newBalance = Math.round((prevBalance + paidAmt) * 100) / 100;
+          const prevCoins = Number(cData.alfaCoins ?? cData.alfa_coins ?? cData.puntosLealtad ?? cData.puntos_lealtad ?? cData.puntos ?? 0);
+          const newCoins = prevCoins + bonusCoins;
+          const nowDate = new Date();
+          const clientFullName = String(recData.cliente_nombre || '').trim() || [cData.nombre, cData.apellido].filter(Boolean).join(' ').trim() || 'Cliente App';
+          const resolvedLocalId = String(recData.local_id || paymentInfo?.metadata?.local_id || cData.local_preferido || cData.local_id || 'default');
+
+          t.update(clientRef, {
+            saldo_monedero: newBalance,
+            saldoMonedero: newBalance,
+            saldo_pase_alfa: newBalance,
+            total_recargado_monedero: Math.round((Number(cData.total_recargado_monedero || 0) + paidAmt) * 100) / 100,
+            ultima_recarga_monedero: nowDate,
+            ...(bonusCoins > 0 ? {
+              puntos: newCoins,
+              alfaCoins: newCoins,
+              alfa_coins: newCoins,
+              puntosLealtad: newCoins,
+              puntos_lealtad: newCoins
+            } : {}),
+            recompensa_pendiente: {
+              id: `rw_${external_reference}`,
+              fecha: nowDate.toISOString(),
+              tipo_recompensa: 'recarga_saldo',
+              monto_recargado: paidAmt,
+              saldo_nuevo: newBalance,
+              coins_ganadas: bonusCoins,
+              total_coins: newCoins,
+              visto: false
+            }
+          });
+
+          t.set(recargaRef, {
+            id: external_reference,
+            cliente_id: targetClientId,
+            cliente_nombre: clientFullName,
+            monto: paidAmt,
+            monto_pagado: paidAmt,
+            bono_alfa_coins: bonusCoins,
+            local_id: resolvedLocalId,
+            metodo_pago: 'mercadopago',
+            estado: 'aprobada',
+            acreditado: true,
+            mercado_pago_id: String(paymentInfo.id),
+            fecha_pago: nowDate
+          }, { merge: true });
+
+          const movRef = admin.firestore().collection('movimientos_monedero').doc(`mov_${external_reference}`);
+          t.set(movRef, {
+            id: `mov_${external_reference}`,
+            cliente_id: targetClientId,
+            cliente_nombre: clientFullName,
+            tipo: 'recarga',
+            es_abono: true,
+            monto: paidAmt,
+            saldo_anterior: prevBalance,
+            saldo_nuevo: newBalance,
+            bono_alfa_coins: bonusCoins,
+            metodo_pago: 'mercadopago',
+            referencia_id: external_reference,
+            local_id: resolvedLocalId,
+            concepto: bonusCoins > 0 ? `Recarga en línea Saldo Pase Alfa (+${bonusCoins} Alfa Coins)` : 'Recarga en línea Saldo Pase Alfa',
+            creado_por_id: 'app_mercadopago',
+            creado_por_nombre: 'App Móvil (Mercado Pago)',
+            fecha: nowDate
+          });
+
+          t.set(saleRef, {
+            id: external_reference,
+            tipo: 'recarga_monedero',
+            tipo_venta: 'recarga_monedero',
+            fecha_hora_venta: nowDate,
+            fecha_pago: nowDate,
+            creado_en: nowDate,
+            cliente_id: targetClientId,
+            cliente_nombre: clientFullName,
+            local_id: resolvedLocalId,
+            metodo_pago: 'mercadopago',
+            pago_estado: 'Pagado',
+            estado: 'completed',
+            status: 'completed',
+            origen: 'app_movil',
+            subtotal: paidAmt,
+            descuento: { valor: 0, tipo: 'fixed', monto: 0 },
+            total: paidAmt,
+            monto_pagado_real: paidAmt,
+            monto_pagado: paidAmt,
+            saldo_pendiente: 0,
+            propina: 0,
+            bono_recarga_coins: bonusCoins,
+            monedero_acreditado: true,
+            mercado_pago_id: String(paymentInfo.id),
+            mercado_pago_status: 'approved',
+            detalle_pago_combinado: {
+              efectivo: 0,
+              tarjeta: 0,
+              transferencia: 0,
+              pagos_en_linea: paidAmt,
+              monedero: 0
+            },
+            items: [{
+              id: 'recarga_saldo_pase_alfa',
+              nombre: bonusCoins > 0 ? `Recarga Saldo Pase Alfa (+${bonusCoins} Alfa Coins)` : 'Recarga Saldo Pase Alfa',
+              tipo: 'recarga_monedero',
+              barbero_id: null,
+              precio_unitario: paidAmt,
+              cantidad: 1,
+              subtotal: paidAmt,
+              descuento: { valor: 0, tipo: 'fixed', monto: 0 }
+            }],
+            lealtad_aplicada: {
+              aplicado: true,
+              fecha_aplicacion: nowDate.toISOString(),
+              cliente_id: targetClientId,
+              coins_ganados_venta: 0,
+              coins_canjeados_venta: 0,
+              descuento_coins_monto: 0,
+              sellos_sumados: 0,
+              corte_gratis_10_otorgado: false,
+              sellos_consumidos: 0,
+              visitas_pase_alfa_sumadas: 0,
+              consumo_real_sumado: 0,
+              is_wallet_topup: true,
+              topup_amount: paidAmt,
+              topup_bonus_coins: bonusCoins
+            }
+          }, { merge: true });
+
+          console.log(`[vFinal] Online Wallet Topup ${external_reference} accredited ($${paidAmt}, +${bonusCoins} coins).`);
+          return;
+        }
+
         const ventaRef = admin.firestore().collection('ventas').doc(external_reference);
         const ventaCanceladaRef = admin.firestore().collection('ventas_canceladas').doc(external_reference);
         const [ventaDoc, ventaCanceladaDoc] = await Promise.all([
@@ -594,10 +772,12 @@ exports.mercadoPagoWebhook = onRequest(
           const ventaData = (ventaDoc.exists ? ventaDoc.data() : ventaCanceladaDoc.data()) || {};
           if (ventaData.pago_estado === 'Pagado') return;
 
-          // PRE-READ Linked Reservation & sibling sales for the same reservation (Must be done before ANY write)
+          // PRE-READ Linked Reservation, sibling sales, and client doc if wallet is involved (Must be done before ANY write)
           let reservaRef = null;
           let reservaDoc = null;
           let siblingSalesSnap = null;
+          let saleClientRef = null;
+          let saleClientDoc = null;
           if (ventaData.reservationId) {
             reservaRef = admin.firestore().collection('reservas').doc(ventaData.reservationId);
             const siblingsQuery = admin.firestore().collection('ventas').where('reservationId', '==', ventaData.reservationId);
@@ -605,6 +785,126 @@ exports.mercadoPagoWebhook = onRequest(
               t.get(reservaRef),
               t.get(siblingsQuery)
             ]);
+          }
+          const hasWalletInvolvement = Boolean(
+            ventaData.tipo_venta === 'recarga_monedero' ||
+            Number(ventaData.pago_monedero || ventaData.detalle_pago_combinado?.monedero || 0) > 0
+          );
+          if (hasWalletInvolvement && ventaData.cliente_id) {
+            saleClientRef = admin.firestore().collection('clientes').doc(String(ventaData.cliente_id));
+            saleClientDoc = await t.get(saleClientRef);
+          }
+
+          // SUBCASE 1A: In-branch Terminal Point Wallet Top-Up (recarga_monedero)
+          if (ventaData.tipo_venta === 'recarga_monedero') {
+            const topupPaid = Number(transaction_amount || 0);
+            const bonusCoins = Math.max(0, Math.floor(Number(ventaData.bono_recarga_coins || 0)));
+            const nowDate = new Date();
+            const topupUpdatedFields = {
+              pago_estado: 'Pagado',
+              mercado_pago_status: status,
+              mercado_pago_id: String(paymentInfo.id),
+              subtotal: topupPaid,
+              total: topupPaid,
+              monto_pagado_real: topupPaid,
+              monto_pagado: topupPaid,
+              monto_cobrado_terminal: topupPaid,
+              saldo_pendiente: 0,
+              propina: 0,
+              monedero_acreditado: true,
+              fecha_pago: nowDate,
+              mp_store_id: paymentInfo.store_id || null,
+              mp_pos_id: paymentInfo.pos_id || null,
+              detalle_pago_combinado: {
+                efectivo: 0,
+                tarjeta: topupPaid,
+                transferencia: 0,
+                pagos_en_linea: 0,
+                monedero: 0
+              },
+              lealtad_aplicada: {
+                aplicado: true,
+                fecha_aplicacion: nowDate.toISOString(),
+                cliente_id: String(ventaData.cliente_id || ''),
+                coins_ganados_venta: 0,
+                coins_canjeados_venta: 0,
+                descuento_coins_monto: 0,
+                sellos_sumados: 0,
+                corte_gratis_10_otorgado: false,
+                sellos_consumidos: 0,
+                visitas_pase_alfa_sumadas: 0,
+                consumo_real_sumado: 0,
+                is_wallet_topup: true,
+                topup_amount: topupPaid,
+                topup_bonus_coins: bonusCoins
+              }
+            };
+
+            if (isRecoveredFromCancel) {
+              const restored = { ...ventaData, ...topupUpdatedFields };
+              delete restored.cancelado_en;
+              delete restored.motivo_cancelacion;
+              t.set(ventaRef, restored);
+              t.delete(ventaCanceladaRef);
+            } else {
+              t.update(ventaRef, topupUpdatedFields);
+            }
+
+            if (!ventaData.monedero_acreditado && saleClientRef && saleClientDoc && saleClientDoc.exists) {
+              const cData = saleClientDoc.data() || {};
+              const prevBalance = readClientWalletNum(cData);
+              const newBalance = Math.round((prevBalance + topupPaid) * 100) / 100;
+              const prevCoins = Number(cData.alfaCoins ?? cData.alfa_coins ?? cData.puntosLealtad ?? cData.puntos_lealtad ?? cData.puntos ?? 0);
+              const newCoins = prevCoins + bonusCoins;
+              const clientFullName = String(ventaData.cliente_nombre || '').trim() || [cData.nombre, cData.apellido].filter(Boolean).join(' ').trim();
+
+              t.update(saleClientRef, {
+                saldo_monedero: newBalance,
+                saldoMonedero: newBalance,
+                saldo_pase_alfa: newBalance,
+                total_recargado_monedero: Math.round((Number(cData.total_recargado_monedero || 0) + topupPaid) * 100) / 100,
+                ultima_recarga_monedero: nowDate,
+                ...(bonusCoins > 0 ? {
+                  puntos: newCoins,
+                  alfaCoins: newCoins,
+                  alfa_coins: newCoins,
+                  puntosLealtad: newCoins,
+                  puntos_lealtad: newCoins
+                } : {}),
+                recompensa_pendiente: {
+                  id: `rw_${external_reference}`,
+                  fecha: nowDate.toISOString(),
+                  tipo_recompensa: 'recarga_saldo',
+                  monto_recargado: topupPaid,
+                  saldo_nuevo: newBalance,
+                  coins_ganadas: bonusCoins,
+                  total_coins: newCoins,
+                  visto: false
+                }
+              });
+
+              const movRef = admin.firestore().collection('movimientos_monedero').doc(`mov_${external_reference}`);
+              t.set(movRef, {
+                id: `mov_${external_reference}`,
+                cliente_id: saleClientDoc.id,
+                cliente_nombre: clientFullName,
+                tipo: 'recarga',
+                es_abono: true,
+                monto: topupPaid,
+                saldo_anterior: prevBalance,
+                saldo_nuevo: newBalance,
+                bono_alfa_coins: bonusCoins,
+                metodo_pago: 'tarjeta',
+                referencia_id: external_reference,
+                local_id: ventaData.local_id || 'default',
+                concepto: bonusCoins > 0 ? `Recarga en sucursal (Terminal Point, +${bonusCoins} Alfa Coins)` : 'Recarga en sucursal (Terminal Point)',
+                creado_por_id: ventaData.creado_por_id || 'terminal_point',
+                creado_por_nombre: ventaData.creado_por_nombre || 'Recepción (Terminal Point)',
+                fecha: nowDate
+              });
+            }
+            console.log(`[vFinal] Terminal Wallet Top-Up ${external_reference} accredited ($${topupPaid}, +${bonusCoins} coins, recovered=${isRecoveredFromCancel}).`);
+            return;
           }
 
           const isDepositSale = Boolean(
@@ -617,14 +917,17 @@ exports.mercadoPagoWebhook = onRequest(
             ? 0
             : Number(ventaData.anticipoPagado || ventaData.anticipo_pagado || ventaData.monto_anticipo || 0);
           const descuentoCoins = Number(ventaData.descuento_alfacoins || 0);
+          const pagoMonedero = isDepositSale
+            ? 0
+            : Number(ventaData.pago_monedero || ventaData.detalle_pago_combinado?.monedero || 0);
           const isCombined = ventaData.metodo_pago === 'combinado';
 
-          // Monto base esperado de la venta en la terminal (descontando anticipos previos y AlfaCoins, sin propina)
+          // Monto base esperado de la venta en la terminal (descontando anticipos previos, AlfaCoins y Saldo Pase Alfa, sin propina)
           const montoBaseEsperado = isDepositSale
             ? Number(ventaData.anticipo_esperado || montoOriginal || 0)
             : isCombined
               ? Number(ventaData.detalle_pago_combinado?.tarjeta || ventaData.pago_tarjeta || 0)
-              : Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins);
+              : Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins - pagoMonedero);
 
           // La propina es cualquier excedente cobrado en la terminal sobre el monto base esperado
           const propinaTerminal = (!isDepositSale && montoPagado > montoBaseEsperado)
@@ -633,11 +936,11 @@ exports.mercadoPagoWebhook = onRequest(
           const propinaPrevia = Number(ventaData.propina) || 0;
           const propina = propinaTerminal > 0 ? propinaTerminal : propinaPrevia;
 
-          // El ingreso real de la VENTA (estrictamente SIN propina, ya que las propinas son independientes)
+          // El ingreso real de la VENTA (estrictamente SIN propina y SIN saldo monedero ya contabilizado el día de recarga)
           const montoVentaSinPropina = isDepositSale
             ? montoPagado
             : isCombined
-              ? Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins)
+              ? Math.max(0, montoOriginal - anticipoPrevio - descuentoCoins - pagoMonedero)
               : Math.max(0, Math.min(montoBaseEsperado, parseFloat((montoPagado - propina).toFixed(2))));
 
           let propinaDetalles = ventaData.propina_detalles;
@@ -659,6 +962,37 @@ exports.mercadoPagoWebhook = onRequest(
             ? 0
             : Math.max(0, (isDepositSale ? montoOriginal : montoBaseEsperado) - montoVentaSinPropina);
 
+          let didDeductWalletNow = false;
+          if (isFullPay && pagoMonedero > 0 && !ventaData.monedero_descontado && saleClientRef && saleClientDoc && saleClientDoc.exists) {
+            const cData = saleClientDoc.data() || {};
+            const prevWallet = readClientWalletNum(cData);
+            const nextWallet = Math.max(0, Math.round((prevWallet - pagoMonedero) * 100) / 100);
+            t.update(saleClientRef, {
+              saldo_monedero: nextWallet,
+              saldoMonedero: nextWallet,
+              saldo_pase_alfa: nextWallet
+            });
+            const movSpendRef = admin.firestore().collection('movimientos_monedero').doc(`mov_spend_${external_reference}`);
+            t.set(movSpendRef, {
+              id: `mov_spend_${external_reference}`,
+              cliente_id: saleClientDoc.id,
+              cliente_nombre: [cData.nombre, cData.apellido].filter(Boolean).join(' ').trim() || ventaData.cliente_nombre || '',
+              tipo: 'consumo_venta',
+              es_abono: false,
+              monto: pagoMonedero,
+              saldo_anterior: prevWallet,
+              saldo_nuevo: nextWallet,
+              metodo_pago: 'monedero',
+              referencia_id: external_reference,
+              local_id: ventaData.local_id || 'default',
+              concepto: 'Pago combinado con Saldo Pase Alfa + Terminal Point',
+              creado_por_id: ventaData.creado_por_id || 'terminal_point',
+              creado_por_nombre: ventaData.creado_por_nombre || 'Recepción',
+              fecha: new Date()
+            });
+            didDeductWalletNow = true;
+          }
+
           const updatedSaleFields = {
             pago_estado: isFullPay ? 'Pagado' : 'deposit_paid',
             mercado_pago_status: status,
@@ -667,6 +1001,7 @@ exports.mercadoPagoWebhook = onRequest(
             monto_cobrado_terminal: montoPagado,
             saldo_pendiente: saldoPendiente,
             propina: propina,
+            ...(didDeductWalletNow ? { monedero_descontado: true } : {}),
             ...(propinaDetalles ? { propina_detalles: propinaDetalles } : {}),
             fecha_pago: new Date(),
             // Add terminal info for tracking

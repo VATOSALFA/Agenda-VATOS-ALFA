@@ -150,13 +150,20 @@ export async function getClientDetailsForChatInternal({
       try {
         const salesSnap = await db.collection('ventas').where('cliente_id', '==', resolvedClientId).get();
         const validSales = salesSnap.docs
-          .map((d) => d.data())
-          .filter((s) => !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || ''));
+          .map((d) => ({ id: d.id, ...d.data() } as any))
+          .filter(
+            (s) =>
+              !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || '') &&
+              !s.absorbed_in_sale_id &&
+              s.tipo_venta !== 'recarga_monedero' &&
+              !String(s.id || '').startsWith('topup_')
+          );
         totalCompras = validSales.length;
         totalSpent = validSales.reduce((acc, s) => {
+          const walletUsed = Number(s.pago_monedero || s.detalle_pago_combinado?.monedero || 0);
           const amount =
             s.monto_pagado_real !== undefined && s.monto_pagado_real !== null
-              ? Number(s.monto_pagado_real)
+              ? Number(s.monto_pagado_real) + walletUsed
               : Number(s.total || 0);
           return acc + amount;
         }, 0);

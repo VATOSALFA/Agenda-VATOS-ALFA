@@ -40,6 +40,7 @@ import {
   Users,
   Crown,
   Percent,
+  Wallet,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/firebase-auth-context';
@@ -60,6 +61,9 @@ import {
 } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
 import { ClientDetailModal } from '@/components/clients/client-detail-modal';
+import { WalletTopupModal } from '@/components/sales/wallet-topup-modal';
+import { isClientWithApp } from '@/lib/client-app-helper';
+import { getClientWalletBalance } from '@/lib/wallet-config';
 import { cn, formatMoney } from '@/lib/utils';
 import { format } from 'date-fns';
 import {
@@ -157,6 +161,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const [isRedeemingBenefit, setIsRedeemingBenefit] = useState(false);
   const [todayReservation, setTodayReservation] = useState<any | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isWalletTopupOpen, setIsWalletTopupOpen] = useState(false);
   const [isUpdatingStamp, setIsUpdatingStamp] = useState(false);
   const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [targetStamps, setTargetStamps] = useState<number>(10);
@@ -478,6 +483,15 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           if (parsed && typeof parsed === 'object') {
             if (parsed.type === 'VATOS_ALFA_BENEFIT_REDEMPTION' || parsed.benefitId) {
               isOfficialAppQr = true;
+              const isSaldoWalletQR =
+                parsed.benefitId === 'saldo_pase_alfa' ||
+                String(parsed.benefitTitle || parsed.titulo || '')
+                  .toLowerCase()
+                  .includes('saldo pase alfa');
+              if (isSaldoWalletQR) {
+                clientIdToSearch = parsed.clientId || '';
+                phoneToSearch = parsed.phone || parsed.clientPhone || '';
+              } else {
               const rawFolio = parsed.folio || `VA-BNF-${Date.now().toString().slice(-6)}`;
               const isRefQR =
                 parsed.benefitId === 'invita_amigo' ||
@@ -521,6 +535,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               };
               clientIdToSearch = parsed.clientId || '';
               phoneToSearch = parsed.phone || parsed.clientPhone || '';
+              }
             } else if (parsed.type === 'VATOS_ALFA_CLIENT_PASS') {
               isOfficialAppQr = true;
               clientIdToSearch = parsed.clientId || '';
@@ -546,6 +561,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             const parts = clean.split(':');
             const bId = parts[2] || 'beneficio_alfa';
             const cId = parts[3] || '';
+            if (bId === 'saldo_pase_alfa') {
+              clientIdToSearch = cId;
+            } else {
             const bFolio = parts[4] || '';
             const bSig = parts[5] || '';
             const bRefCode = parts[6] || '';
@@ -585,6 +603,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
               minorsCount: 0,
             };
+            }
           } else if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-') || clean.startsWith('VA-JUNTOS-')) {
             const isRefFolio = clean.startsWith('VA-REF-');
             const isJuntosFolio = clean.startsWith('VA-JUNTOS-');
@@ -1937,7 +1956,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   const decimaApptOk = decimaConfig.exigir_cita_previa === false || Boolean(todayReservation);
 
   // Acción: Cobrar en Caja de Ventas
-  const handleOpenInCashbox = (applyFreeCutFromPass = false) => {
+  const handleOpenInCashbox = (applyFreeCutFromPass = false, preferWallet = false) => {
     if (!scannedClient && !scannedBenefit) return;
 
     const requiredPaidStampsForPass = Math.max(1, targetStamps === 10 ? 9 : targetStamps);
@@ -1984,7 +2003,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
     onOpenChange(false);
 
-    if (onClientSelectedForSale && scannedClient && !applyFreeCutFromPass && !scannedBenefit) {
+    if (onClientSelectedForSale && scannedClient && !applyFreeCutFromPass && !scannedBenefit && !preferWallet) {
       onClientSelectedForSale(scannedClient);
     } else {
       // Disparar evento para abrir NewSaleSheet automáticamente con el cliente precargado
@@ -2013,6 +2032,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             detail: {
               client: scannedClient || undefined,
               benefitRedeemed: safeBenefitToPass,
+              useWallet: preferWallet,
             },
           })
         );
@@ -2040,6 +2060,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             items: preloadedItems,
             reservationId: todayReservation?.id || undefined,
             anticipoPagado: todayReservation?.anticipoPagado || 0,
+            useWallet: preferWallet,
           },
         })
       );
@@ -3493,6 +3514,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                             {Number(scannedClient.alfaCoins ?? (scannedClient as any).alfa_coins ?? scannedClient.puntosLealtad ?? (scannedClient as any).puntos_lealtad ?? 0)} ALFA COINS
                           </Badge>
 
+                          {isClientWithApp(scannedClient) && (
+                            <Badge className="bg-blue-500/15 border border-blue-400/40 text-blue-300 text-[10px] font-bold px-2 py-0.5 font-sans">
+                              <Wallet className="h-3 w-3 mr-1 inline text-blue-400" />
+                              SALDO: ${formatMoney(getClientWalletBalance(scannedClient))} MXN
+                            </Badge>
+                          )}
+
                           <span className="text-[10px] text-slate-300 bg-black/30 px-2 py-0.5 rounded border border-white/10 font-sans">
                             {scannedClientTier.visitasHistoricas} visitas &bull; ${formatMoney(scannedClientTier.consumoHistorico)} MXN
                           </span>
@@ -3612,6 +3640,51 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     )}
                   </div>
                 </div>
+
+                {/* Saldo Pase Alfa (Monedero Prepago) */}
+                {isClientWithApp(scannedClient) && (
+                  <div className="bg-[#161E35] border border-blue-500/35 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Wallet className="h-4 w-4 text-[#C5A880] shrink-0" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white">Saldo Pase Alfa</span>
+                          <span className="text-xs font-bold text-blue-300 font-sans">
+                            ${formatMoney(getClientWalletBalance(scannedClient))} MXN
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 truncate">
+                          Monedero prepago disponible para servicios y productos
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsWalletTopupOpen(true)}
+                        className="h-8 px-2.5 text-xs font-semibold border-blue-500/50 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20 hover:text-white cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1 text-blue-300" />
+                        Recargar Saldo
+                      </Button>
+
+                      {getClientWalletBalance(scannedClient) > 0 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleOpenInCashbox(false, true)}
+                          className="h-8 px-2.5 text-xs font-bold bg-[#C5A880] hover:bg-[#b0936b] text-black cursor-pointer"
+                        >
+                          <Wallet className="h-3.5 w-3.5 mr-1" />
+                          Cobrar con Saldo
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Cita de hoy para Check-in */}
                 {todayReservation && (
@@ -4008,6 +4081,39 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                   client: scannedClient,
                 },
               })
+            );
+          }}
+        />
+      )}
+
+      {/* Modal Recarga de Saldo Pase Alfa en Recepción */}
+      {scannedClient && (
+        <WalletTopupModal
+          isOpen={isWalletTopupOpen}
+          onOpenChange={setIsWalletTopupOpen}
+          client={scannedClient}
+          onSuccess={({ newBalance, bonusCoins }) => {
+            setScannedClient((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    saldo_monedero: newBalance,
+                    saldoMonedero: newBalance,
+                    saldo_pase_alfa: newBalance,
+                    ...(bonusCoins > 0
+                      ? {
+                          alfaCoins:
+                            Number(
+                              prev.alfaCoins ??
+                                (prev as any).alfa_coins ??
+                                prev.puntosLealtad ??
+                                prev.puntos ??
+                                0
+                            ) + bonusCoins,
+                        }
+                      : {}),
+                  }
+                : prev
             );
           }}
         />

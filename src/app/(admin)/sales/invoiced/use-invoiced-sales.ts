@@ -143,6 +143,9 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
                 if (filter === 'Pagos en linea' || filter === 'pagos_en_linea' || filter === 'Pagos en Línea') {
                     return sale.metodo_pago === 'mercadopago' || sale.metodo_pago === 'Pagos en linea' || sale.metodo_pago === 'pagos_en_linea' || sale.metodo_pago === 'en_linea' || (sale.metodo_pago === 'combinado' && (sale.detalle_pago_combinado?.pagos_en_linea || 0) > 0) || (!sale.metodo_pago && sale.pago_estado === 'deposit_paid');
                 }
+                if (filter === 'monedero') {
+                    return sale.metodo_pago === 'monedero' || Number((sale as any).pago_monedero || sale.detalle_pago_combinado?.monedero || 0) > 0;
+                }
                 return sale.metodo_pago === filter;
             })();
 
@@ -204,7 +207,11 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
 
             if (sale.items && Array.isArray(sale.items)) {
                 sale.items.forEach(item => {
-                    const type = (item as any).tipo === 'producto' ? 'Productos' : 'Servicios';
+                    const type = (item as any).tipo === 'producto'
+                        ? 'Productos'
+                        : (item as any).tipo === 'recarga_monedero' || sale.tipo_venta === 'recarga_monedero'
+                            ? 'Recargas Saldo'
+                            : 'Servicios';
                     const itemSubtotal = (item as any).subtotal ?? (((item as any).precio || 0) * ((item as any).cantidad || 1));
                     const proportion = computedSaleSubtotal > 0 ? (itemSubtotal / computedSaleSubtotal) : 0;
                     const proportionalTotal = proportion * saleTotal;
@@ -216,6 +223,7 @@ export function useInvoicedSales(activeFilters: InvoicedSalesFilters, queryKey: 
 
         const salesByPaymentMethod = populatedSales.reduce((acc, sale) => {
             const actualRevenue = getSaleActualRevenue(sale);
+            if (actualRevenue <= 0) return acc;
 
             if (sale.metodo_pago === 'combinado') {
                 const combinedEfectivo = sale.detalle_pago_combinado?.efectivo || 0;

@@ -117,6 +117,17 @@ function MobileAppSettingsContent() {
         return clientsList.reduce((acc, c) => acc + (isClientWithApp(c) ? Number(c.alfaCoins || (c as any).alfa_coins || c.puntosLealtad || (c as any).puntos || 0) : 0), 0);
     }, [clientsList]);
 
+    const completedCanjesCount = useMemo(() => {
+        if (!canjesList) return 0;
+        const completed = canjesList.filter((c: any) => !c.estado || c.estado === 'canjeado');
+        const folioSet = new Set(completed.map((c: any) => String(c.folio || c.id || '')).filter(Boolean));
+        return completed.filter((c: any) => {
+            const f = String(c.folio || c.id || '');
+            const orig = String(c.originalFolio || '');
+            return !(f.startsWith('VA-JUNTOS-GRP-') && orig && folioSet.has(orig));
+        }).length;
+    }, [canjesList]);
+
     const filteredAppClients = useMemo(() => {
         if (!searchAppClient.trim()) return appClients;
         const q = searchAppClient.toLowerCase().trim();
@@ -211,7 +222,7 @@ function MobileAppSettingsContent() {
                             </div>
                             <div>
                                 <div className="text-lg sm:text-2xl font-bold tracking-tight text-foreground font-sans">
-                                    {canjesLoading ? '...' : canjesList.length}
+                                    {canjesLoading ? '...' : completedCanjesCount}
                                 </div>
                                 <p className="text-[10px] text-muted-foreground/70 truncate hidden sm:block mt-0.5">
                                     Escaneados en recepción

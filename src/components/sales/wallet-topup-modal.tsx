@@ -74,6 +74,34 @@ interface WalletTopupModalProps {
 
 type BranchPaymentMethod = 'efectivo' | 'tarjeta' | 'transferencia';
 
+function formatAsUserTypes(raw: string): string {
+  if (!raw) return '';
+  const clean = raw.replace(/[^0-9.]/g, '');
+  if (!clean) return '';
+
+  const parts = clean.split('.');
+  const integerPart = parts[0] || '';
+  const decimalPart = parts.length > 1 ? parts.slice(1).join('') : null;
+
+  let formattedInteger = '';
+  if (integerPart) {
+    const num = parseInt(integerPart, 10);
+    formattedInteger = isNaN(num) ? '' : num.toLocaleString('es-MX');
+  }
+
+  if (decimalPart !== null) {
+    return `${formattedInteger || '0'}.${decimalPart.slice(0, 2)}`;
+  }
+  return formattedInteger;
+}
+
+function parseCashAmount(val: string): number {
+  if (!val) return 0;
+  const clean = val.replace(/,/g, '').trim();
+  const parsed = parseFloat(clean);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 export function WalletTopupModal({
   isOpen,
   onOpenChange,
@@ -242,7 +270,8 @@ export function WalletTopupModal({
 
   const selectedAmount = useMemo(() => {
     if (isCustomMode) {
-      const parsed = parseFloat(customAmountStr);
+      const clean = customAmountStr.replace(/,/g, '');
+      const parsed = parseFloat(clean);
       return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) / 100 : 0;
     }
     const pkg = activePackages.find((p) => p.id === selectedPackageId);
@@ -267,7 +296,7 @@ export function WalletTopupModal({
   const previewBonusCoins = amountValidation.ok ? amountValidation.bonusCoins : 0;
   const previewNewBalance = Math.round((currentBalance + (amountValidation.ok ? amountValidation.cleanAmount : 0)) * 100) / 100;
 
-  const cashReceived = parseFloat(cashReceivedStr) || 0;
+  const cashReceived = parseCashAmount(cashReceivedStr);
   const cashChange = paymentMethod === 'efectivo' && cashReceived > selectedAmount
     ? Math.round((cashReceived - selectedAmount) * 100) / 100
     : 0;
@@ -437,6 +466,7 @@ export function WalletTopupModal({
                   : 'Recarga Saldo Pase Alfa',
                 tipo: 'recarga_monedero',
                 barbero_id: null,
+                barbero_nombre: 'Recarga de Saldo',
                 precio_unitario: cleanAmount,
                 cantidad: 1,
                 subtotal: cleanAmount,
@@ -727,6 +757,7 @@ export function WalletTopupModal({
                 : 'Recarga Saldo Pase Alfa',
               tipo: 'recarga_monedero',
               barbero_id: null,
+              barbero_nombre: 'Recarga de Saldo',
               precio_unitario: cleanAmount,
               cantidad: 1,
               subtotal: cleanAmount,
@@ -789,19 +820,19 @@ export function WalletTopupModal({
     >
       <DialogContent
         hideCloseButton={true}
-        className="sm:max-w-lg w-[95vw] max-h-[92vh] p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background flex flex-col"
+        className="sm:max-w-3xl lg:max-w-4xl w-[96vw] max-h-[92vh] p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background flex flex-col"
       >
         {/* Cabecera Oficial VATOS ALFA */}
-        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 py-2.5 sm:px-5 sm:py-3 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
           <div className="header-light-beam" aria-hidden="true" />
           <div className="relative z-10 flex items-center justify-between w-full gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Wallet className="h-5 w-5 text-[#C5A880] shrink-0" />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Wallet className="h-4.5 w-4.5 text-[#C5A880] shrink-0" />
               <div className="min-w-0">
-                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide truncate">
+                <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide truncate">
                   Recargar Saldo Pase Alfa
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-300 mt-0.5 truncate">
+                <DialogDescription className="text-[11px] text-slate-300 mt-0.5 truncate">
                   Abono prepago a monedero exclusivo para miembros con App Móvil
                 </DialogDescription>
               </div>
@@ -816,13 +847,13 @@ export function WalletTopupModal({
               className="p-1 text-slate-300 hover:text-white transition-colors shrink-0 cursor-pointer"
               aria-label="Cerrar modal"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>
 
         {/* Cuerpo con Scroll Azul Vatos Alfa */}
-        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
+        <div className="p-3.5 sm:p-4 overflow-y-auto flex-1">
           {isConfigLoading ? (
             <div className="py-8 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
@@ -833,7 +864,9 @@ export function WalletTopupModal({
               El beneficio <strong>Saldo Pase Alfa</strong> está pausado actualmente en Configuración &gt; App Móvil &gt; Pase Alfa.
             </div>
           ) : (
-            <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
+              {/* COLUMNA IZQUIERDA: CLIENTE + PAQUETE + RESUMEN */}
+              <div className="space-y-3">
               {/* 1. Cliente Miembro */}
               {!initialClient ? (
                 <div className="space-y-1.5">
@@ -957,17 +990,29 @@ export function WalletTopupModal({
                 ) : (
                   <div className="space-y-1.5">
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground select-none pointer-events-none font-sans">
                         $
                       </span>
                       <Input
-                        type="number"
-                        min={config.monto_minimo}
-                        max={config.monto_maximo}
-                        step="50"
+                        type="text"
+                        inputMode="decimal"
                         placeholder={`${formatMoney(config.monto_minimo)} - ${formatMoney(config.monto_maximo)}`}
                         value={customAmountStr}
-                        onChange={(e) => setCustomAmountStr(e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => {
+                          const formatted = formatAsUserTypes(e.target.value);
+                          setCustomAmountStr(formatted);
+                        }}
+                        onBlur={() => {
+                          if (customAmountStr.trim()) {
+                            const num = parseCashAmount(customAmountStr);
+                            if (num > 0) {
+                              setCustomAmountStr(formatMoney(num));
+                            } else {
+                              setCustomAmountStr('');
+                            }
+                          }
+                        }}
                         className="pl-7 h-9 text-xs font-semibold font-sans"
                       />
                     </div>
@@ -1007,7 +1052,10 @@ export function WalletTopupModal({
                   )}
                 </div>
               )}
+            </div>
 
+            {/* COLUMNA DERECHA: MÉTODO DE PAGO + CALCULADORA + TERMINAL */}
+            <div className="space-y-3">
               {/* 4. Método de Cobro en Recepción */}
               {allowedBranchMethods.length === 0 ? (
                 <div className="p-3 rounded-xl border border-border/60 bg-muted/20 text-xs text-muted-foreground">
@@ -1044,25 +1092,108 @@ export function WalletTopupModal({
 
                   {/* Calculadora de cambio si es Efectivo */}
                   {paymentMethod === 'efectivo' && selectedAmount > 0 && (
-                    <div className="p-2.5 rounded-xl border border-border/60 bg-card/60 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 flex-1">
-                        <Calculator className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <Input
-                          type="number"
-                          placeholder="Efectivo recibido (opcional)"
-                          value={cashReceivedStr}
-                          onChange={(e) => setCashReceivedStr(e.target.value)}
-                          className="h-8 text-xs font-sans"
-                        />
+                    <div className="p-3 rounded-xl border border-border/60 bg-muted/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          <Calculator className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          Calculadora de Efectivo y Cambio
+                        </span>
+                        <span className="text-[11px] text-muted-foreground font-sans">
+                          A cobrar: ${formatMoney(selectedAmount)} MXN
+                        </span>
                       </div>
-                      {cashChange > 0 && (
-                        <div className="text-right shrink-0">
-                          <span className="text-[10px] text-muted-foreground block">Cambio</span>
-                          <span className="text-xs font-bold text-blue-400 font-sans">
-                            ${formatMoney(cashChange)}
+
+                      {/* Denominaciones rápidas de cobro en efectivo */}
+                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                        <span className="text-[10px] font-semibold text-muted-foreground mr-0.5">Cobro rápido:</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setCashReceivedStr(formatMoney(selectedAmount))}
+                          className={cn(
+                            "h-7 px-2.5 text-xs font-semibold rounded-lg transition-all font-sans",
+                            cashReceived === selectedAmount
+                              ? "border-blue-500 bg-blue-500/15 text-blue-300 border"
+                              : "border-border/60 hover:bg-muted/40 text-foreground"
+                          )}
+                        >
+                          Exacto (${formatMoney(selectedAmount)})
+                        </Button>
+                        {Array.from(new Set([500, 1000, 2000]))
+                          .filter(bill => bill >= selectedAmount)
+                          .map(bill => (
+                            <Button
+                              key={bill}
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setCashReceivedStr(formatMoney(bill))}
+                              className={cn(
+                                "h-7 px-2.5 text-xs font-semibold rounded-lg transition-all font-sans",
+                                cashReceived === bill
+                                  ? "border-blue-500 bg-blue-500/15 text-blue-300 border"
+                                  : "border-border/60 hover:bg-muted/40 text-foreground"
+                              )}
+                            >
+                              ${formatMoney(bill)}
+                            </Button>
+                          ))}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-3 pt-1 border-t border-border/40">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground pointer-events-none select-none font-sans">
+                            $
                           </span>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={cashReceivedStr}
+                            onFocus={(e) => e.target.select()}
+                            onChange={(e) => {
+                              const formatted = formatAsUserTypes(e.target.value);
+                              setCashReceivedStr(formatted);
+                            }}
+                            onBlur={() => {
+                              if (cashReceivedStr.trim()) {
+                                const num = parseCashAmount(cashReceivedStr);
+                                if (num > 0) {
+                                  setCashReceivedStr(formatMoney(num));
+                                } else {
+                                  setCashReceivedStr('');
+                                }
+                              }
+                            }}
+                            className={cn(
+                              "pl-6 h-8 text-xs font-semibold font-sans rounded-lg",
+                              cashReceived > 0 && cashReceived < selectedAmount && "border-red-500/40 focus-visible:ring-red-500/30"
+                            )}
+                          />
                         </div>
-                      )}
+
+                        {cashReceived > 0 && (
+                          <div className="text-right shrink-0">
+                            {cashChange > 0 ? (
+                              <>
+                                <span className="text-[10px] text-muted-foreground block">Cambio a entregar</span>
+                                <span className="text-xs font-bold text-blue-400 font-sans">
+                                  ${formatMoney(cashChange)} MXN
+                                </span>
+                              </>
+                            ) : cashReceived === selectedAmount ? (
+                              <span className="text-[11px] font-semibold text-blue-300 font-sans">
+                                ✓ Pago exacto
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-red-400 font-sans">
+                                Faltan ${formatMoney(selectedAmount - cashReceived)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1147,7 +1278,8 @@ export function WalletTopupModal({
                   </Button>
                 </div>
               )}
-            </>
+            </div>
+          </div>
           )}
         </div>
 

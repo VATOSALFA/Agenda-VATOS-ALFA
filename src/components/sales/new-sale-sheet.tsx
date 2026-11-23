@@ -1116,8 +1116,8 @@ const AddItemDialog = ({ open, onOpenChange, services, categories, products, ser
                     <div className="flex items-center gap-3 relative z-10">
                         <Plus className="h-5 w-5 text-slate-300 shrink-0" />
                         <div>
-                            <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">Agregar al Carrito</h2>
-                            <p className="text-xs text-slate-300">Selecciona servicios o productos para añadir.</p>
+                            <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">Agregar al Carrito</DialogTitle>
+                            <DialogDescription className="text-xs text-slate-300">Selecciona servicios o productos para añadir.</DialogDescription>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 relative z-10">
@@ -3678,18 +3678,26 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     coins: juntosCoins,
                                     folio: comp.folio || undefined,
                                 });
-                                if (comp.folio) {
+                                if (comp.folio && comp.folio !== appliedBenefit.folio) {
                                     await setDoc(doc(db, 'canjes_beneficios', comp.folio), {
                                         folio: comp.folio,
+                                        benefitId: 'juntos_es_mejor',
+                                        benefitTitle: 'JUNTOS ES MEJOR',
                                         estado: 'canjeado',
                                         utilizado_en_venta: true,
                                         pagado: true,
                                         fecha_aplicacion: Timestamp.now(),
+                                        canjeadoEn: Timestamp.now(),
+                                        fechaCanje: Timestamp.now(),
                                         fecha_canje_dia: todayStr,
+                                        fechaStr: todayStr,
+                                        anio: now.getFullYear(),
                                         clienteId: comp.id,
                                         clienteNombre: comp.name || '',
                                         isJuntosBenefit: true,
                                         juntosMode: 'companions_single_ticket',
+                                        sucursal: 'Sombrerete',
+                                        ...(finalizedSaleId ? { ventaId: finalizedSaleId } : {}),
                                         rewardCoins: juntosCoins,
                                         recompensaAcreditada: true,
                                     }, { merge: true });
@@ -3764,32 +3772,44 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                     const isCurrentSaleClient = member.id === selectedClient.id;
                                     await creditJuntosBonusToMember(member.id, juntosCoins, isCurrentSaleClient);
 
-                                    const completedPayload = {
+                                    const origFolio = member.data?.originalFolio ? String(member.data.originalFolio) : '';
+                                    const canonicalMemberFolio = origFolio && origFolio !== member.docId ? origFolio : member.docId;
+                                    const memberVentaId = isCurrentSaleClient
+                                        ? (finalizedSaleId || member.data?.ventaId || null)
+                                        : (member.data?.ventaId || null);
+
+                                    // Consolidar en UN SOLO documento canónico (preferentemente el folio QR original del miembro)
+                                    // y eliminar el registro temporal VA-JUNTOS-GRP-* para no duplicar canjes en la ficha.
+                                    await setDoc(doc(db, 'canjes_beneficios', canonicalMemberFolio), {
+                                        folio: canonicalMemberFolio,
+                                        benefitId: 'juntos_es_mejor',
+                                        benefitTitle: 'JUNTOS ES MEJOR',
+                                        isJuntosBenefit: true,
+                                        juntosMode: 'companions_separate_tickets',
+                                        ...(member.data?.grupoId ? { grupoId: member.data.grupoId } : {}),
+                                        ...(Array.isArray(member.data?.grupoMiembros) ? { grupoMiembros: member.data.grupoMiembros } : {}),
+                                        ...(member.data?.grupoTitularId ? { grupoTitularId: member.data.grupoTitularId } : {}),
+                                        ...(member.data?.grupoTitularNombre ? { grupoTitularNombre: member.data.grupoTitularNombre } : {}),
+                                        ...(member.data?.telefono ? { telefono: member.data.telefono } : {}),
+                                        sucursal: member.data?.sucursal || 'Sombrerete',
+                                        fechaStr: member.data?.fechaStr || todayStr,
+                                        anio: member.data?.anio || now.getFullYear(),
+                                        ...(memberVentaId ? { ventaId: memberVentaId } : {}),
+                                        clienteId: member.id,
+                                        clienteNombre: member.nombre,
                                         estado: 'canjeado',
                                         utilizado_en_venta: true,
                                         pagado: true,
                                         fecha_aplicacion: Timestamp.now(),
+                                        canjeadoEn: Timestamp.now(),
+                                        fechaCanje: Timestamp.now(),
                                         fecha_canje_dia: todayStr,
                                         rewardCoins: juntosCoins,
                                         recompensaAcreditada: true,
-                                    };
-                                    await setDoc(doc(db, 'canjes_beneficios', member.docId), {
-                                        folio: member.docId,
-                                        ...completedPayload,
                                     }, { merge: true });
 
-                                    // Quemar también el folio original del QR del miembro para evitar reuso
-                                    const origFolio = member.data?.originalFolio;
-                                    if (origFolio && origFolio !== member.docId) {
-                                        await setDoc(doc(db, 'canjes_beneficios', origFolio), {
-                                            folio: origFolio,
-                                            clienteId: member.id,
-                                            clienteNombre: member.nombre,
-                                            benefitId: 'juntos_es_mejor',
-                                            benefitTitle: 'JUNTOS ES MEJOR',
-                                            isJuntosBenefit: true,
-                                            ...completedPayload,
-                                        }, { merge: true });
+                                    if (canonicalMemberFolio !== member.docId) {
+                                        await deleteDoc(doc(db, 'canjes_beneficios', member.docId)).catch(() => {});
                                     }
 
                                     // Si este integrante pagó previamente antes de cerrar el grupo (caso mixto), actualizar su venta previa para permitir reversión
@@ -3801,12 +3821,12 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                                                 const prevLoyalty = prevSaleSnap.data()?.lealtad_aplicada || {};
                                                 await updateDoc(prevSaleRef, {
                                                     beneficio_aplicado: 'JUNTOS ES MEJOR',
-                                                    beneficio_folio: member.docId,
+                                                    beneficio_folio: canonicalMemberFolio,
                                                     lealtad_aplicada: {
                                                         ...prevLoyalty,
                                                         is_juntos_applied: true,
                                                         juntos_mode: 'companions_separate_tickets',
-                                                        beneficio_folio: member.docId,
+                                                        beneficio_folio: canonicalMemberFolio,
                                                         juntos_titular_coins_awarded: juntosCoins,
                                                     },
                                                 });
@@ -3816,12 +3836,13 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
 
                                     totalBonusCoinsCredited += juntosCoins;
                                     if (isCurrentSaleClient) {
+                                        loyaltySnapshot.beneficio_folio = canonicalMemberFolio;
                                         loyaltySnapshot.juntos_titular_coins_awarded = juntosCoins;
                                     } else {
                                         companionsAwardedForSnapshot.push({
                                             id: member.id,
                                             coins: juntosCoins,
-                                            folio: member.docId,
+                                            folio: canonicalMemberFolio,
                                         });
                                     }
                                 }
@@ -3849,28 +3870,58 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     }
                 }
 
-                const folio = appliedBenefit.folio || `VA-JUNTOS-${Date.now().toString().slice(-6)}`;
-                loyaltySnapshot.beneficio_folio = folio;
-                const keepPending = separateTicketsStillPending || (!isMet && mode === 'companions_separate_tickets');
-                await setDoc(doc(db, 'canjes_beneficios', folio), {
-                    folio,
-                    estado: keepPending ? 'pendiente_cobro_grupo' : 'canjeado',
-                    utilizado_en_venta: !keepPending,
-                    pagado: isMet,
-                    fecha_aplicacion: Timestamp.now(),
-                    fecha_canje_dia: todayStr,
-                    clienteId: clientId || selectedClient.id,
-                    clienteNombre: `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim(),
-                    totalVenta: total,
-                    isJuntosBenefit: true,
-                    juntosMode: mode,
-                    minorsCount: countMinors,
-                    companionsCount: companionsList.length,
-                    haircutPriceApplied: effPrice,
-                    requiredMinPurchase: reqMin,
-                    rewardCoins: totalBonusCoinsCredited,
-                    recompensaAcreditada: keepPending ? false : isMet,
-                }, { merge: true });
+                // Cuando companions_separate_tickets completó todo el grupo con retención activa, cada integrante
+                // ya quedó consolidado arriba en su folio canónico individual sin sobrescribir ni duplicar.
+                const alreadyConsolidatedSeparate =
+                    isMet &&
+                    mode === 'companions_separate_tickets' &&
+                    juntosConfig?.retener_coins_tickets_separados !== false &&
+                    !separateTicketsStillPending;
+
+                if (!alreadyConsolidatedSeparate) {
+                    let folio = appliedBenefit.folio || `VA-JUNTOS-${Date.now().toString().slice(-6)}`;
+                    if (
+                        mode === 'companions_separate_tickets' &&
+                        juntosConfig?.retener_coins_tickets_separados === false &&
+                        folio.startsWith('VA-JUNTOS-GRP-')
+                    ) {
+                        const grpSnap = await getDoc(doc(db, 'canjes_beneficios', folio));
+                        const orig = grpSnap.exists() ? String(grpSnap.data()?.originalFolio || '') : '';
+                        if (orig && orig !== folio) {
+                            await deleteDoc(doc(db, 'canjes_beneficios', folio)).catch(() => {});
+                            folio = orig;
+                        }
+                    }
+
+                    loyaltySnapshot.beneficio_folio = folio;
+                    const keepPending = separateTicketsStillPending || (!isMet && mode === 'companions_separate_tickets');
+                    await setDoc(doc(db, 'canjes_beneficios', folio), {
+                        folio,
+                        benefitId: 'juntos_es_mejor',
+                        benefitTitle: 'JUNTOS ES MEJOR',
+                        estado: keepPending ? 'pendiente_cobro_grupo' : 'canjeado',
+                        utilizado_en_venta: !keepPending,
+                        pagado: isMet,
+                        fecha_aplicacion: Timestamp.now(),
+                        ...(!keepPending ? { canjeadoEn: Timestamp.now(), fechaCanje: Timestamp.now() } : {}),
+                        fecha_canje_dia: todayStr,
+                        fechaStr: todayStr,
+                        anio: now.getFullYear(),
+                        sucursal: 'Sombrerete',
+                        ...(finalizedSaleId ? { ventaId: finalizedSaleId } : {}),
+                        clienteId: clientId || selectedClient.id,
+                        clienteNombre: `${selectedClient.nombre} ${selectedClient.apellido || ''}`.trim(),
+                        totalVenta: total,
+                        isJuntosBenefit: true,
+                        juntosMode: mode,
+                        minorsCount: countMinors,
+                        companionsCount: companionsList.length,
+                        haircutPriceApplied: effPrice,
+                        requiredMinPurchase: reqMin,
+                        rewardCoins: loyaltySnapshot.juntos_titular_coins_awarded ?? totalBonusCoinsCredited,
+                        recompensaAcreditada: keepPending ? false : isMet,
+                    }, { merge: true });
+                }
             } catch (e) {
                 console.error("Error updating canjes_beneficios for Juntos es Mejor:", e);
             }
@@ -5646,14 +5697,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                             <ShoppingBag className="h-5 w-5 text-slate-300 shrink-0" />
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">Registrar Nueva Venta</h2>
+                                    <SheetTitle className="text-sm sm:text-base font-bold text-white tracking-wide">Registrar Nueva Venta</SheetTitle>
                                     <Badge variant="outline" className="text-[10px] py-0 px-2 border-blue-400/40 text-blue-300 bg-blue-500/10 font-bold">
                                         Paso {step} de 2
                                     </Badge>
                                 </div>
-                                <p className="text-xs text-slate-300 hidden sm:block">
+                                <SheetDescription className="text-xs text-slate-300 hidden sm:block">
                                     {step === 1 ? 'Busca y agrega servicios o productos al carrito.' : 'Completa los detalles para finalizar la venta.'}
-                                </p>
+                                </SheetDescription>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 relative z-10">
@@ -7300,14 +7351,14 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                         <div className="flex items-center gap-3 relative z-10">
                             <UserPlus className="h-5 w-5 text-slate-300 shrink-0" />
                             <div>
-                                <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                                <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
                                     {isEditingClient && selectedClient ? 'Editar Cliente' : 'Crear Nuevo Cliente'}
-                                </h2>
-                                <p className="text-xs text-slate-300">
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-slate-300">
                                     {isEditingClient && selectedClient
                                         ? 'Completa la información para actualizar al cliente.'
                                         : 'Completa la información para registrar un nuevo cliente.'}
-                                </p>
+                                </DialogDescription>
                             </div>
                         </div>
                         <div className="flex items-center gap-2 relative z-10">

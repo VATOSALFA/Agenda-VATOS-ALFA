@@ -231,23 +231,22 @@ export function RegisterDepositModal({
         onOpenChange(open);
       }
     }}>
-      <DialogContent 
+      <DialogContent
         hideCloseButton={true}
-        className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background flex flex-col"
+        className="w-[95vw] sm:max-w-3xl max-h-[92dvh] p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background flex flex-col"
       >
         {/* CABECERA OFICIAL VATOS ALFA */}
-        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
-          {/* Haz de luz animado en diagonal */}
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
           <div className="header-light-beam" aria-hidden="true" />
 
           <div className="relative z-10 flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
-              <DollarSign className="h-5 w-5 text-[#C5A880] shrink-0" />
+            <div className="flex items-center gap-2.5">
+              <DollarSign className="h-4 w-4 text-[#C5A880] shrink-0" />
               <div>
-                <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
+                <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide leading-tight">
                   Registrar Anticipo
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                <DialogDescription className="text-[11px] text-slate-300 hidden sm:block">
                   Asegura la reserva registrando el anticipo recibido.
                 </DialogDescription>
               </div>
@@ -262,15 +261,15 @@ export function RegisterDepositModal({
                   onOpenChange(false);
                 }
               }}
-              className="p-1 text-slate-300 hover:text-white transition-colors"
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
               aria-label="Cerrar modal"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
-        <div className="p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-3.5 sm:p-4">
         {isWaitingForTerminal ? (
           <div className="py-8 flex flex-col items-center justify-center space-y-4 text-center">
             <div className="relative">
@@ -279,8 +278,8 @@ export function RegisterDepositModal({
             </div>
             <div>
               <h4 className="font-bold text-base text-foreground">Esperando Pago en Terminal MP Point</h4>
-              <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                Monto del Anticipo: <strong className="text-primary">${depositAmount.toFixed(2)}</strong>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xs font-sans">
+                Monto del Anticipo: <strong className="text-primary">${depositAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Por favor desliza, inserta o aproxima la tarjeta del cliente en la terminal física.
@@ -290,111 +289,112 @@ export function RegisterDepositModal({
               variant="outline"
               size="sm"
               onClick={handleCancelTerminalWait}
-              className="mt-2 text-xs"
+              className="mt-2 text-xs rounded-xl"
             >
               Cancelar Cobro en Terminal
             </Button>
           </div>
         ) : (
-          <div className="space-y-4 py-2">
-            {/* Summary Box */}
-            <div className="p-3 bg-muted/60 rounded-lg space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Cliente:</span>
-                <span className="font-semibold text-foreground">
-                  {reservation.customer?.nombre || 'Cliente'} {reservation.customer?.apellido || ''}
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
+            {/* COLUMNA IZQUIERDA: Resumen y Monto */}
+            <div className="space-y-3">
+              <div className="p-3 bg-muted/40 border border-border/60 rounded-xl space-y-1.5 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Cliente:</span>
+                  <span className="font-semibold text-foreground">
+                    {reservation.customer?.nombre || 'Cliente'} {reservation.customer?.apellido || ''}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Total del Servicio:</span>
+                  <span className="font-bold text-foreground font-sans">${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                </div>
+                <div className="flex justify-between items-center text-blue-400 font-semibold pt-1 border-t border-border/50">
+                  <span>Mínimo Requerido (50%):</span>
+                  <span className="font-sans">${minDeposit.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total del Servicio:</span>
-                <span className="font-bold text-foreground">${total.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-xs text-primary font-semibold">
-                <span>Mínimo Requerido (50%):</span>
-                <span>${minDeposit.toFixed(2)}</span>
-              </div>
-            </div>
 
-            {/* Amount Field */}
-            <div className="space-y-1.5">
-              <Label htmlFor="deposit-amount" className="font-semibold">
-                Monto del Anticipo ($)
-              </Label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
-                <Input
-                  id="deposit-amount"
-                  type="number"
-                  step="0.01"
-                  min={minDeposit}
-                  max={total > 0 ? total : undefined}
-                  value={amountStr}
-                  onChange={(e) => setAmountStr(e.target.value)}
-                  className="pl-7 font-bold text-base border-primary/30 focus-visible:ring-primary"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-
-            {/* Payment Method Selector */}
-            <div className="space-y-1.5">
-              <Label htmlFor="payment-method" className="font-semibold">
-                Método de Pago
-              </Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger id="payment-method">
-                  <SelectValue placeholder="Seleccionar método" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="efectivo">💵 Efectivo</SelectItem>
-                  <SelectItem value="mercadopago">💳 Mercado Pago / Terminal Point</SelectItem>
-                  <SelectItem value="transferencia">🏦 Transferencia Bancaria</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* If Mercado Pago selected and terminals exist, show terminal selector */}
-            {paymentMethod === 'mercadopago' && terminals && terminals.length > 0 && (
-              <div className="space-y-1.5 p-2.5 bg-muted/40 rounded-lg border text-xs">
-                <Label htmlFor="terminal-select" className="font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <Wifi className="w-3.5 h-3.5 text-primary" /> Terminal Mercado Pago Point Destino:
+              <div className="space-y-1.5">
+                <Label htmlFor="deposit-amount" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Monto del Anticipo ($)
                 </Label>
-                <Select value={selectedTerminalId} onValueChange={setSelectedTerminalId}>
-                  <SelectTrigger id="terminal-select" className="h-8 text-xs">
-                    <SelectValue placeholder="Selecciona una terminal" />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">$</span>
+                  <Input
+                    id="deposit-amount"
+                    type="number"
+                    step="0.01"
+                    min={minDeposit}
+                    max={total > 0 ? total : undefined}
+                    value={amountStr}
+                    onChange={(e) => setAmountStr(e.target.value)}
+                    className="pl-7 h-10 font-bold text-base font-sans border-primary/30 focus-visible:ring-primary rounded-xl"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA: Método de Pago y Saldo Restante */}
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="payment-method" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Método de Pago
+                </Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger id="payment-method" className="h-10 rounded-xl">
+                    <SelectValue placeholder="Seleccionar método" />
                   </SelectTrigger>
                   <SelectContent>
-                    {terminals.map((t: any) => (
-                      <SelectItem key={t.id} value={t.id} className="text-xs">
-                        {t.display_name || t.id}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+                    <SelectItem value="mercadopago">💳 Mercado Pago / Terminal Point</SelectItem>
+                    <SelectItem value="transferencia">🏦 Transferencia Bancaria</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            )}
 
-            {/* Remaining Balance Summary */}
-            <div className="flex justify-between items-center p-2.5 bg-primary/10 border border-primary/20 rounded-md text-xs">
-              <span className="font-semibold text-primary">
-                Saldo Restante a Cobrar:
-              </span>
-              <span className="font-bold text-primary text-sm">
-                ${remainingBalance.toFixed(2)}
-              </span>
+              {paymentMethod === 'mercadopago' && terminals && terminals.length > 0 && (
+                <div className="space-y-1.5 p-2.5 bg-muted/40 rounded-xl border border-border/60 text-xs">
+                  <Label htmlFor="terminal-select" className="font-semibold text-muted-foreground flex items-center gap-1.5">
+                    <Wifi className="w-3.5 h-3.5 text-blue-400" /> Terminal Mercado Pago Point Destino:
+                  </Label>
+                  <Select value={selectedTerminalId} onValueChange={setSelectedTerminalId}>
+                    <SelectTrigger id="terminal-select" className="h-8 text-xs rounded-lg">
+                      <SelectValue placeholder="Selecciona una terminal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {terminals.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id} className="text-xs">
+                          {t.display_name || t.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="flex justify-between items-center p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs">
+                <span className="font-semibold text-foreground">
+                  Saldo Restante a Cobrar:
+                </span>
+                <span className="font-bold text-blue-400 text-sm font-sans">
+                  ${remainingBalance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                </span>
+              </div>
+
+              {error && (
+                <p className="text-xs text-red-400 font-semibold bg-red-500/10 p-2.5 rounded-xl border border-red-500/30">
+                  {error}
+                </p>
+              )}
             </div>
-
-            {error && (
-              <p className="text-xs text-red-600 font-semibold bg-red-500/10 p-2 rounded border border-red-500/20">
-                {error}
-              </p>
-            )}
           </div>
         )}
         </div>
 
-        <DialogFooter className="px-5 pb-5 pt-0 gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => {
+        <DialogFooter className="px-4 py-2.5 sm:px-5 sm:py-3 border-t border-border/60 bg-muted/20 gap-2 sm:gap-2">
+          <Button variant="outline" size="sm" className="rounded-xl h-9" onClick={() => {
             if (isWaitingForTerminal) {
               handleCancelTerminalWait();
             } else {
@@ -406,7 +406,8 @@ export function RegisterDepositModal({
           <Button
             onClick={handleConfirm}
             disabled={isSubmitting}
-            className="btn-vatos-alfa rounded-xl font-bold"
+            size="sm"
+            className="btn-vatos-alfa rounded-xl font-bold h-9 px-4"
           >
             {isSubmitting ? (
               <>
@@ -416,12 +417,12 @@ export function RegisterDepositModal({
             ) : paymentMethod === 'mercadopago' && selectedTerminalId ? (
               <>
                 <Wifi className="mr-2 h-4 w-4" />
-                Enviar a Terminal MP (${depositAmount.toFixed(2)})
+                Enviar a Terminal MP (${depositAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
               </>
             ) : (
               <>
                 <CreditCard className="mr-2 h-4 w-4" />
-                Registrar Anticipo (${depositAmount.toFixed(2)})
+                Registrar Anticipo (${depositAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
               </>
             )}
           </Button>

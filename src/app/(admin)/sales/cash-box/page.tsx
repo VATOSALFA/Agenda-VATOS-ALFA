@@ -156,6 +156,20 @@ const IconSeparator = ({ icon: Icon }: { icon: any }) => (
     </div>
 );
 
+const isSaleWalletTopup = (sale: any): boolean => {
+    if (!sale) return false;
+    return sale.tipo === 'recarga_monedero' ||
+           sale.tipo_venta === 'recarga_monedero' ||
+           !!sale.is_wallet_topup ||
+           !!sale.lealtad_aplicada?.is_wallet_topup ||
+           !!sale.items?.some((i: any) => i.id === 'recarga_saldo_pase_alfa' || i.tipo === 'recarga_monedero');
+};
+
+const getSaleProfessionalDisplay = (sale: any, professionalMap: Map<string, string>): string => {
+    if (isSaleWalletTopup(sale)) return 'Recarga de Saldo';
+    const profs = Array.from(new Set(sale.items?.map((i: any) => professionalMap.get(i.barbero_id) || i.barbero_nombre || 'N/A').filter(Boolean))) as string[];
+    return profs.length > 0 ? profs.join(', ') : 'N/A';
+};
 
 export default function CashBoxPage() {
     const { user } = useAuth();
@@ -278,9 +292,8 @@ export default function CashBoxPage() {
                         bValue = `${b.client?.nombre || ''} ${b.client?.apellido || ''}`.trim().toLowerCase();
                         break;
                     case 'professional':
-                        const getProfNames = (s: Sale) => Array.from(new Set(s.items?.map(i => professionalMap.get(i.barbero_id) || '').filter(Boolean))).join(', ').toLowerCase();
-                        aValue = getProfNames(a);
-                        bValue = getProfNames(b);
+                        aValue = getSaleProfessionalDisplay(a, professionalMap).toLowerCase();
+                        bValue = getSaleProfessionalDisplay(b, professionalMap).toLowerCase();
                         break;
                     case 'items':
                         aValue = (a.items?.map(i => i.nombre).join(', ') || '').toLowerCase();
@@ -881,7 +894,7 @@ export default function CashBoxPage() {
             'Fecha De Pago': sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A',
             Local: localMap.get(sale.local_id ?? '') || sale.local_id,
             Cliente: `${sale.client?.nombre || ''} ${sale.client?.apellido || ''}`,
-            Profesional: Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A'))).join(', '),
+            Profesional: getSaleProfessionalDisplay(sale, professionalMap),
             Detalle: sale.items?.map(i => i.nombre).join(', '),
             'Monto Facturado': sale.total,
         }));
@@ -1490,7 +1503,13 @@ export default function CashBoxPage() {
                                                         <TableCell className="py-1.5 px-3 text-xs whitespace-nowrap">{sale.fecha_hora_venta ? format(sale.fecha_hora_venta.toDate(), 'dd-MM-yyyy HH:mm') : 'N/A'}</TableCell>
                                                         <TableCell className="py-1.5 px-3 text-xs">{localMap.get(sale.local_id ?? '') || sale.local_id}</TableCell>
                                                         <TableCell className="py-1.5 px-3 text-xs font-medium">{sale.client?.nombre} {sale.client?.apellido}</TableCell>
-                                                        <TableCell className="py-1.5 px-3 text-xs">{Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A').filter(Boolean))).join(', ')}</TableCell>
+                                                        <TableCell className="py-1.5 px-3 text-xs">
+                                                            {isSaleWalletTopup(sale) ? (
+                                                                <span className="font-medium text-foreground">Recarga de Saldo</span>
+                                                            ) : (
+                                                                getSaleProfessionalDisplay(sale, professionalMap)
+                                                            )}
+                                                        </TableCell>
                                                         <TableCell className="py-1.5 px-3 text-xs">{sale.items?.map(i => i.nombre).join(', ')}</TableCell>
                                                         <TableCell className="py-1.5 px-3 text-xs text-right font-medium">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                         <TableCell className="py-1.5 px-3 text-xs text-right font-medium text-foreground">${((sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total) ? sale.monto_pagado_real : sale.total).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
@@ -1597,7 +1616,7 @@ export default function CashBoxPage() {
                                                 ? format(sale.fecha_hora_venta.toDate(), 'dd/MM/yyyy HH:mm')
                                                 : 'N/A';
                                             const itemsList = sale.items?.map(i => i.nombre).join(', ') || 'Sin detalle';
-                                            const profNames = Array.from(new Set(sale.items?.map(i => professionalMap.get(i.barbero_id) || 'N/A').filter(Boolean))).join(', ');
+                                            const profNames = getSaleProfessionalDisplay(sale, professionalMap);
 
                                             return (
                                                 <div key={sale.id} className="p-3.5 space-y-2 bg-card/40 hover:bg-muted/20 transition-colors">

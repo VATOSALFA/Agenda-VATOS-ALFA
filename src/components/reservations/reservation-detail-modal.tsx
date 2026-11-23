@@ -1030,18 +1030,18 @@ export function ReservationDetailModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent hideCloseButton={true} className="max-w-xl max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+        <DialogContent hideCloseButton={true} className="w-[96vw] sm:max-w-3xl lg:max-w-4xl max-h-[92dvh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background">
           {/* HEADER ESTILO VATOS ALFA */}
-          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
+          <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
             {/* Haz de luz animado sutil */}
             <div className="header-light-beam" aria-hidden="true" />
 
             <div className="relative z-10 flex items-center justify-between w-full">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 {/* Icono izquierdo sin contenedor */}
-                <originInfo.icon className="h-5 w-5 text-slate-300 shrink-0" />
+                <originInfo.icon className="h-4 w-4 text-slate-300 shrink-0" />
                 <div className="space-y-0.5">
-                  <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide flex items-center gap-2 flex-wrap leading-tight">
                     <span>Detalle de la Reserva</span>
                     {isConcluded ? (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 tracking-wider uppercase">
@@ -1053,14 +1053,14 @@ export function ReservationDetailModal({
                       </span>
                     )}
                   </DialogTitle>
-                  <div className="flex items-center gap-2 text-xs text-slate-300 flex-wrap">
-                    <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-[11px] border border-white/10">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-300 flex-wrap">
+                    <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[10px] border border-white/10">
                       ID: {reservation.id?.slice(0, 8)}...
                     </span>
                     {currentLocal && (
                       <>
                         <span>•</span>
-                        <span className="text-slate-300 font-medium truncate max-w-[150px]">{currentLocal.name}</span>
+                        <span className="text-slate-300 font-medium truncate max-w-[180px]">{currentLocal.name}</span>
                       </>
                     )}
                   </div>
@@ -1068,12 +1068,12 @@ export function ReservationDetailModal({
               </div>
 
               {/* Botones de acción y cerrar sin contenedor ni texto */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
                 {onEdit && !isConcluded && (
                   <button
                     type="button"
                     onClick={onEdit}
-                    className="p-1 text-slate-300 hover:text-white transition-colors"
+                    className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                     title="Editar cita"
                     aria-label="Editar"
                   >
@@ -1084,7 +1084,7 @@ export function ReservationDetailModal({
                   type="button"
                   onClick={handleResendEmail}
                   disabled={isSendingEmail}
-                  className="p-1 text-slate-300 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   title="Reenviar confirmación por correo"
                   aria-label="Notificar por correo"
                 >
@@ -1093,793 +1093,796 @@ export function ReservationDetailModal({
                 <button
                   type="button"
                   onClick={() => onOpenChange(false)}
-                  className="p-1 text-slate-300 hover:text-white transition-colors"
+                  className="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                   aria-label="Cerrar modal"
                   title="Cerrar"
                 >
-                  <X className="h-5 w-5" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
 
-          {/* CONTENIDO SCROLLEABLE */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-sm">
+          {/* CONTENIDO EN 2 COLUMNAS PARA TABLET HORIZONTAL (1 COLUMNA EN CELULAR) */}
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
 
-            {/* 1. ORIGEN Y AUDITORÍA DE LA RESERVA (Compacto con iconos interactivos) */}
-            <div className={cn("px-3.5 py-2.5 rounded-xl border transition-all text-xs", originInfo.cardBg)}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                  {/* Iconos de Origen y Preferencia de Barbero (Hover o Mantener Presionado) */}
-                  <div className="flex items-center gap-2 shrink-0 pr-2 border-r border-border/50">
-                    <TooltipProvider delayDuration={100}>
-                      <Tooltip open={activeHintId === 'origin'}>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onMouseEnter={() => setActiveHintId('origin')}
-                            onMouseLeave={() => setActiveHintId(null)}
-                            onTouchStart={() => setActiveHintId(prev => prev === 'origin' ? null : 'origin')}
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setActiveHintId(prev => prev === 'origin' ? null : 'origin');
-                            }}
-                            className="p-1 text-slate-400 hover:text-blue-400 transition-colors cursor-help focus:outline-none"
-                            aria-label={originInfo.label}
-                            title={originInfo.label}
-                          >
-                            <originInfo.icon className={cn("w-4 h-4", originInfo.accentColor)} />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
-                          <p>{originInfo.label}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+              {/* ================= COLUMNA IZQUIERDA: AUDITORÍA, CLIENTE, HORARIO Y SERVICIOS ================= */}
+              <div className="space-y-3">
 
-                    {/* Candado de Preferencia de Profesional (Editable: Clic para abrir o fijar) */}
-                    <TooltipProvider delayDuration={100}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleToggleLock();
-                            }}
-                            disabled={isTogglingLock || isConcluded}
-                            className={cn(
-                              "p-1 transition-colors focus:outline-none rounded-md group flex items-center justify-center",
-                              isConcluded ? "cursor-not-allowed opacity-60 text-slate-500" : "cursor-pointer",
-                              currentIsLocked ? "text-slate-400 hover:text-blue-400" : "text-blue-400 hover:text-blue-300"
-                            )}
-                            aria-label={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
-                            title={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
-                          >
-                            {isTogglingLock ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                            ) : currentIsLocked ? (
-                              <Lock className="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition-colors" />
-                            ) : (
-                              <Unlock className="w-4 h-4 text-blue-400 group-hover:text-blue-300 transition-colors" />
-                            )}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
-                          <p>
-                            {currentIsLocked
-                              ? "Candado cerrado: Barbero fijado por cliente (Clic para abrir)"
-                              : "Candado abierto: Barbero flexible (Clic para fijar)"}
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {reservation.confirmada_por_cliente && (
-                      <TooltipProvider delayDuration={100}>
-                        <Tooltip open={activeHintId === 'wa_confirmed'}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onMouseEnter={() => setActiveHintId('wa_confirmed')}
-                              onMouseLeave={() => setActiveHintId(null)}
-                              onTouchStart={() => setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed')}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed');
-                              }}
-                              className="p-1 text-blue-400 hover:text-blue-300 transition-colors cursor-help focus:outline-none"
-                              aria-label="Confirmada por WhatsApp"
-                              title="Confirmada por WhatsApp"
-                            >
-                              <CheckCircle2 className="w-4 h-4 text-blue-400" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
-                            <p>Confirmada por WhatsApp</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-
-                  {/* Quién agendó y fecha */}
-                  <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
-                    <User className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                    <span className="text-muted-foreground shrink-0">Agendó:</span>
-                    <strong className="text-foreground font-semibold truncate">{originInfo.creator}</strong>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
-                  {creationFormattedDate && (
-                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Clock className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                      <strong className="text-foreground font-semibold whitespace-nowrap">
-                        {creationFormattedDate.short}
-                      </strong>
-                    </div>
-                  )}
-
-                  <Badge
-                    variant={reservation.pago_estado === 'Pagado' || isDepositPaid ? 'default' : 'secondary'}
-                    className={cn(
-                      "text-[10px] font-bold px-2 py-0.5",
-                      reservation.pago_estado === 'Pagado' ? 'bg-blue-600 text-white' :
-                        isDepositPaid ? 'bg-[#C5A880] text-black font-semibold' :
-                          reservation.estado === 'Cancelado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
-                            'bg-slate-700 text-white dark:bg-slate-800 dark:text-slate-200'
-                    )}
-                  >
-                    {reservation.estado === 'Cancelado' ? 'Cancelada' :
-                      (reservation.pago_estado === 'pending_payment' || reservation.pago_estado === 'pending' || reservation.pago_estado === 'pendiente_anticipo') ? 'Pendiente Anticipo' :
-                        reservation.pago_estado === 'Pagado' ? 'Pagada Completa' :
-                          isDepositPaid ? 'Anticipo Pagado' :
-                            reservation.pago_estado || 'Sin Pago'}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-
-            {/* 2. FICHA DEL CLIENTE (Simplificada: solo nombre y acceso a Ver Perfil) */}
-            <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-card shadow-sm hover:border-slate-300 dark:hover:border-slate-700 transition-all space-y-2.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Avatar className="h-9 w-9 border border-border shrink-0">
-                    <AvatarFallback className="bg-[#1a233a] text-white font-bold text-xs">
-                      {clientData?.nombre?.[0] || 'C'}{clientData?.apellido?.[0] || ''}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    <h4
-                      className={cn(
-                        "font-bold text-sm text-foreground transition-colors truncate",
-                        canViewPhone && onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
-                      )}
-                      onClick={() => canViewPhone && onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
-                    >
-                      {formatClientName(clientData?.nombre, clientData?.apellido)}
-                    </h4>
-
-                    {isClientExempt ? (
-                      <Badge variant="outline" className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] py-0 px-1.5 font-semibold">
-                        ★ Exento de Anticipo
-                      </Badge>
-                    ) : reservation.exento_anticipo ? (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px] py-0 px-1.5 font-semibold">
-                        ★ Anticipo Exentado (Código)
-                      </Badge>
-                    ) : isNewClient ? (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                        ⭐ Nuevo
-                      </Badge>
-                    ) : hasUnattendedAlert ? (
-                      <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
-                        🚨 Anticipo Requerido
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
-                        ✓ Frecuente
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                {canViewPhone && onClientClick && reservation.cliente_id && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 px-2.5 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg shrink-0"
-                    onClick={() => onClientClick(reservation.cliente_id!)}
-                  >
-                    Ver Perfil
-                  </Button>
-                )}
-              </div>
-
-              {/* Alerta de Escudo Antifraude si tiene inasistencias acumuladas */}
-              {hasUnattendedAlert && !isStaff && (
-                <div className="p-2.5 rounded-lg border-2 border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200 flex items-start gap-2.5">
-                  <ShieldAlert className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-1 flex-1">
-                    <p className="font-bold uppercase tracking-wide text-[11px]">Escudo Antifraude: Cliente con {unattendedCount} Faltas</p>
-                    <p className="text-red-700 dark:text-red-300 leading-snug">
-                      Según las reglas de reserva, este cliente debe cubrir un <strong>anticipo obligatorio del {penalizacionPorcentaje}%</strong> para apartar su lugar en la agenda.
-                    </p>
-                    {reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid' && (
-                      <div className="pt-1">
-                        <Button
-                          size="sm"
-                          type="button"
-                          onClick={() => setIsDepositLinkModalOpen(true)}
-                          className="h-7 text-xs font-bold bg-[#202A49] hover:bg-[#18223c] text-white rounded-lg gap-1.5 shadow-xs"
-                        >
-                          <CreditCard className="w-3.5 h-3.5" /> Enviar Enlace SPEI / Mercado Pago
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Alerta de Cita Tentativa en Espera de Anticipo */}
-              {isAnticipoRequired &&
-                reservation.pago_estado !== 'Pagado' &&
-                !isDepositPaid &&
-                reservation.estado !== 'En espera' &&
-                reservation.estado !== 'Asiste' &&
-                reservation.estado !== 'Completado' && (
-                <div className={cn(
-                  "p-3 rounded-xl border-2 flex items-start gap-2.5",
-                  isDepositExpired
-                    ? "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200"
-                    : "border-blue-500/40 bg-blue-500/10 text-foreground"
-                )}>
-                  <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                  <div className="text-xs space-y-1.5 flex-1">
-                    <div className="flex items-center justify-between flex-wrap gap-1">
-                      <p className="font-bold uppercase tracking-wide text-[11px] text-blue-400 font-sans">
-                        Cita Tentativa: Esperando Anticipo (${expectedDepositAmount.toFixed(2)} MXN)
-                      </p>
-                      <span className={cn(
-                        "text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap font-sans",
-                        isDepositExpired
-                          ? "bg-red-500/20 text-red-300 border-red-500/40"
-                          : "bg-blue-500/20 text-blue-200 border-blue-400/40 animate-pulse"
-                      )}>
-                        {isDepositExpired ? `Tolerancia ${toleranceMins}m Vencida` : `${depositMinutesRemaining} min restantes`}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground text-[11px] leading-snug">
-                      Esta cita ocupa la mitad del espacio en la agenda como apartado preliminar. Cuenta con una tolerancia de {toleranceMins} minutos para recibir y registrar el anticipo. Al confirmarse el pago, pasará al 100% del espacio formal.
-                      {canMarkWaitingRoomInPerson(reservation, 90) && (
-                        <span className="block mt-1 text-emerald-400 font-semibold">
-                          ✓ Si el cliente ya está presente físicamente en la sucursal esperando su turno, puedes activar directamente el botón verde &ldquo;En espera&rdquo;.
-                        </span>
-                      )}
-                    </p>
-
-                    {!isStaff && reservation.estado !== 'Cancelado' && (
-                      <div className="pt-1">
-                        {!showExemptBox ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowExemptBox(true)}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-border/70 rounded-lg px-2.5 py-1 transition-colors"
-                          >
-                            <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
-                            Omitir anticipo con código de autorización (4 dígitos)
-                          </button>
-                        ) : (
-                          <div className="mt-1.5 p-2.5 rounded-xl border border-blue-500/40 bg-background/95 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
-                                <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
-                                Exentar Anticipo por esta ocasión
-                              </span>
+                {/* 1. ORIGEN Y AUDITORÍA DE LA RESERVA */}
+                <div className={cn("px-3 py-2 rounded-xl border transition-all text-xs", originInfo.cardBg)}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                      <div className="flex items-center gap-1.5 shrink-0 pr-2 border-r border-border/50">
+                        <TooltipProvider delayDuration={100}>
+                          <Tooltip open={activeHintId === 'origin'}>
+                            <TooltipTrigger asChild>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setShowExemptBox(false);
-                                  setExemptAuthCode('');
-                                  setExemptReason('');
+                                onMouseEnter={() => setActiveHintId('origin')}
+                                onMouseLeave={() => setActiveHintId(null)}
+                                onTouchStart={() => setActiveHintId(prev => prev === 'origin' ? null : 'origin')}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setActiveHintId(prev => prev === 'origin' ? null : 'origin');
                                 }}
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                                className="p-1 text-slate-400 hover:text-blue-400 transition-colors cursor-help focus:outline-none"
+                                aria-label={originInfo.label}
+                                title={originInfo.label}
                               >
-                                Cancelar
+                                <originInfo.icon className={cn("w-4 h-4", originInfo.accentColor)} />
                               </button>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              <Input
-                                type="password"
-                                placeholder="Código (4 dígitos o maestro)"
-                                value={exemptAuthCode}
-                                onChange={(e) => setExemptAuthCode(e.target.value)}
-                                className="h-8 text-xs font-sans"
-                              />
-                              <Input
-                                type="text"
-                                placeholder="Motivo (ej. Autorizado por Beatriz)"
-                                value={exemptReason}
-                                onChange={(e) => setExemptReason(e.target.value)}
-                                className="h-8 text-xs"
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={isValidatingExempt}
-                              onClick={handleExemptDepositWithCode}
-                              className="w-full h-8 text-xs font-bold btn-vatos-alfa"
-                            >
-                              {isValidatingExempt ? (
-                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                              ) : (
-                                <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
-                              )}
-                              Confirmar Exención y Pasar al 100%
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                              <p>{originInfo.label}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
 
-              {/* Notas del perfil del cliente si existen */}
-              {clientData?.notas && (
-                <div className="bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 p-2 rounded-lg text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-0.5">
-                    <Tag className="w-3 h-3 text-slate-500" /> Notas del Cliente (Perfil):
-                  </span>
-                  <p className="text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{clientData.notas}</p>
-                </div>
-              )}
-            </div>
-
-            {/* 3. FECHA, HORA, PROFESIONAL Y SERVICIOS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-xl border bg-card space-y-2">
-                <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
-                  <CalendarIcon className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Fecha y Horario
-                </p>
-                <div className="space-y-1 pl-6">
-                  <p className="font-bold text-sm text-foreground capitalize">
-                    {format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", { locale: es })}
-                  </p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
-                    <span>
-                      Inicio: <strong className="text-foreground font-semibold">{reservation.hora_inicio || '--:--'}</strong>
-                      {' • '}
-                      Fin: <strong className="text-foreground font-semibold">{reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, 60)}</strong>
-                    </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-0.5">
-                    <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <strong className="text-foreground">{allProfessionalNames}</strong>
-                  </p>
-                </div>
-              </div>
-
-              {(() => {
-                const rawItems = reservation.items || [];
-                const serviceItems = rawItems.filter(i => (i as any).tipo !== 'producto');
-                const productItemsFromItems = rawItems.filter(i => (i as any).tipo === 'producto');
-                const fallbackProducts = (reservation as any).productos || [];
-                const finalProductItems = productItemsFromItems.length > 0 ? productItemsFromItems : fallbackProducts;
-
-                const servicesSubtotal = serviceItems.reduce((sum: number, s: any) => sum + (Number((s as any).precio || (s as any).subtotal) || 0), 0);
-                const productsSubtotal = finalProductItems.reduce((sum: number, p: any) => sum + ((Number((p as any).precio || (p as any).public_price) || 0) * (Number((p as any).cantidad) || 1)), 0);
-
-                return (
-                  <div className="space-y-3">
-                    {/* SERVICIOS */}
-                    <div className="p-3.5 rounded-xl border bg-card space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
-                          <Scissors className="w-4 h-4 text-slate-600 dark:text-slate-300" /> Servicios ({serviceItems.length > 0 ? serviceItems.length : 1})
-                        </p>
-                        <span className="text-xs font-bold text-foreground font-sans">
-                          ${Number(finalProductItems.length > 0 && servicesSubtotal > 0 ? servicesSubtotal : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
-                        </span>
-                      </div>
-                      <ul className="space-y-1.5 text-xs max-h-36 overflow-y-auto pr-1">
-                        {serviceItems.length > 0 ? (() => {
-                          let runningStart = reservation.hora_inicio || '';
-                          return serviceItems.map((i, idx) => {
-                            const prof = professionals?.find(p => p.id === i.barbero_id) || professionals?.find(p => p.id === reservation.barbero_id);
-                            const dur = Number((i as any).duracion) || 30;
-                            const itemStart = (i as any).hora_inicio || runningStart || reservation.hora_inicio || '';
-                            const itemEnd = (i as any).hora_fin || (serviceItems.length === 1 && reservation.hora_fin ? reservation.hora_fin : addMinutesToTimeStr(itemStart, dur));
-                            runningStart = itemEnd || runningStart;
-
-                            return (
-                              <li key={idx} className="flex justify-between items-start py-1 border-b last:border-b-0 border-border/50">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-medium text-foreground">{i.nombre || (i as any).servicio}</span>
-                                  {itemStart && (
-                                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                                      <span>
-                                        {itemStart} - {itemEnd} ({dur} min)
-                                      </span>
-                                    </span>
-                                  )}
-                                </div>
-                                {prof && (
-                                  <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded ml-2 shrink-0">
-                                    {prof.publicName || prof.name}
-                                  </span>
+                        <TooltipProvider delayDuration={100}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleToggleLock();
+                                }}
+                                disabled={isTogglingLock || isConcluded}
+                                className={cn(
+                                  "p-1 transition-colors focus:outline-none rounded-md group flex items-center justify-center",
+                                  isConcluded ? "cursor-not-allowed opacity-60 text-slate-500" : "cursor-pointer",
+                                  currentIsLocked ? "text-slate-400 hover:text-blue-400" : "text-blue-400 hover:text-blue-300"
                                 )}
-                              </li>
-                            );
-                          });
-                        })() : (
-                          <li className="flex flex-col gap-0.5 py-1">
-                            <span className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</span>
-                            {reservation.hora_inicio && (
-                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                                <span>{reservation.hora_inicio} - {reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, (reservation as any).duracion || reservation.duration || 30)}</span>
-                              </span>
-                            )}
-                          </li>
+                                aria-label={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
+                                title={currentIsLocked ? "Candado cerrado: Clic para abrir" : "Candado abierto: Clic para fijar"}
+                              >
+                                {isTogglingLock ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                                ) : currentIsLocked ? (
+                                  <Lock className="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition-colors" />
+                                ) : (
+                                  <Unlock className="w-4 h-4 text-blue-400 group-hover:text-blue-300 transition-colors" />
+                                )}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                              <p>
+                                {currentIsLocked
+                                  ? "Candado cerrado: Barbero fijado por cliente (Clic para abrir)"
+                                  : "Candado abierto: Barbero flexible (Clic para fijar)"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        {reservation.confirmada_por_cliente && (
+                          <TooltipProvider delayDuration={100}>
+                            <Tooltip open={activeHintId === 'wa_confirmed'}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onMouseEnter={() => setActiveHintId('wa_confirmed')}
+                                  onMouseLeave={() => setActiveHintId(null)}
+                                  onTouchStart={() => setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed')}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setActiveHintId(prev => prev === 'wa_confirmed' ? null : 'wa_confirmed');
+                                  }}
+                                  className="p-1 text-blue-400 hover:text-blue-300 transition-colors cursor-help focus:outline-none"
+                                  aria-label="Confirmada por WhatsApp"
+                                  title="Confirmada por WhatsApp"
+                                >
+                                  <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                                <p>Confirmada por WhatsApp</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         )}
-                      </ul>
+                      </div>
+
+                      <div className="flex items-center gap-1 min-w-0 text-[11px]">
+                        <User className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                        <span className="text-muted-foreground shrink-0">Agendó:</span>
+                        <strong className="text-foreground font-semibold truncate max-w-[130px]">{originInfo.creator}</strong>
+                      </div>
                     </div>
 
-                    {/* PRODUCTOS SEPARADOS */}
-                    {finalProductItems.length > 0 && (
-                      <div className="p-3.5 rounded-xl border bg-card space-y-2">
-                        <div className="flex items-center justify-between">
-                          <p className="font-semibold text-xs flex items-center gap-2 text-foreground uppercase tracking-wider">
-                            <ShoppingBag className="w-4 h-4 text-amber-500" /> Productos Agregados ({finalProductItems.length})
-                          </p>
-                          <span className="text-xs font-bold text-foreground font-sans">
-                            ${Number(productsSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
-                          </span>
+                    <div className="flex items-center gap-2 shrink-0 ml-auto">
+                      {creationFormattedDate && (
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="w-3 h-3 shrink-0 text-slate-500" />
+                          <strong className="text-foreground font-semibold whitespace-nowrap">
+                            {creationFormattedDate.short}
+                          </strong>
                         </div>
-                        <ul className="space-y-1.5 text-xs max-h-32 overflow-y-auto pr-1">
-                          {finalProductItems.map((p: any, idx: number) => {
-                            const qty = Number(p.cantidad) || 1;
-                            const unitPrice = Number(p.precio || p.public_price || 0);
-                            return (
-                              <li key={idx} className="flex justify-between items-center py-1 border-b last:border-b-0 border-border/50">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="font-medium text-foreground">
-                                    {qty > 1 ? `${qty}x ` : ''}{p.nombre || p.name || 'Producto'}
-                                  </span>
-                                  <span className="text-[11px] text-muted-foreground">
-                                    Entrega al finalizar cita en sucursal
-                                  </span>
-                                </div>
-                                <span className="text-xs font-semibold text-foreground">
-                                  ${(unitPrice * qty).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
+                      )}
 
-            {/* 3.1 NOTAS O ESPECIFICACIONES DEL CLIENTE */}
-            {customerBookingNotes && (
-              <div className="p-3 rounded-xl border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 text-xs space-y-1.5 shadow-2xs">
-                <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] uppercase tracking-wider">
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Notas o especificaciones del cliente</span>
-                </div>
-                <p className="text-foreground text-xs leading-relaxed pl-5 whitespace-pre-wrap font-medium">
-                  {customerBookingNotes}
-                </p>
-              </div>
-            )}
-
-            {/* 4. DESGLOSE FINANCIERO / ANTICIPO */}
-            {(depositAmount > 0 || (isAnticipoRequired && expectedDepositAmount > 0) || isDepositPaid || reservation.pago_estado === 'Pagado') && (
-              <div className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between gap-3 text-xs flex-wrap">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="w-4 h-4 text-blue-400" />
-                  <div>
-                    <span className="font-semibold text-foreground">Total Cita: ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
-                    {reservation.pago_estado === 'Pagado' ? (
-                      <span className="text-muted-foreground ml-2">
-                        (Liquidada al 100%: <strong className="text-blue-400">${Number(depositAmount > 0 ? depositAmount : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
-                      </span>
-                    ) : depositAmount > 0 ? (
-                      <span className="text-muted-foreground ml-2">
-                        (Anticipo pagado: <strong className="text-blue-400">${Number(depositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
-                      </span>
-                    ) : expectedDepositAmount > 0 && isAnticipoRequired ? (
-                      <span className="text-muted-foreground ml-2">
-                        (Anticipo requerido: <strong className="text-red-400">${Number(expectedDepositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>)
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                {reservation.pago_estado !== 'Pagado' && balancePending > 0 && (
-                  <Badge variant="outline" className="border-border bg-muted/50 text-foreground font-bold text-xs">
-                    Resta por cobrar: ${Number(balancePending).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
-                  </Badge>
-                )}
-              </div>
-            )}
-
-            {/* 5. COMUNICACIÓN POR WHATSAPP (Oculto para rol Staff por privacidad del cliente) */}
-            {canViewPhone && (
-              effectivePhone ? (
-                <div className="space-y-2 pt-2 border-t border-border/60">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
-                      <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" /> Notificaciones WhatsApp
-                    </span>
-                    {reservation.customer?.correo && reservation.notifications?.email_confirmation_sent && (
-                      <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 text-[10px] py-0 px-2 flex items-center gap-1">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> Correo enviado
+                      <Badge
+                        variant={reservation.pago_estado === 'Pagado' || isDepositPaid ? 'default' : 'secondary'}
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-0.5",
+                          reservation.pago_estado === 'Pagado' ? 'bg-blue-600 text-white' :
+                            isDepositPaid ? 'bg-[#C5A880] text-black font-semibold' :
+                              reservation.estado === 'Cancelado' ? 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300' :
+                                'bg-slate-700 text-white dark:bg-slate-800 dark:text-slate-200'
+                        )}
+                      >
+                        {reservation.estado === 'Cancelado' ? 'Cancelada' :
+                          (reservation.pago_estado === 'pending_payment' || reservation.pago_estado === 'pending' || reservation.pago_estado === 'pendiente_anticipo') ? 'Pendiente Anticipo' :
+                            reservation.pago_estado === 'Pagado' ? 'Pagada Completa' :
+                              isDepositPaid ? 'Anticipo Pagado' :
+                                reservation.pago_estado || 'Sin Pago'}
                       </Badge>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {/* Si requiere anticipo y no está pagada, mostrar botón prioritario para enviar enlace SPEI */}
-                    {isAnticipoRequired && (
-                      <div className="flex items-center justify-between bg-muted/40 border border-border/70 p-2.5 rounded-xl text-xs col-span-1 sm:col-span-2">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
-                          <div>
-                            <span className="font-bold text-foreground">Enlace de Anticipo (SPEI / MP)</span>
-                            <span className="block text-[10px] text-muted-foreground">
-                              {reservation.mercado_pago_link ? 'Enlace generado listo para enviar' : 'Generar enlace dinámico con CLABE SPEI'}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setIsDepositLinkModalOpen(true)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#202A49] hover:bg-[#18223c] text-white shadow-xs transition-all"
-                        >
-                          <Send className="w-3 h-3" /> Enviar Link
-                        </button>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
-                      <div className="flex items-center gap-2">
-                        <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
-                        <span className="font-medium text-foreground">Confirmación</span>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="alfa"
-                        disabled={isConcluded || isPastDate}
-                        onClick={() => handleWhatsAppClick('confirmation')}
-                        className={cn(
-                          "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                          reservation.whatsappConfirmationSent && "opacity-90",
-                          (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
-                        )}
-                      >
-                        {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3 h-3" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between bg-card p-2.5 rounded-xl border text-xs">
-                      <div className="flex items-center gap-2">
-                        <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" />
-                        <div className="leading-tight">
-                          <span className="font-medium text-foreground">Recordatorio</span>
-                          {isShortNotice && !reservation.whatsappReminderSent && (
-                            <span className="block text-[9px] text-muted-foreground">
-                              Cita de poca anticipación
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="alfa"
-                        disabled={isConcluded || isPastDate}
-                        onClick={() => handleWhatsAppClick('reminder')}
-                        className={cn(
-                          "h-7 px-2.5 rounded-lg text-xs font-semibold shadow-xs", 
-                          reservation.whatsappReminderSent && "opacity-90",
-                          (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
-                        )}
-                        title={
-                          reservation.whatsappReminderSent
-                            ? "Reenviar recordatorio por WhatsApp"
-                            : "Enviar recordatorio por WhatsApp"
-                        }
-                      >
-                        {reservation.whatsappReminderSent ? (
-                          <><CheckCircle2 className="w-3 h-3" /> Enviado</>
-                        ) : (
-                          <><Send className="w-3 h-3" /> Enviar</>
-                        )}
-                      </Button>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="space-y-2 pt-2 border-t border-border/60">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
-                      <WhatsAppIcon className="w-3.5 h-3.5 text-muted-foreground opacity-60" /> Notificaciones WhatsApp
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-dashed border-border/70 bg-muted/20 text-xs gap-3">
-                    <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                      <AlertCircle className="w-4 h-4 text-blue-400 shrink-0" />
-                      <span className="truncate">Cliente sin teléfono registrado. Agrega su celular para enviar WhatsApp.</span>
+
+                {/* 2. FICHA DEL CLIENTE */}
+                <div className="p-3 rounded-xl border border-border/60 bg-card shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar className="h-9 w-9 border border-border shrink-0">
+                        <AvatarFallback className="bg-[#1a233a] text-white font-bold text-xs">
+                          {clientData?.nombre?.[0] || 'C'}{clientData?.apellido?.[0] || ''}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        <h4
+                          className={cn(
+                            "font-bold text-sm text-foreground transition-colors truncate",
+                            canViewPhone && onClientClick && reservation.cliente_id && "cursor-pointer hover:text-primary hover:underline"
+                          )}
+                          onClick={() => canViewPhone && onClientClick && reservation.cliente_id && onClientClick(reservation.cliente_id)}
+                        >
+                          {formatClientName(clientData?.nombre, clientData?.apellido)}
+                        </h4>
+
+                        {isClientExempt ? (
+                          <Badge variant="outline" className="bg-[#C5A880]/15 text-[#C5A880] border-[#C5A880]/40 text-[10px] py-0 px-1.5 font-semibold">
+                            ★ Exento de Anticipo
+                          </Badge>
+                        ) : reservation.exento_anticipo ? (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px] py-0 px-1.5 font-semibold">
+                            ★ Anticipo Exentado (Código)
+                          </Badge>
+                        ) : isNewClient ? (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                            ⭐ Nuevo
+                          </Badge>
+                        ) : hasUnattendedAlert ? (
+                          <Badge variant="outline" className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] py-0 px-1.5 font-bold animate-pulse">
+                            🚨 Anticipo Requerido
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/20 text-[10px] py-0 px-1.5 font-semibold">
+                            ✓ Frecuente
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    {reservation.cliente_id && onClientClick && (
+
+                    {canViewPhone && onClientClick && reservation.cliente_id && (
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-7 px-2.5 text-xs font-semibold text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg shrink-0"
                         onClick={() => onClientClick(reservation.cliente_id!)}
-                        className="h-7 px-2 text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0"
                       >
-                        Editar Teléfono
+                        Ver Perfil
                       </Button>
                     )}
                   </div>
+
+                  {/* Notas del perfil del cliente si existen */}
+                  {clientData?.notas && (
+                    <div className="bg-muted/30 border border-border/60 p-2 rounded-lg text-xs">
+                      <span className="font-semibold text-foreground/80 flex items-center gap-1.5 mb-0.5 text-[11px]">
+                        <Tag className="w-3 h-3 text-slate-400" /> Notas del Cliente (Perfil):
+                      </span>
+                      <p className="text-muted-foreground whitespace-pre-wrap leading-snug">{clientData.notas}</p>
+                    </div>
+                  )}
                 </div>
-              )
-            )}
 
-            {/* 6. NOTAS INTERNAS O MOTIVO DE CANCELACIÓN */}
-            {reservation.estado === 'Cancelado' && (reservation as any).motivo_cancelacion && (
-              <div className="p-3 rounded-xl border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20 text-xs space-y-1">
-                <span className="font-bold text-red-700 dark:text-red-300 flex items-center gap-1.5">
-                  <XCircle className="w-3.5 h-3.5" /> Motivo de Cancelación:
-                </span>
-                <p className="text-red-800 dark:text-red-200 pl-5">{(reservation as any).motivo_cancelacion}</p>
-              </div>
-            )}
+                {/* 3. FECHA, HORARIO Y PROFESIONAL */}
+                <div className="p-3 rounded-xl border border-border/60 bg-card space-y-1.5">
+                  <p className="font-semibold text-[11px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wider">
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" /> Fecha y Horario
+                  </p>
+                  <div className="space-y-1 pl-5">
+                    <p className="font-bold text-sm text-foreground capitalize">
+                      {format(parseISO(reservation.fecha), "EEEE, dd 'de' MMMM", { locale: es })}
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                      <span>
+                        Inicio: <strong className="text-foreground font-semibold">{reservation.hora_inicio || '--:--'}</strong>
+                        {' • '}
+                        Fin: <strong className="text-foreground font-semibold">{reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, 60)}</strong>
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                      <UserCheck className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      <strong className="text-foreground">{allProfessionalNames}</strong>
+                    </p>
+                  </div>
+                </div>
 
-            {reservation.nota_interna && (
-              <div className="p-3 rounded-xl border bg-muted/30 text-xs space-y-1">
-                <span className="font-semibold text-foreground flex items-center gap-1.5">
-                  <MessageSquare className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" /> Nota Interna de la Cita:
-                </span>
-                <p className="text-muted-foreground pl-5 whitespace-pre-wrap">{reservation.nota_interna}</p>
-              </div>
-            )}
+                {/* 4. SERVICIOS Y PRODUCTOS */}
+                {(() => {
+                  const rawItems = reservation.items || [];
+                  const serviceItems = rawItems.filter(i => (i as any).tipo !== 'producto');
+                  const productItemsFromItems = rawItems.filter(i => (i as any).tipo === 'producto');
+                  const fallbackProducts = (reservation as any).productos || [];
+                  const finalProductItems = productItemsFromItems.length > 0 ? productItemsFromItems : fallbackProducts;
 
-            {/* 7. SELECTOR DE ESTADOS DE AGENDA (Solo círculos de color con texto al pasar el puntero o mantener presionado) */}
-            <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Estado de la Cita:
-                </span>
-                <span className="text-xs font-bold text-foreground">
-                  {statusOptions.find(s => s.status === effectiveReservationEstado)?.label || effectiveReservationEstado}
-                </span>
-                {isConcluded ? (
-                  <span className="text-[11px] text-slate-400 font-medium">
-                    (Concluida - Solo lectura)
-                  </span>
-                ) : reservation.estado === 'Cancelado' ? (
-                  <span className="text-[11px] text-blue-400 font-medium hidden sm:inline">
-                    (Toca un color para reactivar)
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {statusOptions.map(({ status, hex, label }) => {
-                  const hintKey = `status_${status}`;
-                  const isSelected = effectiveReservationEstado === status;
-                  const canSetWaitingRoomNow = status === 'En espera' && canMarkWaitingRoomInPerson(reservation, 90);
-                  const canAdvanceFromWaitingRoom =
-                    (status === 'Asiste' || status === 'En espera') &&
-                    (reservation.estado === 'En espera' || reservation.estado === 'Asiste');
-                  const isBlockedByPendingDeposit =
-                    (status === 'Confirmado' || status === 'En espera' || status === 'Asiste') &&
-                    isAnticipoRequired &&
-                    !isDepositPaid &&
-                    !isReservationExempt &&
-                    !canSetWaitingRoomNow &&
-                    !canAdvanceFromWaitingRoom;
+                  const servicesSubtotal = serviceItems.reduce((sum: number, s: any) => sum + (Number((s as any).precio || (s as any).subtotal) || 0), 0);
+                  const productsSubtotal = finalProductItems.reduce((sum: number, p: any) => sum + ((Number((p as any).precio || (p as any).public_price) || 0) * (Number((p as any).cantidad) || 1)), 0);
+
                   return (
-                    <TooltipProvider key={status} delayDuration={80}>
-                      <Tooltip open={activeHintId === hintKey}>
-                        <TooltipTrigger asChild>
-                          <button
+                    <div className="space-y-3">
+                      <div className="p-3 rounded-xl border border-border/60 bg-card space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="font-semibold text-[11px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wider">
+                            <Scissors className="w-3.5 h-3.5 text-slate-400" /> Servicios ({serviceItems.length > 0 ? serviceItems.length : 1})
+                          </p>
+                          <span className="text-xs font-bold text-foreground font-sans">
+                            ${Number(finalProductItems.length > 0 && servicesSubtotal > 0 ? servicesSubtotal : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                          </span>
+                        </div>
+                        <ul className="space-y-1 text-xs max-h-36 overflow-y-auto pr-1">
+                          {serviceItems.length > 0 ? (() => {
+                            let runningStart = reservation.hora_inicio || '';
+                            return serviceItems.map((i, idx) => {
+                              const prof = professionals?.find(p => p.id === i.barbero_id) || professionals?.find(p => p.id === reservation.barbero_id);
+                              const dur = Number((i as any).duracion) || 30;
+                              const itemStart = (i as any).hora_inicio || runningStart || reservation.hora_inicio || '';
+                              const itemEnd = (i as any).hora_fin || (serviceItems.length === 1 && reservation.hora_fin ? reservation.hora_fin : addMinutesToTimeStr(itemStart, dur));
+                              runningStart = itemEnd || runningStart;
+
+                              return (
+                                <li key={idx} className="flex justify-between items-start py-1 border-b last:border-b-0 border-border/50">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium text-foreground">{i.nombre || (i as any).servicio}</span>
+                                    {itemStart && (
+                                      <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                        <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                        <span>
+                                          {itemStart} - {itemEnd} ({dur} min)
+                                        </span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  {prof && (
+                                    <span className="text-[10px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                                      {prof.publicName || prof.name}
+                                    </span>
+                                  )}
+                                </li>
+                              );
+                            });
+                          })() : (
+                            <li className="flex flex-col gap-0.5 py-1">
+                              <span className="font-medium text-foreground">{(reservation as any).servicio || 'Servicio General'}</span>
+                              {reservation.hora_inicio && (
+                                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                                  <span>{reservation.hora_inicio} - {reservation.hora_fin || addMinutesToTimeStr(reservation.hora_inicio, (reservation as any).duracion || reservation.duration || 30)}</span>
+                                </span>
+                              )}
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+
+                      {finalProductItems.length > 0 && (
+                        <div className="p-3 rounded-xl border border-border/60 bg-card space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <p className="font-semibold text-[11px] flex items-center gap-1.5 text-muted-foreground uppercase tracking-wider">
+                              <ShoppingBag className="w-3.5 h-3.5 text-slate-400" /> Productos ({finalProductItems.length})
+                            </p>
+                            <span className="text-xs font-bold text-foreground font-sans">
+                              ${Number(productsSubtotal).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                            </span>
+                          </div>
+                          <ul className="space-y-1 text-xs max-h-28 overflow-y-auto pr-1">
+                            {finalProductItems.map((p: any, idx: number) => {
+                              const qty = Number(p.cantidad) || 1;
+                              const unitPrice = Number(p.precio || p.public_price || 0);
+                              return (
+                                <li key={idx} className="flex justify-between items-center py-1 border-b last:border-b-0 border-border/50">
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="font-medium text-foreground">
+                                      {qty > 1 ? `${qty}x ` : ''}{p.nombre || p.name || 'Producto'}
+                                    </span>
+                                    <span className="text-[11px] text-muted-foreground">
+                                      Entrega al finalizar cita en sucursal
+                                    </span>
+                                  </div>
+                                  <span className="text-xs font-semibold text-foreground font-sans">
+                                    ${(unitPrice * qty).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ================= COLUMNA DERECHA: ALERTAS, FINANZAS, WHATSAPP, NOTAS Y ESTADO ================= */}
+              <div className="space-y-3">
+
+                {/* Alerta de Escudo Antifraude si tiene inasistencias acumuladas */}
+                {hasUnattendedAlert && !isStaff && (
+                  <div className="p-2.5 rounded-xl border border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200 flex items-start gap-2.5">
+                    <ShieldAlert className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-1 flex-1">
+                      <p className="font-bold uppercase tracking-wide text-[11px]">Escudo Antifraude: Cliente con {unattendedCount} Faltas</p>
+                      <p className="text-red-700 dark:text-red-300 leading-snug text-[11px]">
+                        Según las reglas de reserva, este cliente debe cubrir un <strong>anticipo obligatorio del {penalizacionPorcentaje}%</strong> para apartar su lugar en la agenda.
+                      </p>
+                      {reservation.pago_estado !== 'Pagado' && reservation.pago_estado !== 'deposit_paid' && (
+                        <div className="pt-1">
+                          <Button
+                            size="sm"
                             type="button"
-                            disabled={isConcluded}
-                            onMouseEnter={() => !isConcluded && setActiveHintId(hintKey)}
-                            onMouseLeave={() => setActiveHintId(null)}
-                            onTouchStart={() => {
-                              if (isConcluded) return;
-                              isLongPressRef.current = false;
-                              if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-                              longPressTimerRef.current = setTimeout(() => {
-                                isLongPressRef.current = true;
-                                setActiveHintId(hintKey);
-                              }, 220);
-                            }}
-                            onTouchEnd={() => {
-                              if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
-                              setTimeout(() => setActiveHintId(null), 1400);
-                            }}
-                            onContextMenu={(e) => {
-                              e.preventDefault();
-                              if (!isConcluded) setActiveHintId(hintKey);
-                            }}
-                            onClick={() => {
-                              if (isConcluded) return;
-                              if (isLongPressRef.current) {
-                                isLongPressRef.current = false;
-                                return;
-                              }
-                              if (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste')) return;
-                              if (status === 'Cancelado') {
-                                handleCancelClick();
-                              } else if (reservation.estado === 'Cancelado') {
-                                handleReactivateReservation(status);
-                              } else if (isBlockedByPendingDeposit) {
-                                toast({
-                                  variant: 'destructive',
-                                  title: status === 'En espera' ? 'Sala de Espera No Disponible Aún' : 'Anticipo Pendiente',
-                                  description:
-                                    status === 'En espera'
-                                      ? 'El estado "En espera" sin anticipo solo se habilita para citas del día de hoy cuando faltan 90 minutos (1h 30m) o menos para su inicio y el cliente ya está presente en la sucursal.'
-                                      : 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
-                                });
-                                setShowExemptBox(true);
-                              } else {
-                                onUpdateStatus(reservation.id, status);
-                              }
-                            }}
-                            aria-label={label}
-                            title={isConcluded ? `${label} (Cita concluida - Solo lectura)` : label}
+                            onClick={() => setIsDepositLinkModalOpen(true)}
+                            className="h-7 text-xs font-bold bg-[#202A49] hover:bg-[#18223c] text-white rounded-lg gap-1.5 shadow-xs"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" /> Enviar Enlace SPEI / Mercado Pago
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alerta de Cita Tentativa en Espera de Anticipo */}
+                {isAnticipoRequired &&
+                  reservation.pago_estado !== 'Pagado' &&
+                  !isDepositPaid &&
+                  reservation.estado !== 'En espera' &&
+                  reservation.estado !== 'Asiste' &&
+                  reservation.estado !== 'Completado' && (
+                  <div className={cn(
+                    "p-3 rounded-xl border flex items-start gap-2.5",
+                    isDepositExpired
+                      ? "border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-200"
+                      : "border-blue-500/40 bg-blue-500/10 text-foreground"
+                  )}>
+                    <Clock className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                    <div className="text-xs space-y-1.5 flex-1">
+                      <div className="flex items-center justify-between flex-wrap gap-1">
+                        <p className="font-bold uppercase tracking-wide text-[11px] text-blue-400 font-sans">
+                          Cita Tentativa: Esperando Anticipo (${expectedDepositAmount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN)
+                        </p>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap font-sans",
+                          isDepositExpired
+                            ? "bg-red-500/20 text-red-300 border-red-500/40"
+                            : "bg-blue-500/20 text-blue-200 border-blue-400/40 animate-pulse"
+                        )}>
+                          {isDepositExpired ? `Tolerancia ${toleranceMins}m Vencida` : `${depositMinutesRemaining} min restantes`}
+                        </span>
+                      </div>
+                      <p className="text-muted-foreground text-[11px] leading-snug">
+                        Cuenta con una tolerancia de {toleranceMins} minutos para registrar el anticipo y pasar al 100% del espacio formal.
+                        {canMarkWaitingRoomInPerson(reservation, 90) && (
+                          <span className="block mt-1 text-blue-400 font-semibold">
+                            ✓ Si el cliente ya está presente en sucursal, puedes activar directamente &ldquo;En espera&rdquo;.
+                          </span>
+                        )}
+                      </p>
+
+                      {!isStaff && reservation.estado !== 'Cancelado' && (
+                        <div className="pt-1">
+                          {!showExemptBox ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowExemptBox(true)}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-300 hover:text-white bg-slate-900/60 hover:bg-slate-900 border border-border/70 rounded-lg px-2.5 py-1 transition-colors"
+                            >
+                              <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
+                              Omitir anticipo con código de autorización (4 dígitos)
+                            </button>
+                          ) : (
+                            <div className="mt-1.5 p-2.5 rounded-xl border border-blue-500/40 bg-background/95 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                                  <KeyRound className="h-3.5 w-3.5 text-[#C5A880]" />
+                                  Exentar Anticipo por esta ocasión
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowExemptBox(false);
+                                    setExemptAuthCode('');
+                                    setExemptReason('');
+                                  }}
+                                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <Input
+                                  type="password"
+                                  placeholder="Código (4 dígitos o maestro)"
+                                  value={exemptAuthCode}
+                                  onChange={(e) => setExemptAuthCode(e.target.value)}
+                                  className="h-8 text-xs font-sans"
+                                />
+                                <Input
+                                  type="text"
+                                  placeholder="Motivo (ej. Autorizado por Beatriz)"
+                                  value={exemptReason}
+                                  onChange={(e) => setExemptReason(e.target.value)}
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isValidatingExempt}
+                                onClick={handleExemptDepositWithCode}
+                                className="w-full h-8 text-xs font-bold btn-vatos-alfa"
+                              >
+                                {isValidatingExempt ? (
+                                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                ) : (
+                                  <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-[#C5A880]" />
+                                )}
+                                Confirmar Exención y Pasar al 100%
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* DESGLOSE FINANCIERO / ANTICIPO */}
+                {(depositAmount > 0 || (isAnticipoRequired && expectedDepositAmount > 0) || isDepositPaid || reservation.pago_estado === 'Pagado') && (
+                  <div className="p-3 rounded-xl border border-border/60 bg-muted/20 flex items-center justify-between gap-2 text-xs flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-blue-400 shrink-0" />
+                      <div className="leading-snug">
+                        <span className="font-semibold text-foreground font-sans">Total Cita: ${Number(totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</span>
+                        {reservation.pago_estado === 'Pagado' ? (
+                          <span className="block text-[11px] text-muted-foreground font-sans">
+                            Liquidada al 100%: <strong className="text-blue-400">${Number(depositAmount > 0 ? depositAmount : totalAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>
+                          </span>
+                        ) : depositAmount > 0 ? (
+                          <span className="block text-[11px] text-muted-foreground font-sans">
+                            Anticipo pagado: <strong className="text-blue-400">${Number(depositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>
+                          </span>
+                        ) : expectedDepositAmount > 0 && isAnticipoRequired ? (
+                          <span className="block text-[11px] text-muted-foreground font-sans">
+                            Anticipo requerido: <strong className="text-red-400">${Number(expectedDepositAmount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {reservation.pago_estado !== 'Pagado' && balancePending > 0 && (
+                      <Badge variant="outline" className="border-border bg-muted/50 text-foreground font-bold text-xs font-sans">
+                        Resta: ${Number(balancePending).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* COMUNICACIÓN POR WHATSAPP (Oculto para rol Staff por privacidad del cliente) */}
+                {canViewPhone && (
+                  effectivePhone ? (
+                    <div className="p-3 rounded-xl border border-border/60 bg-card space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                          <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366]" /> Notificaciones WhatsApp
+                        </span>
+                        {reservation.customer?.correo && reservation.notifications?.email_confirmation_sent && (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border-blue-200 text-[10px] py-0 px-2 flex items-center gap-1">
+                            <CheckCircle2 className="w-2.5 h-2.5" /> Correo enviado
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {isAnticipoRequired && (
+                          <div className="flex items-center justify-between bg-muted/40 border border-border/70 p-2 rounded-xl text-xs col-span-1 sm:col-span-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <CreditCard className="w-4 h-4 text-blue-400 shrink-0" />
+                              <div className="min-w-0">
+                                <span className="font-bold text-foreground block truncate">Enlace de Anticipo (SPEI / MP)</span>
+                                <span className="block text-[10px] text-muted-foreground truncate">
+                                  {reservation.mercado_pago_link ? 'Enlace generado listo para enviar' : 'Generar enlace dinámico con CLABE SPEI'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setIsDepositLinkModalOpen(true)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-[#202A49] hover:bg-[#18223c] text-white shadow-xs transition-all shrink-0 ml-2"
+                            >
+                              <Send className="w-3 h-3" /> Enviar Link
+                            </button>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between bg-muted/20 p-2 rounded-xl border border-border/60 text-xs gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366] shrink-0" />
+                            <span className="font-medium text-foreground truncate">Confirmación</span>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="alfa"
+                            disabled={isConcluded || isPastDate}
+                            onClick={() => handleWhatsAppClick('confirmation')}
                             className={cn(
-                              'w-7 h-7 rounded-full flex items-center justify-center transition-all focus:outline-none',
-                              isConcluded ? 'cursor-default opacity-85' : 'hover:scale-110',
-                              isSelected
-                                ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
-                                : (isConcluded ? 'opacity-35' : 'opacity-80 hover:opacity-100'),
-                              (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40',
-                              (isBlockedByPendingDeposit && !isConcluded) && 'cursor-not-allowed opacity-45'
+                              "h-7 px-2 rounded-lg text-[11px] font-semibold shadow-xs shrink-0",
+                              reservation.whatsappConfirmationSent && "opacity-90",
+                              (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
                             )}
                           >
-                            <span
-                              className="rounded-full shrink-0 shadow-xs"
-                              style={{
-                                backgroundColor: hex,
-                                width: '16px',
-                                height: '16px',
-                                minWidth: '16px',
-                                minHeight: '16px',
-                                borderRadius: '9999px',
-                                display: 'inline-block'
-                              }}
-                            />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
-                          <p>{label}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                })}
+                            {reservation.whatsappConfirmationSent ? <><CheckCircle2 className="w-3 h-3" /> Enviada</> : <><Send className="w-3 h-3" /> Enviar</>}
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-muted/20 p-2 rounded-xl border border-border/60 text-xs gap-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <WhatsAppIcon className="w-3.5 h-3.5 text-[#25D366] shrink-0" />
+                            <div className="leading-tight min-w-0">
+                              <span className="font-medium text-foreground block truncate">Recordatorio</span>
+                              {isShortNotice && !reservation.whatsappReminderSent && (
+                                <span className="block text-[9px] text-muted-foreground truncate">
+                                  Poca anticipación
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="alfa"
+                            disabled={isConcluded || isPastDate}
+                            onClick={() => handleWhatsAppClick('reminder')}
+                            className={cn(
+                              "h-7 px-2 rounded-lg text-[11px] font-semibold shadow-xs shrink-0",
+                              reservation.whatsappReminderSent && "opacity-90",
+                              (isConcluded || isPastDate) && "opacity-50 cursor-not-allowed"
+                            )}
+                            title={
+                              reservation.whatsappReminderSent
+                                ? "Reenviar recordatorio por WhatsApp"
+                                : "Enviar recordatorio por WhatsApp"
+                            }
+                          >
+                            {reservation.whatsappReminderSent ? (
+                              <><CheckCircle2 className="w-3 h-3" /> Enviado</>
+                            ) : (
+                              <><Send className="w-3 h-3" /> Enviar</>
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl border border-dashed border-border/70 bg-muted/20 space-y-1.5 text-xs">
+                      <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                        <WhatsAppIcon className="w-3.5 h-3.5 text-muted-foreground opacity-60" /> Notificaciones WhatsApp
+                      </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-muted-foreground min-w-0">
+                          <AlertCircle className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                          <span className="truncate text-[11px]">Cliente sin teléfono registrado.</span>
+                        </div>
+                        {reservation.cliente_id && onClientClick && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onClientClick(reservation.cliente_id!)}
+                            className="h-7 px-2 text-xs text-blue-400 hover:text-blue-300 font-medium shrink-0"
+                          >
+                            Editar Teléfono
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* NOTAS O ESPECIFICACIONES DEL CLIENTE */}
+                {customerBookingNotes && (
+                  <div className="p-2.5 rounded-xl border border-blue-500/30 bg-blue-50/40 dark:bg-blue-950/20 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-bold text-[11px] uppercase tracking-wider">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Notas del cliente</span>
+                    </div>
+                    <p className="text-foreground text-xs leading-snug pl-5 whitespace-pre-wrap font-medium">
+                      {customerBookingNotes}
+                    </p>
+                  </div>
+                )}
+
+                {/* NOTAS INTERNAS O MOTIVO DE CANCELACIÓN */}
+                {reservation.estado === 'Cancelado' && (reservation as any).motivo_cancelacion && (
+                  <div className="p-2.5 rounded-xl border border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20 text-xs space-y-1">
+                    <span className="font-bold text-red-700 dark:text-red-300 flex items-center gap-1.5">
+                      <XCircle className="w-3.5 h-3.5" /> Motivo de Cancelación:
+                    </span>
+                    <p className="text-red-800 dark:text-red-200 pl-5">{(reservation as any).motivo_cancelacion}</p>
+                  </div>
+                )}
+
+                {reservation.nota_interna && (
+                  <div className="p-2.5 rounded-xl border border-border/60 bg-muted/30 text-xs space-y-1">
+                    <span className="font-semibold text-foreground flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5 text-slate-400" /> Nota Interna de la Cita:
+                    </span>
+                    <p className="text-muted-foreground pl-5 whitespace-pre-wrap">{reservation.nota_interna}</p>
+                  </div>
+                )}
+
+                {/* SELECTOR DE ESTADOS DE AGENDA */}
+                <div className="p-3 rounded-xl border border-border/60 bg-card space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        Estado:
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        {statusOptions.find(s => s.status === effectiveReservationEstado)?.label || effectiveReservationEstado}
+                      </span>
+                    </div>
+                    {isConcluded ? (
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        (Concluida - Solo lectura)
+                      </span>
+                    ) : reservation.estado === 'Cancelado' ? (
+                      <span className="text-[10px] text-blue-400 font-medium">
+                        (Toca un color para reactivar)
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    {statusOptions.map(({ status, hex, label }) => {
+                      const hintKey = `status_${status}`;
+                      const isSelected = effectiveReservationEstado === status;
+                      const canSetWaitingRoomNow = status === 'En espera' && canMarkWaitingRoomInPerson(reservation, 90);
+                      const canAdvanceFromWaitingRoom =
+                        (status === 'Asiste' || status === 'En espera') &&
+                        (reservation.estado === 'En espera' || reservation.estado === 'Asiste');
+                      const isBlockedByPendingDeposit =
+                        (status === 'Confirmado' || status === 'En espera' || status === 'Asiste') &&
+                        isAnticipoRequired &&
+                        !isDepositPaid &&
+                        !isReservationExempt &&
+                        !canSetWaitingRoomNow &&
+                        !canAdvanceFromWaitingRoom;
+                      return (
+                        <TooltipProvider key={status} delayDuration={80}>
+                          <Tooltip open={activeHintId === hintKey}>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={isConcluded}
+                                onMouseEnter={() => !isConcluded && setActiveHintId(hintKey)}
+                                onMouseLeave={() => setActiveHintId(null)}
+                                onTouchStart={() => {
+                                  if (isConcluded) return;
+                                  isLongPressRef.current = false;
+                                  if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                                  longPressTimerRef.current = setTimeout(() => {
+                                    isLongPressRef.current = true;
+                                    setActiveHintId(hintKey);
+                                  }, 220);
+                                }}
+                                onTouchEnd={() => {
+                                  if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                                  setTimeout(() => setActiveHintId(null), 1400);
+                                }}
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  if (!isConcluded) setActiveHintId(hintKey);
+                                }}
+                                onClick={() => {
+                                  if (isConcluded) return;
+                                  if (isLongPressRef.current) {
+                                    isLongPressRef.current = false;
+                                    return;
+                                  }
+                                  if (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste')) return;
+                                  if (status === 'Cancelado') {
+                                    handleCancelClick();
+                                  } else if (reservation.estado === 'Cancelado') {
+                                    handleReactivateReservation(status);
+                                  } else if (isBlockedByPendingDeposit) {
+                                    toast({
+                                      variant: 'destructive',
+                                      title: status === 'En espera' ? 'Sala de Espera No Disponible Aún' : 'Anticipo Pendiente',
+                                      description:
+                                        status === 'En espera'
+                                          ? 'El estado "En espera" sin anticipo solo se habilita para citas del día de hoy cuando faltan 90 minutos (1h 30m) o menos para su inicio y el cliente ya está presente en la sucursal.'
+                                          : 'No es posible cambiar el estado de la cita mientras tenga anticipo pendiente. Primero registra el pago del anticipo o utiliza el botón "Omitir anticipo con código de autorización".',
+                                    });
+                                    setShowExemptBox(true);
+                                  } else {
+                                    onUpdateStatus(reservation.id, status);
+                                  }
+                                }}
+                                aria-label={label}
+                                title={isConcluded ? `${label} (Cita concluida - Solo lectura)` : label}
+                                className={cn(
+                                  'w-7 h-7 rounded-full flex items-center justify-center transition-all focus:outline-none',
+                                  isConcluded ? 'cursor-default opacity-85' : 'hover:scale-110',
+                                  isSelected
+                                    ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background scale-110 shadow-sm'
+                                    : (isConcluded ? 'opacity-35' : 'opacity-80 hover:opacity-100'),
+                                  (reservation.pago_estado === 'Pagado' && (status === 'Cancelado' || status === 'Pendiente' || status === 'No asiste') && !isConcluded) && 'cursor-not-allowed opacity-40',
+                                  (isBlockedByPendingDeposit && !isConcluded) && 'cursor-not-allowed opacity-45'
+                                )}
+                              >
+                                <span
+                                  className="rounded-full shrink-0 shadow-xs"
+                                  style={{
+                                    backgroundColor: hex,
+                                    width: '16px',
+                                    height: '16px',
+                                    minWidth: '16px',
+                                    minHeight: '16px',
+                                    borderRadius: '9999px',
+                                    display: 'inline-block'
+                                  }}
+                                />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="border-2 border-blue-500 rounded-xl bg-[#0d1424] text-white text-xs font-semibold px-3 py-1.5 shadow-lg">
+                              <p>{label}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      );
+                    })}
+                  </div>
+                </div>
+
               </div>
             </div>
-
           </div>
 
           {/* FOOTER DE ACCIONES */}
-          <DialogFooter className="p-3.5 sm:p-4 border-t border-border/80 flex flex-wrap items-center justify-between gap-2 flex-shrink-0 bg-muted/20">
+          <DialogFooter className="px-4 py-2.5 sm:px-5 sm:py-3 border-t border-border/80 flex flex-wrap items-center justify-between gap-2 flex-shrink-0 bg-muted/20">
             <div className="shrink-0">
               {reservation.estado !== 'Cancelado' && !isConcluded && (
                 <Button

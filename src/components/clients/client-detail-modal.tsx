@@ -9,14 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, ShieldCheck, Wallet, Plus, type LucideIcon } from 'lucide-react';
+import { Calendar, ShoppingCart, User, Phone, Mail, Cake, MessageSquare, PlusCircle, VenetianMask, UserCheck, UserX, PiggyBank, XCircle, Sparkles, Scissors, Award, Smartphone, Gift, CheckCircle2, Check, QrCode, X, Pencil, ShieldCheck, Wallet, Plus, Trash2, Loader2, ShieldAlert, type LucideIcon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { logAuditAction } from '@/lib/audit-logger';
 import type { Client, Profesional, CanjeBeneficio } from '@/lib/types';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
-import { where, doc, updateDoc, onSnapshot, collection, query } from 'firebase/firestore';
+import { where, doc, updateDoc, deleteDoc, deleteField, onSnapshot, collection, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -224,8 +224,180 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
   const canViewPhone = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('ver_numero_telefono')), [user]);
   const canEditClient = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local' || Boolean(user?.permissions?.includes('editar_clientes')), [user]);
   const canManageExemption = useMemo(() => user?.role === 'Administrador general' || user?.role === 'Administrador local', [user]);
+  const canDeleteRedemption = canManageExemption;
+  const [redemptionToDelete, setRedemptionToDelete] = useState<any | null>(null);
+  const [isDeletingRedemption, setIsDeletingRedemption] = useState(false);
+
+  const handleConfirmDeleteRedemption = async () => {
+    if (!db || !liveClient?.id || !redemptionToDelete || !canDeleteRedemption || isDeletingRedemption) return;
+    setIsDeletingRedemption(true);
+    try {
+      const targetId = String(redemptionToDelete.id || redemptionToDelete.folio || '');
+      const targetFolio = String(redemptionToDelete.folio || targetId);
+      const originalFolio = String(redemptionToDelete.originalFolio || '');
+      const idsToDelete = new Set<string>();
+      if (targetId) idsToDelete.add(targetId);
+      if (originalFolio) idsToDelete.add(originalFolio);
+
+      // Si el registro seleccionado es un folio original o de grupo de Juntos, limpiar su pareja vinculada del mismo cliente
+      redemptions.forEach((r: any) => {
+        const rId = String(r.id || r.folio || '');
+        if (!rId) return;
+        if (
+          (targetFolio && String(r.originalFolio || '') === targetFolio) ||
+          (redemptionToDelete.grupoId && r.grupoId === redemptionToDelete.grupoId)
+        ) {
+          idsToDelete.add(rId);
+        }
+      });
+
+      await Promise.all(
+        Array.from(idsToDelete).map((docId) =>
+          deleteDoc(doc(db, 'canjes_beneficios', docId)).catch(() => {})
+        )
+      );
+
+      // Limpiar automáticamente el candado de límite diario / de periodo en la ficha del cliente
+      const isJuntosRedemption =
+        redemptionToDelete.benefitId === 'juntos_es_mejor' ||
+        redemptionToDelete.isJuntosBenefit === true ||
+        targetFolio.startsWith('VA-JUNTOS');
+      const isBirthdayRedemption =
+        redemptionToDelete.benefitId === 'regalo_cumpleanos' ||
+        targetFolio.includes('CUMPLE');
+      const isVipCourtesyRedemption =
+        redemptionToDelete.benefitId === 'cortesia_vip_mensual' ||
+        targetFolio.includes('VIP');
+
+      const clientResetPayload: Record<string, any> = {};
+      if (isJuntosRedemption) {
+        const remainingJuntosDates = redemptions
+          .filter((r: any) => {
+            const rId = String(r.id || r.folio || '');
+            if (idsToDelete.has(rId)) return false;
+            if (r.estado !== 'canjeado') return false;
+            return (
+              r.benefitId === 'juntos_es_mejor' ||
+              r.isJuntosBenefit === true ||
+              String(r.folio || '').startsWith('VA-JUNTOS')
+            );
+          })
+          .map((r: any) => String(r.fecha_canje_dia || r.fechaStr || ''))
+          .filter(Boolean)
+          .sort();
+        clientResetPayload.ultimo_canje_juntos_fecha =
+          remainingJuntosDates.length > 0 ? remainingJuntosDates[remainingJuntosDates.length - 1] : '';
+      }
+      if (isBirthdayRedemption) {
+        clientResetPayload.ultimo_canje_cumpleanos_anio = deleteField();
+      }
+      if (isVipCourtesyRedemption) {
+        clientResetPayload.ultimo_canje_cortesia_vip_mes = deleteField();
+      }
+
+      if (Object.keys(clientResetPayload).length > 0) {
+        await updateDoc(doc(db, 'clientes', liveClient.id), clientResetPayload).catch(() => {});
+      }
+
+      await logAuditAction({
+        action: 'Eliminar Canje de Beneficio',
+        details: `Se eliminó el registro de canje "${redemptionToDelete.benefitTitle || redemptionToDelete.titulo || 'Beneficio'}" (folio ${targetFolio}) del cliente ${liveClient.nombre} ${liveClient.apellido || ''} y se restableció su límite de escaneo.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Administración',
+        userRole: user?.role || 'Administrador',
+        severity: 'warning',
+        entityId: liveClient.id,
+        localId: user?.local_id || 'todos',
+      });
+
+      toast({
+        title: 'Canje eliminado',
+        description: 'Se eliminó el registro y se liberó el límite de escaneo para este cliente.',
+      });
+      setRedemptionToDelete(null);
+    } catch (err) {
+      console.error('Error eliminando canje de beneficio:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error al eliminar',
+        description: 'No se pudo eliminar el registro de canje. Intenta nuevamente.',
+      });
+    } finally {
+      setIsDeletingRedemption(false);
+    }
+  };
+
+  const [movementToDelete, setMovementToDelete] = useState<any | null>(null);
+  const [isDeletingMovement, setIsDeletingMovement] = useState(false);
+
+  const handleConfirmDeleteMovement = async () => {
+    if (!db || !liveClient?.id || !movementToDelete || !canManageExemption || isDeletingMovement) return;
+    setIsDeletingMovement(true);
+    try {
+      const movId = String(movementToDelete.id);
+      await deleteDoc(doc(db, 'movimientos_monedero', movId));
+      await logAuditAction({
+        action: 'Eliminar Movimiento de Monedero',
+        details: `Se eliminó el movimiento de saldo "${movementToDelete.concepto || movementToDelete.tipo}" (monto $${movementToDelete.monto || 0}) del cliente ${liveClient.nombre} ${liveClient.apellido || ''}.`,
+        userId: user?.uid || 'unknown',
+        userName: user?.displayName || user?.email || 'Administración',
+        userRole: user?.role || 'Administrador',
+        severity: 'warning',
+        localId: (liveClient as any).local_id || 'general',
+      });
+      toast({
+        title: 'Movimiento eliminado',
+        description: 'Se eliminó el registro de saldo correctamente de la ficha.',
+      });
+      setMovementToDelete(null);
+    } catch (err: any) {
+      console.error('Error eliminando movimiento de monedero:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Error al eliminar',
+        description: err?.message || 'No se pudo eliminar el movimiento de saldo.',
+      });
+    } finally {
+      setIsDeletingMovement(false);
+    }
+  };
   const isClientExempt = Boolean(liveClient.exento_anticipo === true && (Number(liveClient.faltas_desde_exencion) || 0) < 2);
   const [isTogglingExemption, setIsTogglingExemption] = useState(false);
+
+  const visibleRedemptions = useMemo(() => {
+    if (!redemptions || redemptions.length === 0) return [];
+    const activeEntries = redemptions.filter((r: any) => {
+      const st = String(r.estado || '').trim();
+      return st !== 'pendiente_escaneo' && st !== 'en_proceso' && st !== 'esperando_acompanante';
+    });
+    const folioSet = new Set(activeEntries.map((r: any) => String(r.folio || r.id || '')).filter(Boolean));
+    const deduped = activeEntries.filter((r: any) => {
+      const f = String(r.folio || r.id || '');
+      const orig = String(r.originalFolio || '');
+      if (f.startsWith('VA-JUNTOS-GRP-') && orig && folioSet.has(orig)) {
+        return false;
+      }
+      return true;
+    });
+    const toMs = (raw: any) => {
+      if (!raw) return 0;
+      if (typeof raw?.toDate === 'function') return raw.toDate().getTime();
+      if (typeof raw?.seconds === 'number') return raw.seconds * 1000;
+      if (typeof raw?._seconds === 'number') return raw._seconds * 1000;
+      const d = new Date(raw);
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+    return [...deduped].sort((a: any, b: any) => {
+      const ta = toMs(a.fechaCanje || a.canjeadoEn || a.fecha_aplicacion || a.fechaCreacion || a.creadoEn);
+      const tb = toMs(b.fechaCanje || b.canjeadoEn || b.fecha_aplicacion || b.fechaCreacion || b.creadoEn);
+      return tb - ta;
+    });
+  }, [redemptions]);
+
+  const redeemedCount = useMemo(
+    () => visibleRedemptions.filter((r: any) => !r.estado || r.estado === 'canjeado').length,
+    [visibleRedemptions]
+  );
 
   const handleToggleExemption = async (nextExempt: boolean) => {
     if (!db || !liveClient?.id || !canManageExemption || isTogglingExemption) return;
@@ -1206,6 +1378,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                 <TableHead className="py-1 px-3 text-xs font-semibold">Concepto</TableHead>
                                 <TableHead className="py-1 px-3 text-xs font-semibold text-right">Movimiento</TableHead>
                                 <TableHead className="py-1 px-3 text-xs font-semibold text-right">Saldo Final</TableHead>
+                                {canManageExemption && (
+                                  <TableHead className="py-1 px-2 text-xs font-semibold text-right w-10" />
+                                )}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1230,6 +1405,19 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                     <TableCell className="py-1.5 px-3 text-xs text-right font-medium text-muted-foreground font-sans">
                                       ${Number(mov.saldo_nuevo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </TableCell>
+                                    {canManageExemption && (
+                                      <TableCell className="py-1.5 px-2 text-right">
+                                        <button
+                                          type="button"
+                                          onClick={() => setMovementToDelete(mov)}
+                                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                                          title="Eliminar movimiento de saldo"
+                                          aria-label="Eliminar movimiento de saldo"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </TableCell>
+                                    )}
                                   </TableRow>
                                 );
                               })}
@@ -1258,9 +1446,9 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                             Registro de folios y promociones escaneadas en recepción para este cliente.
                           </CardDescription>
                         </div>
-                        {redemptions && redemptions.length > 0 && (
+                        {redeemedCount > 0 && (
                           <Badge variant="outline" className="text-xs">
-                            {redemptions.length} canjes
+                            {redeemedCount} {redeemedCount === 1 ? 'canje' : 'canjes'}
                           </Badge>
                         )}
                       </div>
@@ -1268,7 +1456,7 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                     <CardContent>
                       {redemptionsLoading ? (
                         <Skeleton className="h-28 w-full" />
-                      ) : redemptions && redemptions.length > 0 ? (
+                      ) : visibleRedemptions.length > 0 ? (
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
@@ -1278,30 +1466,61 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
                                 <TableHead className="py-1 px-3 text-xs font-semibold">Folio QR</TableHead>
                                 <TableHead className="py-1 px-3 text-xs font-semibold">Sucursal</TableHead>
                                 <TableHead className="py-1 px-3 text-xs font-semibold text-right">Estado</TableHead>
+                                {canDeleteRedemption && (
+                                  <TableHead className="py-1 px-2 text-xs font-semibold text-right w-10" />
+                                )}
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {redemptions.map((redemption: any) => (
-                                <TableRow key={redemption.id || redemption.folio} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
-                                  <TableCell className="py-1.5 px-3 text-xs font-medium">
-                                    {formatDate(redemption.fechaCanje || redemption.canjeadoEn || redemption.fechaCreacion, true)}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 px-3 font-semibold text-xs text-primary">
-                                    {redemption.benefitTitle || redemption.titulo || 'Beneficio Alfa'}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 px-3 font-mono text-xs text-muted-foreground">
-                                    {redemption.folio}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 px-3 text-xs">
-                                    {redemption.sucursal || 'Sombrerete'}
-                                  </TableCell>
-                                  <TableCell className="py-1.5 px-3 text-right">
-                                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">
-                                      Canjeado
-                                    </Badge>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {visibleRedemptions.map((redemption: any) => {
+                                const st = String(redemption.estado || 'canjeado').trim();
+                                const isPendingGroup = st === 'pendiente_cobro_grupo';
+                                const isCancelled = st !== 'canjeado' && !isPendingGroup;
+                                return (
+                                  <TableRow key={redemption.id || redemption.folio} className="h-9 hover:bg-muted/30 transition-colors border-b border-border/40">
+                                    <TableCell className="py-1.5 px-3 text-xs font-medium">
+                                      {formatDate(redemption.fechaCanje || redemption.canjeadoEn || redemption.fecha_aplicacion || redemption.fechaCreacion || redemption.creadoEn, true)}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 font-semibold text-xs text-primary">
+                                      {redemption.benefitTitle || redemption.titulo || 'Beneficio Alfa'}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 font-mono text-xs text-muted-foreground">
+                                      {redemption.folio}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 text-xs">
+                                      {redemption.sucursal || 'Sombrerete'}
+                                    </TableCell>
+                                    <TableCell className="py-1.5 px-3 text-right">
+                                      {isPendingGroup ? (
+                                        <Badge className="bg-muted/40 text-muted-foreground border-border/60 text-[10px]">
+                                          Pendiente grupo
+                                        </Badge>
+                                      ) : isCancelled ? (
+                                        <Badge className="bg-muted/40 text-muted-foreground border-border/60 text-[10px]">
+                                          Cancelado
+                                        </Badge>
+                                      ) : (
+                                        <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-[10px]">
+                                          Canjeado
+                                        </Badge>
+                                      )}
+                                    </TableCell>
+                                    {canDeleteRedemption && (
+                                      <TableCell className="py-1.5 px-2 text-right">
+                                        <button
+                                          type="button"
+                                          onClick={() => setRedemptionToDelete(redemption)}
+                                          className="text-slate-400 hover:text-red-400 transition-colors p-1"
+                                          title="Eliminar escaneo y liberar límite"
+                                          aria-label="Eliminar escaneo de beneficio"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </TableCell>
+                                    )}
+                                  </TableRow>
+                                );
+                              })}
                             </TableBody>
                           </Table>
                         </div>
@@ -1380,6 +1599,144 @@ export function ClientDetailModal({ client, isOpen, onOpenChange, onNewReservati
       onOpenChange={setIsWalletTopupOpen}
       client={liveClient}
     />
+
+    {/* MODAL CONFIRMAR ELIMINACIÓN DE CANJE DE BENEFICIO */}
+    <Dialog open={Boolean(redemptionToDelete)} onOpenChange={(open) => { if (!open && !isDeletingRedemption) setRedemptionToDelete(null); }}>
+      <DialogContent
+        hideCloseButton={true}
+        className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
+      >
+        <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between relative overflow-hidden">
+          <div className="header-light-beam" aria-hidden="true" />
+          <div className="relative z-10 flex items-center gap-2.5">
+            <ShieldAlert className="h-4 w-4 text-slate-300 shrink-0" />
+            <div>
+              <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide">
+                Eliminar Escaneo de Beneficio
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-300">
+                Libera el límite de escaneo por periodo para este cliente.
+              </DialogDescription>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => !isDeletingRedemption && setRedemptionToDelete(null)}
+            className="relative z-10 h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+            aria-label="Cerrar modal"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-3 text-xs sm:text-sm text-muted-foreground">
+          <p>
+            ¿Seguro que deseas eliminar el registro de{' '}
+            <strong className="text-foreground">
+              {redemptionToDelete?.benefitTitle || redemptionToDelete?.titulo || 'Beneficio Alfa'}
+            </strong>{' '}
+            con folio <span className="font-mono text-foreground">{redemptionToDelete?.folio}</span>?
+          </p>
+          <p className="text-xs text-muted-foreground/90">
+            Al eliminarlo, se borrará el folio (y su registro de grupo vinculado si aplica) y se restablecerá automáticamente el límite de escaneo diario/de periodo en la ficha del cliente.
+          </p>
+        </div>
+
+        <div className="p-3 sm:p-4 border-t border-border/60 bg-muted/10 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isDeletingRedemption}
+            onClick={() => setRedemptionToDelete(null)}
+            className="rounded-xl h-9 text-xs"
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="alfa"
+            size="sm"
+            disabled={isDeletingRedemption}
+            onClick={handleConfirmDeleteRedemption}
+            className="rounded-xl h-9 px-4 text-xs font-bold"
+          >
+            {isDeletingRedemption && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Eliminar y Liberar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* MODAL CONFIRMAR ELIMINACIÓN DE MOVIMIENTO DE SALDO */}
+    <Dialog open={Boolean(movementToDelete)} onOpenChange={(open) => { if (!open && !isDeletingMovement) setMovementToDelete(null); }}>
+      <DialogContent
+        hideCloseButton={true}
+        className="sm:max-w-md p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-background"
+      >
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-4 text-white">
+          <div className="header-light-beam" />
+          <div className="relative z-10 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Trash2 className="h-4 w-4 text-slate-300" />
+              <div>
+                <DialogTitle className="text-sm font-bold text-white tracking-wide">
+                  Eliminar Registro de Movimiento
+                </DialogTitle>
+                <DialogDescription className="text-xs text-slate-300">
+                  Ficha de {liveClient.nombre} {liveClient.apellido || ''}
+                </DialogDescription>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => !isDeletingMovement && setMovementToDelete(null)}
+              className="relative z-10 h-8 w-8 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+              aria-label="Cerrar modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 sm:p-5 space-y-3 text-xs sm:text-sm text-muted-foreground">
+          <p>
+            ¿Seguro que deseas eliminar el registro de{' '}
+            <strong className="text-foreground">
+              {movementToDelete?.concepto || movementToDelete?.tipo || 'Movimiento de Saldo'}
+            </strong>{' '}
+            por un monto de <strong className="text-foreground">${Number(movementToDelete?.monto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN</strong>?
+          </p>
+          <p className="text-xs text-muted-foreground/90">
+            Esta acción eliminará de forma permanente el registro del historial de movimientos de Saldo Pase Alfa.
+          </p>
+        </div>
+
+        <div className="p-3 sm:p-4 border-t border-border/60 bg-muted/10 flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isDeletingMovement}
+            onClick={() => setMovementToDelete(null)}
+            className="rounded-xl h-9 text-xs"
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            variant="alfa"
+            size="sm"
+            disabled={isDeletingMovement}
+            onClick={handleConfirmDeleteMovement}
+            className="rounded-xl h-9 px-4 text-xs font-bold"
+          >
+            {isDeletingMovement && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+            Sí, eliminar registro
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

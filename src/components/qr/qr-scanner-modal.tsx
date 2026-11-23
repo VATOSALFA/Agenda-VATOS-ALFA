@@ -49,6 +49,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -192,6 +193,31 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     members: Array<{ nombre: string; coins: number }>;
   } | null>(null);
   const [isScanningCompanion, setIsScanningCompanion] = useState<boolean>(false);
+  const [moreCompanionsChoice, setMoreCompanionsChoice] = useState<'unknown' | 'yes' | 'no'>('unknown');
+  const [codeEntryMode, setCodeEntryMode] = useState<'beneficio' | 'referido' | 'libre'>('beneficio');
+  const [benefitPrefix, setBenefitPrefix] = useState<'VA-JUNTOS' | 'VA-CUMPLE' | 'VA-CORTE' | 'VA-REF' | 'VA-BNF' | 'VA-PASE'>('VA-JUNTOS');
+  const [benefitPhonePart, setBenefitPhonePart] = useState<string>('');
+  const [benefitSuffixPart, setBenefitSuffixPart] = useState<string>('');
+  const [refNamePart, setRefNamePart] = useState<string>('');
+  const [refSuffixPart, setRefSuffixPart] = useState<string>('');
+  const benefitSuffixInputRef = useRef<HTMLInputElement>(null);
+  const refSuffixInputRef = useRef<HTMLInputElement>(null);
+  const [waitingJuntosClients, setWaitingJuntosClients] = useState<
+    Array<{
+      docId: string;
+      clienteId: string;
+      clienteNombre: string;
+      numeroCliente?: string | number;
+      telefono?: string;
+      fotoUrl?: string;
+      originalFolio?: string;
+      pagado?: boolean;
+      montoPagadoHoy?: number;
+      fechaStr?: string;
+      companions?: Array<{ id: string; nombre: string; telefono?: string; folio?: string }>;
+    }>
+  >([]);
+  const [isAssociatingWaiting, setIsAssociatingWaiting] = useState<string | null>(null);
   const [juntosConfig, setJuntosConfig] = useState<JuntosEsMejorConfig>(DEFAULT_JUNTOS_CONFIG);
   const [decimaConfig, setDecimaConfig] = useState<DecimaCorteConfig>(DEFAULT_DECIMA_CONFIG);
   const [referralConfig, setReferralConfig] = useState<ReferralProgramConfig>(DEFAULT_REFERRAL_CONFIG);
@@ -288,6 +314,35 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   useEffect(() => {
     juntosConfigRef.current = juntosConfig;
   }, [juntosConfig]);
+
+  // Suscripción en tiempo real a clientes de "Juntos es Mejor" en espera de su acompañante hoy
+  useEffect(() => {
+    if (!isOpen || !db) {
+      setWaitingJuntosClients([]);
+      return;
+    }
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const qWait = query(
+      collection(db, 'canjes_beneficios'),
+      where('estado', '==', 'esperando_acompanante')
+    );
+    const unsub = onSnapshot(
+      qWait,
+      (snap) => {
+        const list = snap.docs
+          .map((d) => ({ docId: d.id, ...(d.data() as any) }))
+          .filter((item) => !item.fechaStr || item.fechaStr === todayStr)
+          .sort((a, b) => {
+            const ta = a.creadoEn?.seconds || a.creadoEn?._seconds || 0;
+            const tb = b.creadoEn?.seconds || b.creadoEn?._seconds || 0;
+            return ta - tb;
+          });
+        setWaitingJuntosClients(list);
+      },
+      () => {}
+    );
+    return () => unsub();
+  }, [isOpen]);
 
   const getJuntosUnitMinPrice = useCallback(
     (cfg: JuntosEsMejorConfig = juntosConfigRef.current) =>
@@ -549,13 +604,38 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             }
           }
         } catch {
-          // No es JSON, puede ser formato compacto (VA:P: / VA:T: / VA:B:) o texto plano
+          // No es JSON, puede ser formato compacto (VA:P: / VA:T: / VA:B: / VA:F:) o texto plano / folio manual
           const clean = decodedText.trim();
-          if (clean.startsWith('VA:P:')) {
+          const cleanUpper = clean.toUpperCase();
+          if (cleanUpper.startsWith('VA:P:')) {
             isOfficialAppQr = true;
             clientIdToSearch = clean.slice(5).trim();
-          } else if (clean.startsWith('VA:T:')) {
+          } else if (cleanUpper.startsWith('VA:T:')) {
             phoneToSearch = clean.slice(5).trim();
+          } else if (cleanUpper.startsWith('VA:F:')) {
+            // QR ultra-simplificado por folio registrado en Firestore (`VA:F:VA-JUNTOS-XXXX-XXXX`)
+            const fCode = cleanUpper.slice(5).trim();
+            const isRefFolio = fCode.startsWith('VA-REF-');
+            const isJuntosFolio = fCode.startsWith('VA-JUNTOS-');
+            const schedJuntos = isJuntosFolio ? validateJuntosSchedule(new Date(), undefined, activeJuntosCfg) : { isValid: true, reason: undefined };
+
+            detectedBenefit = {
+              folio: fCode,
+              benefitTitle: fCode.includes('CUMPLE') ? 'Regalo de Cumpleaños' : fCode.includes('CORTE') ? '10.° Corte Gratis' : isRefFolio ? 'Invita a un Amigo' : isJuntosFolio ? 'JUNTOS ES MEJOR' : 'Beneficio Pase Alfa',
+              benefitId: fCode.includes('CUMPLE') ? 'regalo_cumpleanos' : fCode.includes('CORTE') ? 'decimo_corte' : isRefFolio ? 'invita_amigo' : isJuntosFolio ? 'juntos_es_mejor' : 'beneficio_alfa',
+              isReferralBenefit: isRefFolio,
+              isJuntosBenefit: isJuntosFolio,
+              discount: isRefFolio ? REFERRAL_DISCOUNT_PERCENT : isJuntosFolio ? 0 : 100,
+              rewardCoins: isRefFolio
+                ? REFERRAL_HOST_REWARD_COINS
+                : isJuntosFolio
+                ? (Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON)
+                : undefined,
+              minPurchase: isRefFolio ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
+              isScheduleValid: schedJuntos.isValid,
+              scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
+              minorsCount: 0,
+            };
           } else if (clean.startsWith('VA:B:')) {
             isOfficialAppQr = true;
             const parts = clean.split(':');
@@ -604,19 +684,31 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               minorsCount: 0,
             };
             }
-          } else if (clean.startsWith('VA-BNF-') || clean.startsWith('VA-CUMPLE-') || clean.startsWith('VA-REF-') || clean.startsWith('VA-CORTE-') || clean.startsWith('VA-JUNTOS-')) {
-            const isRefFolio = clean.startsWith('VA-REF-');
-            const isJuntosFolio = clean.startsWith('VA-JUNTOS-');
+          } else if (
+            cleanUpper.startsWith('VA-BNF-') ||
+            cleanUpper.startsWith('VA-CUMPLE-') ||
+            cleanUpper.startsWith('VA-REF-') ||
+            cleanUpper.startsWith('VA-CORTE-') ||
+            cleanUpper.startsWith('VA-JUNTOS-') ||
+            cleanUpper.startsWith('VA-PASE-')
+          ) {
+            const isRefFolio = cleanUpper.startsWith('VA-REF-');
+            const isJuntosFolio = cleanUpper.startsWith('VA-JUNTOS-');
+            const isPaseFolio = cleanUpper.startsWith('VA-PASE-');
             const schedJuntos = isJuntosFolio ? validateJuntosSchedule(new Date(), undefined, activeJuntosCfg) : { isValid: true, reason: undefined };
 
             detectedBenefit = {
-              folio: clean,
-              benefitTitle: clean.includes('CUMPLE') ? 'Regalo de Cumpleaños' : clean.includes('CORTE') ? '10.° Corte Gratis' : isRefFolio ? 'Invita a un Amigo' : isJuntosFolio ? 'JUNTOS ES MEJOR' : 'Beneficio Pase Alfa',
-              benefitId: clean.includes('CUMPLE') ? 'regalo_cumpleanos' : clean.includes('CORTE') ? 'decimo_corte' : isRefFolio ? 'invita_amigo' : isJuntosFolio ? 'juntos_es_mejor' : 'beneficio_alfa',
+              folio: cleanUpper,
+              benefitTitle: isPaseFolio ? 'Pase Alfa • Identificación' : cleanUpper.includes('CUMPLE') ? 'Regalo de Cumpleaños' : cleanUpper.includes('CORTE') ? '10.° Corte Gratis' : isRefFolio ? 'Invita a un Amigo' : isJuntosFolio ? 'JUNTOS ES MEJOR' : 'Beneficio Pase Alfa',
+              benefitId: isPaseFolio ? 'pase_alfa' : cleanUpper.includes('CUMPLE') ? 'regalo_cumpleanos' : cleanUpper.includes('CORTE') ? 'decimo_corte' : isRefFolio ? 'invita_amigo' : isJuntosFolio ? 'juntos_es_mejor' : 'beneficio_alfa',
               isReferralBenefit: isRefFolio,
               isJuntosBenefit: isJuntosFolio,
               discount: isRefFolio ? REFERRAL_DISCOUNT_PERCENT : isJuntosFolio ? 0 : 100,
-              rewardCoins: isRefFolio ? REFERRAL_HOST_REWARD_COINS : isJuntosFolio ? JUNTOS_REWARD_COINS_PER_PERSON : undefined,
+              rewardCoins: isRefFolio
+                ? REFERRAL_HOST_REWARD_COINS
+                : isJuntosFolio
+                ? (Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON)
+                : undefined,
               minPurchase: isRefFolio ? calculateReferralMinNetPurchase(currentHaircutPrice) : undefined,
               isScheduleValid: schedJuntos.isValid,
               scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
@@ -725,6 +817,62 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           throw new Error('Base de datos no disponible');
         }
 
+        // Verificar / hidratar folio de beneficio desde `canjes_beneficios`
+        // Soporta tanto el QR simplificado (`VA:F:<folio>`) como la captura manual del código (`VA-JUNTOS-...`, `VA-CUMPLE-...`, `VA-CORTE-...`, etc.)
+        if (detectedBenefit?.folio) {
+          try {
+            const normalizedFolio = String(detectedBenefit.folio).trim().toUpperCase();
+            detectedBenefit.folio = normalizedFolio;
+            const canjeSnap = await getDoc(doc(db, 'canjes_beneficios', normalizedFolio));
+            if (canjeSnap.exists()) {
+              const cData = canjeSnap.data();
+              if (cData.estado === 'canjeado') {
+                playBeep(false);
+                let fechaStr = 'una fecha previa';
+                try {
+                  const dObj = cData.fechaCanje?.toDate ? cData.fechaCanje.toDate() : (cData.canjeadoEn?.toDate ? cData.canjeadoEn.toDate() : null);
+                  if (dObj) fechaStr = format(dObj, 'PPP p');
+                } catch (_) {}
+                toast({
+                  variant: 'destructive',
+                  title: '⚠️ Beneficio Ya Canjeado',
+                  description: `El folio "${normalizedFolio}" ya fue utilizado el ${fechaStr} en ${cData.sucursal || 'Sombrerete'}.`,
+                });
+                return;
+              }
+              if (cData.clienteId && cData.signature) {
+                isOfficialAppQr = true;
+                clientIdToSearch = clientIdToSearch || String(cData.clienteId);
+                if (normalizedFolio.startsWith('VA-PASE-') || cData.benefitId === 'pase_alfa' || cData.benefitId === 'saldo_pase_alfa') {
+                  detectedBenefit = null;
+                } else {
+                  detectedBenefit.clientId = detectedBenefit.clientId || String(cData.clienteId);
+                  detectedBenefit.signature = detectedBenefit.signature || String(cData.signature);
+                  detectedBenefit.year = Number(cData.year || detectedBenefit.year || new Date().getFullYear());
+                  if (cData.benefitId) {
+                    detectedBenefit.benefitId = String(cData.benefitId);
+                    detectedBenefit.rawBenefitId = String(cData.benefitId);
+                  }
+                  if (cData.benefitTitle) {
+                    detectedBenefit.benefitTitle = String(cData.benefitTitle);
+                  }
+                  if (cData.referralCode) {
+                    detectedBenefit.referralCode = String(cData.referralCode);
+                  }
+                  if (detectedBenefit.isReferralBenefit && detectedBenefit.isBlocked && (cData.referralCode || cData.clienteId)) {
+                    detectedBenefit.isBlocked = false;
+                    detectedBenefit.blockReason = undefined;
+                  }
+                }
+              }
+            } else if (normalizedFolio.startsWith('VA-PASE-')) {
+              detectedBenefit = null;
+            }
+          } catch (e) {
+            console.warn('Error verificando/hidratando canjes_beneficios:', e);
+          }
+        }
+
         // MODO ESCANEO DE ACOMPAÑANTE CON APP ("JUNTOS ES MEJOR")
         if (isScanningCompanion && scannedBenefit?.isJuntosBenefit) {
           if (!isOfficialAppQr) {
@@ -814,6 +962,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           const compSales = await fetchClientTodayJuntosSales(compClient.id, unitMin);
           const compFullName = `${compClient.nombre} ${compClient.apellido || ''}`.trim();
           const rewardCoinsCfg = Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+          const compDayCompact = format(new Date(), 'yyyyMMdd');
 
           setJuntosCompanions(prev => [
             ...prev,
@@ -821,12 +970,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               id: compClient.id,
               nombre: compFullName,
               telefono: compClient.telefono || '',
-              folio: detectedBenefit?.folio || `VA-JUNTOS-${compClient.id.slice(0, 5).toUpperCase()}`,
+              folio: detectedBenefit?.folio || `VA-JUNTOS-${compDayCompact}-${compClient.id.slice(0, 5).toUpperCase()}`,
               todaySales: compSales,
               todayReservation: compUnpaidRes,
               clientObj: compClient,
             },
           ]);
+          setMoreCompanionsChoice('unknown');
           setIsScanningCompanion(false);
           await stopCamera();
           playBeep(true);
@@ -843,35 +993,10 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
         setJuntosOption(null);
         setJuntosMinorsCount(1);
         setJuntosCompanions([]);
+        setMoreCompanionsChoice('unknown');
         setTitularTodaySales(null);
         setJuntosCompletedSummary(null);
         setIsScanningCompanion(false);
-
-        // Verificar si el folio del beneficio ya fue canjeado previamente
-        if (detectedBenefit?.folio) {
-          try {
-            const canjeSnap = await getDoc(doc(db, 'canjes_beneficios', detectedBenefit.folio));
-            if (canjeSnap.exists()) {
-              const cData = canjeSnap.data();
-              if (cData.estado === 'canjeado') {
-                playBeep(false);
-                let fechaStr = 'una fecha previa';
-                try {
-                  const dObj = cData.fechaCanje?.toDate ? cData.fechaCanje.toDate() : (cData.canjeadoEn?.toDate ? cData.canjeadoEn.toDate() : null);
-                  if (dObj) fechaStr = format(dObj, 'PPP p');
-                } catch (_) {}
-                toast({
-                  variant: 'destructive',
-                  title: '⚠️ Beneficio Ya Canjeado',
-                  description: `El folio "${detectedBenefit.folio}" ya fue utilizado el ${fechaStr} en ${cData.sucursal || 'Sombrerete'}.`,
-                });
-                return;
-              }
-            }
-          } catch (e) {
-            console.warn('Error verificando canjes_beneficios:', e);
-          }
-        }
 
         // 1. Buscar si es un Cliente y sus citas de hoy (una sola consulta consolidada)
         const {
@@ -1562,10 +1687,15 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
       setJuntosOption(null);
       setJuntosMinorsCount(1);
       setJuntosCompanions([]);
+      setMoreCompanionsChoice('unknown');
       setTitularTodaySales(null);
       setJuntosCompletedSummary(null);
       setIsScanningCompanion(false);
       setManualInput('');
+      setBenefitPhonePart('');
+      setBenefitSuffixPart('');
+      setRefNamePart('');
+      setRefSuffixPart('');
       setActiveTab('camera');
       const timer = setTimeout(() => {
         startCamera();
@@ -2075,6 +2205,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     setIsRedeemingBenefit(true);
     try {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayCompact = format(new Date(), 'yyyyMMdd');
       const nowIso = new Date().toISOString();
       const juntosCoins = Number(juntosConfig.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
       const safeMinors = mode === 'minors' ? Math.max(1, juntosMinorsCount) : 0;
@@ -2088,7 +2219,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 id: scannedClient.id,
                 nombre: titularFullName,
                 telefono: scannedClient.telefono || '',
-                folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+                folio: scannedBenefit?.folio || `VA-JUNTOS-${todayCompact}-${scannedClient.id.slice(0, 5).toUpperCase()}`,
                 coins: juntosCoins * (1 + safeMinors),
                 sales: titularTodaySales?.qualifyingSales || [],
                 primarySaleId: titularTodaySales?.primarySaleId || '',
@@ -2099,7 +2230,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 id: scannedClient.id,
                 nombre: titularFullName,
                 telefono: scannedClient.telefono || '',
-                folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+                folio: scannedBenefit?.folio || `VA-JUNTOS-${todayCompact}-${scannedClient.id.slice(0, 5).toUpperCase()}`,
                 coins: juntosCoins,
                 sales: titularTodaySales?.qualifyingSales || [],
                 primarySaleId: titularTodaySales?.primarySaleId || '',
@@ -2108,7 +2239,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 id: c.id,
                 nombre: c.nombre,
                 telefono: c.telefono || '',
-                folio: c.folio || `VA-JUNTOS-${c.id.slice(0, 5).toUpperCase()}`,
+                folio: c.folio || `VA-JUNTOS-${todayCompact}-${c.id.slice(0, 5).toUpperCase()}`,
                 coins: juntosCoins,
                 sales: c.todaySales?.qualifyingSales || [],
                 primarySaleId: c.todaySales?.primarySaleId || '',
@@ -2221,6 +2352,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           });
 
           const grpDocId = `VA-JUNTOS-GRP-${todayStr}-${p.id}`;
+          const canonicalFolio = p.folio || grpDocId;
           const baseCanjePayload = {
             benefitId: 'juntos_es_mejor',
             benefitTitle: 'JUNTOS ES MEJOR',
@@ -2248,10 +2380,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             sucursal: 'Sombrerete',
           };
 
-          tx.set(grpRefs[i], { folio: grpDocId, originalFolio: p.folio, ...baseCanjePayload }, { merge: true });
-          if (p.folio && p.folio !== grpDocId) {
-            tx.set(doc(db, 'canjes_beneficios', p.folio), { folio: p.folio, ...baseCanjePayload }, { merge: true });
+          // Registrar UN SOLO documento canónico en canjes_beneficios por participante (su folio QR),
+          // eliminando cualquier documento temporal VA-JUNTOS-GRP-* o VA-JUNTOS-WAIT-* previo para evitar duplicados.
+          tx.set(doc(db, 'canjes_beneficios', canonicalFolio), { folio: canonicalFolio, ...baseCanjePayload }, { merge: true });
+          if (grpSnaps[i].exists() && grpDocId !== canonicalFolio) {
+            tx.delete(grpRefs[i]);
           }
+          tx.delete(doc(db, 'canjes_beneficios', `VA-JUNTOS-WAIT-${todayStr}-${p.id}`));
 
           const unlinkedCompanionsAwarded =
             i === primaryPayerIdx && mode === 'companions'
@@ -2260,7 +2395,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                   .map(comp => ({
                     id: comp.id,
                     coins: comp.coins,
-                    folio: `VA-JUNTOS-GRP-${todayStr}-${comp.id}`,
+                    folio: comp.folio || `VA-JUNTOS-GRP-${todayStr}-${comp.id}`,
                   }))
               : [];
 
@@ -2270,12 +2405,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             const isPrimary = s.saleId === p.primarySaleId;
             tx.update(allSaleRefsMap.get(s.saleId), {
               beneficio_aplicado: 'JUNTOS ES MEJOR',
-              beneficio_folio: grpDocId,
+              beneficio_folio: canonicalFolio,
               lealtad_aplicada: {
                 ...prevLoyalty,
                 is_juntos_applied: true,
                 juntos_mode: resolvedJuntosMode,
-                beneficio_folio: grpDocId,
+                beneficio_folio: canonicalFolio,
                 prev_ultimo_canje_juntos_fecha: String(cData.ultimo_canje_juntos_fecha || ''),
                 juntos_titular_coins_awarded: isPrimary ? p.coins : 0,
                 ...(isPrimary && unlinkedCompanionsAwarded.length > 0
@@ -2370,6 +2505,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     setIsRedeemingBenefit(true);
     try {
       const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayCompact = format(new Date(), 'yyyyMMdd');
       const titularFullName = `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim();
       const groupId = `VA-JUNTOS-GRP-${todayStr}-${scannedClient.id}`;
       const separateTickets = action !== 'single_ticket';
@@ -2379,7 +2515,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           id: scannedClient.id,
           nombre: titularFullName,
           telefono: scannedClient.telefono || '',
-          folio: scannedBenefit?.folio || `VA-JUNTOS-${scannedClient.id.slice(0, 5).toUpperCase()}`,
+          folio: scannedBenefit?.folio || `VA-JUNTOS-${todayCompact}-${scannedClient.id.slice(0, 5).toUpperCase()}`,
           hasPaidQualifying: Boolean(titularTodaySales?.meetsIndividualMin),
           primarySaleId: titularTodaySales?.primarySaleId || null,
           todayReservation,
@@ -2389,7 +2525,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
           id: c.id,
           nombre: c.nombre,
           telefono: c.telefono || '',
-          folio: c.folio || `VA-JUNTOS-${c.id.slice(0, 5).toUpperCase()}`,
+          folio: c.folio || `VA-JUNTOS-${todayCompact}-${c.id.slice(0, 5).toUpperCase()}`,
           hasPaidQualifying: Boolean(c.todaySales?.meetsIndividualMin),
           primarySaleId: c.todaySales?.primarySaleId || null,
           todayReservation: c.todayReservation || null,
@@ -2443,7 +2579,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             title: '🤝 Grupo Vinculado para Hoy',
             description: `${allGroupMembers.map(m => m.nombre).join(' + ')} quedaron vinculados. Cuando completen sus pagos en Caja recibirán +${juntosCoins} Alfa Coins c/u.`,
           });
-          onOpenChange(false);
+          await Promise.all(
+        allGroupMembers.map(member =>
+          deleteDoc(doc(db, 'canjes_beneficios', `VA-JUNTOS-WAIT-${todayStr}-${member.id}`)).catch(() => {})
+        )
+      );
+
+      onOpenChange(false);
           return;
         }
       }
@@ -2466,6 +2608,12 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
               : `Cobra a ${targetMemberToCharge.nombre} y después al siguiente integrante. Los +${juntosCoins} Alfa Coins de cada uno se acreditarán al pagar todos hoy.`,
         });
       }
+
+      await Promise.all(
+        allGroupMembers.map(member =>
+          deleteDoc(doc(db, 'canjes_beneficios', `VA-JUNTOS-WAIT-${todayStr}-${member.id}`)).catch(() => {})
+        )
+      );
 
       onOpenChange(false);
       const juntosCompanionsPayload = {
@@ -2511,6 +2659,275 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     }
   };
 
+  // Acción: Guardar al Cliente 1 en lista de espera del día ("Escanear más tarde")
+  const handleSaveJuntosForLater = async () => {
+    if (!scannedClient || !db) return;
+    setIsRedeemingBenefit(true);
+    try {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayCompact = format(new Date(), 'yyyyMMdd');
+      const fullName = `${scannedClient.nombre} ${scannedClient.apellido || ''}`.trim();
+      const waitDocId = `VA-JUNTOS-WAIT-${todayStr}-${scannedClient.id}`;
+      const origFolio =
+        scannedBenefit?.folio || `VA-JUNTOS-${todayCompact}-${scannedClient.id.slice(0, 5).toUpperCase()}`;
+
+      await setDoc(doc(db, 'canjes_beneficios', waitDocId), {
+        folio: waitDocId,
+        originalFolio: origFolio,
+        benefitId: 'juntos_es_mejor',
+        benefitTitle: 'JUNTOS ES MEJOR',
+        isJuntosBenefit: true,
+        clienteId: scannedClient.id,
+        clienteNombre: fullName,
+        numeroCliente: scannedClient.numero_cliente || null,
+        telefono: scannedClient.telefono || '',
+        fotoUrl:
+          scannedClient.fotoUrl ||
+          scannedClient.avatarUrl ||
+          (scannedClient as any).foto_perfil_url ||
+          null,
+        fechaStr: todayStr,
+        estado: 'esperando_acompanante',
+        pagado: Boolean(titularTodaySales?.meetsIndividualMin),
+        montoPagadoHoy: Number(titularTodaySales?.totalQualifyingMoney || 0),
+        companions: juntosCompanions.map(c => ({
+          id: c.id,
+          nombre: c.nombre,
+          telefono: c.telefono || '',
+          folio: c.folio || '',
+        })),
+        creadoEn: serverTimestamp(),
+      });
+
+      playBeep(true);
+      toast({
+        title: '⏳ Guardado en espera para más tarde',
+        description:
+          juntosCompanions.length > 0
+            ? `${fullName} + ${juntosCompanions.length} acompañante(s) quedaron en espera para asociar al siguiente integrante.`
+            : `${fullName} quedó en espera. Cuando llegue o termine su acompañante, podrás asociarlos fácilmente.`,
+      });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo guardar en espera',
+        description: err.message || 'Intenta nuevamente.',
+      });
+    } finally {
+      setIsRedeemingBenefit(false);
+    }
+  };
+
+  // Acción: Asociar un cliente (y sus acompañantes previos si aplica) que estaba en espera hoy con el cliente actual
+  const handleAssociateWaitingClient = async (waitingItem: {
+    docId: string;
+    clienteId: string;
+    clienteNombre: string;
+    telefono?: string;
+    originalFolio?: string;
+    companions?: Array<{ id: string; nombre: string; telefono?: string; folio?: string }>;
+  }) => {
+    if (!db || !scannedClient || isAssociatingWaiting) return;
+    if (waitingItem.clienteId === scannedClient.id) return;
+    if (juntosCompanions.some(c => c.id === waitingItem.clienteId)) {
+      toast({
+        variant: 'destructive',
+        title: 'Acompañante ya agregado',
+        description: `${waitingItem.clienteNombre} ya forma parte de este grupo.`,
+      });
+      return;
+    }
+
+    setIsAssociatingWaiting(waitingItem.docId);
+    try {
+      const activeJuntosCfg = juntosConfigRef.current;
+      const unitMin = getJuntosUnitMinPrice(activeJuntosCfg);
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      const todayCompact = format(new Date(), 'yyyyMMdd');
+
+      const candidatesToLink = [
+        {
+          id: waitingItem.clienteId,
+          nombre: waitingItem.clienteNombre,
+          telefono: waitingItem.telefono || '',
+          folio: waitingItem.originalFolio || '',
+        },
+        ...((Array.isArray(waitingItem.companions) ? waitingItem.companions : []).filter(
+          c => c.id && c.id !== scannedClient.id && !juntosCompanions.some(existing => existing.id === c.id)
+        )),
+      ];
+
+      const resolvedNewCompanions: Array<{
+        id: string;
+        nombre: string;
+        telefono?: string;
+        folio?: string;
+        todaySales?: ClientTodayJuntosStatus | null;
+        todayReservation?: any | null;
+        clientObj?: Client;
+      }> = [];
+
+      for (const cand of candidatesToLink) {
+        const { client: waitClient, unpaidRes: waitUnpaidRes } = await findClientAndTodayReservations({
+          clientId: cand.id,
+        });
+        if (!waitClient) {
+          throw new Error(`No se encontró al cliente "${cand.nombre}".`);
+        }
+
+        const periodCheck = await checkClientJuntosPeriodUsed(
+          waitClient.id,
+          (waitClient as any).ultimo_canje_juntos_fecha,
+          activeJuntosCfg
+        );
+        if (periodCheck.used) {
+          throw new Error(
+            `${waitClient.nombre} ya utilizó "Juntos es Mejor" ${periodCheck.freqLabel}${periodCheck.usedDate ? ` (${periodCheck.usedDate})` : ''}.`
+          );
+        }
+
+        const waitSales = await fetchClientTodayJuntosSales(waitClient.id, unitMin);
+        const waitFullName = `${waitClient.nombre} ${waitClient.apellido || ''}`.trim();
+
+        resolvedNewCompanions.push({
+          id: waitClient.id,
+          nombre: waitFullName,
+          telefono: waitClient.telefono || cand.telefono || '',
+          folio: cand.folio || `VA-JUNTOS-${todayCompact}-${waitClient.id.slice(0, 5).toUpperCase()}`,
+          todaySales: waitSales,
+          todayReservation: waitUnpaidRes,
+          clientObj: waitClient,
+        });
+      }
+
+      setJuntosCompanions(prev => [
+        ...prev,
+        ...resolvedNewCompanions.filter(rc => !prev.some(p => p.id === rc.id)),
+      ]);
+      setMoreCompanionsChoice('unknown');
+
+      await Promise.all([
+        deleteDoc(doc(db, 'canjes_beneficios', waitingItem.docId)).catch(() => {}),
+        deleteDoc(doc(db, 'canjes_beneficios', `VA-JUNTOS-WAIT-${todayStr}-${scannedClient.id}`)).catch(() => {}),
+      ]);
+
+      playBeep(true);
+      toast({
+        title: '✓ Grupo Asociado',
+        description: `${resolvedNewCompanions.map(c => c.nombre).join(' + ')} y ${scannedClient.nombre} quedaron asociados.`,
+      });
+    } catch (err: any) {
+      playBeep(false);
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo asociar',
+        description: err.message || 'Error asociando cliente en espera.',
+      });
+    } finally {
+      setIsAssociatingWaiting(null);
+    }
+  };
+
+  // Acción: Retomar un cliente en espera desde el inicio del Lector QR para escanear a su acompañante
+  const handleResumeWaitingClientInScanner = async (waitingItem: {
+    docId: string;
+    clienteId: string;
+    clienteNombre: string;
+    originalFolio?: string;
+    companions?: Array<{ id: string; nombre: string; telefono?: string; folio?: string }>;
+  }) => {
+    if (!db || isAssociatingWaiting) return;
+    setIsAssociatingWaiting(waitingItem.docId);
+    try {
+      const { client: waitClient, unpaidRes: waitUnpaidRes } = await findClientAndTodayReservations({
+        clientId: waitingItem.clienteId,
+      });
+      if (!waitClient) {
+        throw new Error(`No se encontró al cliente "${waitingItem.clienteNombre}".`);
+      }
+
+      const activeJuntosCfg = juntosConfigRef.current;
+      const unitMin = getJuntosUnitMinPrice(activeJuntosCfg);
+      const [waitSales, periodCheck] = await Promise.all([
+        fetchClientTodayJuntosSales(waitClient.id, unitMin),
+        checkClientJuntosPeriodUsed(waitClient.id, (waitClient as any).ultimo_canje_juntos_fecha, activeJuntosCfg),
+      ]);
+
+      if (periodCheck.used) {
+        await deleteDoc(doc(db, 'canjes_beneficios', waitingItem.docId)).catch(() => {});
+        throw new Error(`${waitClient.nombre} ya utilizó "Juntos es Mejor" ${periodCheck.freqLabel}.`);
+      }
+
+      const todayCompact = format(new Date(), 'yyyyMMdd');
+      const restoredCompanions: Array<{
+        id: string;
+        nombre: string;
+        telefono?: string;
+        folio?: string;
+        todaySales?: ClientTodayJuntosStatus | null;
+        todayReservation?: any | null;
+        clientObj?: Client;
+      }> = [];
+      for (const comp of Array.isArray(waitingItem.companions) ? waitingItem.companions : []) {
+        if (!comp.id) continue;
+        const { client: cObj, unpaidRes: cRes } = await findClientAndTodayReservations({ clientId: comp.id });
+        if (cObj) {
+          const cSales = await fetchClientTodayJuntosSales(cObj.id, unitMin);
+          restoredCompanions.push({
+            id: cObj.id,
+            nombre: `${cObj.nombre} ${cObj.apellido || ''}`.trim(),
+            telefono: cObj.telefono || comp.telefono || '',
+            folio: comp.folio || `VA-JUNTOS-${todayCompact}-${cObj.id.slice(0, 5).toUpperCase()}`,
+            todaySales: cSales,
+            todayReservation: cRes,
+            clientObj: cObj,
+          });
+        }
+      }
+
+      const schedJuntos = validateJuntosSchedule(new Date(), undefined, activeJuntosCfg);
+      const rewardCoinsCfg = Number(activeJuntosCfg.coins_por_persona) || JUNTOS_REWARD_COINS_PER_PERSON;
+
+      setScannedClient(waitClient);
+      setTodayReservation(waitUnpaidRes);
+      setTitularTodaySales(waitSales);
+      setJuntosCompanions(restoredCompanions);
+      setMoreCompanionsChoice('unknown');
+      setJuntosOption('companions_app');
+      setScannedPromo(null);
+      setScannedBenefit({
+        folio: waitingItem.originalFolio || `VA-JUNTOS-${todayCompact}-${waitClient.id.slice(0, 5).toUpperCase()}`,
+        clientId: waitClient.id,
+        benefitId: 'juntos_es_mejor',
+        benefitTitle: 'JUNTOS ES MEJOR',
+        isJuntosBenefit: true,
+        discount: 0,
+        rewardCoins: rewardCoinsCfg,
+        isScheduleValid: schedJuntos.isValid,
+        scheduleWarning: !schedJuntos.isValid ? schedJuntos.reason : undefined,
+        minorsCount: 0,
+      });
+      setIsScanningCompanion(true);
+      setActiveTab('camera');
+    } catch (err: any) {
+      playBeep(false);
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo retomar',
+        description: err.message || 'Error al cargar cliente en espera.',
+      });
+    } finally {
+      setIsAssociatingWaiting(null);
+    }
+  };
+
+  // Acción: Descartar manualmente un cliente en espera
+  const handleRemoveWaitingClient = async (waitingDocId: string) => {
+    if (!db) return;
+    await deleteDoc(doc(db, 'canjes_beneficios', waitingDocId)).catch(() => {});
+  };
+
   // Acción: Volver a escanear otro cliente
   const handleResetScanner = () => {
     isProcessingRef.current = false;
@@ -2523,14 +2940,220 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
     setJuntosOption(null);
     setJuntosMinorsCount(1);
     setJuntosCompanions([]);
+    setMoreCompanionsChoice('unknown');
     setTitularTodaySales(null);
     setJuntosCompletedSummary(null);
     setIsScanningCompanion(false);
     setManualInput('');
+    setBenefitPhonePart('');
+    setBenefitSuffixPart('');
+    setRefNamePart('');
+    setRefSuffixPart('');
     setActiveTab('camera');
     setTimeout(() => {
       startCamera();
     }, 200);
+  };
+
+  const handleSegmentedPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text').trim().toUpperCase();
+    const benefitMatch = pasted.match(/^(VA-(?:JUNTOS|CUMPLE|CORTE|REF|BNF|PASE))-([0-9A-Z]{4})-([0-9A-Z]{4,5})$/);
+    if (benefitMatch) {
+      e.preventDefault();
+      setCodeEntryMode('beneficio');
+      setBenefitPrefix(benefitMatch[1] as typeof benefitPrefix);
+      setBenefitPhonePart(benefitMatch[2]);
+      setBenefitSuffixPart(benefitMatch[3]);
+      return;
+    }
+    const refMatch = pasted.match(/^ALFA-([A-Z0-9]+)-([A-Z0-9]{4})$/);
+    if (refMatch) {
+      e.preventDefault();
+      setCodeEntryMode('referido');
+      setRefNamePart(refMatch[1]);
+      setRefSuffixPart(refMatch[2]);
+    }
+  };
+
+  const renderCodeEntryBar = (autoFocusMain = false) => {
+    const canSubmit =
+      codeEntryMode === 'beneficio'
+        ? Boolean(benefitPhonePart.trim().length >= 4 && benefitSuffixPart.trim().length >= 4)
+        : codeEntryMode === 'referido'
+        ? Boolean(refNamePart.trim() && refSuffixPart.trim().length >= 4)
+        : Boolean(manualInput.trim());
+
+    const handleSegmentedSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (isProcessing) return;
+      if (codeEntryMode === 'beneficio') {
+        const phone = benefitPhonePart.trim();
+        const suffix = benefitSuffixPart.trim().toUpperCase();
+        if (phone && suffix) {
+          handleScanText(`${benefitPrefix}-${phone}-${suffix}`);
+        }
+        return;
+      }
+      if (codeEntryMode === 'referido') {
+        const name = refNamePart.trim().toUpperCase().replace(/\s+/g, '');
+        const suffix = refSuffixPart.trim().toUpperCase();
+        if (name && suffix) {
+          handleScanText(`ALFA-${name}-${suffix}`);
+        }
+        return;
+      }
+      if (manualInput.trim()) {
+        handleScanText(manualInput.trim());
+      }
+    };
+
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-1 bg-[#0F172A] p-1 rounded-lg border border-white/10">
+          <button
+            type="button"
+            onClick={() => setCodeEntryMode('beneficio')}
+            className={cn(
+              'flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap',
+              codeEntryMode === 'beneficio'
+                ? 'bg-[#202A49] text-[#C5A880] border border-[#C5A880]/40'
+                : 'text-slate-400 hover:text-white border border-transparent'
+            )}
+          >
+            Beneficio (VA-...)
+          </button>
+          <button
+            type="button"
+            onClick={() => setCodeEntryMode('referido')}
+            className={cn(
+              'flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap',
+              codeEntryMode === 'referido'
+                ? 'bg-[#202A49] text-[#C5A880] border border-[#C5A880]/40'
+                : 'text-slate-400 hover:text-white border border-transparent'
+            )}
+          >
+            Referido (ALFA-...)
+          </button>
+          <button
+            type="button"
+            onClick={() => setCodeEntryMode('libre')}
+            className={cn(
+              'flex-1 py-1 px-2 rounded-md text-[11px] font-semibold transition-colors whitespace-nowrap',
+              codeEntryMode === 'libre'
+                ? 'bg-[#202A49] text-[#C5A880] border border-[#C5A880]/40'
+                : 'text-slate-400 hover:text-white border border-transparent'
+            )}
+          >
+            Tel / # / Pistola
+          </button>
+        </div>
+
+        <form onSubmit={handleSegmentedSubmit} className="flex flex-col sm:flex-row gap-2">
+          {codeEntryMode === 'beneficio' && (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <select
+                value={benefitPrefix}
+                onChange={e => setBenefitPrefix(e.target.value as typeof benefitPrefix)}
+                aria-label="Prefijo de beneficio"
+                className="h-10 rounded-md bg-[#161E35] border border-white/20 text-[#C5A880] font-semibold text-xs px-2 focus:outline-none focus:border-blue-500 shrink-0"
+              >
+                <option value="VA-JUNTOS">VA-JUNTOS</option>
+                <option value="VA-CUMPLE">VA-CUMPLE</option>
+                <option value="VA-CORTE">VA-CORTE</option>
+                <option value="VA-PASE">VA-PASE</option>
+                <option value="VA-REF">VA-REF</option>
+                <option value="VA-BNF">VA-BNF</option>
+              </select>
+              <span className="text-slate-400 font-bold select-none shrink-0">-</span>
+              <Input
+                autoFocus={autoFocusMain}
+                value={benefitPhonePart}
+                onPaste={handleSegmentedPaste}
+                onChange={e => {
+                  const clean = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setBenefitPhonePart(clean);
+                  if (clean.length === 4) {
+                    benefitSuffixInputRef.current?.focus();
+                  }
+                }}
+                inputMode="numeric"
+                maxLength={4}
+                placeholder="6820"
+                aria-label="Últimos 4 dígitos de teléfono"
+                className="bg-[#161E35] border-white/20 text-white placeholder:text-slate-500 text-xs sm:text-sm h-10 text-center tracking-wider font-semibold w-20 shrink-0"
+              />
+              <span className="text-slate-400 font-bold select-none shrink-0">-</span>
+              <Input
+                ref={benefitSuffixInputRef}
+                value={benefitSuffixPart}
+                onPaste={handleSegmentedPaste}
+                onChange={e => {
+                  const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5);
+                  setBenefitSuffixPart(clean);
+                }}
+                maxLength={5}
+                placeholder="9914"
+                aria-label="Folio del código"
+                className="bg-[#161E35] border-white/20 text-white placeholder:text-slate-500 text-xs sm:text-sm h-10 text-center tracking-wider font-semibold flex-1 min-w-[74px]"
+              />
+            </div>
+          )}
+
+          {codeEntryMode === 'referido' && (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <span className="h-10 px-2.5 rounded-md bg-[#0F172A] border border-white/20 text-[#C5A880] font-bold text-xs flex items-center select-none shrink-0">
+                ALFA
+              </span>
+              <span className="text-slate-400 font-bold select-none shrink-0">-</span>
+              <Input
+                autoFocus={autoFocusMain}
+                value={refNamePart}
+                onPaste={handleSegmentedPaste}
+                onChange={e => {
+                  const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+                  setRefNamePart(clean);
+                }}
+                placeholder="CARLOS"
+                aria-label="Nombre del referido"
+                className="bg-[#161E35] border-white/20 text-white placeholder:text-slate-500 text-xs sm:text-sm h-10 font-semibold flex-1 min-w-[90px]"
+              />
+              <span className="text-slate-400 font-bold select-none shrink-0">-</span>
+              <Input
+                ref={refSuffixInputRef}
+                value={refSuffixPart}
+                onPaste={handleSegmentedPaste}
+                onChange={e => {
+                  const clean = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+                  setRefSuffixPart(clean);
+                }}
+                maxLength={4}
+                placeholder="4567"
+                aria-label="Últimos 4 caracteres del referido"
+                className="bg-[#161E35] border-white/20 text-white placeholder:text-slate-500 text-xs sm:text-sm h-10 text-center tracking-wider font-semibold w-20 shrink-0"
+              />
+            </div>
+          )}
+
+          {codeEntryMode === 'libre' && (
+            <Input
+              autoFocus={autoFocusMain}
+              value={manualInput}
+              onChange={e => setManualInput(e.target.value)}
+              placeholder="Teléfono (10 dígitos), # cliente o código..."
+              className="bg-[#161E35] border-white/20 text-white placeholder:text-gray-400 text-xs sm:text-sm h-10 flex-1"
+            />
+          )}
+
+          <Button
+            type="submit"
+            disabled={!canSubmit || isProcessing}
+            className="bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 px-4 shrink-0 shadow-md"
+          >
+            {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+          </Button>
+        </form>
+      </div>
+    );
   };
 
   const clientStamps = Number(scannedClient?.cortes_acumulados || 0);
@@ -2571,30 +3194,30 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-xl bg-[#0F172A] border-2 border-blue-500 rounded-2xl text-white shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-0 overflow-hidden z-[200]" overlayClassName="z-[190]">
+        <DialogContent className="w-[96vw] sm:max-w-3xl lg:max-w-4xl bg-[#0F172A] border-2 border-blue-500 rounded-2xl text-white shadow-[0_10px_30px_rgba(59,130,246,0.18)] p-0 overflow-hidden z-[200]" overlayClassName="z-[190]">
           {/* Header */}
-          <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] p-5 border-b border-blue-500/30 relative overflow-hidden">
+          <DialogHeader className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-blue-500/30 relative overflow-hidden">
             {/* Haz de luz animado sutil */}
             <div className="header-light-beam" aria-hidden="true" />
 
             <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 {isFreeCutRedemptionView ? (
-                  <Scissors className="h-5 w-5 text-[#C5A880] shrink-0" />
+                  <Scissors className="h-4 w-4 text-[#C5A880] shrink-0" />
                 ) : isJuntosRedemptionView ? (
-                  <Users className="h-5 w-5 text-[#C5A880] shrink-0" />
+                  <Users className="h-4 w-4 text-[#C5A880] shrink-0" />
                 ) : (
-                  <QrCode className="h-5 w-5 text-[#C5A880] shrink-0" />
+                  <QrCode className="h-4 w-4 text-[#C5A880] shrink-0" />
                 )}
                 <div>
-                  <DialogTitle className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
+                  <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-wide flex items-center gap-2 leading-tight">
                     {isFreeCutRedemptionView
                       ? 'DÉCIMO CORTE GRATIS'
                       : isJuntosRedemptionView
                       ? 'JUNTOS ES MEJOR'
                       : 'Lector QR • VATOS ALFA'}
                   </DialogTitle>
-                  <DialogDescription className="text-xs text-[#C5A880]/90">
+                  <DialogDescription className="text-[11px] text-[#C5A880]/90">
                     {isFreeCutRedemptionView
                       ? 'Confirmación de canje de cortesía en caja'
                       : isJuntosRedemptionView
@@ -2606,7 +3229,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
             </div>
           </DialogHeader>
 
-          <div className="p-5 space-y-4 max-h-[82vh] overflow-y-auto scrollbar-thin">
+          <div className="p-3.5 sm:p-4 space-y-3 max-h-[84dvh] overflow-y-auto scrollbar-thin">
             {/* VISTA SIMPLIFICADA: DÉCIMO CORTE GRATIS (SOLO CLIENTE + EQUIVALENCIA + APLICAR) */}
             {isFreeCutRedemptionView && (
               <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
@@ -2988,22 +3611,189 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         ))}
                       </div>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setIsScanningCompanion(true);
-                          setActiveTab('camera');
-                        }}
-                        className="w-full bg-transparent border-blue-500/50 text-blue-300 hover:bg-blue-500/15 text-xs font-semibold h-9"
-                      >
-                        <QrCode className="h-4 w-4 mr-1.5 text-blue-400" />
-                        {juntosCompanions.length === 0
-                          ? 'Escanear QR del Acompañante'
-                          : 'Escanear otro acompañante'}
-                      </Button>
+                      {juntosCompanions.length === 0 ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setIsScanningCompanion(true);
+                              setActiveTab('camera');
+                            }}
+                            className="w-full bg-transparent border-blue-500/50 text-blue-300 hover:bg-blue-500/15 text-xs font-semibold h-9"
+                          >
+                            <QrCode className="h-4 w-4 mr-1.5 text-blue-400" />
+                            Escanear QR del Acompañante
+                          </Button>
 
-                      {juntosCompanions.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isRedeemingBenefit}
+                            onClick={handleSaveJuntosForLater}
+                            className="w-full bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs font-medium h-9"
+                          >
+                            {isRedeemingBenefit ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                            ) : (
+                              <Clock className="h-3.5 w-3.5 mr-1.5 text-slate-300" />
+                            )}
+                            Escanear más tarde
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="pt-2 border-t border-white/10 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-white">
+                              ¿Viene otro acompañante?
+                            </p>
+                            <span className="text-[11px] text-slate-400">
+                              {groupSize} en grupo
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={isRedeemingBenefit}
+                              onClick={() => setMoreCompanionsChoice('yes')}
+                              className={`h-9 text-xs font-semibold ${
+                                moreCompanionsChoice === 'yes'
+                                  ? 'bg-blue-500/20 border-blue-500 text-blue-200'
+                                  : 'bg-transparent border-white/20 text-slate-200 hover:bg-white/10'
+                              }`}
+                            >
+                              Sí, viene otro
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={allGroupPaid ? 'alfa' : 'outline'}
+                              disabled={isRedeemingBenefit}
+                              onClick={() => {
+                                if (allGroupPaid) {
+                                  handleCreditJuntosPostPayment('companions');
+                                } else {
+                                  setMoreCompanionsChoice('no');
+                                }
+                              }}
+                              className={`h-9 text-xs font-semibold ${
+                                allGroupPaid
+                                  ? 'text-white'
+                                  : moreCompanionsChoice === 'no'
+                                  ? 'bg-blue-500/20 border-blue-500 text-blue-200'
+                                  : 'bg-transparent border-white/20 text-slate-200 hover:bg-white/10'
+                              }`}
+                            >
+                              {isRedeemingBenefit && allGroupPaid ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                              ) : null}
+                              {allGroupPaid ? 'No, acreditar ahora' : 'No, ya somos todos'}
+                            </Button>
+                          </div>
+
+                          {moreCompanionsChoice === 'yes' && (
+                            <div className="pt-1.5 space-y-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => {
+                                  setIsScanningCompanion(true);
+                                  setActiveTab('camera');
+                                }}
+                                className="w-full bg-transparent border-blue-500/50 text-blue-300 hover:bg-blue-500/15 text-xs font-semibold h-9"
+                              >
+                                <QrCode className="h-4 w-4 mr-1.5 text-blue-400" />
+                                Escanear QR del siguiente acompañante
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={isRedeemingBenefit}
+                                onClick={handleSaveJuntosForLater}
+                                className="w-full bg-transparent border-white/20 text-slate-200 hover:bg-white/10 text-xs font-medium h-9"
+                              >
+                                {isRedeemingBenefit ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                ) : (
+                                  <Clock className="h-3.5 w-3.5 mr-1.5 text-slate-300" />
+                                )}
+                                Sigue en espera (Escanear más tarde)
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {(juntosCompanions.length === 0 || moreCompanionsChoice === 'yes') && (() => {
+                        const availableWaitingClients = waitingJuntosClients.filter(
+                          w =>
+                            w.clienteId !== scannedClient?.id &&
+                            !juntosCompanions.some(c => c.id === w.clienteId)
+                        );
+                        if (availableWaitingClients.length === 0) return null;
+                        return (
+                          <div className="pt-2 border-t border-white/10 space-y-2">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-1.5">
+                              <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                              En espera para asociar hoy ({availableWaitingClients.length})
+                            </p>
+                            <div className="space-y-1.5">
+                              {availableWaitingClients.map((w) => (
+                                <div
+                                  key={w.docId}
+                                  className="p-2.5 rounded-lg bg-[#0F172A] border border-blue-500/35 flex items-center justify-between gap-2 text-xs"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-white font-semibold truncate">
+                                      {w.clienteNombre}
+                                      {w.numeroCliente ? (
+                                        <span className="text-[#C5A880] ml-1.5 font-normal">#{w.numeroCliente}</span>
+                                      ) : null}
+                                      {Array.isArray(w.companions) && w.companions.length > 0 ? (
+                                        <span className="text-blue-300 ml-1.5 font-normal text-[11px]">
+                                          +{w.companions.length} acomp.
+                                        </span>
+                                      ) : null}
+                                    </p>
+                                    <p className={cn('text-[11px] font-sans', w.pagado ? 'text-blue-400' : 'text-slate-400')}>
+                                      {w.pagado
+                                        ? `✓ Pagó hoy $${formatMoney(w.montoPagadoHoy || 0)} MXN`
+                                        : 'Por cobrar'}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="alfa"
+                                      disabled={isAssociatingWaiting === w.docId}
+                                      onClick={() => handleAssociateWaitingClient(w)}
+                                      className="h-7 px-3 text-[11px] font-bold text-white"
+                                    >
+                                      {isAssociatingWaiting === w.docId ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        'Asociar'
+                                      )}
+                                    </Button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveWaitingClient(w.docId)}
+                                      className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                                      title="Quitar de espera"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {juntosCompanions.length > 0 && moreCompanionsChoice === 'no' && (
                         <div className="pt-2.5 border-t border-white/10 space-y-2.5">
                           {allGroupPaid ? (
                             <>
@@ -3535,10 +4325,14 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                       </div>
                     </div>
 
-                    {/* Privilegios Activos del Nivel (cuando el programa de niveles está encendido) */}
+                    {/* Privilegios Activos + Tarjeta de Sellos en 2 columnas para tablet horizontal */}
+                    <div className={cn(
+                      "mt-3 pt-3 border-t border-[#C5A880]/20 grid grid-cols-1 gap-3 items-start",
+                      scannedClientTier.activo && scannedClientTier.beneficios.length > 0 && "md:grid-cols-2"
+                    )}>
                     {scannedClientTier.activo && scannedClientTier.beneficios.length > 0 && (
-                      <div className="mt-3 p-3 rounded-xl bg-[#0F172A]/85 border border-[#C5A880]/35 space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
+                      <div className="p-3 rounded-xl bg-[#0F172A]/85 border border-[#C5A880]/35 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-[#C5A880] flex items-center gap-1.5">
                             <Crown className="h-3.5 w-3.5 text-[#C5A880]" />
                             Privilegios Activos • {scannedClientTier.tierName}
@@ -3546,7 +4340,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                           {scannedClientTier.productDiscountPct > 0 && (
                             <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/40 text-[9px] font-bold px-1.5 py-0">
                               <Percent className="h-2.5 w-2.5 mr-0.5 inline" />
-                              {scannedClientTier.productDiscountPct}% Desc. en Productos (Automático en Caja)
+                              {scannedClientTier.productDiscountPct}% Desc. Productos
                             </Badge>
                           )}
                         </div>
@@ -3562,11 +4356,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     )}
 
                   {/* Pase Alfa: Tarjeta de Sellos Visual */}
-                  <div className="mt-4 pt-3.5 border-t border-[#C5A880]/20">
+                  <div className="p-3 rounded-xl bg-[#0F172A]/60 border border-white/10">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5 text-xs font-bold text-[#C5A880]">
                         <Scissors className="h-3.5 w-3.5" />
-                        <span>PASE ALFA (TARJETA DE VISITAS)</span>
+                        <span>PASE ALFA (VISITAS)</span>
                       </div>
                       <span className="text-xs font-bold text-white">
                         {clientStamps} / {totalSlots} Sellos
@@ -3574,7 +4368,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     </div>
 
                     {/* Grilla de Sellos */}
-                    <div className="grid grid-cols-10 gap-1.5 my-2.5">
+                    <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5 my-2">
                       {Array.from({ length: totalSlots }).map((_, idx) => {
                         const isFilled = idx < clientStamps;
                         const isLast = idx === totalSlots - 1;
@@ -3610,9 +4404,9 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
 
                     {/* Banner si el corte gratis está listo */}
                     {freeCutAvailable ? (
-                      <div className="mt-2.5 p-3 rounded-xl bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border border-[#C5A880]/50 flex items-center justify-between gap-2">
+                      <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-[#10172b] via-[#161E35] to-[#10172b] border border-[#C5A880]/50 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <Sparkles className="h-5 w-5 text-[#C5A880] shrink-0" />
+                          <Sparkles className="h-4 w-4 text-[#C5A880] shrink-0" />
                           <div className="min-w-0">
                             <p className="text-xs font-bold text-[#C5A880]">¡{rewardName} Disponible!</p>
                             <p className="text-[10px] text-gray-300">
@@ -3632,12 +4426,13 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                         </Button>
                       </div>
                     ) : (
-                      <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
+                      <div className="mt-1.5 flex items-center justify-between text-[11px] text-gray-400">
                         <span>
-                          Faltan {Math.max(0, requiredPaidStampsForGoal - clientStamps)} visitas para su corte de cortesía. (Se acredita automáticamente al cobrar en Caja).
+                          Faltan {Math.max(0, requiredPaidStampsForGoal - clientStamps)} visitas para su corte de cortesía.
                         </span>
                       </div>
                     )}
+                  </div>
                   </div>
                 </div>
 
@@ -3727,8 +4522,8 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                   </div>
                 )}
 
-                {/* Acciones Rápidas (cobro normal: NUNCA inyectar 10.° corte gratis automáticamente) */}
-                {fromCashbox ? (
+                {/* Acciones Rápidas: Solo cuando se abre desde la caja de ventas */}
+                {fromCashbox && (
                   <Button
                     onClick={() => handleOpenInCashbox(false)}
                     className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
@@ -3736,25 +4531,6 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     <CheckCircle2 className="h-4 w-4 mr-1.5" />
                     Aplicar en Caja
                   </Button>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <Button
-                      onClick={() => handleOpenInCashbox(false)}
-                      className="w-full bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 shadow-lg"
-                    >
-                      <CreditCard className="h-4 w-4 mr-1.5" />
-                      Cobrar en Caja de Ventas
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsDetailModalOpen(true)}
-                      className="w-full bg-transparent border-white/20 text-gray-200 hover:bg-white/10 text-xs h-10"
-                    >
-                      <User className="h-4 w-4 mr-1.5" />
-                      Ver Ficha Completa
-                    </Button>
-                  </div>
                 )}
                 </>
                 )}
@@ -3849,6 +4625,65 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     </Button>
                   </div>
                 )}
+                {!isScanningCompanion && waitingJuntosClients.length > 0 && (
+                  <div className="p-3 rounded-xl bg-[#161E35] border border-blue-500/40 space-y-2">
+                    <p className="text-[11px] font-semibold text-blue-300 uppercase tracking-wide flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                      En espera hoy • Juntos es Mejor ({waitingJuntosClients.length})
+                    </p>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto scrollbar-thin pr-0.5">
+                      {waitingJuntosClients.map((w) => (
+                        <div
+                          key={w.docId}
+                          className="p-2 rounded-lg bg-[#0F172A] border border-white/10 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-white font-semibold truncate">
+                              {w.clienteNombre}
+                              {w.numeroCliente ? (
+                                <span className="text-[#C5A880] ml-1.5 font-normal">#{w.numeroCliente}</span>
+                              ) : null}
+                              {Array.isArray(w.companions) && w.companions.length > 0 ? (
+                                <span className="text-blue-300 ml-1.5 font-normal text-[10px]">
+                                  +{w.companions.length} acomp.
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className={cn('text-[10px] font-sans', w.pagado ? 'text-blue-400' : 'text-slate-400')}>
+                              {w.pagado
+                                ? `✓ Pagó hoy $${formatMoney(w.montoPagadoHoy || 0)} MXN`
+                                : 'Por cobrar'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={isAssociatingWaiting === w.docId}
+                              onClick={() => handleResumeWaitingClientInScanner(w)}
+                              className="h-7 px-2.5 text-[11px] bg-transparent border-blue-500/50 text-blue-300 hover:bg-blue-500/15"
+                            >
+                              {isAssociatingWaiting === w.docId ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                'Elegir'
+                              )}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveWaitingClient(w.docId)}
+                              className="text-slate-400 hover:text-red-400 p-1 transition-colors"
+                              title="Quitar de espera"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Selector de modo */}
                 <div className="flex bg-[#161E35] p-1 rounded-xl border border-white/10">
                   <button
@@ -3884,7 +4719,7 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                 </div>
 
                 {activeTab === 'camera' ? (
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
                     {/* Input oculto para tomar foto o subir archivo de QR */}
                     <input
                       ref={fileInputRef}
@@ -3895,133 +4730,116 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                       onChange={handleScanFile}
                     />
 
-                    {/* Visor de Cámara */}
-                    <div className="relative w-full aspect-square max-h-[320px] mx-auto rounded-2xl overflow-hidden bg-black border-2 border-[#C5A880]/40 shadow-inner flex items-center justify-center">
-                      <div id={scannerContainerId} className="w-full h-full object-cover [&>video]:w-full [&>video]:h-full [&>video]:object-cover" />
+                    {/* COLUMNA IZQUIERDA: Visor de Cámara y selector */}
+                    <div className="space-y-2">
+                      <div className="relative w-full aspect-square max-h-[250px] mx-auto rounded-2xl overflow-hidden bg-black border-2 border-[#C5A880]/40 shadow-inner flex items-center justify-center">
+                        <div id={scannerContainerId} className="w-full h-full object-cover [&>video]:w-full [&>video]:h-full [&>video]:object-cover" />
 
-                      {/* Marco animado de escaneo */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="w-48 h-48 border-2 border-[#C5A880]/80 rounded-2xl relative shadow-[0_0_15px_rgba(197,168,128,0.3)]">
-                          {/* Esquinas doradas */}
-                          <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-[#C5A880]" />
-                          <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-[#C5A880]" />
-                          <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-[#C5A880]" />
-                          <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-[#C5A880]" />
-
-                          {/* Línea de escaneo láser */}
-                          <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-[#C5A880] to-transparent shadow-[0_0_8px_#C5A880] animate-bounce mt-24" />
-                        </div>
-                      </div>
-
-                      {cameraError && (
-                        <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center space-y-2.5 z-20">
-                          <AlertCircle className="h-8 w-8 text-red-400" />
-                          <p className="text-xs text-gray-200 max-w-xs">{cameraError}</p>
-                          <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onClick={async () => {
-                                setCameraError(null);
-                                if (navigator?.mediaDevices?.getUserMedia) {
-                                  try {
-                                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                                    stream.getTracks().forEach(t => t.stop());
-                                  } catch (permErr) {
-                                    console.warn('Permiso directo:', permErr);
-                                  }
-                                }
-                                startCamera();
-                              }}
-                              className="text-xs"
-                            >
-                              Reintentar Cámara
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => fileInputRef.current?.click()}
-                              className="text-xs border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/20"
-                            >
-                              <Camera className="h-3.5 w-3.5 mr-1.5" />
-                              Tomar Foto / Subir QR
-                            </Button>
+                        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                          <div className="w-40 h-40 border-2 border-[#C5A880]/80 rounded-2xl relative shadow-[0_0_15px_rgba(197,168,128,0.3)]">
+                            <div className="absolute -top-1 -left-1 w-4 h-4 border-t-2 border-l-2 border-[#C5A880]" />
+                            <div className="absolute -top-1 -right-1 w-4 h-4 border-t-2 border-r-2 border-[#C5A880]" />
+                            <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-2 border-l-2 border-[#C5A880]" />
+                            <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-2 border-r-2 border-[#C5A880]" />
+                            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-[#C5A880] to-transparent shadow-[0_0_8px_#C5A880] animate-bounce mt-20" />
                           </div>
                         </div>
-                      )}
 
-                      {isProcessing && (
-                        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center space-y-2 z-20">
-                          <Loader2 className="h-8 w-8 text-[#C5A880] animate-spin" />
-                          <p className="text-xs font-semibold text-white">Identificando cliente...</p>
-                        </div>
-                      )}
-                    </div>
+                        {cameraError && (
+                          <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-4 text-center space-y-2.5 z-20">
+                            <AlertCircle className="h-7 w-7 text-red-400" />
+                            <p className="text-xs text-gray-200 max-w-xs">{cameraError}</p>
+                            <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                onClick={async () => {
+                                  setCameraError(null);
+                                  if (navigator?.mediaDevices?.getUserMedia) {
+                                    try {
+                                      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                      stream.getTracks().forEach(t => t.stop());
+                                    } catch (permErr) {
+                                      console.warn('Permiso directo:', permErr);
+                                    }
+                                  }
+                                  startCamera();
+                                }}
+                                className="text-xs"
+                              >
+                                Reintentar Cámara
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => fileInputRef.current?.click()}
+                                className="text-xs border-[#C5A880]/50 text-[#C5A880] hover:bg-[#C5A880]/20"
+                              >
+                                <Camera className="h-3.5 w-3.5 mr-1.5" />
+                                Tomar Foto / Subir QR
+                              </Button>
+                            </div>
+                          </div>
+                        )}
 
-                    {/* Acciones debajo del visor: selector de cámara o botón alternativo de foto */}
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      {availableCameras.length > 1 && (
-                        <div className="flex items-center gap-1.5 bg-[#161E35] border border-white/10 rounded-lg px-2 py-1">
-                          <Camera className="h-3.5 w-3.5 text-gray-400" />
-                          <select
-                            value={selectedCameraId || ''}
-                            onChange={e => {
-                              const newId = e.target.value;
-                              setSelectedCameraId(newId);
-                              startCamera(newId);
-                            }}
-                            className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer"
-                          >
-                            {availableCameras.map(cam => (
-                              <option key={cam.id} value={cam.id} className="bg-slate-900 text-white">
-                                {cam.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                        {isProcessing && (
+                          <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center space-y-2 z-20">
+                            <Loader2 className="h-8 w-8 text-[#C5A880] animate-spin" />
+                            <p className="text-xs font-semibold text-white">Identificando cliente...</p>
+                          </div>
+                        )}
+                      </div>
 
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="h-8 text-xs text-[#C5A880] hover:text-[#e4cfb4] hover:bg-[#C5A880]/10 rounded-lg gap-1.5 font-medium"
-                      >
-                        <Camera className="h-3.5 w-3.5" />
-                        <span>Tomar foto o subir QR</span>
-                      </Button>
-                    </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        {availableCameras.length > 1 && (
+                          <div className="flex items-center gap-1.5 bg-[#161E35] border border-white/10 rounded-lg px-2 py-1">
+                            <Camera className="h-3.5 w-3.5 text-gray-400" />
+                            <select
+                              value={selectedCameraId || ''}
+                              onChange={e => {
+                                const newId = e.target.value;
+                                setSelectedCameraId(newId);
+                                startCamera(newId);
+                              }}
+                              className="bg-transparent text-xs text-gray-300 focus:outline-none cursor-pointer"
+                            >
+                              {availableCameras.map(cam => (
+                                <option key={cam.id} value={cam.id} className="bg-slate-900 text-white">
+                                  {cam.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
 
-                    <p className="text-[11px] text-center text-gray-400">
-                      Pide al cliente que muestre el código QR de su tarjeta o cupón frente a la cámara.
-                    </p>
-
-                    {/* Barra rápida de ingreso de código o teléfono directo desde la vista de cámara */}
-                    <div className="pt-2 border-t border-white/10">
-                      <form
-                        onSubmit={e => {
-                          e.preventDefault();
-                          if (manualInput.trim()) {
-                            handleScanText(manualInput.trim());
-                          }
-                        }}
-                        className="flex gap-2"
-                      >
-                        <Input
-                          value={manualInput}
-                          onChange={e => setManualInput(e.target.value)}
-                          placeholder="O escribe código (ej. ALFA-CARLOS-4567), tel o folio..."
-                          className="bg-[#161E35] border-white/20 text-white placeholder:text-gray-400 text-xs sm:text-sm h-10"
-                        />
                         <Button
-                          type="submit"
-                          disabled={!manualInput.trim() || isProcessing}
-                          className="bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs h-10 px-4 shrink-0 shadow-md"
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="h-8 text-xs text-[#C5A880] hover:text-[#e4cfb4] hover:bg-[#C5A880]/10 rounded-lg gap-1.5 font-medium"
                         >
-                          {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
+                          <Camera className="h-3.5 w-3.5" />
+                          <span>Tomar foto o subir QR</span>
                         </Button>
-                      </form>
+                      </div>
+                    </div>
+
+                    {/* COLUMNA DERECHA: Instrucciones y barra rápida de código segmentado */}
+                    <div className="space-y-3 bg-[#161E35]/70 border border-white/10 rounded-2xl p-3.5">
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <QrCode className="h-3.5 w-3.5 text-[#C5A880]" />
+                          Escaneo o Captura Rápida
+                        </p>
+                        <p className="text-[11px] text-gray-400 leading-snug">
+                          Pide al cliente que muestre el código QR de su tarjeta o cupón frente a la cámara, o captura el folio directamente aquí:
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/10">
+                        {renderCodeEntryBar(false)}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -4030,34 +4848,11 @@ export function QRScannerModal({ isOpen, onOpenChange, onClientSelectedForSale, 
                     <div className="p-4 rounded-xl bg-[#161E35] border border-white/10 text-center space-y-2">
                       <QrCode className="h-8 w-8 text-[#C5A880] mx-auto" />
                       <p className="text-xs text-gray-200 font-medium">
-                        Dispara tu pistola lectora USB sobre el celular del cliente, o escribe su número de cliente / teléfono / cupón:
+                        Elige el tipo de código con sus guiones fijos (Beneficio o Referido), o cambia a Tel / # / Pistola para disparar tu lectora USB:
                       </p>
                     </div>
 
-                    <form
-                      onSubmit={e => {
-                        e.preventDefault();
-                        if (manualInput.trim()) {
-                          handleScanText(manualInput.trim());
-                        }
-                      }}
-                      className="flex gap-2"
-                    >
-                      <Input
-                        autoFocus
-                        value={manualInput}
-                        onChange={e => setManualInput(e.target.value)}
-                        placeholder="Ej. 607, 4425596138 o ALFA20..."
-                        className="bg-[#161E35] border-white/20 text-white placeholder:text-gray-500 text-sm"
-                      />
-                      <Button
-                        type="submit"
-                        disabled={!manualInput.trim() || isProcessing}
-                        className="bg-[#C5A880] hover:bg-[#b0936b] text-black font-bold text-xs"
-                      >
-                        {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Buscar'}
-                      </Button>
-                    </form>
+                    {renderCodeEntryBar(true)}
                   </div>
                 )}
               </div>

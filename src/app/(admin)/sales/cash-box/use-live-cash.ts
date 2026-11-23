@@ -91,6 +91,14 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
             .filter(s => s.modalidad_sucursal !== 'sin_recepcionista' && !(Number(s.efectivo_retenido_barbero || 0) > 0))
             .filter(s => s.metodo_pago === 'efectivo' || s.metodo_pago === 'combinado')
             .reduce((sum, sale) => {
+                // If this is a retained deposit whose cash was collected before this cut/shift, it did NOT enter cash in this shift
+                if (sale.tipo_venta === 'anticipo_retenido') {
+                    const depositDate = sale.deposit_paid_at || (sale as any).fecha_pago || (sale as any).fecha_pago_anticipo;
+                    if (!isAfterCut(depositDate)) {
+                        return sum;
+                    }
+                }
+
                 // If this sale had a deposit paid in cash BEFORE this cut, don't count that prior deposit again in this shift
                 const priorDepositPaidBeforeCut = (sale.deposit_paid_at && !isAfterCut(sale.deposit_paid_at) && (sale.anticipoPagado || sale.monto_anticipo))
                     ? Number(sale.anticipoPagado || sale.monto_anticipo || 0)
@@ -98,7 +106,7 @@ export function useLiveCash(selectedLocalId: string, queryKey: number) {
 
                 if (sale.metodo_pago === 'efectivo') {
                     const amount = (sale.monto_pagado_real !== undefined && sale.monto_pagado_real < sale.total)
-                        ? sale.monto_pagado_real
+                        ? Math.max(0, sale.monto_pagado_real - priorDepositPaidBeforeCut)
                         : Math.max(0, (sale.total || 0) - priorDepositPaidBeforeCut);
                     return sum + amount;
                 }

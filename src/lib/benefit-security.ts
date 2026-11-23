@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -2410,6 +2411,11 @@ export async function revertSaleLoyaltyAndBenefits(
 
       await updateDoc(doc(db, 'clientes', clientId), walletRevertUpdate);
 
+      // Si la recarga original tenía un movimiento directo registrado, eliminarlo para evitar registros huérfanos
+      try {
+        await deleteDoc(doc(db, 'movimientos_monedero', `mov_${saleId}`));
+      } catch (_) {}
+
       if (topupAmount > 0) {
         await addDoc(collection(db, 'movimientos_monedero'), {
           cliente_id: clientId,
@@ -2908,25 +2914,51 @@ export async function revertSaleLoyaltyAndBenefits(
             await updateDoc(compRef, compUpdate);
           }
           if (comp.folio) {
-            await updateDoc(doc(db, 'canjes_beneficios', comp.folio), {
+            const compCanjeRef = doc(db, 'canjes_beneficios', comp.folio);
+            const compCanjeSnap = await getDoc(compCanjeRef).catch(() => null);
+            const compOrigFolio = compCanjeSnap?.exists() ? String(compCanjeSnap.data()?.originalFolio || '') : '';
+            await updateDoc(compCanjeRef, {
               estado: 'cancelado_por_venta_eliminada',
               utilizado_en_venta: false,
+              pagado: false,
               recompensaAcreditada: false,
+              revertido_en: Timestamp.now(),
             }).catch(() => {});
+            if (compOrigFolio && compOrigFolio !== comp.folio) {
+              await updateDoc(doc(db, 'canjes_beneficios', compOrigFolio), {
+                estado: 'cancelado_por_venta_eliminada',
+                utilizado_en_venta: false,
+                pagado: false,
+                recompensaAcreditada: false,
+                revertido_en: Timestamp.now(),
+              }).catch(() => {});
+            }
           }
         } catch (_) {}
       }
     }
 
-    // H. Cancelar el documento en `canjes_beneficios` para que el folio/beneficio no quede quemado
+    // H. Cancelar el documento en `canjes_beneficios` (y su `originalFolio` si existe) para que el folio/beneficio no quede quemado
     if (appliedBenefitFolio) {
-      await updateDoc(doc(db, 'canjes_beneficios', appliedBenefitFolio), {
+      const canjeRef = doc(db, 'canjes_beneficios', appliedBenefitFolio);
+      const canjeSnap = await getDoc(canjeRef).catch(() => null);
+      const origFolio = canjeSnap?.exists() ? String(canjeSnap.data()?.originalFolio || '') : '';
+      await updateDoc(canjeRef, {
         estado: 'cancelado_por_venta_eliminada',
         utilizado_en_venta: false,
         pagado: false,
         recompensaAcreditada: false,
         revertido_en: Timestamp.now(),
       }).catch(() => {});
+      if (origFolio && origFolio !== appliedBenefitFolio) {
+        await updateDoc(doc(db, 'canjes_beneficios', origFolio), {
+          estado: 'cancelado_por_venta_eliminada',
+          utilizado_en_venta: false,
+          pagado: false,
+          recompensaAcreditada: false,
+          revertido_en: Timestamp.now(),
+        }).catch(() => {});
+      }
     }
 
     return { reverted: true, summary };

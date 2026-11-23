@@ -186,18 +186,18 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
         hideCloseButton={true}
-        className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border-2 border-blue-500 bg-card"
+        className="w-[96vw] sm:max-w-4xl lg:max-w-5xl max-h-[92dvh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 bg-card"
       >
         {/* Cabecera Oficial de Modal con Haz de Luz Oblicuo */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+        <div className="relative overflow-hidden bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] px-4 py-3 sm:px-5 sm:py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="header-light-beam absolute inset-0 pointer-events-none" />
-          <div className="flex items-center gap-3 relative z-10">
-            <MapPin className="h-5 w-5 text-slate-300 shrink-0" />
+          <div className="flex items-center gap-2.5 relative z-10">
+            <MapPin className="h-4 w-4 text-slate-300 shrink-0" />
             <div>
-              <DialogTitle className="text-base font-bold text-white tracking-tight">
+              <DialogTitle className="text-sm sm:text-base font-bold text-white tracking-tight leading-tight">
                 {isEditMode ? 'Editar Sucursal' : 'Nueva Sucursal'}
               </DialogTitle>
-              <DialogDescription className="text-xs text-slate-300">
+              <DialogDescription className="text-[11px] text-slate-300 hidden sm:block">
                 {isEditMode ? 'Modifica los datos y horario de atención de la sucursal.' : 'Ingresa la información general y horarios de la nueva sucursal.'}
               </DialogDescription>
             </div>
@@ -215,8 +215,10 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
         </div>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col overflow-hidden">
-          <ScrollArea className="flex-1 overflow-y-auto p-4 sm:p-5">
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 overflow-y-auto p-3.5 sm:p-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+              {/* COLUMNA IZQUIERDA: Información General + Modalidad Operativa */}
+              <div className="lg:col-span-7 space-y-3.5">
               {/* Información General */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="space-y-1">
@@ -480,9 +482,10 @@ export function NewLocalModal({ isOpen, onClose, onLocalCreated, local }: NewLoc
                   )}
                 </div>
               </div>
+              </div>
 
-              {/* Configurador de Horario Semanal Unificado (Regla 2 AGENTS.md) */}
-              <div className="space-y-2 pt-3 border-t border-border/50">
+              {/* COLUMNA DERECHA: Configurador de Horario Semanal Unificado (Regla 2 AGENTS.md) */}
+              <div className="lg:col-span-5 space-y-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-border/50">
                 <div className="flex items-center justify-between">
                   <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-slate-400" />

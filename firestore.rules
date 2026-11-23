@@ -299,10 +299,20 @@ service cloud.firestore {
     }
     match /clients/{document=**} { allow read, write: if isStaff(); } 
 
-    // Canjes de Beneficios (Pase Alfa y Cupones App Móvil) - Lectura autenticada (compatibilidad app instalada), escritura exclusiva Staff
-    match /canjes_beneficios/{document=**} { 
+    // Canjes de Beneficios (Pase Alfa y Cupones App Móvil)
+    // - Lectura autenticada (compatibilidad app instalada)
+    // - Creación permitida para clientes autenticados SOLO como intención pendiente de escaneo/código manual (sin poder canjear ni acreditar)
+    // - Actualización y eliminación exclusivas de Staff
+    match /canjes_beneficios/{folioId} { 
       allow read: if isAuthenticated();
-      allow write: if isStaff();
+      allow create: if isStaff() || (
+        isAuthenticated() &&
+        request.resource.data.get('estado', '') == 'pendiente_escaneo' &&
+        request.resource.data.get('utilizado_en_venta', false) == false &&
+        request.resource.data.get('recompensaAcreditada', false) == false &&
+        request.resource.data.get('pagado', false) == false
+      );
+      allow update, delete: if isStaff();
     } 
 
     // Bitácora y Órdenes de Saldo Pase Alfa (Monedero Prepago)

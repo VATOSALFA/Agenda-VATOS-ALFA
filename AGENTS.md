@@ -74,6 +74,10 @@ Este repositorio cuenta con directrices de diseño y arquitectura de software qu
 - Usar paddings contenidos (`p-2.5` a `p-3.5`) para evitar scroll vertical excesivo.
 - Subtítulos o párrafos explicativos largos deben ocultarse en pantallas móviles (`hidden sm:block`) para mantener una vista limpia y ordenada.
 - **Configuradores de Horario Semanal:** Deben presentarse en una sola tarjeta contenedora unificada con divisores (`divide-y`), alineando el switch, nombre del día, selectores de hora en línea (`De HH:mm a HH:mm`) y botones de acción en una sola fila horizontal (`py-2 px-3.5`). Queda prohibido separar cada día en tarjetas pesadas o de múltiples filas que fuercen scroll vertical innecesario.
+- **Optimización para Tablets Horizontales (Landscape Tablet Optimization):**
+  - En sucursal, la tablet de recepción y barbería se opera en orientación horizontal (landscape), donde el ancho es amplio (~1024px a 1280px) pero la altura vertical es reducida (~600px a 750px útiles).
+  - **Prohibido apilar verticalmente modales con múltiples secciones en una sola columna estrecha (`sm:max-w-lg`):** Modales con varios pasos, formularios o calculadoras (ej. Recarga de Saldo, Pagos o Check-ins) deben usar un contenedor amplio (`sm:max-w-3xl lg:max-w-4xl`) y dividir el contenido en 2 columnas paralelas (`grid grid-cols-1 md:grid-cols-2 gap-3.5`).
+  - **Objetivo Cero Scroll:** La cabecera oficial, ambas columnas y los botones de acción del pie deben caber completos dentro de la pantalla sin forzar scroll vertical.
 
 ---
 

@@ -969,7 +969,7 @@ export function OverdueNotificationsPopover({
       >
         <DialogContent
           hideCloseButton={true}
-          className="w-full max-w-lg bg-background rounded-2xl shadow-2xl border-2 border-blue-500 p-0 overflow-hidden flex flex-col max-h-[88vh] gap-0 pointer-events-auto"
+          className="w-[95vw] sm:max-w-3xl lg:max-w-4xl bg-background rounded-2xl shadow-[0_10px_30px_rgba(59,130,246,0.18)] border-2 border-blue-500 p-0 overflow-hidden flex flex-col max-h-[88dvh] gap-0 pointer-events-auto"
           onPointerDownOutside={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1106,8 +1106,8 @@ export function OverdueNotificationsPopover({
               )}
             </div>
 
-            {/* Listado con Barra de Desplazamiento Estilizada */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 max-h-[58vh]">
+            {/* Listado en 2 columnas para tablet horizontal (1 columna en celular) */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-3 items-start max-h-[62dvh]">
               {/* 1. SECCIÓN: CITAS AGENDADAS EN LÍNEA PENDIENTES DE CONFIRMACIÓN */}
               {filteredOnline.map((res) => {
                 const prof = professionals.find(

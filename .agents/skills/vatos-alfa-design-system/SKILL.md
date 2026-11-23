@@ -535,3 +535,32 @@ Al presionar **Editar**, se abre un modal maximizado oficial (`Dialog` de tamañ
 3. **Etiquetas Dinámicas (si aplica):** Si el campo admite variables (ej. `{nombre}`, `{fecha}`, `{hora}`, `{profesional}`), se incluye una barra superior de badges clicables para insertarlas o copiarlas directamente al texto con un solo clic.
 4. **Área de Redacción:** `<Textarea className="flex-1 min-h-[260px] sm:min-h-[360px] text-xs sm:text-sm font-sans leading-relaxed resize-none p-3.5 rounded-xl border-border/80 focus:border-blue-500">`.
 5. **Pie de Modal:** Botón `Cancelar` y botón `Aplicar y Guardar Ahora` con `variant="alfa"`.
+
+---
+
+## 14. Estándar Oficial para Modales en Tablets Horizontales (Landscape Tablet Optimization)
+
+En la operación diaria de las sucursales, **las tablets de recepción y estaciones de barbería se utilizan predominantemente en orientación horizontal (apaisada / landscape)**. En este escenario:
+- El ancho de pantalla es abundante (típicamente de `1024px` a `1280px`).
+- La altura vertical es sumamente limitada (generalmente entre `600px` y `750px` útiles una vez descontadas las barras de navegación del explorador y del sistema operativo).
+
+### 14.1. Reglas de Diseño Horizontal (Cero Scroll en Tablet)
+1. **Prohibido apilar verticalmente modales multi-sección en una columna estrecha (`sm:max-w-lg`):**
+   - Si un modal contiene más de 3 secciones (por ejemplo: selección de cliente/paquete, resumen de costos, métodos de cobro y calculadora de cambio), apilarlas en una sola columna angosta provoca que el modal supere los 850px de altura, forzando un scroll vertical incómodo y escondiendo el botón de acción principal ("Abonar", "Cobrar", "Guardar").
+2. **Distribución en 2 Columnas Paralelas en Tablets y Desktop:**
+   - En pantallas `md:` o mayores, utilizar ancho amplio: `sm:max-w-3xl lg:max-w-4xl w-[96vw] max-h-[92vh]`.
+   - Dividir el contenido con un grid responsivo:
+     ```tsx
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
+       {/* Columna Izquierda: Información de cliente, selección de paquete / servicios y resumen */}
+       <div className="space-y-3">...</div>
+
+       {/* Columna Derecha: Método de pago, calculadora de cambio y acciones de cobro */}
+       <div className="space-y-3">...</div>
+     </div>
+     ```
+3. **Paddings y Alturas Contenidas:**
+   - Cabecera: `px-4 py-2.5 sm:px-5 sm:py-3` (icono `h-4.5 w-4.5`, texto conciso sin saltos de línea largos).
+   - Cuerpo: `p-3.5 sm:p-4`.
+   - Botones de selección rápida y fichas: `p-2` a `p-2.5` con textos compactos.
+   - El conjunto total debe medir entre 400px y 480px de alto, permitiendo visualizar la cabecera, ambas columnas y el pie sin que el usuario tenga que deslizar hacia abajo en la tablet.

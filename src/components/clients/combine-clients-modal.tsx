@@ -12,16 +12,6 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '../ui
 import { ScrollArea } from '../ui/scroll-area';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Label } from '../ui/label';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { writeBatch, collection, getDocs, query, where, doc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase-client';
 import { getClientWalletBalance } from '@/lib/wallet-config';
@@ -337,6 +327,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 setStep(1);
                 setSelectedGroup(null);
                 setPrimaryClientId(null);
+                setIsConfirming(false);
             }, 300);
             return () => clearTimeout(timer);
         }
@@ -359,8 +350,8 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
 
     return (
         <>
-            <Dialog open={isOpen} onOpenChange={onOpenChange}>
-                <DialogContent hideCloseButton={true} className="sm:max-w-4xl max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background">
+            <Dialog open={isOpen} onOpenChange={(open) => { if (!isProcessing) onOpenChange(open); }}>
+                <DialogContent hideCloseButton={true} className="w-[96vw] sm:max-w-4xl max-h-[88vh] flex flex-col p-0 overflow-hidden rounded-2xl border-2 border-blue-500 shadow-[0_10px_30px_rgba(59,130,246,0.18)] bg-background">
                     {/* Header Oficial Vatos Alfa */}
                     <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
                         <div className="header-light-beam" aria-hidden="true" />
@@ -369,10 +360,14 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                 <Combine className="h-5 w-5 text-slate-300 shrink-0" />
                                 <div>
                                     <DialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
-                                        Combinar Clientes Duplicados
+                                        {isConfirming ? '¿Confirmar Combinación?' : 'Combinar Clientes Duplicados'}
                                     </DialogTitle>
                                     <DialogDescription className="text-xs text-slate-300">
-                                        {step === 1 ? 'Selecciona un grupo de clientes duplicados para unificar sus datos.' : 'Elige el registro principal y confirma la combinación.'}
+                                        {isConfirming
+                                            ? 'Esta acción unificará el historial y eliminará los registros secundarios.'
+                                            : step === 1
+                                                ? 'Selecciona un grupo de clientes duplicados para unificar sus datos.'
+                                                : 'Elige el registro principal y confirma la combinación.'}
                                     </DialogDescription>
                                 </div>
                             </div>
@@ -380,6 +375,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                 variant="ghost"
                                 size="icon"
                                 onClick={handleClose}
+                                disabled={isProcessing}
                                 className="h-8 w-8 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 shrink-0"
                             >
                                 <X className="h-4 w-4" />
@@ -407,12 +403,15 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                                         <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                                         <span className="font-medium text-foreground">{client.nombre} {client.apellido}</span>
                                                         <span className="text-[11px] text-muted-foreground font-mono">({client.numero_cliente ? `#${client.numero_cliente}` : client.id?.slice(0, 6)})</span>
+                                                        <span className="text-[11px] font-semibold text-foreground/80 font-sans">
+                                                            ${Number(client.gasto_total ?? (client as any).consumo_total ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </span>
                                                     </li>
                                                 ))}
                                             </ul>
                                             <Button
                                                 className="btn-vatos-alfa rounded-xl h-8 px-3 text-xs font-semibold text-white mt-3"
-                                                onClick={() => handleSelectGroup(group)}
+                                                onClick={() => { setIsConfirming(false); handleSelectGroup(group); }}
                                             >
                                                 Combinar este grupo <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                                             </Button>
@@ -423,22 +422,37 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                         </div>
                     )}
 
-                    {step === 2 && selectedGroup && (
+                    {step === 2 && selectedGroup && !isConfirming && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 p-4 sm:p-5 flex-grow overflow-y-auto max-h-[58vh]">
                             <div className="overflow-y-auto pr-1">
                                 <RadioGroup value={primaryClientId ?? undefined} onValueChange={setPrimaryClientId}>
                                     <div className="space-y-3">
                                         <h3 className="font-semibold text-xs uppercase tracking-wider text-slate-500">Selecciona el registro a conservar:</h3>
-                                        {selectedGroup.clients.map(client => (
-                                            <Label key={client.id} htmlFor={client.id} className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-500/5 transition-colors">
-                                                <RadioGroupItem value={client.id} id={client.id} className="mt-1" />
-                                                <div className="space-y-1 text-xs">
-                                                    <p className="font-semibold text-sm text-foreground">{client.nombre} {client.apellido}</p>
-                                                    <p className="text-muted-foreground flex items-center gap-1.5"><Mail className="h-3 w-3" />{client.correo || 'N/A'}</p>
-                                                    <p className="text-muted-foreground flex items-center gap-1.5"><Phone className="h-3 w-3" />{client.telefono || 'N/A'}</p>
-                                                </div>
-                                            </Label>
-                                        ))}
+                                        {selectedGroup.clients.map(client => {
+                                            const spentVal = Number(client.gasto_total ?? (client as any).consumo_total ?? 0);
+                                            const lastVisitStr = String((client as any).ultima_visita_fecha || '');
+                                            return (
+                                                <Label key={client.id} htmlFor={client.id} className="flex items-start gap-3 p-3 border rounded-xl cursor-pointer has-[:checked]:border-blue-500 has-[:checked]:bg-blue-500/5 transition-colors">
+                                                    <RadioGroupItem value={client.id} id={client.id} className="mt-1" />
+                                                    <div className="space-y-1 text-xs flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <p className="font-semibold text-sm text-foreground truncate">
+                                                                {client.nombre} {client.apellido}
+                                                            </p>
+                                                            <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                                                                {client.numero_cliente ? `#${client.numero_cliente}` : client.id?.slice(0, 6)}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-muted-foreground flex items-center gap-1.5"><Mail className="h-3 w-3 shrink-0" />{client.correo || 'N/A'}</p>
+                                                        <p className="text-muted-foreground flex items-center gap-1.5"><Phone className="h-3 w-3 shrink-0" />{client.telefono || 'N/A'}</p>
+                                                        <div className="flex items-center justify-between pt-1 text-[11px] text-muted-foreground border-t border-border/40">
+                                                            <span>Consumo: <strong className="font-sans text-foreground">${spentVal.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+                                                            {lastVisitStr && <span>Últ. visita: {lastVisitStr}</span>}
+                                                        </div>
+                                                    </div>
+                                                </Label>
+                                            );
+                                        })}
                                     </div>
                                 </RadioGroup>
                             </div>
@@ -448,6 +462,13 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                                     <CardDescription className="text-xs">Los datos e historial de los demás registros se transferirán al principal.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="p-4 pt-1 text-xs">
+                                    {primaryClientId && (
+                                        <ComparisonField
+                                            label="ID Principal"
+                                            primaryValue={selectedGroup.clients.find(c => c.id === primaryClientId)?.numero_cliente ? `#${selectedGroup.clients.find(c => c.id === primaryClientId)?.numero_cliente}` : primaryClientId.slice(0, 6)}
+                                            secondaryValues={selectedGroup.clients.filter(c => c.id !== primaryClientId).map(c => c.numero_cliente ? `#${c.numero_cliente}` : c.id.slice(0, 6))}
+                                        />
+                                    )}
                                     {primaryClientId && (
                                         <ComparisonField
                                             label="Nombre Completo"
@@ -474,6 +495,30 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                         </div>
                     )}
 
+                    {step === 2 && selectedGroup && isConfirming && (
+                        <div className="p-5 sm:p-6 space-y-4">
+                            <div className="flex items-start gap-3 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
+                                <AlertTriangle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                                <div className="space-y-1.5 text-xs leading-relaxed">
+                                    <p className="font-bold text-sm text-foreground">
+                                        Confirmar fusión de {selectedGroup.clients.length} registros
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                        Se conservará el perfil principal{' '}
+                                        <strong className="text-foreground">
+                                            {selectedGroup.clients.find(c => c.id === primaryClientId)?.nombre}{' '}
+                                            {selectedGroup.clients.find(c => c.id === primaryClientId)?.apellido}
+                                            {selectedGroup.clients.find(c => c.id === primaryClientId)?.numero_cliente
+                                                ? ` (#${selectedGroup.clients.find(c => c.id === primaryClientId)?.numero_cliente})`
+                                                : ''}
+                                        </strong>.
+                                        Todas las citas, ventas, canjes de beneficios, Alfa Coins, Saldo Pase Alfa y notas de los demás registros se sumarán a este perfil y los registros duplicados serán eliminados permanentemente.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2 shrink-0">
                         {step === 1 ? (
                             <Button
@@ -484,58 +529,50 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                             >
                                 Cerrar
                             </Button>
+                        ) : isConfirming ? (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    onClick={() => setIsConfirming(false)}
+                                    disabled={isProcessing}
+                                    className="rounded-xl h-9 text-xs"
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={handleCombine}
+                                    disabled={isProcessing}
+                                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl h-9 px-4 text-xs font-semibold shadow-sm"
+                                >
+                                    {isProcessing && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                                    Sí, combinar registros
+                                </Button>
+                            </>
                         ) : (
-                            <Button
-                                variant="outline"
-                                type="button"
-                                onClick={() => setStep(1)}
-                                className="rounded-xl h-9 text-xs"
-                            >
-                                Volver
-                            </Button>
-                        )}
-                        {step === 2 && (
-                            <Button
-                                onClick={() => setIsConfirming(true)}
-                                disabled={isProcessing}
-                                className="btn-vatos-alfa rounded-xl h-9 px-4 text-xs font-bold text-white shadow-md"
-                            >
-                                {isProcessing && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                                Combinar Clientes
-                            </Button>
+                            <>
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    onClick={() => setStep(1)}
+                                    className="rounded-xl h-9 text-xs"
+                                >
+                                    Volver
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={() => setIsConfirming(true)}
+                                    disabled={isProcessing || !primaryClientId}
+                                    className="btn-vatos-alfa rounded-xl h-9 px-4 text-xs font-bold text-white shadow-md"
+                                >
+                                    Combinar Clientes
+                                </Button>
+                            </>
                         )}
                     </div>
                 </DialogContent>
             </Dialog>
-
-            <AlertDialog open={isConfirming} onOpenChange={setIsConfirming}>
-                <AlertDialogContent className="p-0 overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-background max-w-md">
-                    {/* Header Oficial Vatos Alfa */}
-                    <div className="bg-gradient-to-r from-[#10172b] via-[#1c2847] to-[#12192d] text-white p-4 sm:p-5 border-b border-[#2d3a60]/60 flex items-center justify-between shrink-0 relative overflow-hidden">
-                        <div className="header-light-beam" aria-hidden="true" />
-                        <div className="relative z-10 flex items-center gap-3">
-                            <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-                            <div>
-                                <AlertDialogTitle className="text-base sm:text-lg font-bold text-white tracking-wide">
-                                    ¿Confirmar Combinación?
-                                </AlertDialogTitle>
-                                <AlertDialogDescription className="text-xs text-slate-300">
-                                    Esta acción es irreversible
-                                </AlertDialogDescription>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="p-5 text-xs text-muted-foreground leading-relaxed">
-                        Se combinarán los clientes seleccionados en un único registro. Todo el historial (citas, ventas y notas) será transferido al cliente principal y los registros secundarios serán eliminados permanentemente.
-                    </div>
-                    <div className="p-4 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2">
-                        <AlertDialogCancel className="rounded-xl h-9 text-xs">Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleCombine} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-xl h-9 px-4 text-xs font-semibold shadow-sm">
-                            Sí, combinar registros
-                        </AlertDialogAction>
-                    </div>
-                </AlertDialogContent>
-            </AlertDialog>
         </>
     );
 }

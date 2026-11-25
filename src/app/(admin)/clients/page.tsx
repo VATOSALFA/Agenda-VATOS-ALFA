@@ -496,6 +496,50 @@ export default function ClientsPage() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
 
+  // ON-DEMAND SEARCH ENRICHMENT: Cuando el usuario busca un cliente específico, consulta su historial completo
+  // (solo para los resultados filtrados, máx. 12, con caché en sesión para optimizar costos de Firestore)
+  const [enrichedClientStats, setEnrichedClientStats] = useState<
+    Record<string, { lastVisit: Date | null; totalSpent: number; sales: Sale[]; attended: number; noShows: number }>
+  >({});
+  const fetchedEnrichedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetchedEnrichedIdsRef.current.clear();
+    setEnrichedClientStats({});
+  }, [queryKey]);
+
+  const parseStoredVisitDate = useCallback((raw: any): Date | null => {
+    if (!raw) return null;
+    if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+    if (raw instanceof Timestamp) return raw.toDate();
+    if (typeof raw?.seconds === 'number') return new Date(raw.seconds * 1000);
+    if (typeof raw === 'string' && raw.trim()) {
+      const trimmed = raw.trim();
+      const parsed = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+        ? parseISO(`${trimmed}T12:00:00`)
+        : parseISO(trimmed);
+      return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+  }, []);
+
+  const isValidSpendSale = useCallback((sale: any): boolean => {
+    if (!sale) return false;
+    if (['Pendiente', 'Anulado', 'Cancelado'].includes(String(sale.pago_estado || ''))) return false;
+    if (['cancelada', 'cancelled'].includes(String(sale.estado_venta || sale.status || '').toLowerCase())) return false;
+    if (sale.absorbed_in_sale_id) return false;
+    if (sale.tipo_venta === 'recarga_monedero' || String(sale.id || '').startsWith('topup_')) return false;
+    return true;
+  }, []);
+
+  const getSaleRealAmount = useCallback((sale: any): number => {
+    const walletUsed = Number(sale.pago_monedero || sale.detalle_pago_combinado?.monedero || 0);
+    if (sale.monto_pagado_real !== undefined && sale.monto_pagado_real !== null) {
+      return Number(sale.monto_pagado_real) + walletUsed;
+    }
+    return Number(sale.total) || 0;
+  }, []);
+
   // Precargar reservas recientes (últimos 90 días) para enriquecer la fecha de última visita sin descargar toda la colección histórica
   useEffect(() => {
     if (!db) return;
@@ -524,21 +568,25 @@ export default function ClientsPage() {
     const salesSource = hasLoadedHistory ? historicalSales : sales;
     const reservationsSource = historicalReservations;
 
+    // 1. Base ligera sin lecturas extra: leer fecha guardada en cada ficha de cliente
+    clients.forEach(c => {
+      const storedDate =
+        parseStoredVisitDate((c as any).ultima_visita) ||
+        parseStoredVisitDate((c as any).ultima_visita_fecha) ||
+        parseStoredVisitDate((c as any).ultimo_corte);
+      if (storedDate) {
+        map.set(c.id, storedDate);
+      }
+    });
+
+    // 2. Superponer ventas recientes (ventana ligera de 600 o historial cargado)
     if (salesSource && salesSource.length > 0) {
       salesSource.forEach(s => {
         const clientId = s.cliente_id;
-        if (!clientId) return;
+        if (!clientId || !isValidSpendSale(s)) return;
 
-        let saleDate: Date | null = null;
-        if (s.fecha_hora_venta instanceof Timestamp) {
-          saleDate = s.fecha_hora_venta.toDate();
-        } else if ((s.fecha_hora_venta as any)?.seconds) {
-          saleDate = new Date((s.fecha_hora_venta as any).seconds * 1000);
-        } else if (typeof s.fecha_hora_venta === 'string') {
-          saleDate = parseISO(s.fecha_hora_venta);
-        }
-
-        if (saleDate && !isNaN(saleDate.getTime())) {
+        const saleDate = parseStoredVisitDate(s.fecha_hora_venta);
+        if (saleDate) {
           const currentLast = map.get(clientId);
           if (!currentLast || saleDate > currentLast) {
             map.set(clientId, saleDate);
@@ -547,23 +595,15 @@ export default function ClientsPage() {
       });
     }
 
+    // 3. Superponer reservas asistidas/pagadas recientes
     if (reservationsSource && reservationsSource.length > 0) {
       reservationsSource.forEach(r => {
         const clientId = r.cliente_id;
         if (!clientId) return;
-        if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.estado !== 'Confirmado') return;
+        if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.pago_estado !== 'Pagado') return;
 
-        let resDate: Date | null = null;
-        const rawDate = r.fecha as any;
-        if (typeof rawDate === 'string') {
-          resDate = parseISO(rawDate);
-        } else if (rawDate instanceof Timestamp) {
-          resDate = rawDate.toDate();
-        } else if (rawDate?.seconds) {
-          resDate = new Date(rawDate.seconds * 1000);
-        }
-
-        if (resDate && !isNaN(resDate.getTime())) {
+        const resDate = parseStoredVisitDate(r.fecha);
+        if (resDate) {
           const currentLast = map.get(clientId);
           if (!currentLast || resDate > currentLast) {
             map.set(clientId, resDate);
@@ -572,8 +612,15 @@ export default function ClientsPage() {
       });
     }
 
+    // 4. Superponer historial exacto consultado bajo demanda al buscar un cliente específico
+    Object.entries(enrichedClientStats).forEach(([cid, stats]) => {
+      if (stats.lastVisit) {
+        map.set(cid, stats.lastVisit);
+      }
+    });
+
     return map;
-  }, [sales, historicalSales, historicalReservations, hasLoadedHistory]);
+  }, [clients, sales, historicalSales, historicalReservations, hasLoadedHistory, enrichedClientStats, parseStoredVisitDate, isValidSpendSale]);
 
   const appClientIdsFromReservations = useMemo(() => {
     const set = new Set<string>();
@@ -594,41 +641,66 @@ export default function ClientsPage() {
     const map = new Map<string, number>();
     const salesSource = hasLoadedHistory ? historicalSales : sales;
 
-    // Inicializar con gasto_total del cliente si existe
+    // 1. Inicializar con gasto_total / consumo_total guardado en el cliente (si no hay filtro de rango de fechas)
     clients.forEach(c => {
-      map.set(c.id, typeof c.gasto_total === 'number' ? c.gasto_total : 0);
+      if (activeFilters.dateRange) {
+        map.set(c.id, 0);
+      } else {
+        const stored = typeof c.gasto_total === 'number'
+          ? c.gasto_total
+          : (typeof (c as any).consumo_total === 'number' ? Number((c as any).consumo_total) : 0);
+        map.set(c.id, stored);
+      }
     });
 
-    // Calcular con precisión sumando las ventas
+    // 2. Sumar ventas de la ventana activa
     if (salesSource && salesSource.length > 0) {
       const salesSum = new Map<string, number>();
       salesSource.forEach(sale => {
         const clientId = sale.cliente_id;
-        if (!clientId) return;
+        if (!clientId || !isValidSpendSale(sale)) return;
 
         if (activeFilters.dateRange) {
-          let saleDate: Date | null = null;
-          if (sale.fecha_hora_venta instanceof Timestamp) saleDate = sale.fecha_hora_venta.toDate();
-          else if ((sale.fecha_hora_venta as any)?.seconds) saleDate = new Date((sale.fecha_hora_venta as any).seconds * 1000);
-          else if (typeof sale.fecha_hora_venta === 'string') saleDate = parseISO(sale.fecha_hora_venta);
-
+          const saleDate = parseStoredVisitDate(sale.fecha_hora_venta);
           if (saleDate) {
             if (activeFilters.dateRange.from && saleDate < startOfDay(activeFilters.dateRange.from)) return;
             if (activeFilters.dateRange.to && saleDate > endOfDay(activeFilters.dateRange.to)) return;
           }
         }
 
-        const total = Number(sale.total) || 0;
-        salesSum.set(clientId, (salesSum.get(clientId) || 0) + total);
+        const amount = getSaleRealAmount(sale);
+        salesSum.set(clientId, (salesSum.get(clientId) || 0) + amount);
       });
 
       salesSum.forEach((amt, clientId) => {
-        map.set(clientId, amt);
+        if (activeFilters.dateRange || hasLoadedHistory) {
+          map.set(clientId, amt);
+        } else {
+          // Ventana parcial (últimas 600 ventas): nunca degradar un gasto histórico mayor guardado en la ficha
+          map.set(clientId, Math.max(map.get(clientId) || 0, amt));
+        }
       });
     }
 
+    // 3. Superponer consumo exacto de clientes buscados bajo demanda
+    Object.entries(enrichedClientStats).forEach(([cid, stats]) => {
+      if (activeFilters.dateRange) {
+        const periodSum = stats.sales.reduce((acc, sale) => {
+          const saleDate = parseStoredVisitDate(sale.fecha_hora_venta);
+          if (saleDate) {
+            if (activeFilters.dateRange?.from && saleDate < startOfDay(activeFilters.dateRange.from)) return acc;
+            if (activeFilters.dateRange?.to && saleDate > endOfDay(activeFilters.dateRange.to)) return acc;
+          }
+          return acc + getSaleRealAmount(sale);
+        }, 0);
+        map.set(cid, periodSum);
+      } else {
+        map.set(cid, stats.totalSpent);
+      }
+    });
+
     return map;
-  }, [clients, sales, historicalSales, hasLoadedHistory, activeFilters.dateRange]);
+  }, [clients, sales, historicalSales, hasLoadedHistory, activeFilters.dateRange, enrichedClientStats, isValidSpendSale, getSaleRealAmount, parseStoredVisitDate]);
 
   const isLoading = clientsLoading || localesLoading || professionalsLoading || isHistoryLoading;
 
@@ -661,8 +733,13 @@ export default function ClientsPage() {
     });
 
     clients.forEach((c) => {
-      const asistidas = Math.max(Number(c.citas_asistidas) || 0, attendedByClient.get(c.id) || 0);
-      const noAsistidas = Math.max(Number(c.citas_no_asistidas) || 0, noShowByClient.get(c.id) || 0);
+      const enriched = enrichedClientStats[c.id];
+      const asistidas = enriched
+        ? Math.max(Number(c.citas_asistidas) || 0, enriched.attended)
+        : Math.max(Number(c.citas_asistidas) || 0, attendedByClient.get(c.id) || 0);
+      const noAsistidas = enriched
+        ? Math.max(Number(c.citas_no_asistidas) || 0, enriched.noShows)
+        : Math.max(Number(c.citas_no_asistidas) || 0, noShowByClient.get(c.id) || 0);
       const isExempt = Boolean(c.exento_anticipo === true && (Number(c.faltas_desde_exencion) || 0) < 2);
       const isCandidate = !isExempt && asistidas >= 5 && noAsistidas === 0;
       const isPenalized = !isExempt && noAsistidas >= 2;
@@ -670,7 +747,7 @@ export default function ClientsPage() {
     });
 
     return map;
-  }, [clients, historicalReservations]);
+  }, [clients, historicalReservations, enrichedClientStats]);
 
   const exemptionCounts = useMemo(() => {
     let exemptCount = 0;
@@ -1043,6 +1120,88 @@ export default function ClientsPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm]);
+
+  // Enriquecimiento bajo demanda al buscar clientes específicos (<= 12 resultados)
+  // Trae el historial exacto de ventas y reservas solo para los resultados buscados, con caché por sesión
+  useEffect(() => {
+    const trimmedSearch = searchTerm.trim();
+    if (!db || trimmedSearch.length < 2) return;
+    if (filteredClients.length === 0 || filteredClients.length > 12) return;
+
+    const missingIds = filteredClients
+      .map(c => c.id)
+      .filter(id => id && !fetchedEnrichedIdsRef.current.has(id));
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      missingIds.forEach(id => fetchedEnrichedIdsRef.current.add(id));
+      try {
+        const results = await Promise.all(
+          missingIds.map(async (cid) => {
+            const [salesSnap, resSnap] = await Promise.all([
+              getDocs(query(collection(db, 'ventas'), where('cliente_id', '==', cid))),
+              getDocs(query(collection(db, 'reservas'), where('cliente_id', '==', cid))),
+            ]);
+            const clientSales = salesSnap.docs
+              .map(d => ({ id: d.id, ...d.data() } as Sale))
+              .filter(s => isValidSpendSale(s));
+            const clientRes = resSnap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation));
+
+            let lastVisit: Date | null = null;
+            const consider = (d: Date | null) => {
+              if (d && (!lastVisit || d > lastVisit)) lastVisit = d;
+            };
+            let totalSpent = 0;
+            clientSales.forEach(s => {
+              totalSpent += getSaleRealAmount(s);
+              consider(parseStoredVisitDate(s.fecha_hora_venta));
+            });
+
+            let attended = 0;
+            let noShows = 0;
+            clientRes.forEach(r => {
+              if (r.estado === 'Asiste' || r.estado === 'Pagado' || r.pago_estado === 'Pagado') {
+                attended += 1;
+                consider(parseStoredVisitDate(r.fecha));
+              } else if (r.estado === 'No asiste') {
+                noShows += 1;
+              }
+            });
+
+            return {
+              cid,
+              stats: {
+                lastVisit,
+                totalSpent: Math.round(totalSpent * 100) / 100,
+                sales: clientSales,
+                attended,
+                noShows,
+              },
+            };
+          })
+        );
+
+        if (!cancelled) {
+          setEnrichedClientStats(prev => {
+            const next = { ...prev };
+            results.forEach(({ cid, stats }) => {
+              next[cid] = stats;
+            });
+            return next;
+          });
+        }
+      } catch (err) {
+        missingIds.forEach(id => fetchedEnrichedIdsRef.current.delete(id));
+        console.warn('Error enriqueciendo historial de clientes buscados:', err);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [db, searchTerm, filteredClients, isValidSpendSale, getSaleRealAmount, parseStoredVisitDate]);
 
   const getDateValue = (date: any): number => {
     if (!date) return 0;

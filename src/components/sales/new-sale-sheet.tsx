@@ -3332,6 +3332,8 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     updatePayload.consumo_total = increment(realMoneySpent);
                     updatePayload.gasto_total = increment(realMoneySpent);
                     updatePayload.consumoTotal = increment(realMoneySpent);
+                    updatePayload.ultima_visita = Timestamp.now();
+                    updatePayload.ultima_visita_fecha = todayStr;
                     if (liveHasApp) {
                         updatePayload.consumo_pase_alfa = increment(realMoneySpent);
                     }
@@ -3341,6 +3343,7 @@ export function NewSaleSheet({ isOpen, onOpenChange, initialData, onSaleComplete
                     updatePayload.citas_asistidas = increment(1);
                     updatePayload.citasAsistidas = increment(1);
                     updatePayload.visitas_totales = increment(1);
+                    updatePayload.ultima_visita = Timestamp.now();
                     updatePayload.ultima_visita_fecha = todayStr;
                     if (liveHasApp) {
                         updatePayload.visitas_pase_alfa = increment(1);

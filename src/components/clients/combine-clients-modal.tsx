@@ -103,26 +103,32 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
             let inheritedAppLinked = Boolean(primaryClient.appVinculada || primaryClient.appInstalada);
             let inheritedAuthUid = primaryClient.authUid || '';
             const extraNotes: string[] = [];
+            const secondaryResDocs: any[] = [];
+            const secondarySalesDocs: any[] = [];
 
-            // Move reservations, sales, and wallet movements from secondary clients to primary
+            // Move reservations, sales, benefit redemptions, and wallet movements from secondary clients to primary
             for (const secondaryClient of secondaryClients) {
                 const reservationsQuery = query(collection(db, 'reservas'), where('cliente_id', '==', secondaryClient.id));
                 const salesQuery = query(collection(db, 'ventas'), where('cliente_id', '==', secondaryClient.id));
                 const movsQuery = query(collection(db, 'movimientos_monedero'), where('cliente_id', '==', secondaryClient.id));
                 const recargasQuery = query(collection(db, 'recargas_monedero'), where('cliente_id', '==', secondaryClient.id));
+                const canjesQuery = query(collection(db, 'canjes_beneficios'), where('cliente_id', '==', secondaryClient.id));
 
-                const [reservationsSnapshot, salesSnapshot, movsSnapshot, recargasSnapshot] = await Promise.all([
+                const [reservationsSnapshot, salesSnapshot, movsSnapshot, recargasSnapshot, canjesSnapshot] = await Promise.all([
                     getDocs(reservationsQuery),
                     getDocs(salesQuery),
                     getDocs(movsQuery),
                     getDocs(recargasQuery),
+                    getDocs(canjesQuery),
                 ]);
 
                 reservationsSnapshot.forEach(docSnap => {
+                    secondaryResDocs.push({ id: docSnap.id, ...docSnap.data() });
                     batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
 
                 salesSnapshot.forEach(docSnap => {
+                    secondarySalesDocs.push({ id: docSnap.id, ...docSnap.data() });
                     batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
 
@@ -131,6 +137,10 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 });
 
                 recargasSnapshot.forEach(docSnap => {
+                    batch.update(docSnap.ref, { cliente_id: primaryClientId });
+                });
+
+                canjesSnapshot.forEach(docSnap => {
                     batch.update(docSnap.ref, { cliente_id: primaryClientId });
                 });
 
@@ -166,7 +176,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 batch.delete(doc(db, 'clientes', secondaryClient.id));
             }
 
-            // Fetch ALL reservations and sales for primary client (including newly assigned ones)
+            // Fetch primary client's reservations & sales and merge in-memory with secondary records BEFORE batch.commit()
             const allPrimaryReservationsQuery = query(collection(db, 'reservas'), where('cliente_id', '==', primaryClientId));
             const allPrimarySalesQuery = query(collection(db, 'ventas'), where('cliente_id', '==', primaryClientId));
 
@@ -175,8 +185,15 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                 getDocs(allPrimarySalesQuery)
             ]);
 
-            const allRes = allResSnap.docs.map(d => d.data());
-            const allSales = allSalesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+            const mergedResMap = new Map<string, any>();
+            allResSnap.docs.forEach(d => mergedResMap.set(d.id, { id: d.id, ...d.data() }));
+            secondaryResDocs.forEach(r => mergedResMap.set(r.id, r));
+            const allRes = Array.from(mergedResMap.values());
+
+            const mergedSalesMap = new Map<string, any>();
+            allSalesSnap.docs.forEach(d => mergedSalesMap.set(d.id, { id: d.id, ...d.data() }));
+            secondarySalesDocs.forEach(s => mergedSalesMap.set(s.id, s));
+            const allSales = Array.from(mergedSalesMap.values());
 
             const totalCount = allRes.length;
             const attendedCount = allRes.filter(r => r.estado === 'Asiste' || r.estado === 'Pagado').length;
@@ -186,6 +203,7 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
             const validSales = allSales.filter(
                 s =>
                     !['Pendiente', 'Anulado', 'Cancelado'].includes(s.pago_estado || '') &&
+                    !['cancelada', 'cancelled'].includes(String(s.estado_venta || s.status || '').toLowerCase()) &&
                     !s.absorbed_in_sale_id &&
                     s.tipo_venta !== 'recarga_monedero' &&
                     !String(s.id || '').startsWith('topup_')
@@ -197,6 +215,31 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
                     : (sale.total || 0);
                 return acc + amount;
             }, 0);
+
+            // Compute consolidated last visit date from merged valid sales & attended reservations
+            let latestVisitDate: Date | null = null;
+            const considerDate = (d: Date | null) => {
+                if (d && !isNaN(d.getTime()) && (!latestVisitDate || d > latestVisitDate)) {
+                    latestVisitDate = d;
+                }
+            };
+            validSales.forEach(sale => {
+                const raw = sale.fecha_hora_venta;
+                if (raw instanceof Timestamp) considerDate(raw.toDate());
+                else if (raw?.seconds) considerDate(new Date(raw.seconds * 1000));
+                else if (typeof raw === 'string') considerDate(new Date(raw));
+            });
+            allRes.forEach(r => {
+                if (r.estado !== 'Asiste' && r.estado !== 'Pagado' && r.pago_estado !== 'Pagado') return;
+                const raw = r.fecha;
+                if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+                    considerDate(new Date(`${raw.slice(0, 10)}T12:00:00`));
+                } else if (raw instanceof Timestamp) considerDate(raw.toDate());
+                else if (raw?.seconds) considerDate(new Date(raw.seconds * 1000));
+            });
+            const latestVisitStr = latestVisitDate
+                ? `${(latestVisitDate as Date).getFullYear()}-${String((latestVisitDate as Date).getMonth() + 1).padStart(2, '0')}-${String((latestVisitDate as Date).getDate()).padStart(2, '0')}`
+                : '';
 
             const primaryCoins = Number(
                 primaryClient.alfaCoins ??
@@ -237,12 +280,16 @@ export function CombineClientsModal({ isOpen, onOpenChange, onClientsCombined }:
             // Update primary client document with consolidated stats
             const primaryRef = doc(db, 'clientes', primaryClientId);
             batch.update(primaryRef, {
+                nombre: (primaryClient.nombre || '').trim(),
+                apellido: (primaryClient.apellido || '').trim(),
                 citas_totales: totalCount,
                 citas_asistidas: attendedCount,
+                citasAsistidas: attendedCount,
                 citas_no_asistidas: unattendedCount,
                 citas_canceladas: cancelledCount,
-                gasto_total: totalSpent,
-                consumo_total: totalSpent,
+                gasto_total: Math.round(totalSpent * 100) / 100,
+                consumo_total: Math.round(totalSpent * 100) / 100,
+                ...(latestVisitDate ? { ultima_visita: Timestamp.fromDate(latestVisitDate), ultima_visita_fecha: latestVisitStr } : {}),
                 puntos: finalPoints,
                 alfaCoins: finalPoints,
                 alfa_coins: finalPoints,

@@ -7,6 +7,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   serverTimestamp,
@@ -1050,6 +1051,18 @@ function KioskContent() {
 
     setIsLookingUpClient(true);
     try {
+      // Evitar duplicados verificando variantes del teléfono antes de crear un nuevo registro
+      const phoneVariants = Array.from(new Set([cleanPhone, `+52${cleanPhone}`, `52${cleanPhone}`]));
+      const existingSnap = await getDocs(
+        query(collection(db, 'clientes'), where('telefono', 'in', phoneVariants))
+      );
+      if (!existingSnap.empty) {
+        const existingDoc = existingSnap.docs[0];
+        setActiveClient({ id: existingDoc.id, ...existingDoc.data() } as Client);
+        setStep('checkout');
+        return;
+      }
+
       const newClientData = {
         nombre: walkinFirstName.trim(),
         apellido: walkinLastName.trim(),

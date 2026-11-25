@@ -1641,7 +1641,10 @@ async function runAutomatedChecks() {
           const profId = res.barbero_id || res.profesional_id;
           if (profId) {
             const pDoc = await db.collection('profesionales').doc(profId).get();
-            if (pDoc.exists) professionalName = pDoc.data().name || pDoc.data().nombre || professionalName;
+            if (pDoc.exists) {
+              const pd = pDoc.data() || {};
+              professionalName = pd.publicName || pd.name || pd.nombre || professionalName;
+            }
           }
 
           // Template Configuration
@@ -1905,7 +1908,10 @@ async function sendReservationConfirmationEmail(reservationId, clientId, localId
 
     if (proId) {
       const proSnap = await db.collection('profesionales').doc(proId).get();
-      if (proSnap.exists) professionalName = proSnap.data().name;
+      if (proSnap.exists) {
+        const pd = proSnap.data() || {};
+        professionalName = pd.publicName || pd.name || pd.nombre || professionalName;
+      }
     }
 
     const confirmationConfig = websiteSettings.confirmationEmailConfig || {};
@@ -2637,7 +2643,7 @@ async function runDailySummary(dateStr) {
         const headlineTpl = dsConfig.headline || "Hola {nombre}, aquí está tu agenda programada para hoy.";
 
         // Personalize Text
-        const proName = proData.name || proData.nombre || proData.publicName || 'Profesional';
+        const proName = proData.publicName || proData.name || proData.nombre || 'Profesional';
         const currentHeadline = headlineTpl.replace('{nombre}', proName);
         const currentSubject = subjectTpl.replace('{nombre}', proName);
 

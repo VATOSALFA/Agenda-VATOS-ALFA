@@ -435,7 +435,19 @@ export async function handleClientAppointmentAction({
         const sofiaSnap = await db.collection('settings').doc('sofia').get();
         if (sofiaSnap.exists && sofiaSnap.data()?.chatConfirmationTemplate) {
           const tpl = sofiaSnap.data()?.chatConfirmationTemplate;
+          let resolvedPublicProfName = '';
+          const pIdConf = resData?.barbero_id || resData?.items?.[0]?.barbero_id;
+          if (pIdConf) {
+            try {
+              const pDocConf = await db.collection('profesionales').doc(String(pIdConf)).get();
+              if (pDocConf.exists) {
+                const pd = pDocConf.data() || {};
+                resolvedPublicProfName = pd.publicName || pd.name || '';
+              }
+            } catch (_) {}
+          }
           const profName =
+            resolvedPublicProfName ||
             resData?.customer?.professionalName ||
             resData?.items?.[0]?.barbero_name ||
             resData?.barbero_nombre ||
@@ -648,7 +660,19 @@ export async function sendAppointmentChatReminder({
 
     // Format text
     const clientName = res.customer?.nombre || res.cliente_nombre || 'Cliente';
+    let resolvedReminderProfName = '';
+    const pIdRem = res.barbero_id || res.items?.[0]?.barbero_id;
+    if (pIdRem) {
+      try {
+        const pDocRem = await db.collection('profesionales').doc(String(pIdRem)).get();
+        if (pDocRem.exists) {
+          const pd = pDocRem.data() || {};
+          resolvedReminderProfName = pd.publicName || pd.name || '';
+        }
+      } catch (_) {}
+    }
     const profName =
+      resolvedReminderProfName ||
       res.customer?.professionalName ||
       res.items?.[0]?.barbero_name ||
       res.barbero_nombre ||

@@ -841,6 +841,8 @@ export async function finalizeSmartSaleLoyalty(params: {
     clientUpdatePayload.consumo_total = increment(realMoneySpent);
     clientUpdatePayload.gasto_total = increment(realMoneySpent);
     clientUpdatePayload.consumoTotal = increment(realMoneySpent);
+    clientUpdatePayload.ultima_visita = Timestamp.now();
+    clientUpdatePayload.ultima_visita_fecha = todayStr;
     if (hasApp) {
       clientUpdatePayload.consumo_pase_alfa = increment(realMoneySpent);
     }
@@ -849,6 +851,7 @@ export async function finalizeSmartSaleLoyalty(params: {
   if (visitDelta > 0) {
     clientUpdatePayload.citas_asistidas = increment(1);
     clientUpdatePayload.visitas_totales = increment(1);
+    clientUpdatePayload.ultima_visita = Timestamp.now();
     clientUpdatePayload.ultima_visita_fecha = todayStr;
     if (hasApp) {
       clientUpdatePayload.visitas_pase_alfa = increment(1);

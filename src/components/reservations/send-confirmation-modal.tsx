@@ -90,12 +90,20 @@ export function SendConfirmationModal({
     return false;
   }, [reservation, forceAnticipoMode]);
 
+  const servicesSignature = useMemo(() => {
+    if (!reservation) return '';
+    if (reservation.items && reservation.items.length > 0) {
+      return reservation.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ').trim();
+    }
+    return String((reservation as any).servicio || 'Servicio de Barbería').trim();
+  }, [reservation]);
+
   const totalReservationAmount = useMemo(() => {
     if (!reservation) return 0;
     const itemsSum = Array.isArray(reservation.items)
       ? reservation.items.reduce((acc, it: any) => acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1), 0)
       : 0;
-    return Number(reservation.total || reservation.precio || itemsSum || 0);
+    return Number(reservation.precio || itemsSum || reservation.total || 0);
   }, [reservation]);
 
   const depositAmount = useMemo(() => {
@@ -113,21 +121,47 @@ export function SendConfirmationModal({
   const activeChargeAmount = (linkMode === 'full' && canSwitchToFullLink) ? totalReservationAmount : depositAmount;
   const shortPaymentLink = useMemo(() => {
     if (!reservation?.id) return '';
+    const amountTag = Math.round(Number(activeChargeAmount || 0));
     return linkMode === 'full' && canSwitchToFullLink
-      ? `https://vatosalfa.com/p/${reservation.id}?m=full`
-      : `https://vatosalfa.com/p/${reservation.id}`;
-  }, [reservation?.id, linkMode, canSwitchToFullLink]);
+      ? `https://vatosalfa.com/p/${reservation.id}?m=full&v=${amountTag}`
+      : `https://vatosalfa.com/p/${reservation.id}?v=${amountTag}`;
+  }, [reservation?.id, linkMode, canSwitchToFullLink, activeChargeAmount]);
   const paymentLink = shortPaymentLink || (linkMode === 'full' ? (paymentLinksCache.full || '') : (paymentLinksCache.deposit || ''));
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && reservation) {
       setLinkMode('deposit');
+      const resAny = reservation as any;
+      const cachedDepAmt = Number(resAny?.mercado_pago_link_amount || 0);
+      const cachedDepSrv = String(resAny?.mercado_pago_link_services || '').trim();
+      const cachedDepTs = Number(resAny?.mercado_pago_link_ts || 0);
+      const isDepositLinkFresh =
+        Boolean(resAny?.mercado_pago_link) &&
+        cachedDepAmt > 0 &&
+        Math.abs(cachedDepAmt - depositAmount) < 0.01 &&
+        Boolean(cachedDepSrv) &&
+        cachedDepSrv === servicesSignature &&
+        cachedDepTs > 0 &&
+        Date.now() - cachedDepTs < 25 * 60 * 1000;
+
+      const cachedFullAmt = Number(resAny?.mercado_pago_link_total_amount || 0);
+      const cachedFullSrv = String(resAny?.mercado_pago_link_total_services || '').trim();
+      const cachedFullTs = Number(resAny?.mercado_pago_link_total_ts || 0);
+      const isFullLinkFresh =
+        Boolean(resAny?.mercado_pago_link_total) &&
+        cachedFullAmt > 0 &&
+        Math.abs(cachedFullAmt - totalReservationAmount) < 0.01 &&
+        Boolean(cachedFullSrv) &&
+        cachedFullSrv === servicesSignature &&
+        cachedFullTs > 0 &&
+        Date.now() - cachedFullTs < 25 * 60 * 1000;
+
       setPaymentLinksCache({
-        deposit: reservation?.mercado_pago_link || (reservation as any)?.link_pago_anticipo || undefined,
-        full: (reservation as any)?.mercado_pago_link_total || undefined,
+        deposit: isDepositLinkFresh ? resAny.mercado_pago_link : undefined,
+        full: isFullLinkFresh ? resAny.mercado_pago_link_total : undefined,
       });
     }
-  }, [isOpen, reservation?.id]);
+  }, [isOpen, reservation?.id, depositAmount, totalReservationAmount, servicesSignature]);
 
   useEffect(() => {
     if (isOpen && db) {
@@ -210,11 +244,16 @@ export function SendConfirmationModal({
                     mercado_pago_link_total: data.init_point,
                     mercado_pago_preference_id_total: data.id,
                     mercado_pago_link_total_ts: Date.now(),
+                    mercado_pago_link_total_amount: targetAmount,
+                    mercado_pago_link_total_services: servicesText.trim(),
                   }
                 : {
                     mercado_pago_link: data.init_point,
+                    link_pago: data.init_point,
                     mercado_pago_preference_id: data.id,
                     mercado_pago_link_ts: Date.now(),
+                    mercado_pago_link_amount: targetAmount,
+                    mercado_pago_link_services: servicesText.trim(),
                   }),
               anticipo_esperado: depositAmount,
               requiere_anticipo: true,
@@ -236,14 +275,25 @@ export function SendConfirmationModal({
   }, [isOpen, reservation, isDepositRequired, depositAmount, totalReservationAmount, linkMode, canSwitchToFullLink, paymentLinksCache.deposit, paymentLinksCache.full, db, toast]);
 
   const allProfessionalNames = useMemo(() => {
-    if (!reservation?.items || !professionals) return reservation?.professionalNames || 'Profesional';
-    const profIds = new Set(reservation.items.map((i) => i.barbero_id).filter(Boolean));
-    if (profIds.size === 0) return reservation.professionalNames || 'Profesional';
+    if (!professionals) return reservation?.professionalNames || 'Profesional';
+    const profIds = new Set<string>();
+    if (reservation?.items && reservation.items.length > 0) {
+      reservation.items.forEach((i) => {
+        if (i.barbero_id) profIds.add(i.barbero_id);
+      });
+    }
+    if (profIds.size === 0 && reservation?.barbero_id) {
+      profIds.add(reservation.barbero_id);
+    }
+    if (profIds.size === 0) return reservation?.professionalNames || 'Profesional';
     const names = Array.from(profIds)
-      .map((id) => professionals.find((p) => p.id === id)?.name)
+      .map((id) => {
+        const prof = professionals.find((p) => p.id === id);
+        return prof?.publicName || prof?.name;
+      })
       .filter(Boolean);
-    return names.length > 0 ? names.join(', ') : (reservation.professionalNames || 'Profesional');
-  }, [reservation?.items, reservation?.professionalNames, professionals]);
+    return names.length > 0 ? names.join(', ') : (reservation?.professionalNames || 'Profesional');
+  }, [reservation?.items, reservation?.barbero_id, reservation?.professionalNames, professionals]);
 
   if (!reservation) return null;
 

@@ -1685,6 +1685,22 @@ export const reagendarCitaSucursalTool = ai.defineTool(
       estado: nextEstado,
       pago_estado: nextPagoEstado,
       items: updatedItems.length > 0 ? updatedItems : resData.items,
+      ...(anticipoPagado <= 0
+        ? {
+            mercado_pago_link: FieldValue.delete(),
+            link_pago: FieldValue.delete(),
+            link_pago_anticipo: FieldValue.delete(),
+            mercado_pago_preference_id: FieldValue.delete(),
+            mercado_pago_link_ts: FieldValue.delete(),
+            mercado_pago_link_amount: FieldValue.delete(),
+            mercado_pago_link_services: FieldValue.delete(),
+            mercado_pago_link_total: FieldValue.delete(),
+            mercado_pago_preference_id_total: FieldValue.delete(),
+            mercado_pago_link_total_ts: FieldValue.delete(),
+            mercado_pago_link_total_amount: FieldValue.delete(),
+            mercado_pago_link_total_services: FieldValue.delete(),
+          }
+        : {}),
       whatsappConfirmationSent: false,
       reagendada_en: Timestamp.now(),
       reagendada_por: caller.creatorDisplay,

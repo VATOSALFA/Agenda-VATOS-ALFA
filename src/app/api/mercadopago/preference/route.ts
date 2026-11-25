@@ -207,7 +207,13 @@ export async function POST(req: NextRequest) {
 
         // Fallback a reserva existente en Firestore si no se enviaron servicios nuevos
         if (serverCalculatedMinAmount <= 0 && existingResData) {
-            const resTotal = Number(existingResData.totalAmount || existingResData.total || existingResData.precio || 0);
+            const resItemsSum = Array.isArray(existingResData.items)
+                ? existingResData.items.reduce(
+                    (acc: number, it: any) => acc + Number(it?.precio || it?.price || 0) * Number(it?.cantidad || 1),
+                    0
+                )
+                : 0;
+            const resTotal = Number(existingResData.precio || resItemsSum || existingResData.total || existingResData.totalAmount || 0);
             const expectedDep = Number(existingResData.anticipo_esperado || 0);
             const pendingBal = Number(existingResData.saldo_pendiente || 0);
             const candidateAmount = expectedDep > 0 ? expectedDep : (pendingBal > 0 ? pendingBal : resTotal);

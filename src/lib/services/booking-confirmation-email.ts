@@ -194,7 +194,7 @@ export async function sendBookingConfirmation(
 
                             ${showProfessional ? `<tr>
                                 <td style="width: 24px; vertical-align: middle;"><img src="https://cdn-icons-png.flaticon.com/512/1077/1077114.png" width="20" style="display: block; filter: invert(21%) sepia(35%) saturate(6970%) hue-rotate(209deg) brightness(93%) contrast(101%);"></td>
-                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${escapeHtml(professional.name || 'Profesional')}</td>
+                                <td style="font-weight: 600; font-size: 1em; color: #444; vertical-align: middle; padding-left: 12px;">${escapeHtml(professional.publicName || professional.name || 'Profesional')}</td>
                             </tr>` : ''}
 
                             ${showLocation ? `<tr>

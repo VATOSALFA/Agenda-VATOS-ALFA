@@ -928,10 +928,25 @@ export const crearCitaTool = ai.defineTool(
 
         if (linkPago) {
           const targetCol = isSimulation ? 'reservas_sandbox' : 'reservas';
+          const linkServicesLabel = resolvedProducts.length > 0
+            ? `${finalServName}, ${resolvedProducts.map((p) => p.nombre).join(', ')}`
+            : finalServName;
           await db.collection(targetCol).doc(reservationId).set(
             {
               link_pago_anticipo: linkPago,
-              ...(cobraTotalCompleto ? { mercado_pago_link_total: linkPago } : { mercado_pago_link: linkPago }),
+              ...(cobraTotalCompleto
+                ? {
+                    mercado_pago_link_total: linkPago,
+                    mercado_pago_link_total_ts: Date.now(),
+                    mercado_pago_link_total_amount: montoACobrarEnLink,
+                    mercado_pago_link_total_services: linkServicesLabel,
+                  }
+                : {
+                    mercado_pago_link: linkPago,
+                    mercado_pago_link_ts: Date.now(),
+                    mercado_pago_link_amount: montoACobrarEnLink,
+                    mercado_pago_link_services: linkServicesLabel,
+                  }),
               updated_at: new Date(),
             },
             { merge: true }
@@ -1547,6 +1562,22 @@ export const reagendarCitaTool = ai.defineTool(
                 pago_estado: 'pending_payment',
               }
             : {}),
+          ...(anticipoPagado <= 0
+            ? {
+                mercado_pago_link: FieldValue.delete(),
+                link_pago: FieldValue.delete(),
+                link_pago_anticipo: FieldValue.delete(),
+                mercado_pago_preference_id: FieldValue.delete(),
+                mercado_pago_link_ts: FieldValue.delete(),
+                mercado_pago_link_amount: FieldValue.delete(),
+                mercado_pago_link_services: FieldValue.delete(),
+                mercado_pago_link_total: FieldValue.delete(),
+                mercado_pago_preference_id_total: FieldValue.delete(),
+                mercado_pago_link_total_ts: FieldValue.delete(),
+                mercado_pago_link_total_amount: FieldValue.delete(),
+                mercado_pago_link_total_services: FieldValue.delete(),
+              }
+            : {}),
           etiqueta_recordatorio: 'reagendada',
           updated_at: new Date(),
           notas:
@@ -1736,8 +1767,18 @@ export const generarEnlacePagoCitaTool = ai.defineTool(
         {
           link_pago_anticipo: pref.initPoint,
           ...(isFullMode
-            ? { mercado_pago_link_total: pref.initPoint }
-            : { mercado_pago_link: pref.initPoint }),
+            ? {
+                mercado_pago_link_total: pref.initPoint,
+                mercado_pago_link_total_ts: Date.now(),
+                mercado_pago_link_total_amount: targetChargeAmount,
+                mercado_pago_link_total_services: String(servTitle || '').trim(),
+              }
+            : {
+                mercado_pago_link: pref.initPoint,
+                mercado_pago_link_ts: Date.now(),
+                mercado_pago_link_amount: targetChargeAmount,
+                mercado_pago_link_services: String(servTitle || '').trim(),
+              }),
           updated_at: new Date(),
         },
         { merge: true }

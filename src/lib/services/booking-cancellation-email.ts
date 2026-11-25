@@ -114,7 +114,7 @@ export async function sendBookingCancellation(params: SendBookingCancellationPar
     const professional: any = profDoc.exists ? profDoc.data() : {};
     const localData: any = locDoc.exists ? locDoc.data() : {};
 
-    const professionalName = professional.name || reservation.barbero_nombre || 'Profesional';
+    const professionalName = professional.publicName || professional.name || reservation.barbero_nombre || 'Profesional';
     const localAddress = localData.address || localData.direccion || 'Sucursal Principal';
     const localPhone = localData.phone || localData.telefono || '';
     const whatsappDigits = String(localPhone || '').replace(/\D/g, '');

@@ -144,26 +144,74 @@ export async function GET(
       );
     }
 
-    // Si es el bot de vista previa de WhatsApp / redes sociales, devolver metadatos limpios sin crear preferencia nueva
+    const db = getDb();
+
+    // Si es el bot de vista previa de WhatsApp / redes sociales, devolver metadatos dinámicos actuales SIN crear preferencia nueva
     const ua = (req.headers.get('user-agent') || '').toLowerCase();
-    if (
+    const isPreviewBot =
       ua.includes('whatsapp') ||
       ua.includes('facebookexternalhit') ||
       ua.includes('telegrambot') ||
-      ua.includes('twitterbot')
-    ) {
+      ua.includes('twitterbot');
+
+    if (isPreviewBot) {
+      let previewTitle = 'Pago Seguro de Anticipo';
+      let previewDesc = 'Confirma tu cita en VATOS ALFA Barber Shop con SPEI o tarjeta.';
+      if (!reservationId.startsWith('topup_')) {
+        try {
+          let previewDoc = await db.collection('reservas').doc(reservationId).get();
+          if (!previewDoc.exists) {
+            const qPreview = await db
+              .collection('reservas')
+              .where('folio', '==', reservationId)
+              .limit(1)
+              .get();
+            if (!qPreview.empty) previewDoc = qPreview.docs[0];
+          }
+          if (previewDoc.exists) {
+            const pData = previewDoc.data() || {};
+            const pItemsSum = Array.isArray(pData.items)
+              ? pData.items.reduce(
+                  (acc: number, it: any) =>
+                    acc + Number(it.precio || it.price || 0) * Number(it.cantidad || 1),
+                  0
+                )
+              : 0;
+            const pTotal = Number(pData.precio || pItemsSum || pData.total || 0);
+            const pDeposit =
+              Number(pData.anticipo_esperado || pData.monto_anticipo || 0) ||
+              Math.round(pTotal * 0.5) ||
+              100;
+            const pTarget = mode === 'full' && pTotal > 0 ? pTotal : pDeposit;
+            const pServices =
+              Array.isArray(pData.items) && pData.items.length > 0
+                ? pData.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ')
+                : pData.servicio || 'Servicio de Barbería';
+            const pAmountStr = Number(pTarget).toLocaleString('es-MX', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            });
+            previewTitle = `${mode === 'full' ? 'Pago Total Cita' : 'Anticipo Cita'} - ${pServices} ($${pAmountStr} MXN)`;
+            previewDesc = `Realiza tu ${mode === 'full' ? 'pago total' : 'anticipo'} de $${pAmountStr} MXN (SPEI o tarjeta) para confirmar tu cita en VATOS ALFA Barber Shop.`;
+          }
+        } catch (_) {}
+      }
       return new NextResponse(
         renderStatusHtml(
-          'Pago Seguro de Anticipo',
-          'Confirma tu cita en VATOS ALFA Barber Shop con SPEI o tarjeta.',
+          previewTitle,
+          previewDesc,
           'Continuar al pago',
-          `https://vatosalfa.com/p/${encodeURIComponent(reservationId)}`
+          `https://vatosalfa.com/p/${encodeURIComponent(reservationId)}${mode === 'full' ? '?m=full' : ''}`
         ),
-        { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+        {
+          status: 200,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+          },
+        }
       );
     }
-
-    const db = getDb();
 
     // Manejo dedicado de recargas en línea de Saldo Pase Alfa (topup_*)
     if (reservationId.startsWith('topup_')) {
@@ -325,14 +373,19 @@ export async function GET(
           0
         )
       : 0;
-    const totalAmount = Number(resData.total || resData.precio || itemsSum || 0);
+    const totalAmount = Number(resData.precio || itemsSum || resData.total || 0);
     const depositAmount =
       Number(resData.anticipo_esperado || resData.monto_anticipo || 0) ||
       Math.round(totalAmount * 0.5) ||
       100;
     const targetAmount = mode === 'full' && totalAmount > 0 ? totalAmount : depositAmount;
 
-    // Si ya existe un link generado hace menos de 25 minutos Y por el mismo monto exacto, reutilizarlo de inmediato
+    const servicesText =
+      Array.isArray(resData.items) && resData.items.length > 0
+        ? resData.items.map((i: any) => i.nombre || i.servicio).filter(Boolean).join(', ')
+        : resData.servicio || 'Servicio de Barbería';
+
+    // Si ya existe un link generado hace menos de 25 minutos Y coincide exactamente en monto y servicios actuales, reutilizarlo de inmediato
     const existingLink =
       mode === 'full'
         ? resData.mercado_pago_link_total
@@ -343,23 +396,31 @@ export async function GET(
     const cachedLinkAmount = Number(
       mode === 'full' ? resData.mercado_pago_link_total_amount : resData.mercado_pago_link_amount
     ) || 0;
-    const sameAmount = !cachedLinkAmount || cachedLinkAmount === targetAmount;
+    const cachedLinkServices = String(
+      mode === 'full' ? resData.mercado_pago_link_total_services : resData.mercado_pago_link_services
+    ).trim();
+    const sameAmount = cachedLinkAmount > 0 && Math.abs(cachedLinkAmount - targetAmount) < 0.01;
+    const sameServices = Boolean(cachedLinkServices) && cachedLinkServices === servicesText.trim();
 
-    if (existingLink && sameAmount && linkCreatedAtMs > 0 && Date.now() - linkCreatedAtMs < 25 * 60 * 1000) {
+    if (existingLink && sameAmount && sameServices && linkCreatedAtMs > 0 && Date.now() - linkCreatedAtMs < 25 * 60 * 1000) {
       if (wantsJson) {
         return NextResponse.json({
           id: mode === 'full' ? resData.mercado_pago_preference_id_total || resolvedDocId : resData.mercado_pago_preference_id || resolvedDocId,
           initPoint: existingLink,
         });
       }
-      return NextResponse.redirect(existingLink, 302);
+      const resRedirect = NextResponse.redirect(existingLink, 302);
+      resRedirect.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return resRedirect;
     }
 
     // Generar una preferencia fresca de Mercado Pago al vuelo
     const accessToken = await getMercadoPagoToken(db);
     if (!accessToken) {
-      if (existingLink) {
-        return NextResponse.redirect(existingLink, 302);
+      if (existingLink && sameAmount) {
+        const resRedirect = NextResponse.redirect(existingLink, 302);
+        resRedirect.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        return resRedirect;
       }
       return new NextResponse(
         renderStatusHtml(
@@ -371,11 +432,6 @@ export async function GET(
         { status: 500, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
-
-    const servicesText =
-      Array.isArray(resData.items) && resData.items.length > 0
-        ? resData.items.map((i: any) => i.nombre || i.servicio).join(', ')
-        : resData.servicio || 'Servicio de Barbería';
 
     const clientName = resData.customer?.nombre || resData.cliente_nombre || 'Cliente';
     const clientLastName = resData.customer?.apellido || '';
@@ -442,6 +498,7 @@ export async function GET(
                 mercado_pago_preference_id_total: prefResult.id,
                 mercado_pago_link_total_ts: Date.now(),
                 mercado_pago_link_total_amount: targetAmount,
+                mercado_pago_link_total_services: servicesText.trim(),
               }
             : {
                 mercado_pago_link: prefResult.init_point,
@@ -449,6 +506,7 @@ export async function GET(
                 mercado_pago_preference_id: prefResult.id,
                 mercado_pago_link_ts: Date.now(),
                 mercado_pago_link_amount: targetAmount,
+                mercado_pago_link_services: servicesText.trim(),
               }),
           anticipo_esperado: depositAmount,
           requiere_anticipo: true,
@@ -463,7 +521,9 @@ export async function GET(
         });
       }
 
-      return NextResponse.redirect(prefResult.init_point, 302);
+      const resRedirect = NextResponse.redirect(prefResult.init_point, 302);
+      resRedirect.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return resRedirect;
     }
 
       return new NextResponse(

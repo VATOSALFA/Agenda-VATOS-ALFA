@@ -197,17 +197,28 @@ export function ReservationDetailModal({
   }, [reservation]);
 
   const allProfessionalNames = useMemo(() => {
-    if (!reservation.items || !professionals) return reservation.professionalNames || 'N/A';
+    if (!professionals) return reservation.professionalNames || 'N/A';
 
-    const profIds = new Set(reservation.items.map(i => i.barbero_id).filter(Boolean));
+    const profIds = new Set<string>();
+    if (reservation.items && reservation.items.length > 0) {
+      reservation.items.forEach(i => {
+        if (i.barbero_id) profIds.add(i.barbero_id);
+      });
+    }
+    if (profIds.size === 0 && reservation.barbero_id) {
+      profIds.add(reservation.barbero_id);
+    }
     if (profIds.size === 0) return reservation.professionalNames || 'N/A';
 
     const names = Array.from(profIds)
-      .map(id => professionals.find(p => p.id === id)?.name)
+      .map(id => {
+        const prof = professionals.find(p => p.id === id);
+        return prof?.publicName || prof?.name;
+      })
       .filter(Boolean);
 
     return names.length > 0 ? names.join(', ') : (reservation.professionalNames || 'N/A');
-  }, [reservation.items, reservation.professionalNames, professionals]);
+  }, [reservation.items, reservation.barbero_id, reservation.professionalNames, professionals]);
 
   // Cliente completo (desde BD o reservation.customer)
   const clientData: Client | null = useMemo(() => {

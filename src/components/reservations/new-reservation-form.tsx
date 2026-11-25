@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, setDoc, limit, increment } from 'firebase/firestore';
+import { addDoc, collection, getDocs, query, where, Timestamp, updateDoc, doc, getDoc, setDoc, limit, increment, deleteField } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestoreQuery } from '@/hooks/use-firestore';
 import { cn, formatMoney } from '@/lib/utils';
@@ -1518,17 +1518,20 @@ export function NewReservationForm({
 
       const paidTimestamp = (initialData as any)?.deposit_paid_at || (initialData as any)?.fecha_pago || Timestamp.now();
 
-      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean; duracion?: number; duracionMinutos?: number; servicios?: any[] } = {
+      const dataToSave: Partial<Reservation> & { hora_inicio?: string; hora_fin?: string; cliente_nombre?: string; cliente_telefono?: string; cliente_email?: string; manual_deposit?: boolean; duracion?: number; duracionMinutos?: number; servicios?: any[]; totalAmount?: number } = {
         cliente_id: data.cliente_id,
         cliente_nombre: selectedClient ? `${selectedClient.nombre || ''} ${selectedClient.apellido || ''}`.trim() : (data.cliente_nombre || ''),
         cliente_telefono: selectedClient?.telefono || data.cliente_telefono || '',
         cliente_email: selectedClient?.correo || (selectedClient as any)?.email || data.cliente_email || '',
         barbero_id: primaryBarberoId,
         items: itemsToSave,
-        servicios: itemsToSave.map((i: any) => ({
-          ...i,
-          profesional: professionals.find(p => p.id === i.barbero_id)?.name || i.barbero_id || ''
-        })),
+        servicios: itemsToSave.map((i: any) => {
+          const profObj = professionals.find(p => p.id === i.barbero_id);
+          return {
+            ...i,
+            profesional: profObj?.publicName || profObj?.name || i.barbero_id || ''
+          };
+        }),
         servicio: itemsToSave.map((i: any) => i.nombre).join(', '),
         fecha: formattedDate,
         hora_inicio: hora_inicio,
@@ -1537,6 +1540,8 @@ export function NewReservationForm({
         duracionMinutos: latestEnd - earliestStart,
         estado: resolvedEstado,
         precio: totalPrecioNum,
+        total: totalPrecioNum,
+        totalAmount: totalPrecioNum,
         notas: data.notas || '',
         nota_interna: data.nota_interna || '',
         notifications: data.notifications || { whatsapp_notification: true, whatsapp_reminder: true },
@@ -1592,7 +1597,26 @@ export function NewReservationForm({
       if (isEditMode && initialData?.id) {
         const targetCollection = (initialData as any)?.isSandbox ? 'reservas_sandbox' : 'reservas';
         const resRef = doc(db, targetCollection, initialData.id);
-        await updateDoc(resRef, dataToSave);
+        const editPayload: Record<string, any> = {
+          ...dataToSave,
+          ...(!effectiveDepositPaid
+            ? {
+                mercado_pago_link: deleteField(),
+                link_pago: deleteField(),
+                link_pago_anticipo: deleteField(),
+                mercado_pago_preference_id: deleteField(),
+                mercado_pago_link_ts: deleteField(),
+                mercado_pago_link_amount: deleteField(),
+                mercado_pago_link_services: deleteField(),
+                mercado_pago_link_total: deleteField(),
+                mercado_pago_preference_id_total: deleteField(),
+                mercado_pago_link_total_ts: deleteField(),
+                mercado_pago_link_total_amount: deleteField(),
+                mercado_pago_link_total_services: deleteField(),
+              }
+            : {}),
+        };
+        await updateDoc(resRef, editPayload);
       } else {
         const isShortNotice = isShortNoticeAppointment({
           fecha: formattedDate,

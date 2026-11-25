@@ -190,12 +190,20 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
     setEmailError(null);
 
     const isPhoneComplete = phone ? isValidPhoneNumber(phone) : false;
+    const phoneDigits = phone.replace(/\D/g, '');
+    const phoneLast10 = phoneDigits.length >= 10 ? phoneDigits.slice(-10) : '';
+    const phoneVariants = phoneLast10
+      ? Array.from(new Set([phone, phoneLast10, `+52${phoneLast10}`, `52${phoneLast10}`]))
+      : (phone ? [phone] : []);
 
-    const phoneQuery = clientSettings?.validatePhone && isPhoneComplete
-      ? query(collection(db, 'clientes'), where('telefono', '==', phone))
+    const shouldValidatePhone = clientSettings ? clientSettings.validatePhone !== false : true;
+    const shouldValidateEmail = clientSettings ? clientSettings.validateEmail !== false : true;
+
+    const phoneQuery = shouldValidatePhone && isPhoneComplete && phoneVariants.length > 0
+      ? query(collection(db, 'clientes'), where('telefono', 'in', phoneVariants))
       : null;
 
-    const emailQuery = clientSettings?.validateEmail && email && email.length >= 5
+    const emailQuery = shouldValidateEmail && email && email.length >= 5
       ? query(collection(db, 'clientes'), where('correo', '==', email))
       : null;
 
@@ -316,25 +324,36 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
       return;
     };
 
-    if (!isEditMode) {
-      let hasError = false;
-      if (clientSettings?.validatePhone && data.telefono && isValidPhoneNumber(data.telefono)) {
-        const cleanPhone = data.telefono.trim();
-        const q = query(collection(db, 'clientes'), where('telefono', '==', cleanPhone));
-        if (!(await getDocs(q)).empty) {
-          setPhoneError('Este número ya está registrado.');
-          hasError = true;
-        }
+    const shouldValidatePhone = clientSettings ? clientSettings.validatePhone !== false : true;
+    const shouldValidateEmail = clientSettings ? clientSettings.validateEmail !== false : true;
+    const trimmedPhone = (data.telefono || '').trim();
+    const trimmedEmail = (data.correo || '').trim().toLowerCase();
+
+    if (shouldValidatePhone && trimmedPhone && isValidPhoneNumber(trimmedPhone) && (!isEditMode || trimmedPhone !== (client?.telefono || '').trim())) {
+      const digits = trimmedPhone.replace(/\D/g, '');
+      const last10 = digits.length >= 10 ? digits.slice(-10) : '';
+      const variants = last10
+        ? Array.from(new Set([trimmedPhone, last10, `+52${last10}`, `52${last10}`]))
+        : [trimmedPhone];
+      const q = query(collection(db, 'clientes'), where('telefono', 'in', variants));
+      const snap = await getDocs(q);
+      const hasDup = snap.docs.some((d) => !isEditMode || d.id !== client?.id);
+      if (hasDup) {
+        setPhoneError('Este número ya está registrado.');
+        toast({
+          variant: 'destructive',
+          title: 'Teléfono duplicado',
+          description: 'Ya existe un cliente registrado con este número de celular.',
+        });
+        setIsSubmitting(false);
+        return;
       }
-      if (clientSettings?.validateEmail && data.correo && data.correo.length > 5) {
-        const emailLower = data.correo.toLowerCase();
-        const q = query(collection(db, 'clientes'), where('correo', '==', emailLower));
-        if (!(await getDocs(q)).empty) {
-          setEmailError('Este correo electrónico ya está registrado.');
-          hasError = true;
-        }
-      }
-      if (hasError) {
+    }
+
+    if (!isEditMode && shouldValidateEmail && trimmedEmail && trimmedEmail.length > 5) {
+      const q = query(collection(db, 'clientes'), where('correo', '==', trimmedEmail));
+      if (!(await getDocs(q)).empty) {
+        setEmailError('Este correo electrónico ya está registrado.');
         setIsSubmitting(false);
         return;
       }
@@ -343,11 +362,11 @@ export function NewClientForm({ onFormSubmit, onCancel, client = null, initialNa
 
     const isoBirthStr = data.fecha_nacimiento ? format(data.fecha_nacimiento, 'yyyy-MM-dd') : null;
     const dataToSave: Partial<Client> & Record<string, any> = {
-      nombre: data.nombre,
-      apellido: data.apellido,
-      telefono: (isEditMode && !canViewPhone && client) ? (client.telefono || '') : data.telefono,
-      correo: data.correo,
-      notas: data.notas,
+      nombre: (data.nombre || '').trim(),
+      apellido: (data.apellido || '').trim(),
+      telefono: (isEditMode && !canViewPhone && client) ? (client.telefono || '') : trimmedPhone,
+      correo: trimmedEmail,
+      notas: (data.notas || '').trim(),
       fecha_nacimiento: isoBirthStr,
       cumpleanos: isoBirthStr,
     };
